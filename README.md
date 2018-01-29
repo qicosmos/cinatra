@@ -1,4 +1,4 @@
-# cinatra--一个高效易用的http框架
+# cinatra--一个高效易用的c++ http框架
 
 # 目录
 
@@ -11,7 +11,7 @@
 * [联系方式](#联系方式)
 
 # cinatra简介
-cinatra是一个高性能易用的http框架，它是用modern c++(c++17)开发的，它的目标是提供一个快速开发的c++ http框架。它的主要特点如下：
+[cinatra](https://github.com/qicosmos/cinatra)是一个高性能易用的http框架，它是用modern c++(c++17)开发的，它的目标是提供一个快速开发的c++ http框架。它的主要特点如下：
 
 1. 统一而简单的接口
 2. header-only
@@ -19,7 +19,7 @@ cinatra是一个高性能易用的http框架，它是用modern c++(c++17)开发�
 4. 高效
 5. 支持面向切面编程
 
-cinatra目前支持了http1.1/1.0和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器。
+cinatra目前支持了http1.1/1.0和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
 
 # 如何使用
 
