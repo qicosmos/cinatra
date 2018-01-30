@@ -1,36 +1,38 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 project(cinatra)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++17")
-set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
-set(IGUANA_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+if (MSVC)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
+else ()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++17")
+endif ()
 
-find_package(Boost 1.66 COMPONENTS coroutine context system thread filesystem REQUIRED)
+find_package(Boost 1.60 REQUIRED COMPONENTS system date_time)
 
 set(CINATRA
-        http_server.hpp
-        connection.hpp
-        io_service_pool.hpp
-        nanolog.hpp
-        picohttpparser.h
-        request.hpp
-        response.hpp
-        utils.hpp
-        response_cv.hpp
-        itoa.hpp
-        multipart_parser.hpp
-        multipart_reader.hpp
-        sha1.hpp
-        websocket.hpp
-        ws_define.h
-        function_traits.hpp
-        http_router.hpp
-        router.hpp
-        define.h
-        main.cpp
-        )
+	http_server.hpp
+	connection.hpp
+	io_service_pool.hpp
+	nanolog.hpp
+	picohttpparser.h
+	request.hpp
+	response.hpp
+	utils.hpp
+	response_cv.hpp
+	itoa.hpp
+	multipart_parser.hpp
+	multipart_reader.hpp
+	sha1.hpp
+	websocket.hpp
+	ws_define.h
+	function_traits.hpp
+	http_router.hpp
+	router.hpp
+	define.h
+	main.cpp
+	)
 
-add_executable(cinatra   ${CINATRA})
-target_link_libraries(cinatra ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIB})
-
-
+add_executable(cinatra ${CINATRA})
+include_directories(${Boost_INCLUDE_DIRS})
+target_link_libraries(cinatra ${Boost_LIBRARIES})
+install(TARGETS cinatra DESTINATION include)
