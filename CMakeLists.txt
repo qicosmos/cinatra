@@ -35,4 +35,4 @@ set(CINATRA
 add_executable(cinatra ${CINATRA})
 include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(cinatra ${Boost_LIBRARIES})
-install(TARGETS cinatra DESTINATION bin)
+install(TARGETS cinatra DESTINATION include)
