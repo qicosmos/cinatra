@@ -120,6 +120,10 @@ namespace cinatra {
 			});
 		}
 
+		void response_now() {
+			do_write();
+		}
+
 		//~connection() {
 		//	close();
 		//}
@@ -514,7 +518,8 @@ namespace cinatra {
 				return;
 			}
 
-			do_write();
+			if(!res_.need_delay())
+				do_write();
 		}
 
 		//-------------web socket----------------//
@@ -694,7 +699,8 @@ namespace cinatra {
 
 			call_back();
 
-			do_write();
+			if (!res_.need_delay())
+				do_write();
 		}
 
 		void response_back(status_type status, std::string&& content) {

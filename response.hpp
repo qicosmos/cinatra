@@ -63,14 +63,20 @@ namespace cinatra {
 			return status_;
 		}
 
-		void set_status_and_content(status_type status) {
+		void set_status_and_content(status_type status, bool delay = false) {
 			status_ = status;
+			delay_ = delay;
 			set_content(to_string(status).data());
 		}
 
-		void set_status_and_content(status_type status, std::string&& content) {
+		void set_status_and_content(status_type status, std::string&& content, bool delay = false) {
 			status_ = status;
+			delay_ = delay;
 			set_content(std::move(content));
+		}
+
+		bool need_delay() const {
+			return delay_;
 		}
 
 		void reset() {
@@ -150,6 +156,8 @@ namespace cinatra {
 		status_type status_ = status_type::init;
 		bool proc_continue_ = true;
 		std::string chunk_size_;
+
+		bool delay_ = false;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
