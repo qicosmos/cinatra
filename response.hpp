@@ -63,15 +63,17 @@ namespace cinatra {
 			return status_;
 		}
 
-		void set_status_and_content(status_type status, bool delay = false) {
-			status_ = status;
+		void set_delay(bool delay) {
 			delay_ = delay;
+		}
+
+		void set_status_and_content(status_type status) {
+			status_ = status;
 			set_content(to_string(status).data());
 		}
 
-		void set_status_and_content(status_type status, std::string&& content, bool delay = false) {
+		void set_status_and_content(status_type status, std::string&& content) {
 			status_ = status;
-			delay_ = delay;
 			set_content(std::move(content));
 		}
 
