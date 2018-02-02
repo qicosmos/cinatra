@@ -90,8 +90,9 @@ namespace cinatra {
 			chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
 			boost::asio::async_write(socket_,
 				boost::asio::buffer(chunked_header_),
-				boost::bind(&connection::handle_chunked_header, this->shared_from_this(),
-					boost::asio::placeholders::error));
+				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+					self->handle_chunked_header(ec);
+				});
 		}
 
 		void write_chunked_data(std::string&& buf, bool eof) {
@@ -134,9 +135,9 @@ namespace cinatra {
 			reset_timer();
 
 			socket_.async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
-				boost::bind(&connection::handle_read, this->shared_from_this(),
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred));
+				[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+					self->handle_read(e, bytes_transferred);
+				});
 		}
 
 		void handle_read(const boost::system::error_code& e, std::size_t bytes_transferred) {
@@ -205,9 +206,9 @@ namespace cinatra {
 			reset_timer();
 
 			socket_.async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
-				boost::bind(&connection::handle_read, this->shared_from_this(),
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred));
+				[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+					self->handle_read(e, bytes_transferred);
+				});
 		}
 
 		void do_read_body() {
@@ -245,8 +246,9 @@ namespace cinatra {
 			}
 
 			boost::asio::async_write(socket_, buffers,
-				boost::bind(&connection::handle_write, this->shared_from_this(),
-					boost::asio::placeholders::error));
+				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+					self->handle_write(ec);
+			        });
 		}
 
 		http_type get_http_type() {
