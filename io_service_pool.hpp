@@ -5,7 +5,6 @@
 #include <vector>
 #include <memory>
 #include <thread>
-#include <boost/bind.hpp>
 
 namespace cinatra
 {
@@ -27,7 +26,10 @@ namespace cinatra
 		void run() {
 			std::vector<std::shared_ptr<std::thread> > threads;
 			for (std::size_t i = 0; i < io_services_.size(); ++i){
-				threads.emplace_back(std::make_shared<std::thread>(boost::bind(&boost::asio::io_service::run, io_services_[i])));
+				threads.emplace_back(std::make_shared<std::thread>(
+					[](io_service_ptr svr) {
+						svr->run();
+					}, io_services_[i]));
 			}
 
 			for (std::size_t i = 0; i < threads.size(); ++i)
