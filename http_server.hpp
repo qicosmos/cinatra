@@ -1,7 +1,5 @@
 #pragma once
 #include <boost/asio.hpp>
-#include <boost/noncopyable.hpp>
-
 #include <string>
 #include <vector>
 #include <string_view>
@@ -14,7 +12,7 @@
 #include "mime_types.hpp"
 
 namespace cinatra {
-	class http_server : private boost::noncopyable {
+	class http_server : private noncopyable {
 	public:
 		explicit http_server(std::size_t io_service_pool_size) : io_service_pool_(io_service_pool_size){
 			init_conn_callback();

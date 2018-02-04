@@ -35,6 +35,16 @@ namespace cinatra {
 		}
 	};
 
+	class noncopyable {
+	public:
+		noncopyable() = default;
+		~noncopyable() = default;
+
+	private:
+		noncopyable(const noncopyable&) = delete;
+		noncopyable& operator=(const noncopyable&) = delete;
+	};
+
 	using namespace std::string_view_literals;
 
 	template <class T>

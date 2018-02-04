@@ -1,14 +1,13 @@
 #pragma once
 #include <boost/asio.hpp>
-#include <boost/noncopyable.hpp>
-
 #include <vector>
 #include <memory>
 #include <thread>
+#include "utils.hpp"
 
 namespace cinatra
 {
-	class io_service_pool : private boost::noncopyable{
+	class io_service_pool : private noncopyable{
 	public:
 		explicit io_service_pool(std::size_t pool_size) : next_io_service_(0) {
 			if (pool_size == 0)

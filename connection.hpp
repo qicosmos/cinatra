@@ -1,6 +1,5 @@
 #pragma once
 #include <boost/asio.hpp>
-#include <boost/noncopyable.hpp>
 #include <vector>
 #include <cassert>
 #include <mutex>
@@ -17,7 +16,7 @@ namespace cinatra {
 	using send_failed_handler = std::function<void(const boost::system::error_code&)>;
 	
 	template <typename socket_type>
-	class connection :public std::enable_shared_from_this<connection<socket_type>>, private boost::noncopyable {
+	class connection :public std::enable_shared_from_this<connection<socket_type>>, private noncopyable {
 	public:
 		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
 			http_handler& handler, std::string& static_dir)
