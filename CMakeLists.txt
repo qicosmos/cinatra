@@ -7,7 +7,7 @@ else ()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++17")
 endif ()
 
-find_package(Boost 1.60 REQUIRED COMPONENTS system date_time)
+find_package(Boost 1.60 REQUIRED COMPONENTS system)
 
 set(CINATRA
 	http_server.hpp

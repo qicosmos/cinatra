@@ -51,7 +51,7 @@ namespace cinatra {
 		}
 
 		void reset_timer() {
-			timer_.expires_from_now(boost::posix_time::seconds(KEEP_ALIVE_TIMEOUT_));
+			timer_.expires_from_now(std::chrono::seconds(KEEP_ALIVE_TIMEOUT_));
 			auto self = this->shared_from_this();
 
 			timer_.async_wait([self](boost::system::error_code const& ec) {
@@ -821,7 +821,7 @@ namespace cinatra {
 		//-----------------send message----------------//
 
 		socket_type socket_;
-		boost::asio::deadline_timer timer_;
+		boost::asio::steady_timer timer_;
 		request req_;
 		response res_;
 		websocket ws_;
