@@ -4,7 +4,7 @@
 
 #ifndef CINATRA_RESPONSE_HPP
 #define CINATRA_RESPONSE_HPP
-#include <boost/asio.hpp>
+#include "use_asio.hpp"
 #include <string>
 #include <vector>
 #include <string_view>
