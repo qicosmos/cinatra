@@ -202,7 +202,7 @@ int main() {
 			std::string filename = "2.xml";
 			auto in = std::make_shared<std::ifstream>(filename, std::ios::binary);
 			if (!in->is_open()) {
-				req.get_conn()->on_error();
+				req.get_conn()->on_close();
 				return;
 			}
 
@@ -234,6 +234,8 @@ int main() {
 		case cinatra::data_proc_state::data_end:
 		{
 			std::cout << "chunked send finish" << std::endl;
+			auto conn = req.get_conn();
+			conn->on_close();
 		}
 		break;
 		case cinatra::data_proc_state::data_error:

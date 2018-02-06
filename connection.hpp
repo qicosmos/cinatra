@@ -45,7 +45,7 @@ namespace cinatra {
 			response_back(status, std::move(reason));
 		}
 
-		void on_error() {
+		void on_close() {
 			keep_alive_ = false;
 			req_.set_state(data_proc_state::data_error);
 			close();
