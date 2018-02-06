@@ -1,5 +1,5 @@
 #pragma once
-#include <boost/asio.hpp>
+#include "use_asio.hpp"
 #include <string>
 #include <vector>
 #include <string_view>

@@ -223,7 +223,7 @@ int main() {
 			str.resize(len);
 
 			in->read(&str[0], len);
-			size_t read_len = in->gcount();
+			size_t read_len = (size_t)in->gcount();
 			if (read_len != len) {
 				str.resize(read_len);
 			}
