@@ -332,8 +332,13 @@ namespace cinatra {
 
 		std::string_view get_query_value(std::string_view key) const{
 			auto it = queries_.find(key);
-			if (it == queries_.end())
-				return{};
+			if (it == queries_.end()) {
+				auto itf = form_url_map_.find(key);
+				if (itf == form_url_map_.end())
+					return {};
+
+				return itf->second;
+			}
 
 			return it->second;
 		}

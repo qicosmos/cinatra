@@ -363,8 +363,9 @@ namespace cinatra {
 				return;
 			}
 
-			std::string_view body = req_.body();
-			response_back(status_type::ok, std::string{ body.data(), body.length() });
+			call_back();
+			if (!res_.need_delay())
+				do_write();
 		}
 		//-------------form urlencoded----------------//
 
