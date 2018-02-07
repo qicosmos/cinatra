@@ -4,11 +4,15 @@
 
 #ifndef CINATRA_UTILS_HPP
 #define CINATRA_UTILS_HPP
+#include <algorithm>
+#include <cstring>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <cstdlib>
 #include <cctype>
 #include <type_traits>
+#include <iostream>
 
 namespace cinatra {
 	struct ci_less
