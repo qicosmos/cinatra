@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <string_view>
+#include "define.h"
 #include "response_cv.hpp"
 #include "itoa.hpp"
 #include "utils.hpp"

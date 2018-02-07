@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.0)
 project(cinatra)
 
+include(ExternalProject)
+find_package(Git)
+
 if (MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
 else ()
@@ -9,30 +12,9 @@ endif ()
 
 find_package(Boost 1.60 REQUIRED COMPONENTS system)
 
-set(CINATRA
-	http_server.hpp
-	connection.hpp
-	io_service_pool.hpp
-	nanolog.hpp
-	picohttpparser.h
-	request.hpp
-	response.hpp
-	utils.hpp
-	response_cv.hpp
-	itoa.hpp
-	multipart_parser.hpp
-	multipart_reader.hpp
-	sha1.hpp
-	websocket.hpp
-	ws_define.h
-	function_traits.hpp
-	http_router.hpp
-	router.hpp
-	define.h
-	main.cpp
-	)
-
-add_executable(cinatra ${CINATRA})
-include_directories(${Boost_INCLUDE_DIRS})
+add_executable(cinatra main.cpp)
+include_directories(${Boost_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cinatra ${Boost_LIBRARIES})
 install(TARGETS cinatra DESTINATION include)
+
+add_subdirectory(tests)
