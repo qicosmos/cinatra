@@ -78,17 +78,17 @@ namespace cinatra {
 		}
 	};
 
-	std::string_view trim_left(std::string_view v) {
+	inline std::string_view trim_left(std::string_view v) {
 		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
 		return v;
 	}
 
-	std::string_view trim_right(std::string_view v) {
+	inline std::string_view trim_right(std::string_view v) {
 		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
 	}
 
-	std::string_view trim(std::string_view v) {
+	inline std::string_view trim(std::string_view v) {
 		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
 		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
@@ -221,7 +221,7 @@ namespace cinatra {
 		return dst - _dst;
 	}
 
-	bool is_valid_utf8(unsigned char *s, size_t length)
+	inline bool is_valid_utf8(unsigned char *s, size_t length)
 	{
 		for (unsigned char *e = s + length; s != e; )
 		{
@@ -275,7 +275,7 @@ namespace cinatra {
 	}
 
 	template<typename T>
-	std::string to_str(T&& value) {
+	inline std::string to_str(T&& value) {
 		using U = std::remove_const_t<std::remove_reference_t<T>>;
 		if constexpr(std::is_integral_v<U> && !is_int64_v<U>) {
 			std::vector<char> temp(20, '\0');
