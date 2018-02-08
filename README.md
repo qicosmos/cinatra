@@ -41,7 +41,8 @@ cinatra是header-only的，直接引用头文件既可。
 	using namespace cinatra;
 	
 	int main() {
-		http_server server(std::thread::hardware_concurrency());
+		int max_thread_num = std::thread::hardware_concurrency();
+		http_server server(max_thread_num);
 		server.listen("0.0.0.0", "8080");
 		server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
@@ -276,7 +277,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 				std::string filename = "2.jpg";
 				auto in = std::make_shared<std::ifstream>(filename, std::ios::binary);
 				if (!in->is_open()) {
-					req.get_conn()->on_error();
+					req.get_conn()->on_close();
 					return;
 				}
 	
