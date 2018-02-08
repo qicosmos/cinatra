@@ -34,7 +34,8 @@ struct check {
 
 int main() {
 	nanolog::initialize(nanolog::GuaranteedLogger(), "/tmp/", "nanolog", 1);
-	http_server server(std::thread::hardware_concurrency());
+	const int max_thread_num = 4;
+	http_server server(max_thread_num);
 	bool r = server.listen("0.0.0.0", "8080");
 	if (!r) {
 		LOG_INFO << "listen failed";
