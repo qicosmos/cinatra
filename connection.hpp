@@ -72,14 +72,14 @@ namespace cinatra {
 		}
 
 		template<typename... Fs>
-		void send_ws_msg(std::string msg, Fs&&... fs) {
+		void send_ws_msg(std::string msg, opcode op=opcode::text, Fs&&... fs) {
 			constexpr const size_t size = sizeof...(Fs);
 			static_assert(size == 0 || size == 2);
 			if constexpr(size == 2) {
 				set_callback(std::forward<Fs>(fs)...);
 			}
 
-			auto header = ws_.format_header(msg.length(), opcode::text);
+			auto header = ws_.format_header(msg.length(), op);
 			send_msg(std::move(header), std::move(msg));
 		}
 
@@ -660,7 +660,7 @@ namespace cinatra {
 			break;
 			case cinatra::ws_frame_type::WS_PING_FRAME:
 			{
-				auto header = ws_.format_header(payload.length(), opcode::text);
+				auto header = ws_.format_header(payload.length(), opcode::pong);
 				send_msg(std::move(header), std::move(payload));
 			}
 			break;
