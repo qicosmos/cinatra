@@ -405,7 +405,8 @@ namespace cinatra {
 			if (length == 0)
 				return false;
 
-			std::string_view multipart_body = std::string_view(req_.buffer(size), length);
+			req_.set_part_data(std::string_view(req_.buffer(size), length));
+			std::string_view multipart_body = req_.get_part_data();
 			size_t bufsize = multipart_body.length();
 
 			size_t fed = 0;
