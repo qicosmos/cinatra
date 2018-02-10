@@ -46,6 +46,13 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
+	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
+		auto body = req.body();
+		std::cout << body.data() << std::endl;
+
+		res.set_status_and_content(status_type::ok, "hello world", content_encoding::gzip);
+	});
+
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
@@ -201,7 +208,7 @@ int main() {
 		{
 		case cinatra::data_proc_state::data_begin:
 		{
-			std::string filename = "2.xml";
+			std::string filename = "3.jpg";
 			auto in = std::make_shared<std::ifstream>(filename, std::ios::binary);
 			if (!in->is_open()) {
 				req.get_conn()->on_close();

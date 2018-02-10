@@ -97,7 +97,7 @@ namespace cinatra {
 		void write_chunked_data(std::string&& buf, bool eof) {
 			reset_timer();
 
-			std::vector<boost::asio::const_buffer> buffers = res_.to_chunked_buffers(buf.data(), buf.size(), eof);
+			std::vector<boost::asio::const_buffer> buffers = res_.to_chunked_buffers(buf.data(), buf.length(), eof);
 			if (buffers.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
@@ -512,6 +512,12 @@ namespace cinatra {
 				return;
 			}
 
+			bool r = handle_gzip();
+			if (!r) {
+				response_back(status_type::bad_request, "gzip uncompress error");
+				return;
+			}
+
 			call_back();
 
 			if (req_.get_http_type() == http_type::chunked)
@@ -700,10 +706,24 @@ namespace cinatra {
 				return;
 			}
 
+			bool r = handle_gzip();
+			if (!r) {
+				response_back(status_type::bad_request, "gzip uncompress error");
+				return;
+			}
+
 			call_back();
 
 			if (!res_.need_delay())
 				do_write();
+		}
+
+		bool handle_gzip() {
+			if (req_.has_gzip()) {
+				return req_.uncompress();
+			}
+
+			return true;
 		}
 
 		void response_back(status_type status, std::string&& content) {

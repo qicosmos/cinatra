@@ -25,6 +25,11 @@ namespace cinatra {
 		service_unavailable = 503
 	};
 
+	enum class content_encoding {
+		gzip,
+		none
+	};
+
 	inline std::string_view ok = "OK";
 	inline std::string_view created = "<html>"
 		"<head><title>Created</title></head>"
