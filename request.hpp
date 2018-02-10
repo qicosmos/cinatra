@@ -3,7 +3,9 @@
 #include "picohttpparser.h"
 #include "utils.hpp"
 #include "multipart_reader.hpp"
+#ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
+#endif
 #include "define.h"
  
 namespace cinatra {
@@ -132,10 +134,11 @@ namespace cinatra {
 		}
 
 		std::string_view body() const{
+#ifdef CINATRA_ENABLE_GZIP
 			if (has_gzip_&&!gzip_str_.empty()) {
 				return { gzip_str_.data(), gzip_str_.length() };
 			}
-
+#endif
 			return std::string_view(&buf_[header_len_], body_len_);
 		}
 
@@ -281,12 +284,13 @@ namespace cinatra {
 
 		bool parse_form_urlencoded() {
 			form_url_map_.clear();
+#ifdef CINATRA_ENABLE_GZIP
 			if (has_gzip_) {
 				bool r = uncompress();
 				if (!r)
 					return false;
 			}
-
+#endif
             auto body_str = body();
             form_url_map_ = parse_query(body_str);
             if(form_url_map_.empty())
@@ -328,11 +332,13 @@ namespace cinatra {
 		}
 
 		void set_part_data(std::string_view data) {
+#ifdef CINATRA_ENABLE_GZIP
 			if (has_gzip_) {
 				bool r = uncompress(data);
 				if (!r)
 					return;
 			}
+#endif
 			
 			part_data_ = data;
 		}
@@ -374,13 +380,21 @@ namespace cinatra {
 			if (str.empty())
 				return false;
 
+			bool r = true;
+#ifdef CINATRA_ENABLE_GZIP
 			gzip_str_.clear();
-			return gzip_codec::uncompress(str, gzip_str_);
+			r = gzip_codec::uncompress(str, gzip_str_);
+#endif
+			return r;
 		}
 
 		bool uncompress() {
+			bool r = true;
+#ifdef CINATRA_ENABLE_GZIP
 			gzip_str_.clear();
-			return gzip_codec::uncompress(std::string_view(&buf_[header_len_], body_len_), gzip_str_);
+			r = gzip_codec::uncompress(std::string_view(&buf_[header_len_], body_len_), gzip_str_);
+#endif
+			return r;
 		}
 
 	private:

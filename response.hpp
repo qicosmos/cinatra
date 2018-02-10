@@ -74,6 +74,7 @@ namespace cinatra {
 
 		void set_status_and_content(status_type status, std::string&& content, content_encoding encoding = content_encoding::none) {
 			status_ = status;
+#ifdef CINATRA_ENABLE_GZIP
 			if (encoding == content_encoding::gzip) {
 				std::string encode_str;
 				bool r = gzip_codec::compress(std::string_view(content.data(), content.length()), encode_str, true);
@@ -85,9 +86,9 @@ namespace cinatra {
 					set_content(std::move(encode_str));
 				}
 			}
-			else {
+			else 
+#endif
 				set_content(std::move(content));
-			}
 		}
 
 		bool need_delay() const {
