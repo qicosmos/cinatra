@@ -156,6 +156,7 @@ namespace cinatra {
 		}
 
 		void async_handshake() {
+#ifdef CINATRA_ENABLE_SSL
 			socket_.async_handshake(boost::asio::ssl::stream_base::server,
 				[this, self = this->shared_from_this()](const boost::system::error_code& error) {
 				if (error) {
@@ -165,6 +166,7 @@ namespace cinatra {
 
 				async_read_some();
 			});
+#endif
 		}
 
 		void async_read_some() {
