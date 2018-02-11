@@ -9,7 +9,7 @@ endif ()
 
 #option(ENABLE_SSL   "Set to switch to build use ssl"  OFF)
 #option(ENABLE_GZIP  "Set to switch to build use gzip" OFF)
-SET(ENABLE_SSL ON)
+SET(ENABLE_SSL OFF)
 if (ENABLE_SSL)
 	add_definitions(-DCINATRA_ENABLE_SSL)
 	message(STATUS "Use SSL")
