@@ -392,7 +392,23 @@ namespace cinatra {
 		//-------------octet-stream----------------//
 
 		//-------------form urlencoded----------------//
+		//TODO: here later will refactor the duplicate code
 		void handle_form_urlencoded() {
+			if (req_.at_capacity()) {
+				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
+				return;
+			}
+
+			if (req_.has_recieved_all()) {
+				handle_url_urlencoded_body();
+			}
+			else {
+				req_.fit_size();
+				do_read_form_urlencoded();
+			}
+		}
+
+		void handle_url_urlencoded_body(){
 			bool success = req_.parse_form_urlencoded();
 
 			if (!success) {
@@ -403,6 +419,30 @@ namespace cinatra {
 			call_back();
 			if (!res_.need_delay())
 				do_write();
+		}
+
+		void do_read_form_urlencoded() {
+			reset_timer();
+
+			auto self = this->shared_from_this();
+			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
+									[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
+										if (ec) {
+											LOG_WARN << ec.message();
+											close();
+											return;
+										}
+
+										req_.update_size(bytes_transferred);
+										req_.reduce_left_body_size(bytes_transferred);
+
+										if (req_.body_finished()) {
+											handle_url_urlencoded_body();
+										}
+										else {
+											do_read_form_urlencoded();
+										}
+									});
 		}
 		//-------------form urlencoded----------------//
 
