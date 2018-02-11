@@ -18,9 +18,16 @@ namespace cinatra {
 		data_error
 	};
 
+	using tcp_socket = boost::asio::ip::tcp::socket;
 	template <typename socket_type>
 	class connection;
-	using conn_type = connection<boost::asio::ip::tcp::socket>;
+#ifdef CINATRA_ENABLE_SSL
+	using Socket = boost::asio::ssl::stream<tcp_socket>;
+#else
+	using Socket = tcp_socket;
+#endif
+
+	using conn_type = connection<Socket>;
 
 	class request {
 	public:

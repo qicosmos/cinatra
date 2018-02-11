@@ -18,5 +18,13 @@ namespace boost
 }
 #else
 #include <boost/asio.hpp>
+#ifdef CINATRA_ENABLE_SSL
+#include <boost/asio/ssl.hpp>
+#endif
 #include <boost/asio/steady_timer.hpp>
+
+using tcp_socket = boost::asio::ip::tcp::socket;
+#ifdef CINATRA_ENABLE_SSL
+using ssl_socket = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+#endif
 #endif

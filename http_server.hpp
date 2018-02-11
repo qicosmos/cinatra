@@ -14,8 +14,31 @@
 namespace cinatra {
 	class http_server : private noncopyable {
 	public:
-		explicit http_server(std::size_t io_service_pool_size) : io_service_pool_(io_service_pool_size){
+		explicit http_server(std::size_t io_service_pool_size) : io_service_pool_(io_service_pool_size)
+#ifdef CINATRA_ENABLE_SSL
+			, ctx_(boost::asio::ssl::context::sslv23)
+#endif
+		{
 			init_conn_callback();
+		}
+
+		template<typename F>
+		void init_ssl_context(bool ssl_enable_v3, F&& f, std::string certificate_chain_file,
+			std::string private_key_file, std::string tmp_dh_file) {
+#ifdef CINATRA_ENABLE_SSL
+			unsigned long ssl_options = boost::asio::ssl::context::default_workarounds
+				| boost::asio::ssl::context::no_sslv2
+				| boost::asio::ssl::context::single_dh_use;
+
+			if (!ssl_enable_v3)
+				ssl_options |= boost::asio::ssl::context::no_sslv3;
+
+			ctx_.set_options(ssl_options);
+			ctx_.set_password_callback(std::forward<F>(f));
+			ctx_.use_certificate_chain_file(std::move(certificate_chain_file));
+			ctx_.use_private_key_file(std::move(private_key_file), boost::asio::ssl::context::pem);
+			ctx_.use_tmp_dh_file(std::move(tmp_dh_file));
+#endif
 		}
 
 		bool listen(std::string_view address, std::string_view port) {
@@ -32,7 +55,8 @@ namespace cinatra {
 				acceptor->listen();
 				start_accept(acceptor);
 				r = true;
-			} catch (const std::exception& e){
+			}
+			catch (const std::exception& e) {
 				LOG_INFO << e.what();
 			}
 
@@ -72,8 +96,12 @@ namespace cinatra {
 
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
-			auto new_conn = std::make_shared<connection<boost::asio::ip::tcp::socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_);
+			auto new_conn = std::make_shared<connection<Socket>>(
+				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_
+#ifdef CINATRA_ENABLE_SSL
+				, ctx_
+#endif
+				);
 			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
 				if (!e) {
 					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
@@ -103,6 +131,10 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = "/tmp/"; //default
+//		https_config ssl_cfg_;
+#ifdef CINATRA_ENABLE_SSL
+		boost::asio::ssl::context ctx_;
+#endif
 
 		http_handler http_handler_ = nullptr;
 	};
