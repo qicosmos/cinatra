@@ -4,6 +4,7 @@
 
 #ifndef CINATRA_UTILS_HPP
 #define CINATRA_UTILS_HPP
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <cstdlib>
