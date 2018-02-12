@@ -19,12 +19,14 @@
 4. 高效
 5. 支持面向切面编程
 
-cinatra目前支持了http1.1/1.0和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
+cinatra目前支持了http1.1/1.0, ssl和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
 
 # 如何使用
 
 ## 编译依赖
-cinatra是基于boost.asio开发的，所以需要boost库，同时也需要支持c++17的编译器，依赖项：
+cinatra是基于boost.asio开发的，所以需要boost库。不过，cinatra同时也支持了ASIO_STANDALONE，你不必一定需要boost库。
+
+cinatra需要支持c++17的编译器，依赖项：
 
 1. boost.asio
 2. c++17编译器(gcc7.2,clang4.0, vs2017 update15.5)
@@ -393,12 +395,11 @@ cinatra目前刚开始在生产环境中使用, 还处于开发完善阶段，�
 
 # roadmap
 
-1. 支持ssl
-2. 支持断点续传
-3. 支持session和cookie
-4. 接口优化、性能优化
+1. 支持断点续传
+2. 支持session和cookie
+3. 接口优化、性能优化
 
-我希望cinatra有越来越多的人使用并喜欢它，也希望在在使用过程中越来越完善，变成一个强大易用、快速开发的http框架，欢迎大家积极参与cinatra项目，可以提issue也可以发邮件提建议，也可以提pr，形式不限。
+我希望有越来越多的人使用cinatra并喜欢它，也希望cinatra在使用过程中越来越完善，变成一个强大易用、快速开发的http框架，欢迎大家积极参与cinatra项目，可以提issue也可以发邮件提建议，也可以提pr，形式不限。
 
 这次重构的cinatra几乎是重写了一遍，代码比之前的少了30%以上，接口统一了，http和业务分离，具备更好的扩展性和可维护性。
 
