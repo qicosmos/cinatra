@@ -56,7 +56,7 @@ include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
 target_link_libraries(cinatra ${Boost_LIBRARIES})
 if (ENABLE_SSL)
-	target_link_libraries(cinatra ${OPENSSL_LIBRARIES})
+	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 if (ENABLE_GZIP)
 	target_link_libraries(cinatra ${ZLIB_LIBRARIES})
