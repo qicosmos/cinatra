@@ -4,11 +4,14 @@
 
 #ifndef CINATRA_UTILS_HPP
 #define CINATRA_UTILS_HPP
+
+#pragma once
 #include <string>
 #include <string_view>
 #include <cstdlib>
 #include <cctype>
 #include <type_traits>
+#include <algorithm>
 
 namespace cinatra {
 	struct ci_less
@@ -79,18 +82,18 @@ namespace cinatra {
 	};
 
 	inline std::string_view trim_left(std::string_view v) {
-		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
+		v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
 		return v;
 	}
 
 	inline std::string_view trim_right(std::string_view v) {
-		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+		v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
 	}
 
 	inline std::string_view trim(std::string_view v) {
-		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
-		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+		v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+		v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
 	}
 
@@ -296,6 +299,7 @@ namespace cinatra {
 			return value;
 		}
 		else {
+			static_assert(false, "this type has not supported yet");
 			std::cout << "this type has not supported yet" << std::endl;
 		}
 	}
