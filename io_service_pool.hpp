@@ -82,7 +82,7 @@ namespace cinatra
 			io_services_->run();
 		}
 
-		intptr_t run_one(){
+		intptr_t run_one() {
 			return io_services_->run_one();
 		}
 
@@ -98,12 +98,7 @@ namespace cinatra
 			work_ = nullptr;
 
 			if (io_services_)
-			{
-				io_services_->run();
 				io_services_->stop();
-
-				io_services_ = nullptr;
-			}
 		}
 
 		boost::asio::io_service& get_io_service() {
