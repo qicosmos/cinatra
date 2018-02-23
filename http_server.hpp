@@ -12,9 +12,12 @@
 #include "mime_types.hpp"
 
 namespace cinatra {
-	class http_server : private noncopyable {
+
+	template<class service_pool_policy = io_service_pool>
+	class http_server_ : private noncopyable {
 	public:
-		explicit http_server(std::size_t io_service_pool_size) : io_service_pool_(io_service_pool_size)
+		template<class... Args>
+		explicit http_server_(Args&&... args) : io_service_pool_(std::forward<Args>(args)...)
 #ifdef CINATRA_ENABLE_SSL
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
@@ -71,6 +74,18 @@ namespace cinatra {
 			io_service_pool_.run();
 		}
 
+		intptr_t run_one() {
+			return io_service_pool_.run_one();
+		}
+
+		intptr_t poll() {
+			return io_service_pool_.poll();
+		}
+
+		intptr_t poll_one() {
+			return io_service_pool_.poll_one();
+		}
+
 		void set_static_dir(std::string&& path) {
 			static_dir_ = std::move(path);
 		}
@@ -124,7 +139,7 @@ namespace cinatra {
 			};
 		}
 
-		io_service_pool io_service_pool_;
+		service_pool_policy io_service_pool_;
 
 		std::size_t max_req_buf_size_ = 3 * 1024 * 1024; //max request buffer size 3M
 		long keep_alive_timeout_ = 60; //max request timeout 60s
@@ -138,4 +153,6 @@ namespace cinatra {
 
 		http_handler http_handler_ = nullptr;
 	};
+
+	using http_server = http_server_<io_service_pool>;
 }

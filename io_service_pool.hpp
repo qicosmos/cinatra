@@ -35,7 +35,21 @@ namespace cinatra
 				threads[i]->join();
 		}
 
+		intptr_t run_one() {
+			return -1;
+		}
+
+		intptr_t poll() {
+			return -1;
+		}
+
+		intptr_t poll_one() {
+			return -1;
+		}
+
 		void stop() {
+			work_.clear();
+
 			for (std::size_t i = 0; i < io_services_.size(); ++i)
 				io_services_[i]->stop();
 		}
@@ -57,4 +71,50 @@ namespace cinatra
 		std::size_t next_io_service_;
 	};
 
+	class io_service_inplace : private noncopyable{
+	public:
+		explicit io_service_inplace() {
+			io_services_ = std::make_shared<boost::asio::io_service>();
+			work_ = std::make_shared<boost::asio::io_service::work>(*io_services_);
+		}
+
+		void run() {
+			io_services_->run();
+		}
+
+		intptr_t run_one(){
+			return io_services_->run_one();
+		}
+
+		intptr_t poll() {
+			return io_services_->poll();
+		}
+
+		intptr_t poll_one() {
+			return io_services_->poll_one();
+		}
+
+		void stop() {
+			work_ = nullptr;
+
+			if (io_services_)
+			{
+				io_services_->run();
+				io_services_->stop();
+
+				io_services_ = nullptr;
+			}
+		}
+
+		boost::asio::io_service& get_io_service() {
+			return *io_services_;
+		}
+
+	private:
+		using io_service_ptr = std::shared_ptr<boost::asio::io_service>;
+		using work_ptr = std::shared_ptr<boost::asio::io_service::work>;
+
+		io_service_ptr io_services_;
+		work_ptr work_;
+	};
 }
