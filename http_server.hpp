@@ -44,23 +44,43 @@ namespace cinatra {
 #endif
 		}
 
+		//address :
+		//		"0.0.0.0" : ipv4. use 'https://localhost/' to visit
+		//		"::1" : ipv6. use 'https://[::1]/' to visit
+		//		"" : ipv4 & ipv6.
 		bool listen(std::string_view address, std::string_view port) {
-			auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(io_service_pool_.get_io_service());
-			boost::asio::ip::tcp::resolver resolver(acceptor->get_io_service());
 			boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
-			boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
-			acceptor->open(endpoint.protocol());
-			acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+			return listen(query);
+		}
+
+		//support ipv6 & ipv4
+		bool listen(std::string_view port) {
+			boost::asio::ip::tcp::resolver::query query(port.data());
+			return listen(query);
+		}
+
+		bool listen(const boost::asio::ip::tcp::resolver::query & query) {
+			boost::asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
+			boost::asio::ip::tcp::resolver::iterator endpoints = resolver.resolve(query);
 
 			bool r = false;
-			try {
-				acceptor->bind(endpoint);
-				acceptor->listen();
-				start_accept(acceptor);
-				r = true;
-			}
-			catch (const std::exception& e) {
-				LOG_INFO << e.what();
+
+			for (; endpoints != boost::asio::ip::tcp::resolver::iterator(); ++endpoints) {
+				boost::asio::ip::tcp::endpoint endpoint = *endpoints;
+
+				auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(io_service_pool_.get_io_service());
+				acceptor->open(endpoint.protocol());
+				acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+
+				try {
+					acceptor->bind(endpoint);
+					acceptor->listen();
+					start_accept(acceptor);
+					r = true;
+				}
+				catch (const std::exception& e) {
+					LOG_INFO << e.what();
+				}
 			}
 
 			return r;
