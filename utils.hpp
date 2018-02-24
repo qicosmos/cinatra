@@ -299,7 +299,6 @@ namespace cinatra {
 			return value;
 		}
 		else {
-			static_assert(false, "this type has not supported yet");
 			std::cout << "this type has not supported yet" << std::endl;
 		}
 	}
