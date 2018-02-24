@@ -149,56 +149,12 @@ namespace cinatra {
 		}
 
 		std::string format_header(size_t length, opcode code) {
-			size_t header_length;
-
-			if (length < 126) {
-				header_length = 2;
-				msg_header_[1] = static_cast<char>(length);
-			}
-			else if (length <= UINT16_MAX) {
-				header_length = 4;
-				msg_header_[1] = 126;
-				*((uint16_t *)&msg_header_[2]) = htons(static_cast<uint16_t>(length));
-			}
-			else {
-				header_length = 10;
-				msg_header_[1] = 127;
-				*((uint64_t *)&msg_header_[2]) = htobe64(length);
-			}
-
-			int flags = 0;
-			msg_header_[0] = (flags & SND_NO_FIN ? 0 : 128);
-			if (!(flags & SND_CONTINUATION)) {
-				msg_header_[0] |= code;
-			}
-
+			size_t header_length = encode_header(length, code);
 			return { msg_header_, header_length };
 		}
 
 		std::vector<boost::asio::const_buffer> format_message(const char *src, size_t length, opcode code) {
-			size_t header_length;
-
-			if (length < 126) {
-				header_length = 2;
-				msg_header_[1] = static_cast<char>(length);
-			}
-			else if (length <= UINT16_MAX) {
-				header_length = 4;
-				msg_header_[1] = 126;
-				*((uint16_t *)&msg_header_[2]) = htons(static_cast<uint16_t>(length));
-			}
-			else {
-				header_length = 10;
-				msg_header_[1] = 127;
-				*((uint64_t *)&msg_header_[2]) = htobe64(length);
-			}
-
-			int flags = 0;
-			msg_header_[0] = (flags & SND_NO_FIN ? 0 : 128);
-			if (!(flags & SND_CONTINUATION)) {
-				msg_header_[0] |= code;
-			}
-
+			size_t header_length = encode_header(length, code);
 			return{ boost::asio::buffer(msg_header_, header_length), boost::asio::buffer(src, length) };
 		}
 
@@ -241,6 +197,33 @@ namespace cinatra {
 			return (opcode)msg_opcode_;
 		}
 	private:
+		size_t encode_header(size_t length, opcode code) {
+			size_t header_length;
+
+			if (length < 126) {
+				header_length = 2;
+				msg_header_[1] = static_cast<char>(length);
+			}
+			else if (length <= UINT16_MAX) {
+				header_length = 4;
+				msg_header_[1] = 126;
+				*((uint16_t *)&msg_header_[2]) = htons(static_cast<uint16_t>(length));
+			}
+			else {
+				header_length = 10;
+				msg_header_[1] = 127;
+				*((uint64_t *)&msg_header_[2]) = htobe64(length);
+			}
+
+			int flags = 0;
+			msg_header_[0] = (flags & SND_NO_FIN ? 0 : 128);
+			if (!(flags & SND_CONTINUATION)) {
+				msg_header_[0] |= code;
+			}
+
+			return header_length;
+		}
+
 		void SHA1(uint8_t* key_src, size_t size, uint8_t* sha1buf) {
 			sha1_context ctx;
 			init(ctx);
