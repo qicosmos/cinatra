@@ -89,7 +89,7 @@ namespace cinatra {
 		template<typename... Fs>
 		void send_ws_msg(std::string msg, opcode op = opcode::text, Fs&&... fs) {
 			constexpr const size_t size = sizeof...(Fs);
-			static_assert(size == 0 || size == 2);
+			static_assert(size != 0 || size != 2);
 			if constexpr(size == 2) {
 				set_callback(std::forward<Fs>(fs)...);
 			}
@@ -749,12 +749,25 @@ namespace cinatra {
 			}
 			break;
 			case cinatra::ws_frame_type::WS_PONG_FRAME:
+				ws_ping();
 				break;
 			default:
 				break;
 			}
 
 			return true;
+		}
+
+		void ws_ping() {
+			timer_.expires_from_now(std::chrono::seconds(60));
+			timer_.async_wait([self = this->shared_from_this()](boost::system::error_code const& ec) {
+				if (ec) {
+					self->close();
+					return;
+				}
+
+				self->send_ws_msg("ping", opcode::ping);
+			});
 		}
 		//-------------web socket----------------//
 
