@@ -583,7 +583,7 @@ namespace cinatra {
 		void handle_header_request() {
 			if (is_upgrade_) { //websocket
 				req_.set_http_type(content_type::websocket);
-				timer_.cancel();
+				//timer_.cancel();
 				ws_.upgrade_to_websocket(req_, res_);
 				response_handshake();
 				return;
@@ -738,7 +738,6 @@ namespace cinatra {
 
 				std::string close_msg = ws_.format_close_payload(opcode::close, close_frame.message, len);
 				auto header = ws_.format_header(close_msg.length(), opcode::close);
-				reset_timer(); //if send timeout, close the connection
 				send_msg(std::move(header), std::move(close_msg));
 			}
 			break;
