@@ -372,7 +372,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ## 示例7：io_service_inplace
 本代码演示如何使用io_service_inplace，然后自己控制http server的运行线程以及循环。
-使用 [http://[::1]:8080/close](http://[::1]:8080/close "http://[::1]:8080/close") （IPv6） 或者 [http://127.0.0.1:8080/close](http://127.0.0.1:8080/close "http://127.0.0.1:8080/close") (IPv4) 来关闭http server。
+使用 [http://[::1]:8080/close] （IPv6） 或者 [http://127.0.0.1:8080/close] (IPv4) 来关闭http server。
 
 	#include "http_server.hpp"
 	using namespace cinatra;
