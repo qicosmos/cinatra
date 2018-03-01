@@ -46,6 +46,9 @@ namespace cinatra {
 				&method_len_, &url_, &url_len_,
 				&minor_version_, headers_, &num_headers_, last_len);
 
+			if (header_len_ <0 )
+				return header_len_;
+
 			check_gizp();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {
