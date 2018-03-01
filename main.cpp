@@ -81,7 +81,7 @@ int main() {
 
 	//web socket
 	server.set_http_handler<GET, POST>("/ws", [](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::websocket);
+		assert(req.get_http_type() == content_type::websocket);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -116,7 +116,7 @@ int main() {
 
 	//http upload(multipart)
 	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::multipart);
+		assert(req.get_http_type() == content_type::multipart);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -167,7 +167,7 @@ int main() {
 
 	//http upload(octet-stream)
 	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::octet_stream);
+		assert(req.get_http_type() == content_type::octet_stream);
 		auto state = req.get_state();
 		switch (state)
 		{

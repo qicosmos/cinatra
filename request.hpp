@@ -46,6 +46,9 @@ namespace cinatra {
 				&method_len_, &url_, &url_len_,
 				&minor_version_, headers_, &num_headers_, last_len);
 
+			if (header_len_ <0 )
+				return header_len_;
+
 			check_gizp();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {
@@ -358,11 +361,11 @@ namespace cinatra {
 			return part_data_;
 		}
 
-		void set_http_type(http_type type) {
+		void set_http_type(content_type type) {
 			http_type_ = type;
 		}
 
-		http_type get_http_type() const {
+		content_type get_http_type() const {
 			return http_type_;
 		}
 
@@ -467,7 +470,7 @@ namespace cinatra {
 
 		data_proc_state state_ = data_proc_state::data_begin;
 		std::string_view part_data_;
-		http_type http_type_ = http_type::unknown;
+		content_type http_type_ = content_type::unknown;
 
 		const std::multimap<std::string_view, std::string_view>* multipart_headers_;
 	};

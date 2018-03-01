@@ -1,6 +1,6 @@
 #pragma once
 namespace cinatra {
-	enum class http_type {
+	enum class content_type {
 		string,
 		multipart,
 		urlencoded,

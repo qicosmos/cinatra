@@ -23,6 +23,7 @@ namespace cinatra {
 				return tolower(c1) < tolower(c2);
 			}
 		};
+
 		bool operator() (const std::string & s1, const std::string & s2) const {
 			return std::lexicographical_compare
 			(s1.begin(), s1.end(),   // source range
@@ -30,7 +31,7 @@ namespace cinatra {
 				nocase_compare());  // comparison
 		}
 
-		bool operator() (const std::string_view & s1, const std::string_view & s2) const {
+		bool operator() (std::string_view s1, std::string_view s2) const {
 			return std::lexicographical_compare
 			(s1.begin(), s1.end(),   // source range
 				s2.begin(), s2.end(),   // dest range
@@ -118,6 +119,39 @@ namespace cinatra {
 	constexpr inline auto CONNECT = http_method::CONNECT;
 	constexpr inline auto TRACE = http_method::TRACE;
 	constexpr inline auto OPTIONS = http_method::OPTIONS;
+
+	inline constexpr std::string_view method_name(http_method mthd) {
+		switch (mthd)
+		{
+		case cinatra::http_method::DEL:
+			return "DELETE"sv;
+			break;
+		case cinatra::http_method::GET:
+			return "GET"sv;
+			break;
+		case cinatra::http_method::HEAD:
+			return "HEAD"sv;
+			break;
+		case cinatra::http_method::POST:
+			return "POST"sv;
+			break;
+		case cinatra::http_method::PUT:
+			return "PUT"sv;
+			break;
+		case cinatra::http_method::CONNECT:
+			return "CONNECT"sv;
+			break;
+		case cinatra::http_method::OPTIONS:
+			return "OPTIONS"sv;
+			break;
+		case cinatra::http_method::TRACE:
+			return "TRACE"sv;
+			break;
+		default:
+			return "UNKONWN"sv;
+			break;
+		}
+	}
 
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::DEL>) noexcept { return "DELETE"sv; }
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::GET>) noexcept { return "GET"sv; }
@@ -299,7 +333,6 @@ namespace cinatra {
 			return value;
 		}
 		else {
-			static_assert(false, "this type has not supported yet");
 			std::cout << "this type has not supported yet" << std::endl;
 		}
 	}
