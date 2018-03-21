@@ -129,6 +129,11 @@ namespace cinatra {
 			http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
 		}
 
+		template<http_method... Is, typename Function, typename... AP>
+		void set_static_res_handler(Function&& f, AP&&... ap) {
+			http_router_.register_handler<Is...>(STAIC_RES, std::forward<Function>(f), std::forward<AP>(ap)...);
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(

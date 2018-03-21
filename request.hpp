@@ -329,6 +329,12 @@ namespace cinatra {
 			return { url_str_.data(), url_str_.length() };
 		}
 
+		std::string_view get_res_path() const {
+			auto url = get_url();
+
+			return url.substr(1);
+		}
+
 		std::map<std::string_view, std::string_view> get_form_url_map() const{
 			return form_url_map_;
 		}

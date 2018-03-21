@@ -9,4 +9,6 @@ namespace cinatra {
 		websocket,
 		unknown,
 	};
+
+	inline std::string_view STAIC_RES = "cinatra_staic_resource";
 }
