@@ -150,7 +150,7 @@ namespace cinatra {
 		/*"Content-Type: video/mp4\r\n"
 		"\r\n";*/
 
-	boost::asio::const_buffer to_buffer(status_type status) {
+	inline boost::asio::const_buffer to_buffer(status_type status) {
 		switch (status) {
 		case status_type::switching_protocols:
 			return boost::asio::buffer(switching_protocols.data(), switching_protocols.length());
