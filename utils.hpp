@@ -12,6 +12,7 @@
 #include <cctype>
 #include <type_traits>
 #include <algorithm>
+#include <iostream>
 
 namespace cinatra {
 	struct ci_less
