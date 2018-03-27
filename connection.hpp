@@ -273,7 +273,7 @@ namespace cinatra {
 
 		void do_write() {
 			reset_timer();
-			auto content_length = res_.get_header_value("content-length");
+			//auto content_length = res_.get_header_value("content-length");
 			//assert(!content_length.empty());
 			std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
 			if (buffers.empty()) {

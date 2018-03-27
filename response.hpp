@@ -43,17 +43,17 @@ namespace cinatra {
 		}
 
 		void add_header(std::string&& key, std::string&& value) {
-			headers_[std::move(key)] = std::move(value);
+			headers_.emplace_back(std::move(key), std::move(value));
 		}
 
-		std::string_view get_header_value(const std::string& key) const {
-			auto it = headers_.find(key);
-			if (it == headers_.end()) {
-				return {};
-			}
+		//std::string_view get_header_value(const std::string& key) const {
+		//	auto it = headers_.find(key);
+		//	if (it == headers_.end()) {
+		//		return {};
+		//	}
 
-			return std::string_view(it->second.data(), it->second.length());
-		}
+		//	return std::string_view(it->second.data(), it->second.length());
+		//}
 
 		void set_status(status_type status) {
 			status_ = status;
@@ -149,8 +149,8 @@ namespace cinatra {
 
 	private:
 		
-		std::map<std::string, std::string, ci_less> headers_;
-
+		//std::map<std::string, std::string, ci_less> headers_;
+		std::vector<std::pair<std::string, std::string>> headers_;
 		std::string content_;
 		content_type body_type_ = content_type::unknown;
 		status_type status_ = status_type::init;
