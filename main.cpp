@@ -58,6 +58,11 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world", content_encoding::gzip);
 	});
 
+	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
+		auto res_path = req.get_res_path();
+		std::cout << res_path << std::endl;
+	});
+
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
@@ -81,7 +86,7 @@ int main() {
 
 	//web socket
 	server.set_http_handler<GET, POST>("/ws", [](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::websocket);
+		assert(req.get_http_type() == content_type::websocket);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -116,7 +121,7 @@ int main() {
 
 	//http upload(multipart)
 	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::multipart);
+		assert(req.get_http_type() == content_type::multipart);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -167,7 +172,7 @@ int main() {
 
 	//http upload(octet-stream)
 	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == http_type::octet_stream);
+		assert(req.get_http_type() == content_type::octet_stream);
 		auto state = req.get_state();
 		switch (state)
 		{

@@ -60,15 +60,15 @@ struct phr_header {
 
 /* returns number of bytes consumed if successful, -2 if request is partial,
  * -1 if failed */
-int phr_parse_request(const char *buf, size_t len, const char **method, size_t *method_len, const char **path, size_t *path_len,
-                      int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len);
+//int phr_parse_request(const char *buf, size_t len, const char **method, size_t *method_len, const char **path, size_t *path_len,
+//                      int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len);
 
 /* ditto */
-int phr_parse_response(const char *_buf, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
-                       struct phr_header *headers, size_t *num_headers, size_t last_len);
+//int phr_parse_response(const char *_buf, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
+//                       struct phr_header *headers, size_t *num_headers, size_t last_len);
 
 /* ditto */
-int phr_parse_headers(const char *buf, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len);
+//int phr_parse_headers(const char *buf, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len);
 
 /* should be zero-filled before start */
 struct phr_chunked_decoder {
@@ -87,10 +87,10 @@ struct phr_chunked_decoder {
  * octets left undecoded at the tail of the supplied buffer.  Returns -1 on
  * error.
  */
-ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *bufsz);
+//ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *bufsz);
 
 /* returns if the chunked decoder is in middle of chunked data */
-int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder);
+//int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder);
 
 /* $Id: a707070d11d499609f99d09f97535642cec910a8 $ */
 
@@ -426,7 +426,7 @@ static const char *parse_request(const char *buf, const char *buf_end, const cha
 	return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
 }
 
-int phr_parse_request(const char *buf_start, size_t len, const char **method, size_t *method_len, const char **path,
+inline int phr_parse_request(const char *buf_start, size_t len, const char **method, size_t *method_len, const char **path,
 	size_t *path_len, int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len) {
 	const char *buf = buf_start, *buf_end = buf_start + len;
 	size_t max_headers = *num_headers;
@@ -453,7 +453,7 @@ int phr_parse_request(const char *buf_start, size_t len, const char **method, si
 	return (int)(buf - buf_start);
 }
 
-static const char *parse_response(const char *buf, const char *buf_end, int *minor_version, int *status, const char **msg,
+inline const char *parse_response(const char *buf, const char *buf_end, int *minor_version, int *status, const char **msg,
 	size_t *msg_len, struct phr_header *headers, size_t *num_headers, size_t max_headers, int *ret) {
 	/* parse "HTTP/1.x" */
 	if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
@@ -484,7 +484,7 @@ static const char *parse_response(const char *buf, const char *buf_end, int *min
 	return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
 }
 
-int phr_parse_response(const char *buf_start, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
+inline int phr_parse_response(const char *buf_start, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
 	struct phr_header *headers, size_t *num_headers, size_t last_len) {
 	const char *buf = buf_start, *buf_end = buf + len;
 	size_t max_headers = *num_headers;
@@ -509,7 +509,7 @@ int phr_parse_response(const char *buf_start, size_t len, int *minor_version, in
 	return (int)(buf - buf_start);
 }
 
-int phr_parse_headers(const char *buf_start, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len) {
+inline int phr_parse_headers(const char *buf_start, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len) {
 	const char *buf = buf_start, *buf_end = buf + len;
 	size_t max_headers = *num_headers;
 	int r;
@@ -553,7 +553,7 @@ static int decode_hex(int ch) {
 	}
 }
 
-ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *_bufsz) {
+inline ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *_bufsz) {
 	size_t dst = 0, src = 0, bufsz = *_bufsz;
 	ssize_t ret = -2; /* incomplete */
 
@@ -668,7 +668,7 @@ Exit:
 	return ret;
 }
 
-int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder) {
+inline int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder) {
 	return decoder->_state == CHUNKED_IN_CHUNK_DATA;
 }
 

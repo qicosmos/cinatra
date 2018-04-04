@@ -4,11 +4,15 @@
 
 #ifndef CINATRA_UTILS_HPP
 #define CINATRA_UTILS_HPP
+
+#pragma once
 #include <string>
 #include <string_view>
 #include <cstdlib>
 #include <cctype>
 #include <type_traits>
+#include <algorithm>
+#include <iostream>
 
 namespace cinatra {
 	struct ci_less
@@ -20,6 +24,7 @@ namespace cinatra {
 				return tolower(c1) < tolower(c2);
 			}
 		};
+
 		bool operator() (const std::string & s1, const std::string & s2) const {
 			return std::lexicographical_compare
 			(s1.begin(), s1.end(),   // source range
@@ -27,7 +32,7 @@ namespace cinatra {
 				nocase_compare());  // comparison
 		}
 
-		bool operator() (const std::string_view & s1, const std::string_view & s2) const {
+		bool operator() (std::string_view s1, std::string_view s2) const {
 			return std::lexicographical_compare
 			(s1.begin(), s1.end(),   // source range
 				s2.begin(), s2.end(),   // dest range
@@ -79,18 +84,18 @@ namespace cinatra {
 	};
 
 	inline std::string_view trim_left(std::string_view v) {
-		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
+		v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
 		return v;
 	}
 
 	inline std::string_view trim_right(std::string_view v) {
-		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+		v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
 	}
 
 	inline std::string_view trim(std::string_view v) {
-		v.remove_prefix(std::min(v.find_first_not_of(" "), v.size()));
-		v.remove_suffix(std::min(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+		v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+		v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
 		return v;
 	}
 
@@ -115,6 +120,39 @@ namespace cinatra {
 	constexpr inline auto CONNECT = http_method::CONNECT;
 	constexpr inline auto TRACE = http_method::TRACE;
 	constexpr inline auto OPTIONS = http_method::OPTIONS;
+
+	inline constexpr std::string_view method_name(http_method mthd) {
+		switch (mthd)
+		{
+		case cinatra::http_method::DEL:
+			return "DELETE"sv;
+			break;
+		case cinatra::http_method::GET:
+			return "GET"sv;
+			break;
+		case cinatra::http_method::HEAD:
+			return "HEAD"sv;
+			break;
+		case cinatra::http_method::POST:
+			return "POST"sv;
+			break;
+		case cinatra::http_method::PUT:
+			return "PUT"sv;
+			break;
+		case cinatra::http_method::CONNECT:
+			return "CONNECT"sv;
+			break;
+		case cinatra::http_method::OPTIONS:
+			return "OPTIONS"sv;
+			break;
+		case cinatra::http_method::TRACE:
+			return "TRACE"sv;
+			break;
+		default:
+			return "UNKONWN"sv;
+			break;
+		}
+	}
 
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::DEL>) noexcept { return "DELETE"sv; }
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::GET>) noexcept { return "GET"sv; }

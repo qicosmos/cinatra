@@ -89,7 +89,7 @@ namespace cinatra {
 		template<typename... Fs>
 		void send_ws_msg(std::string msg, opcode op = opcode::text, Fs&&... fs) {
 			constexpr const size_t size = sizeof...(Fs);
-			static_assert(size == 0 || size == 2);
+			static_assert(size != 0 || size != 2);
 			if constexpr(size == 2) {
 				set_callback(std::forward<Fs>(fs)...);
 			}
@@ -99,7 +99,7 @@ namespace cinatra {
 		}
 
 		void write_chunked_header(std::string_view mime) {
-			req_.set_http_type(http_type::chunked);
+			req_.set_http_type(content_type::chunked);
 			reset_timer();
 			chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
 			boost::asio::async_write(socket_,
@@ -211,23 +211,23 @@ namespace cinatra {
 			else { //4.3 complete request
 				   //5. check if has body
 				if (req_.has_body()) { //5.1 has body
-					auto type = get_http_type();
+					auto type = get_content_type();
 					req_.set_http_type(type);
 					switch (type) {
-					case cinatra::http_type::string:
-					case cinatra::http_type::unknown:
+					case cinatra::content_type::string:
+					case cinatra::content_type::unknown:
 						handle_string_body();
 						break;
-					case cinatra::http_type::multipart:
+					case cinatra::content_type::multipart:
 						handle_multipart();
 						break;
-					case cinatra::http_type::octet_stream:
+					case cinatra::content_type::octet_stream:
 						handle_octet_stream(bytes_transferred);
 						break;
-					case cinatra::http_type::urlencoded:
+					case cinatra::content_type::urlencoded:
 						handle_form_urlencoded();
 						break;
-					case cinatra::http_type::chunked:
+					case cinatra::content_type::chunked:
 						handle_chunked(bytes_transferred);
 						break;
 					}
@@ -273,8 +273,8 @@ namespace cinatra {
 
 		void do_write() {
 			reset_timer();
-			auto content_length = res_.get_header_value("content-length");
-			assert(!content_length.empty());
+			//auto content_length = res_.get_header_value("content-length");
+			//assert(!content_length.empty());
 			std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
 			if (buffers.empty()) {
 				handle_write(boost::system::error_code{});
@@ -287,31 +287,31 @@ namespace cinatra {
 			});
 		}
 
-		http_type get_http_type() {
+		content_type get_content_type() {
 			if (req_.is_chunked())
-				return http_type::chunked;
+				return content_type::chunked;
 
 			auto content_type = req_.get_header_value("content-type");
 			if (!content_type.empty()) {
 				if (content_type.find("application/x-www-form-urlencoded") != std::string_view::npos) {
-					return http_type::urlencoded;
+					return content_type::urlencoded;
 				}
 				else if (content_type.find("multipart/form-data") != std::string_view::npos) {
 					auto size = content_type.find("=");
 					auto bd = content_type.substr(size + 1, content_type.length() - size);
 					std::string boundary(bd.data(), bd.length());
 					multipart_parser_.set_boundary("\r\n--" + std::move(boundary));
-					return http_type::multipart;
+					return content_type::multipart;
 				}
 				else if (content_type.find("application/octet-stream") != std::string_view::npos) {
-					return http_type::octet_stream;
+					return content_type::octet_stream;
 				}
 				else {
-					return http_type::string;
+					return content_type::string;
 				}
 			}
 
-			return http_type::unknown;
+			return content_type::unknown;
 		}
 
 		void close() {
@@ -582,8 +582,8 @@ namespace cinatra {
 
 		void handle_header_request() {
 			if (is_upgrade_) { //websocket
-				req_.set_http_type(http_type::websocket);
-				timer_.cancel();
+				req_.set_http_type(content_type::websocket);
+				//timer_.cancel();
 				ws_.upgrade_to_websocket(req_, res_);
 				response_handshake();
 				return;
@@ -597,7 +597,7 @@ namespace cinatra {
 
 			call_back();
 
-			if (req_.get_http_type() == http_type::chunked)
+			if (req_.get_http_type() == content_type::chunked)
 				return;
 
 			if (req_.get_state() == data_proc_state::data_error) {
@@ -738,7 +738,6 @@ namespace cinatra {
 
 				std::string close_msg = ws_.format_close_payload(opcode::close, close_frame.message, len);
 				auto header = ws_.format_header(close_msg.length(), opcode::close);
-				reset_timer(); //if send timeout, close the connection
 				send_msg(std::move(header), std::move(close_msg));
 			}
 			break;
@@ -749,12 +748,25 @@ namespace cinatra {
 			}
 			break;
 			case cinatra::ws_frame_type::WS_PONG_FRAME:
+				ws_ping();
 				break;
 			default:
 				break;
 			}
 
 			return true;
+		}
+
+		void ws_ping() {
+			timer_.expires_from_now(std::chrono::seconds(60));
+			timer_.async_wait([self = this->shared_from_this()](boost::system::error_code const& ec) {
+				if (ec) {
+					self->close();
+					return;
+				}
+
+				self->send_ws_msg("ping", opcode::ping);
+			});
 		}
 		//-------------web socket----------------//
 

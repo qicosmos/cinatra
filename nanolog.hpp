@@ -44,13 +44,13 @@ namespace nanolog
 	{
 
 		/* Returns microseconds since epoch */
-		uint64_t timestamp_now()
+		inline uint64_t timestamp_now()
 		{
 			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 		}
 
 		/* I want [2016-10-13 00:01:23.528514] */
-		void format_timestamp(std::ostream & os, uint64_t timestamp)
+		inline void format_timestamp(std::ostream & os, uint64_t timestamp)
 		{
 			auto n = std::chrono::system_clock::now();
 			auto m = n.time_since_epoch();
@@ -61,7 +61,7 @@ namespace nanolog
 			os << '[' << std::put_time(std::localtime(&t), "%Y-%m-%d %H.%M.%S") << "." << diff << ']';
 		}
 
-		std::thread::id this_thread_id()
+		inline std::thread::id this_thread_id()
 		{
 			static thread_local const std::thread::id id = std::this_thread::get_id();
 			return id;

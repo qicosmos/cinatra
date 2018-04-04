@@ -37,7 +37,16 @@ namespace cinatra {
 		//elimate exception, resut type bool: true, success, false, failed
 		bool route(std::string_view method, std::string_view url, const request& req, response& res) {
 			std::string key(method.data(), method.length());
-			key += std::string(url.data(), url.length());
+			if (url.rfind('.') == std::string_view::npos) {
+				auto pos = url.rfind("index"sv);
+				if (pos != std::string_view::npos)
+					key += url.substr(0, pos == 1 ? 1 : pos - 1);
+				else
+					key += std::string(url.data(), url.length());
+			}
+			else {
+				key += std::string(STAIC_RES.data(), STAIC_RES.length());
+			}
 
 			auto it = map_invokers_.find(key);
 			if (it == map_invokers_.end()) {
