@@ -38,7 +38,7 @@ namespace cinatra {
 		bool route(std::string_view method, std::string_view url, const request& req, response& res) {
 			std::string key(method.data(), method.length());
 			if (url.rfind('.') == std::string_view::npos) {
-				url = url.substr(url.size()-1,url.size())=="/"?url.substr(0,url.size()-1):url;
+				url = url.substr(url.size()-1,url.size())=="/"&&url.size()>1?url.substr(0,url.size()-1):url;
 				auto pos = url.rfind("index"sv);
 				if (pos != std::string_view::npos)
 					key += url.substr(0, pos == 1 ? 1 : pos - 1);
