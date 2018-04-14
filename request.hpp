@@ -49,7 +49,7 @@ namespace cinatra {
 			if (header_len_ <0 )
 				return header_len_;
 
-			check_gizp();
+			check_gzip();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {
 				auto transfer_encoding = get_header_value("transfer-encoding");
@@ -434,7 +434,7 @@ namespace cinatra {
 			url_len_ = 0;
 		}
 
-		void check_gizp() {
+		void check_gzip() {
 			auto encoding = get_header_value("content-encoding");
 			if (encoding.empty()) {
 				has_gzip_ = false;
