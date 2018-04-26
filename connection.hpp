@@ -45,6 +45,14 @@ namespace cinatra {
 #endif
 		}
 
+		std::string local_address() {
+			return socket_.local_endpoint().address().to_string();
+		}
+
+		std::string remote_address() {
+			return socket_.remote_endpoint().address().to_string();
+		}
+
 		void start() {
 			do_read();
 		}
