@@ -200,7 +200,7 @@ namespace cinatra {
         {
             char chrval = (char) chr;
             unsigned int intval = (unsigned int) chr;
-            if ((intval > 128 || !valid_chr[intval]) && safe.find(chrval) == std::string_view::npos)
+            if ((intval > 127 || !valid_chr[intval]) && safe.find(chrval) == std::string_view::npos)
                 os << '%' << std::setw(2) << std::hex << std::uppercase << intval;
             else 
                 os << chrval;
