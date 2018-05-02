@@ -181,7 +181,23 @@ namespace cinatra {
 				resize(MaxSize);
 			}
 		}
+		
+		//refactor later
+        	void expand_size(){
+            		auto total = total_len();
+            		auto size = buf_.size();
+            		if (size == MaxSize)
+                		return;
 
+            		if (total < MaxSize) {
+                		if (total > size)
+                    			resize(total);
+            		}
+            		else {
+                		resize(MaxSize);
+            		}
+        	}
+		
 		bool has_body() const {
 			return body_len_ != 0 || is_chunked_;
 		}

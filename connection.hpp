@@ -45,6 +45,18 @@ namespace cinatra {
 #endif
 		}
 
+		std::string local_address() {
+			std::stringstream ss;
+			ss << socket_.local_endpoint();
+			return ss.str();
+		}
+
+		std::string remote_address() {
+			std::stringstream ss;
+			ss << socket_.remote_endpoint();
+			return ss.str();
+		}
+
 		void start() {
 			do_read();
 		}
@@ -216,7 +228,7 @@ namespace cinatra {
 					switch (type) {
 					case cinatra::content_type::string:
 					case cinatra::content_type::unknown:
-						handle_string_body();
+						handle_string_body(bytes_transferred);
 						break;
 					case cinatra::content_type::multipart:
 						handle_multipart();
@@ -320,7 +332,7 @@ namespace cinatra {
 		}
 
 		/****************** begin handle http body data *****************/
-		void handle_string_body() {
+		void handle_string_body(std::size_t bytes_transferred) {
 			//defalt add limitation for string_body and else. you can remove the limitation for very big string.
 			if (req_.at_capacity()) {
 				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
@@ -331,7 +343,9 @@ namespace cinatra {
 				handle_body();
 			}
 			else {
-				req_.fit_size();
+				req_.expand_size();
+				size_t part_size = bytes_transferred - req_.header_len();
+				req_.reduce_left_body_size(part_size);
 				do_read_body();
 			}
 		}

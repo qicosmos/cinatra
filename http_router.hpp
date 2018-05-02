@@ -26,7 +26,7 @@ namespace cinatra {
 		}
 
 		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		void register_handler(std::string_view name, Type T::* f, T1 t, Ap&&... ap) {
+		void register_handler(std::string_view name, Type (T::* f)(const request&, response&), T1 t, Ap&&... ap) {
 			register_handler_impl<Is...>(name, f, t, std::forward<Ap>(ap)...);
 		}
 

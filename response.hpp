@@ -37,7 +37,7 @@ namespace cinatra {
 			buffers.push_back(boost::asio::buffer(crlf));
 
 			if (body_type_ == content_type::string)
-				buffers.emplace_back(boost::asio::buffer(content_));
+				buffers.emplace_back(boost::asio::buffer(content_.data(), content_.size()));
 
 			return buffers;
 		}
