@@ -182,18 +182,20 @@ namespace cinatra {
 
     // var bools = [];
     // var valid_chr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-';
-    // for(var i = 0; i <= 255; ++ i) {
+    // for(var i = 0; i <= 127; ++ i) {
     // 	var contain = valid_chr.indexOf(String.fromCharCode(i)) == -1;
     // 	bools.push(contain?false:true);
     // }
     // console.log(JSON.stringify(bools))
+    // 浏览器运行 js 生成 valid_chr 数组
+
+    inline const constexpr bool valid_chr[128] =
+    {
+        false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,false,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,true,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false
+    };
 
     inline std::ostringstream& quote_impl(std::ostringstream& os, std::string_view str, std::string_view safe) {
         os << std::setiosflags(std::ios::right) << std::setfill('0');
-        const constexpr static bool valid_chr[128] =
-        {
-            false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,false,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,true,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false
-        };
         auto begin = reinterpret_cast<const std::byte*>(str.data());
         auto end = begin + sizeof(char) * str.size();
         std::for_each(begin, end, [&os, &safe] (auto& chr)
