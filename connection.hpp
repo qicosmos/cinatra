@@ -237,7 +237,7 @@ namespace cinatra {
 						handle_octet_stream(bytes_transferred);
 						break;
 					case cinatra::content_type::urlencoded:
-						handle_form_urlencoded();
+						handle_form_urlencoded(bytes_transferred);
 						break;
 					case cinatra::content_type::chunked:
 						handle_chunked(bytes_transferred);
@@ -407,7 +407,7 @@ namespace cinatra {
 
 		//-------------form urlencoded----------------//
 		//TODO: here later will refactor the duplicate code
-		void handle_form_urlencoded() {
+		void handle_form_urlencoded(size_t bytes_transferred) {
 			if (req_.at_capacity()) {
 				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
 				return;
@@ -417,7 +417,10 @@ namespace cinatra {
 				handle_url_urlencoded_body();
 			}
 			else {
-				req_.fit_size();
+				req_.expand_size();
+				size_t part_size = bytes_transferred - req_.header_len();
+				req_.reduce_left_body_size(part_size);
+				//req_.fit_size();
 				do_read_form_urlencoded();
 			}
 		}
