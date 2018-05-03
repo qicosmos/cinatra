@@ -136,6 +136,9 @@ int main() {
 				res.set_continue(false);
 				return;
 			}
+			else {
+				res.set_continue(true);
+			}
 			req.get_conn()->set_tag(file);
 		}
 		break;
