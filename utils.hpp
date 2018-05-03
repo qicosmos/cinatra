@@ -241,7 +241,7 @@ namespace cinatra {
 				ret += src[i];
 			}
 		}
-		return (ret);
+		return ret;
 	}
 
 	inline bool is_form_url_encode(std::string_view str) {
