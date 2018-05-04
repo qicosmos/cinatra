@@ -226,24 +226,22 @@ namespace cinatra {
         return strval;
     }
 
-	inline const std::string form_urldecode(std::string_view str) {
-		using namespace std;
-		string result;
-		string::size_type i;
-		for (i = 0; i < str.size(); ++i) {
-			if (str[i] == '+') {
-				result += ' ';
-			}
-			else if (str[i] == '%' && str.size() > i + 2) {
-				int val = std::strtol(&str[i + 1], 0, 16);
-				result += std::to_string(val);
-				i += 2;
+	std::string form_urldecode(const std::string &src) {
+		std::string ret;
+		char ch;
+		int i, ii;
+		for (i = 0; i<src.length(); i++) {
+			if (int(src[i]) == 37) {
+				sscanf(src.substr(i + 1, 2).c_str(), "%x", &ii);
+				ch = static_cast<char>(ii);
+				ret += ch;
+				i = i + 2;
 			}
 			else {
-				result += str[i];
+				ret += src[i];
 			}
 		}
-		return result;
+		return ret;
 	}
 
 	inline bool is_form_url_encode(std::string_view str) {
