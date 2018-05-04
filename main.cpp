@@ -11,23 +11,25 @@ struct log_t
 
 	bool after(const request& req, response& res) {
 		std::cout << "after log" << std::endl;
+		res.add_header("aaaa", "bbcc");
 		return true;
 	}
 };
 
 struct check {
 	bool before(const request& req, response& res) {
-		std::cout << "before check" << std::endl;
+		/*std::cout << "before check" << std::endl;
 		if (req.get_header_value("name").empty()) {
 			res.set_status_and_content(status_type::bad_request);
 			return false;
-		}
+		}*/
 		
 		return true;
 	}
 
 	bool after(const request& req, response& res) {
 		std::cout << "after check" << std::endl;
+		
 		return true;
 	}
 };
