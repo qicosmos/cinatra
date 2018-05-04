@@ -10,9 +10,7 @@
 #include "nanolog.hpp"
 #include "function_traits.hpp"
 #include "mime_types.hpp"
-#include "url_encode_decode.hpp"
-#include <fstream>
-#include <sstream>
+#include "string_plus.hpp"
 namespace cinatra {
 
 	template<class service_pool_policy = io_service_pool>

@@ -41,11 +41,18 @@ int main() {
 	}
 	
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res)->cinatra::res_content_type {
-	    //auto query = req.get_query_value("zh");
+        String query = req.get_query_value("zh");
         //std::cout<<code_utils::get_string_by_urldecode(query)<<std::endl;
-        std::wstring w_abc = L"中文";
-        std::wcout<<w_abc<<std::endl;
-		    res.set_status_and_content(status_type::ok, "<a>hello world</a>");
+        String test("ab&cd&ef");
+        auto vec = test.split("&");
+        for(auto iter:vec)
+        {
+            std::cout<<iter<<std::endl;
+        }
+        std::cout<<String().join(vec,"=")<<std::endl;
+        std::cout<<query.url_decode()<<std::endl;
+        std::cout<<String("abcRef").replace("R","d",String::reg_mode::global)<<std::endl;
+        res.set_status_and_content(status_type::ok,std::string(query.url_decode().data(),query.url_decode().size()));
         return cinatra::res_content_type::string;
     });
 

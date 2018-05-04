@@ -1,5 +1,5 @@
 //
-// Created by dy2018 on 18-3-16.
+// Created by xmh on 18-3-16.
 //
 
 #ifndef CPPWEBSERVER_URL_ENCODE_DECODE_HPP
@@ -303,6 +303,10 @@ namespace  code_utils
     inline std::string get_string_by_urldecode(const std::string_view& content)
     {
         return u8wstring_to_string(url_decode(content));
+    }
+
+    inline bool is_url_encode(std::string_view str) {
+        return str.find("%") != std::string_view::npos || str.find("+") != std::string_view::npos;
     }
 
 //    inline std::string WStringToString(std::wstring wstr,std::string_view code="utf-8")
