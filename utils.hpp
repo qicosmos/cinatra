@@ -16,7 +16,7 @@
 #include <type_traits>
 #include <algorithm>
 #include <iostream>
-
+#include "define.h"
 namespace cinatra {
 	struct ci_less
 	{
@@ -424,6 +424,18 @@ public:\
 
 		return arr;
 	}
+
+	template<typename ResType>
+	struct is_res_content_type
+	{
+		static constexpr std::false_type value = std::false_type{};
+	};
+
+	template<>
+	struct is_res_content_type<cinatra::res_content_type>
+	{
+		static constexpr std::true_type value = std::true_type{};
+	};
 }
 
 #endif //CINATRA_UTILS_HPP
