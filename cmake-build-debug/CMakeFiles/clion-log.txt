@@ -1,0 +1,15 @@
+/usr/share/clion/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /home/dy2018/CLionProjects/cinatra
+CMake Warning at /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/FindBoost.cmake:765 (message):
+  Imported targets not available for Boost version 106600
+Call Stack (most recent call first):
+  /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/FindBoost.cmake:869 (_Boost_COMPONENT_DEPENDENCIES)
+  /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/FindBoost.cmake:1472 (_Boost_MISSING_DEPENDENCIES)
+  CMakeLists.txt:23 (find_package)
+
+
+-- Boost version: 1.66.0
+-- Found the following Boost libraries:
+--   system
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/dy2018/CLionProjects/cinatra/cmake-build-debug
