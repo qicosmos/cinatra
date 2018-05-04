@@ -10,7 +10,9 @@
 #include "nanolog.hpp"
 #include "function_traits.hpp"
 #include "mime_types.hpp"
-
+#include "url_encode_decode.hpp"
+#include <fstream>
+#include <sstream>
 namespace cinatra {
 
 	template<class service_pool_policy = io_service_pool>
@@ -156,6 +158,7 @@ namespace cinatra {
 		}
 
 		void init_conn_callback() {
+            set_static_res_function();
 			http_handler_ = [this](const request& req, response& res) {
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {
@@ -164,7 +167,31 @@ namespace cinatra {
 			};
 		}
 
-
+        void set_static_res_function()
+        {
+            http_router_.register_handler<POST,GET>(STAIC_RES, [](const request& req,response& res){
+                auto file_name =req.get_res_path();
+                std::string real_file_name= std::string(file_name.data(),file_name.size());
+                if(is_form_url_encode(file_name))
+                {
+                    real_file_name = code_utils::get_string_by_urldecode(file_name);
+                }
+                auto extension = get_extension(real_file_name.data());
+                auto mime = get_mime_type(extension);
+                std::string res_content_type = std::string(mime.data(),mime.size())+"; charset=utf8";
+                res.add_header("Content-type",std::move(res_content_type));
+                res.add_header("Access-Control-Allow-origin","*");
+                std::ifstream file("./"+real_file_name,std::ios_base::binary);
+                std::stringstream file_buffer;
+                file_buffer<<file.rdbuf();
+                if(file_buffer.str()=="")
+                {
+                    res.set_status_and_content(status_type::bad_request,"");
+                    return;
+                }
+                res.set_status_and_content(status_type::ok,file_buffer.str(),content_encoding::gzip);
+            });
+        }
 
 		service_pool_policy io_service_pool_;
 
