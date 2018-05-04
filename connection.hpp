@@ -33,7 +33,7 @@ namespace cinatra {
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
 			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
 		{
-			init_multipart_parser();
+			init_multipart_parser(true);
 		}
 
 		tcp_socket& socket()
@@ -231,7 +231,14 @@ namespace cinatra {
 						handle_string_body(bytes_transferred);
 						break;
 					case cinatra::content_type::multipart:
-						handle_multipart();
+						if (req_.total_len() <= 3 * 1024 * 1024) {
+							init_multipart_parser(false);
+							handle_string_body(bytes_transferred);
+						}
+						else {
+							init_multipart_parser(true);
+							handle_multipart();
+						}
 						break;
 					case cinatra::content_type::octet_stream:
 						handle_octet_stream(bytes_transferred);
@@ -474,25 +481,44 @@ namespace cinatra {
 			req_.set_part_data({});
 		}
 		//-------------multipart----------------------//
-		void init_multipart_parser() {
-			multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-				req_.set_multipart_headers(begin);
-				req_.set_state(data_proc_state::data_begin);
-				call_back();
-			};
-			multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-				req_.set_part_data({ buf, size });
-				req_.set_state(data_proc_state::data_continue);
-				call_back();
-			};
-			multipart_parser_.on_part_end = [this] {
-				req_.set_state(data_proc_state::data_end);
-				call_back();
-			};
-			multipart_parser_.on_end = [this] {
-				req_.set_state(data_proc_state::data_all_end);
-				call_back();
-			};
+		void init_multipart_parser(bool is_big) {
+			if (is_big) {
+				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
+					req_.set_multipart_headers(begin);
+					req_.set_state(data_proc_state::data_begin);
+					call_back();
+				};
+				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					req_.set_part_data({ buf, size });
+					req_.set_state(data_proc_state::data_continue);
+					call_back();
+				};
+				multipart_parser_.on_part_end = [this] {
+					req_.set_state(data_proc_state::data_end);
+					call_back();
+				};
+				multipart_parser_.on_end = [this] {
+					req_.set_state(data_proc_state::data_all_end);
+					call_back();
+				};
+			}
+			else {
+				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
+					req_.set_multipart_headers(headers);
+					auto filename = req_.get_multipart_file_name();
+					if (filename.empty())
+						return;
+					
+					auto ext = get_extension(filename);
+					std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+					req_.open_upload_file(name);
+				};
+				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					req_.write_upload_data(buf, size);
+				};
+				multipart_parser_.on_part_end = [this] {req_.close_upload_file(); };
+				multipart_parser_.on_end = [this] { call_back(); };
+			}			
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
@@ -614,7 +640,7 @@ namespace cinatra {
 
 			call_back();
 
-			if (req_.get_http_type() == content_type::chunked)
+			if (req_.get_content_type() == content_type::chunked)
 				return;
 
 			if (req_.get_state() == data_proc_state::data_error) {
@@ -815,6 +841,16 @@ namespace cinatra {
 			bool r = handle_gzip();
 			if (!r) {
 				response_back(status_type::bad_request, "gzip uncompress error");
+				return;
+			}
+
+			if (req_.get_content_type() == content_type::multipart) {
+				bool has_error = parse_multipart(req_.header_len(), req_.current_size() - req_.header_len());
+				if (has_error) {
+					response_back(status_type::bad_request, "mutipart error");
+					return;
+				}
+				do_write();
 				return;
 			}
 

@@ -37,7 +37,6 @@ namespace cinatra {
 			buffers.push_back(boost::asio::buffer(crlf));
 
 			if (body_type_ == content_type::string) {
-				add_header("Content-Type", "text/html; charset=utf-8");
 				buffers.emplace_back(boost::asio::buffer(content_.data(), content_.size()));
 			}
 

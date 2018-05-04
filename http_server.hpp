@@ -170,7 +170,7 @@ namespace cinatra {
 		long keep_alive_timeout_ = 60; //max request timeout 60s
 
 		http_router http_router_;
-		std::string static_dir_ = "/tmp/"; //default
+		std::string static_dir_ = "./static/"; //default
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;

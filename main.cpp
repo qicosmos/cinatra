@@ -86,7 +86,7 @@ int main() {
 
 	//web socket
 	server.set_http_handler<GET, POST>("/ws", [](const request& req, response& res) {
-		assert(req.get_http_type() == content_type::websocket);
+		assert(req.get_content_type() == content_type::websocket);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -119,9 +119,19 @@ int main() {
 
 	std::atomic_int n = 0;
 
-	//http upload(multipart)
+	//http upload(multipart) for small file
+	server.set_http_handler<GET, POST>("/upload_small_file", [&n](const request& req, response& res) {
+		assert(req.get_content_type() == content_type::multipart);
+		auto& files = req.get_upload_files();
+		for (auto& file : files) {
+			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
+		}
+		res.set_status_and_content(status_type::ok, files[0].get_file_path());
+	});
+
+	//http upload(multipart) for big file
 	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == content_type::multipart);
+		assert(req.get_content_type() == content_type::multipart);
 		auto state = req.get_state();
 		switch (state)
 		{
@@ -129,6 +139,13 @@ int main() {
 		{
 			auto file_name_s = req.get_multipart_file_name();
 			auto extension = get_extension(file_name_s);
+			if (file_name_s.empty()) {
+				res.set_continue(false);
+				return;
+			}
+			else {
+				res.set_continue(true);
+			}
 			
 			std::string file_name = std::to_string(n++) + std::string(extension.data(), extension.length());
 			auto file = std::make_shared<std::ofstream>(file_name, std::ios::binary);
@@ -175,7 +192,7 @@ int main() {
 
 	//http upload(octet-stream)
 	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
-		assert(req.get_http_type() == content_type::octet_stream);
+		assert(req.get_content_type() == content_type::octet_stream);
 		auto state = req.get_state();
 		switch (state)
 		{

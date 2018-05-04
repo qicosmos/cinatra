@@ -7,6 +7,7 @@
 #include "gzip.hpp"
 #endif
 #include "define.h"
+#include "upload_file.hpp"
  
 namespace cinatra {
 	enum class data_proc_state : int8_t {
@@ -162,6 +163,7 @@ namespace cinatra {
 
 		void reset() {
 			cur_size_ = 0;
+			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
 			part_data_ = {};
@@ -387,7 +389,7 @@ namespace cinatra {
 			http_type_ = type;
 		}
 
-		content_type get_http_type() const {
+		content_type get_content_type() const {
 			return http_type_;
 		}
 
@@ -427,6 +429,36 @@ namespace cinatra {
 			r = gzip_codec::uncompress(std::string_view(&buf_[header_len_], body_len_), gzip_str_);
 #endif
 			return r;
+		}
+
+		bool open_upload_file(const std::string& filename) {
+			upload_file file;
+			bool r = file.open(filename);
+			if (!r)
+				return false;
+			
+			files_.push_back(std::move(file));
+			return true;
+		}
+
+		void write_upload_data(const char* data, size_t size) {
+			if (size == 0)
+				return;
+
+			assert(!files_.empty());
+
+			files_.back().write(data, size);
+		}
+
+		void close_upload_file() {
+			if (files_.empty())
+				return;
+
+			files_.back().close();
+		}
+
+		const std::vector<upload_file>& get_upload_files() const {
+			return files_;
 		}
 
 	private:
@@ -495,5 +527,6 @@ namespace cinatra {
 		content_type http_type_ = content_type::unknown;
 
 		const std::multimap<std::string_view, std::string_view>* multipart_headers_;
+		std::vector<upload_file> files_;
 	};
 }
