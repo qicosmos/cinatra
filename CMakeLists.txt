@@ -49,8 +49,6 @@ set(CINATRA
 	router.hpp
 	define.h
 	main.cpp
-	url_encode_decode.hpp
-	string_plus.hpp
 	)
 
 add_executable(cinatra ${CINATRA})

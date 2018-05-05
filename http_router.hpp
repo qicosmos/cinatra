@@ -7,7 +7,7 @@
 #include "response.hpp"
 #include "utils.hpp"
 #include "function_traits.hpp"
-#include "mime_types.hpp"
+
 namespace cinatra {
 	class http_router {
 	public:
@@ -97,12 +97,6 @@ namespace cinatra {
 			else {
 				//business
 				result_type result = f(req, res);
-				if constexpr (is_res_content_type<result_type>::value){
-					auto iter = res_mime_map.find(result);
-					if(iter!=res_mime_map.end()){
-						res.add_header("Content-type",std::string(iter->second.data(),iter->second.size()));
-					}
-				}
 				//after
 				do_after(std::move(result), req, res, tp);
 			}
@@ -132,13 +126,6 @@ namespace cinatra {
 			else {
 				//business
 				result_type result = (*self.*f)(req, res);
-
-				if constexpr (is_res_content_type<result_type>::value){
-					auto iter = res_mime_map.find(result);
-					if(iter!=res_mime_map.end()){
-						res.add_header("Content-type",std::string(iter->second.data(),iter->second.size()));
-					}
-				}
 				//after
 				do_after(std::move(result), req, res, tp);
 			}

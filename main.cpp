@@ -1,6 +1,7 @@
 #include <iostream>
 #include "http_server.hpp"
 using namespace cinatra;
+
 struct log_t
 {
 	bool before(const request& req, response& res) {
@@ -34,29 +35,23 @@ struct check {
 };
 
 int main() {
+	nanolog::initialize(nanolog::GuaranteedLogger(), "/tmp/", "nanolog", 1);
 	const int max_thread_num = 4;
 	http_server server(max_thread_num);
+#ifdef CINATRA_ENABLE_SSL
+	server.init_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
+	bool r = server.listen("0.0.0.0", "https");
+#else
 	bool r = server.listen("0.0.0.0", "8080");
+#endif
 	if (!r) {
 		LOG_INFO << "listen failed";
 		return -1;
 	}
 	
-	server.set_http_handler<GET, POST>("/", [](const request& req, response& res)->cinatra::res_content_type {
-        String query = req.get_query_value("zh");
-        //std::cout<<code_utils::get_string_by_urldecode(query)<<std::endl;
-        String test("ab&cd&ef");
-        auto vec = test.split("&");
-        for(auto iter:vec)
-        {
-            std::cout<<iter<<std::endl;
-        }
-        std::cout<<String().join(vec,"=")<<std::endl;
-        std::cout<<query.url_decode()<<std::endl;
-        std::cout<<String("abcRef").replace("R","d",String::reg_mode::global)<<std::endl;
-        res.set_status_and_content(status_type::ok,std::string(query.url_decode().data(),query.url_decode().size()));
-        return cinatra::res_content_type::string;
-    });
+	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
+		res.set_status_and_content(status_type::ok, "hello world");
+	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
@@ -64,7 +59,12 @@ int main() {
 
 		res.set_status_and_content(status_type::ok, "hello world", content_encoding::gzip);
 	});
-  
+
+	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
+		auto res_path = req.get_res_path();
+		std::cout << res_path << std::endl;
+	});
+
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
@@ -286,7 +286,7 @@ int main() {
 		break;
 		}
 	});
-  
+
 	server.run();
 	return 0;
 }
