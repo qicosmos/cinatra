@@ -12,10 +12,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a9f6d18d-8d78-466b-b65d-bfbaf0dd0623" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/define.h" afterPath="$PROJECT_DIR$/define.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/http_router.hpp" afterPath="$PROJECT_DIR$/http_router.hpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/CMakeLists.txt" afterPath="$PROJECT_DIR$/CMakeLists.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/http_server.hpp" afterPath="$PROJECT_DIR$/http_server.hpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/main.cpp" afterPath="$PROJECT_DIR$/main.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/response.hpp" afterPath="$PROJECT_DIR$/response.hpp" />
     </list>
     <ignored path="$PROJECT_DIR$/cmake-build-debug/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -30,8 +30,8 @@
       <file leaf-file-name="main.cpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="220">
-              <caret line="66" column="114" lean-forward="true" selection-start-line="66" selection-start-column="114" selection-end-line="66" selection-end-column="114" />
+            <state relative-caret-position="310">
+              <caret line="72" column="47" lean-forward="true" selection-start-line="72" selection-start-column="47" selection-end-line="72" selection-end-column="47" />
               <folding />
             </state>
           </provider>
@@ -40,11 +40,10 @@
       <file leaf-file-name="response.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/response.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="118">
-              <caret line="80" column="100" lean-forward="true" selection-start-line="80" selection-start-column="100" selection-end-line="80" selection-end-column="100" />
+            <state relative-caret-position="1365">
+              <caret line="91" column="59" lean-forward="false" selection-start-line="91" selection-start-column="59" selection-end-line="91" selection-end-column="59" />
               <folding>
                 <element signature="e#97#120#0" expanded="true" />
-                <element signature="e#2364#2762#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -53,7 +52,7 @@
       <file leaf-file-name="mime_types.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/mime_types.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="86">
+            <state relative-caret-position="7425">
               <caret line="495" column="74" lean-forward="false" selection-start-line="495" selection-start-column="74" selection-end-line="495" selection-end-column="74" />
               <folding />
             </state>
@@ -63,8 +62,18 @@
       <file leaf-file-name="CMakeLists.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="780">
-              <caret line="52" column="0" lean-forward="false" selection-start-line="52" selection-start-column="0" selection-end-line="52" selection-end-column="0" />
+            <state relative-caret-position="750">
+              <caret line="50" column="4" lean-forward="false" selection-start-line="50" selection-start-column="4" selection-end-line="50" selection-end-column="4" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="url_encode_decode.hpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/url_encode_decode.hpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="0">
+              <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -83,8 +92,8 @@
       <file leaf-file-name="http_server.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/http_server.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="150">
-              <caret line="10" column="30" lean-forward="false" selection-start-line="10" selection-start-column="30" selection-end-line="10" selection-end-column="30" />
+            <state relative-caret-position="165">
+              <caret line="11" column="32" lean-forward="false" selection-start-line="11" selection-start-column="32" selection-end-line="11" selection-end-column="32" />
               <folding>
                 <element signature="e#13#36#0" expanded="true" />
               </folding>
@@ -95,7 +104,7 @@
       <file leaf-file-name="http_router.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/http_router.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="173">
+            <state relative-caret-position="1485">
               <caret line="99" column="49" lean-forward="false" selection-start-line="99" selection-start-column="49" selection-end-line="99" selection-end-column="49" />
               <folding>
                 <element signature="e#13#30#0" expanded="true" />
@@ -119,16 +128,16 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/url_encode_decode.hpp" />
         <option value="$PROJECT_DIR$/request.hpp" />
         <option value="$PROJECT_DIR$/string_plus.hpp" />
         <option value="$PROJECT_DIR$/mime_types.hpp" />
         <option value="$PROJECT_DIR$/utils.hpp" />
-        <option value="$PROJECT_DIR$/http_server.hpp" />
         <option value="$PROJECT_DIR$/define.h" />
         <option value="$PROJECT_DIR$/http_router.hpp" />
         <option value="$PROJECT_DIR$/response.hpp" />
+        <option value="$PROJECT_DIR$/http_server.hpp" />
+        <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/main.cpp" />
       </list>
     </option>
@@ -139,7 +148,7 @@
     <detection-done>true</detection-done>
     <sorting>DEFINITION_ORDER</sorting>
   </component>
-  <component name="ProjectFrameBounds" extendedState="6">
+  <component name="ProjectFrameBounds" extendedState="7">
     <option name="x" value="260" />
     <option name="y" value="20" />
     <option name="width" value="1400" />
@@ -220,21 +229,22 @@
       <workItem from="1525417354411" duration="7597000" />
       <workItem from="1525497033111" duration="671000" />
       <workItem from="1525499576447" duration="794000" />
-      <workItem from="1525500619342" duration="2943000" />
+      <workItem from="1525500619342" duration="4234000" />
+      <workItem from="1525505703631" duration="163000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="20721000" />
+    <option name="totallyTimeSpent" value="22175000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="260" y="20" width="1366" height="714" extended-state="6" />
+    <frame x="260" y="20" width="1366" height="714" extended-state="7" />
     <editor active="true" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.25036603" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.2510981" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3289689" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32843137" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3267974" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
@@ -502,15 +512,6 @@
     <entry file="file:///usr/local/gcc/gcc-7.3.0/include/c++/7.3.0/string_view" />
     <entry file="file:///usr/local/gcc/gcc-7.3.0/include/c++/7.3.0/bits/locale_conv.h" />
     <entry file="file:///usr/local/gcc/gcc-7.3.0/include/c++/7.3.0/bits/stl_map.h" />
-    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="780">
-          <caret line="52" column="0" lean-forward="false" selection-start-line="52" selection-start-column="0" selection-end-line="52" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/url_encode_decode.hpp" />
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="105">
@@ -538,16 +539,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/http_server.hpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" column="30" lean-forward="false" selection-start-line="10" selection-start-column="30" selection-end-line="10" selection-end-column="30" />
-          <folding>
-            <element signature="e#13#36#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/define.h">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="240">
@@ -558,7 +549,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/http_router.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="173">
+        <state relative-caret-position="1485">
           <caret line="99" column="49" lean-forward="false" selection-start-line="99" selection-start-column="49" selection-end-line="99" selection-end-column="49" />
           <folding>
             <element signature="e#13#30#0" expanded="true" />
@@ -568,7 +559,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/mime_types.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="86">
+        <state relative-caret-position="7425">
           <caret line="495" column="74" lean-forward="false" selection-start-line="495" selection-start-column="74" selection-end-line="495" selection-end-column="74" />
           <folding />
         </state>
@@ -576,19 +567,44 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="118">
-          <caret line="80" column="100" lean-forward="true" selection-start-line="80" selection-start-column="100" selection-end-line="80" selection-end-column="100" />
+        <state relative-caret-position="1365">
+          <caret line="91" column="59" lean-forward="false" selection-start-line="91" selection-start-column="59" selection-end-line="91" selection-end-column="59" />
           <folding>
             <element signature="e#97#120#0" expanded="true" />
-            <element signature="e#2364#2762#0" expanded="true" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/http_server.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="165">
+          <caret line="11" column="32" lean-forward="false" selection-start-line="11" selection-start-column="32" selection-end-line="11" selection-end-column="32" />
+          <folding>
+            <element signature="e#13#36#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="750">
+          <caret line="50" column="4" lean-forward="false" selection-start-line="50" selection-start-column="4" selection-end-line="50" selection-end-column="4" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/url_encode_decode.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="220">
-          <caret line="66" column="114" lean-forward="true" selection-start-line="66" selection-start-column="114" selection-end-line="66" selection-end-column="114" />
+        <state relative-caret-position="310">
+          <caret line="72" column="47" lean-forward="true" selection-start-line="72" selection-start-column="47" selection-end-line="72" selection-end-column="47" />
           <folding />
         </state>
       </provider>

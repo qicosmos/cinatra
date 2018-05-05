@@ -48,6 +48,7 @@ set(CINATRA
 	http_router.hpp
 	router.hpp
 	define.h
+	url_encode_decode.hpp
 	main.cpp
 	)
 
