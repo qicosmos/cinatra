@@ -9,7 +9,7 @@
 #include "router.hpp"
 #include "nanolog.hpp"
 #include "function_traits.hpp"
-
+#include "url_encode_decode.hpp"
 namespace cinatra {
 
 	template<class service_pool_policy = io_service_pool>

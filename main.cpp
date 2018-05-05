@@ -72,6 +72,13 @@ int main() {
 		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>",res_type);
 	});
 
+    server.set_http_handler<GET,POST>("/getzh",[](const request& req,response& res){
+        auto zh = req.get_query_value("zh");
+        auto code_str = code_utils::get_string_by_urldecode(zh);
+        std::cout<<code_str.c_str()<<std::endl;
+        res.set_status_and_content(status_type::ok,code_str.c_str(),res_content_type::string);
+    });
+
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
