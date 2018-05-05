@@ -490,6 +490,12 @@ namespace cinatra {
 	{ ".json", "application/json" },
 	};
 
+	static std::map<cinatra::res_content_type,std::string_view> res_mime_map = {
+			{cinatra::res_content_type::html,"text/html; charset=utf8"},
+			{cinatra::res_content_type::json,"application/json; charset=utf8"},
+			{cinatra::res_content_type::string,"text/plain; charset=utf8"}
+	};
+
 	inline std::string_view get_mime_type(std::string_view extension) {
 		auto it = mime_map.find(std::string(extension.data(), extension.size()));
 		if (it == mime_map.end()) {

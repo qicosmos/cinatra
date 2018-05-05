@@ -9,7 +9,6 @@
 #include "router.hpp"
 #include "nanolog.hpp"
 #include "function_traits.hpp"
-#include "mime_types.hpp"
 
 namespace cinatra {
 

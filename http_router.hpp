@@ -7,6 +7,7 @@
 #include "response.hpp"
 #include "utils.hpp"
 #include "function_traits.hpp"
+#include "mime_types.hpp"
 
 namespace cinatra {
 	class http_router {
