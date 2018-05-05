@@ -13,7 +13,8 @@ namespace cinatra {
 	enum class res_content_type{
 		html,
 		json,
-		string
+		string,
+        none
 	};
 
 	inline std::string_view STAIC_RES = "cinatra_staic_resource";

@@ -53,7 +53,7 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
-	server.set_http_handler<GET,POST>("/restype",[](const request& req,response& res)->cinatra::res_content_type{
+	server.set_http_handler<GET,POST>("/restype",[](const request& req,response& res){
         auto type = req.get_query_value("type");
         auto res_type = cinatra::res_content_type::string;
         if(type=="html")
@@ -64,15 +64,14 @@ int main() {
         }else if(type=="string"){
             //do not anything;
         }
-		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>");
-		return res_type;
+		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>",res_type);
 	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
 
-		res.set_status_and_content(status_type::ok, "hello world", content_encoding::gzip);
+		res.set_status_and_content(status_type::ok, "hello world",res_content_type::none, content_encoding::gzip);
 	});
 
 	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
