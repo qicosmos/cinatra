@@ -41,7 +41,7 @@ namespace  code_utils
     static unsigned char c_urlhex[16] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f' };
 
     template<class char_type>
-    static inline char_type * _encode_hex(char_type * s, wchar_t u)
+    static inline char_type * encode_hex(char_type * s, wchar_t u)
     {
         *s++ = '%';
         *s++ = c_urlhex[(u >> 4) & 0x0f];
@@ -49,7 +49,7 @@ namespace  code_utils
         return s;
     }
 
-    static inline wchar_t _decode_hex(const wchar_t* &s)
+    static inline wchar_t decode_hex(const wchar_t* &s)
     {
         if (iswxdigit(s[0]) && iswxdigit(s[1]))
         {
@@ -67,7 +67,7 @@ namespace  code_utils
         return 0;
     }
 
-    static inline wchar_t _decode_hex(const unsigned char* &s)
+    static inline wchar_t decode_hex(const unsigned char* &s)
     {
         if (isxdigit(s[0]) && isxdigit(s[1]))
         {
@@ -84,26 +84,26 @@ namespace  code_utils
 
         return 0;
     }
-    static inline wchar_t _decode_hex(const char* &s)
+    static inline wchar_t decode_hex(const char* &s)
     {
-        return _decode_hex(reinterpret_cast<const unsigned char *&>(s));
+        return decode_hex(reinterpret_cast<const unsigned char *&>(s));
     }
 
-    static inline size_t _xcslen_(const unsigned char* s)
+    static inline size_t xcslen_(const unsigned char* s)
     {
         return strlen((char *)s);
     }
-    static inline size_t _xcslen_(const char* s)
+    static inline size_t xcslen_(const char* s)
     {
         return strlen((char *)s);
     }
-    static inline size_t _xcslen_(const wchar_t* s)
+    static inline size_t xcslen_(const wchar_t* s)
     {
         return wcslen(s);
     }
 
     template<class char_type>
-    static size_t _http_url_decode(const char_type * pszUrl, intptr_t nLength, wchar_t * sUrl)
+    static inline size_t http_url_decode(const char_type * pszUrl, intptr_t nLength, wchar_t * sUrl)
     {
         if (!pszUrl || !*pszUrl)
         {
@@ -112,7 +112,7 @@ namespace  code_utils
         }
         else
         {
-            if (nLength < 0) nLength = _xcslen_(pszUrl);
+            if (nLength < 0) nLength = xcslen_(pszUrl);
 
             if (sUrl)
             {
@@ -126,15 +126,15 @@ namespace  code_utils
                     {
                         ++s;
                         wchar_t s0 = 0, s1 = 0, s2 = 0;
-                        s0 = _decode_hex(s);
+                        s0 = decode_hex(s);
                         if (((s0 & 0xC0) == 0xC0) && (*s == L'%'))
                         {
                             ++s;
-                            s1 = _decode_hex(s);
+                            s1 = decode_hex(s);
                             if ((s0 & 0x20) && (s1 & 0x80) && *s == L'%')
                             {
                                 ++s;
-                                s2 = _decode_hex(s);
+                                s2 = decode_hex(s);
                                 s0 = ((s0 & 0x0F) << 12) | ((s1 & 0x3F) << 6) | (s2 & 0x3F);
                             }
                             else
@@ -160,8 +160,8 @@ namespace  code_utils
                         if (u && (u == L'U' || u == L'u'))
                         {
                             ++s;
-                            wchar_t s0 = _decode_hex(s);
-                            wchar_t s1 = _decode_hex(s);
+                            wchar_t s0 = decode_hex(s);
+                            wchar_t s1 = decode_hex(s);
                             if (s0 && s1)
                             {
                                 *pszTarget++ = s0 | (s1 << 8);
@@ -203,7 +203,7 @@ namespace  code_utils
     }
 
     template<class char_type>
-    static size_t _http_url_encode(const wchar_t * pszUrl, char_type * sUrl)
+    static inline size_t http_url_encode(const wchar_t * pszUrl, char_type * sUrl)
     {
         if (!pszUrl || !*pszUrl)
         {
@@ -221,14 +221,14 @@ namespace  code_utils
                     wchar_t u = *s;
                     if (u > 0x07FF)
                     {
-                        pszTarget = _encode_hex(pszTarget, ((u & 0xF000) >> 12) | 0xE0);
-                        pszTarget = _encode_hex(pszTarget, ((u & 0x0FC0) >> 6) | 0x80);
-                        pszTarget = _encode_hex(pszTarget, (u & 0x003F) | 0x80);
+                        pszTarget = encode_hex(pszTarget, ((u & 0xF000) >> 12) | 0xE0);
+                        pszTarget = encode_hex(pszTarget, ((u & 0x0FC0) >> 6) | 0x80);
+                        pszTarget = encode_hex(pszTarget, (u & 0x003F) | 0x80);
                     }
                     else if (u > 0x007F)
                     {
-                        pszTarget = _encode_hex(pszTarget, ((u & 0x07C0) >> 6) | 0xC0);
-                        pszTarget = _encode_hex(pszTarget, (u & 0x003F) | 0x80);
+                        pszTarget = encode_hex(pszTarget, ((u & 0x07C0) >> 6) | 0xC0);
+                        pszTarget = encode_hex(pszTarget, (u & 0x003F) | 0x80);
                     }
                     else if (c_urlflags[u])
                     {
@@ -236,7 +236,7 @@ namespace  code_utils
                     }
                     else
                     {
-                        pszTarget = _encode_hex(pszTarget, u);
+                        pszTarget = encode_hex(pszTarget, u);
                     }
                 }
 
@@ -265,24 +265,24 @@ namespace  code_utils
 
         if (!text.empty())
         {
-            size_t length = _http_url_decode(text.data(), text.size(), nullptr);
+            size_t length = http_url_decode(text.data(), text.size(), nullptr);
             str.resize(length);
-            _http_url_decode(text.data(), text.size(), str.data());
+            http_url_decode(text.data(), text.size(), str.data());
         }
 
         return str;
     }
 
     template<class string_type>
-    string_type url_encode(std::wstring_view text)
+    inline string_type url_encode(std::wstring_view text)
     {
         string_type str;
 
         if (!text.empty())
         {
-            size_t length = _http_url_encode<decltype(str[0])>(text.data(), text.size(), nullptr);
+            size_t length = http_url_encode<decltype(str[0])>(text.data(), text.size(), nullptr);
             str.resize(length);
-            _http_url_encode(text.data(), text.size(), str.data());
+            http_url_encode(text.data(), text.size(), str.data());
         }
 
         return str;
