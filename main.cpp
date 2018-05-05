@@ -54,7 +54,7 @@ int main() {
 	});
 
 	server.set_http_handler<GET, POST>("/seo/*", [](const request& req, response& res) {
-		auto params = req.get_params("/seo/", 0);
+		auto params = req.get_params("/seo/");
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 

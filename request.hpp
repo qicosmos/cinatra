@@ -397,7 +397,7 @@ namespace cinatra {
             return queries_;
         }
 
-		std::vector<std::string_view> get_params(std::string_view reg_url, size_t index) const {
+		std::vector<std::string_view> get_params(std::string_view reg_url) const {
 			auto url = get_url();
 			size_t pos = url.find(reg_url);
 			if (pos == std::string_view::npos)
