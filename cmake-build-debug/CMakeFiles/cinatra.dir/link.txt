@@ -1,0 +1,1 @@
+/usr/bin/c++    -pthread -std=c++17 -g  -rdynamic CMakeFiles/cinatra.dir/main.cpp.o  -o cinatra -Wl,-rpath,/usr/local/lib: /usr/local/lib/libboost_system.so 

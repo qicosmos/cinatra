@@ -53,6 +53,21 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
+	server.set_http_handler<GET,POST>("/restype",[](const request& req,response& res)->cinatra::res_content_type{
+        auto type = req.get_query_value("type");
+        auto res_type = cinatra::res_content_type::string;
+        if(type=="html")
+        {
+            res_type = cinatra::res_content_type::html;
+        }else if(type=="json"){
+            res_type = cinatra::res_content_type::json;
+        }else if(type=="string"){
+            //do not anything;
+        }
+		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>");
+		return res_type;
+	});
+
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
