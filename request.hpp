@@ -397,6 +397,43 @@ namespace cinatra {
             return queries_;
         }
 
+		std::vector<std::string_view> string_split(std::string_view s, const char delimiter) const {
+			size_t start = 0;
+			size_t end = s.find_first_of(delimiter);
+
+			std::vector<std::string_view> output;
+
+			while (end <= std::string_view::npos)
+			{
+				output.emplace_back(s.substr(start, end - start));
+
+				if (end == std::string_view::npos)
+					break;
+
+				start = end + 1;
+				end = s.find_first_of(delimiter, start);
+			}
+
+			return output;
+		}
+
+		std::vector<std::string_view> get_params(std::string_view reg_url, size_t index) const {
+			auto url = get_url();
+			size_t pos = url.find(reg_url);
+			if (pos == std::string_view::npos)
+				return {};
+
+			size_t tail = (url.back() == '/'&&url.length() > 1) ? 1 : 0;
+			auto str = url.substr(reg_url.length(), url.length() - reg_url.length() - tail);
+			if (str.empty())
+				return {};
+
+			if (str.front() == '/')
+				str = str.substr(1, str.length());
+
+			return string_split(str, '/');
+		}
+
 		std::string_view get_query_value(std::string_view key) const{
 			auto it = queries_.find(key);
 			if (it == queries_.end()) {
