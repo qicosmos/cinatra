@@ -1,7 +1,0 @@
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/install/strip.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/install/local.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/install.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/list_install_components.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/xmh0511/Downloads/github/cinatra/cmake-build-debug/CMakeFiles/cinatra.dir
