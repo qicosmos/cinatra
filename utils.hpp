@@ -181,6 +181,26 @@ namespace cinatra {
 		return true;
 	}
 
+	inline std::vector<std::string_view> split(std::string_view s, const char delimiter) {
+		size_t start = 0;
+		size_t end = s.find_first_of(delimiter);
+
+		std::vector<std::string_view> output;
+
+		while (end <= std::string_view::npos)
+		{
+			output.emplace_back(s.substr(start, end - start));
+
+			if (end == std::string_view::npos)
+				break;
+
+			start = end + 1;
+			end = s.find_first_of(delimiter, start);
+		}
+
+		return output;
+	}
+
     // var bools = [];
     // var valid_chr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-';
     // for(var i = 0; i <= 127; ++ i) {
