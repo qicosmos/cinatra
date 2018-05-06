@@ -53,6 +53,11 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
+	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
+		auto s = req.get_query_value(0);
+		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()));
+	});
+
 	server.set_http_handler<GET,POST>("/restype",[](const request& req,response& res){
         auto type = req.get_query_value("type");
         auto res_type = cinatra::res_content_type::string;

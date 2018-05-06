@@ -181,6 +181,26 @@ namespace cinatra {
 		return true;
 	}
 
+	inline std::vector<std::string_view> split(std::string_view s, const char delimiter) {
+		size_t start = 0;
+		size_t end = s.find_first_of(delimiter);
+
+		std::vector<std::string_view> output;
+
+		while (end <= std::string_view::npos)
+		{
+			output.emplace_back(s.substr(start, end - start));
+
+			if (end == std::string_view::npos)
+				break;
+
+			start = end + 1;
+			end = s.find_first_of(delimiter, start);
+		}
+
+		return output;
+	}
+
     // var bools = [];
     // var valid_chr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-';
     // for(var i = 0; i <= 127; ++ i) {
@@ -426,17 +446,16 @@ public:\
 		return arr;
 	}
 
-	template<typename ResType>
-	struct is_res_content_type
-	{
-		static constexpr std::false_type value = std::false_type{};
-	};
+	inline std::string get_time_str(std::time_t t) {
+		std::stringstream ss;
+		ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
+		return ss.str();
+	}
 
-	template<>
-	struct is_res_content_type<cinatra::res_content_type>
-	{
-		static constexpr std::true_type value = std::true_type{};
-	};
+	inline std::string get_cur_time_str() {
+		return get_time_str(std::time(nullptr));
+	}
+
 }
 
 #endif //CINATRA_UTILS_HPP

@@ -8,6 +8,7 @@
 #endif
 #include "define.h"
 #include "upload_file.hpp"
+#include "memento.hpp"
  
 namespace cinatra {
 	enum class data_proc_state : int8_t {
@@ -396,6 +397,26 @@ namespace cinatra {
         const std::map<std::string_view, std::string_view>& queries() const{
             return queries_;
         }
+
+		std::string_view get_query_value(size_t n) const {
+			auto url = get_url();
+			size_t tail = (url.back() == '/') ? 1 : 0;
+			for (auto item : memento::pathinfo_mem) {
+				if (url.find(item) != std::string_view::npos) {
+					if (item.length() == url.length())
+						return {};
+
+					auto str = url.substr(item.length(), url.length() - item.length() - tail);
+					auto params = split(str, '/');
+					if (n >= params.size())
+						return {};
+
+					return params[n];
+				}
+			}
+
+			return {};
+		}
 
 		std::string_view get_query_value(std::string_view key) const{
 			auto it = queries_.find(key);
