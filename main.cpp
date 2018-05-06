@@ -86,10 +86,10 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world",res_content_type::none, content_encoding::gzip);
 	});
 
-	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
-		auto res_path = req.get_res_path();
-		std::cout << res_path << std::endl;
-	});
+//	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
+//		auto res_path = req.get_res_path();
+//		std::cout << res_path << std::endl;
+//	});
 
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
