@@ -8,6 +8,7 @@
 #endif
 #include "define.h"
 #include "upload_file.hpp"
+#include "memento.hpp"
  
 namespace cinatra {
 	enum class data_proc_state : int8_t {
@@ -397,21 +398,24 @@ namespace cinatra {
             return queries_;
         }
 
-		std::vector<std::string_view> get_params(std::string_view reg_url) const {
+		std::string_view get_query_value(size_t n) const {
 			auto url = get_url();
-			size_t pos = url.find(reg_url);
-			if (pos == std::string_view::npos)
-				return {};
+			size_t tail = (url.back() == '/') ? 1 : 0;
+			for (auto item : memento::pathinfo_mem) {
+				if (url.find(item) != std::string_view::npos) {
+					if (item.length() == url.length())
+						return {};
 
-			size_t tail = (url.back() == '/'&&url.length() > 1) ? 1 : 0;
-			auto str = url.substr(reg_url.length(), url.length() - reg_url.length() - tail);
-			if (str.empty())
-				return {};
+					auto str = url.substr(item.length(), url.length() - item.length() - tail);
+					auto params = split(str, '/');
+					if (n >= params.size())
+						return {};
 
-			if (str.front() == '/')
-				str = str.substr(1, str.length());
+					return params[n];
+				}
+			}
 
-			return split(str, '/');
+			return {};
 		}
 
 		std::string_view get_query_value(std::string_view key) const{

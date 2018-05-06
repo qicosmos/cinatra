@@ -8,12 +8,22 @@
 #include "utils.hpp"
 #include "function_traits.hpp"
 #include "mime_types.hpp"
+#include "memento.hpp"
 
 namespace cinatra {
 	class http_router {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
 		void register_handler(std::string_view name, Function&& f, Ap&&... ap) {
+			if (name == "/*"sv) {
+				assert("register error");
+				return;
+			}
+
+			if (name.back() == '*') {
+				memento::pathinfo_mem.push_back(std::string_view(name.data(), name.length()-1));
+			}
+
 			if constexpr(sizeof...(Is) > 0) {
 				auto arr = get_arr<Is...>(name);
 
@@ -86,11 +96,6 @@ namespace cinatra {
 
 		template<typename Function, typename... AP>
 		void register_nonmember_func(std::string_view raw_name, const std::string& name, Function f, AP&&... ap) {
-			if (raw_name=="/*"sv) {
-				assert("register error");
-				return;
-			}
-
 			if (raw_name.back()=='*') {
 				this->wildcard_invokers_[name.substr(0, name.size() - 2)] = std::bind(&http_router::invoke<Function, AP...>, this,
 					std::placeholders::_1, std::placeholders::_2, std::move(f), std::move(ap)...);
