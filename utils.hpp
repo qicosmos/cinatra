@@ -446,17 +446,16 @@ public:\
 		return arr;
 	}
 
-	template<typename ResType>
-	struct is_res_content_type
-	{
-		static constexpr std::false_type value = std::false_type{};
-	};
+	inline std::string get_time_str(std::time_t t) {
+		std::stringstream ss;
+		ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
+		return ss.str();
+	}
 
-	template<>
-	struct is_res_content_type<cinatra::res_content_type>
-	{
-		static constexpr std::true_type value = std::true_type{};
-	};
+	inline std::string get_cur_time_str() {
+		return get_time_str(std::time(nullptr));
+	}
+
 }
 
 #endif //CINATRA_UTILS_HPP
