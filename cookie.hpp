@@ -49,7 +49,7 @@ namespace cinatra {
 			secure_ = secure;
 		}
 
-		void set_max_age(int seconds) {
+		void set_max_age(std::time_t seconds) {
 			max_age_ = seconds;
 		}
 
@@ -84,7 +84,7 @@ namespace cinatra {
 				if (max_age_ != -1)
 				{
 					result.append("; expires=");
-					result.append(get_time_str(max_age_));
+					result.append(get_gmt_time_str(max_age_));
 				}
 				if (secure_)
 				{
@@ -154,7 +154,7 @@ namespace cinatra {
 		std::string  path_;
 		std::string  priority_;
 		bool         secure_ = false;
-		int          max_age_ = -1;
+		std::time_t          max_age_ = -1;
 		bool         http_only_ = false;
 	};
 }

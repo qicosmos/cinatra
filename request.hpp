@@ -9,7 +9,7 @@
 #include "define.h"
 #include "upload_file.hpp"
 #include "memento.hpp"
- 
+#include "session.hpp"
 namespace cinatra {
 	enum class data_proc_state : int8_t {
 		data_begin,
@@ -480,6 +480,35 @@ namespace cinatra {
 
 		const std::vector<upload_file>& get_upload_files() const {
 			return files_;
+		}
+
+		std::map<std::string,std::string> get_cookies() const
+		{
+			auto cookies_str = get_header_value("cookie");
+			auto cookies = get_cookies_map(std::string(cookies_str.data(),cookies_str.size()));
+            return cookies;
+		}
+
+        std::shared_ptr<session> get_session(const std::string& name) const
+		{
+			auto cookies = get_cookies();
+			auto iter = cookies.find(name);
+			if(iter==cookies.end())
+			{
+				return nullptr;
+			}
+			return session::get(iter->second);
+		}
+
+		std::shared_ptr<session> get_session() const
+		{
+			auto cookies = get_cookies();
+			auto iter = cookies.find("CSESSIONID");
+			if(iter==cookies.end())
+			{
+				return nullptr;
+			}
+			return session::get(iter->second);
 		}
 
 	private:

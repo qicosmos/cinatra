@@ -1,5 +1,7 @@
 #include <iostream>
 #include "http_server.hpp"
+#include "cookie.hpp"
+#include "session_utils.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -51,6 +53,23 @@ int main() {
 	
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
+	});
+
+    server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
+        auto session_handle = res.start_session(req);
+		session_handle->set_data("userid",std::string("1"));
+		session_handle->set_max_age(10);
+        res.set_status_and_content(status_type::ok, "login");
+    });
+
+	server.set_http_handler<GET,POST>("/islogin",[](const request& req, response& res) {
+		auto req_session = req.get_session();
+		if(req_session== nullptr||req_session->get_data<std::string>("userid")!="1")
+		{
+			res.set_status_and_content(status_type::ok, "没有登录",res_content_type::string);
+			return;
+		}
+		res.set_status_and_content(status_type::ok, "已经登录",res_content_type::string);
 	});
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {

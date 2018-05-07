@@ -12,6 +12,7 @@
 #include "itoa.hpp"
 #include "utils.hpp"
 #include "mime_types.hpp"
+#include "session_utils.hpp"
 namespace cinatra {
 	class response {
 	public:
@@ -25,6 +26,11 @@ namespace cinatra {
 		std::vector<boost::asio::const_buffer> to_buffers() {
 			std::vector<boost::asio::const_buffer> buffers;
 			add_header("Host", "cinatra");
+			if(req_session!= nullptr)
+			{
+				auto cookie_str = req_session->get_cookie().to_string();
+				add_header("Set-Cookie",cookie_str.c_str());
+			}
 			buffers.reserve(headers_.size() * 4 + 5);
 			buffers.emplace_back(to_buffer(status_));
 			for (auto const& h : headers_) {
@@ -154,6 +160,20 @@ namespace cinatra {
 			return buffers;
 		}
 
+        std::shared_ptr<cinatra::session> start_session(const std::string& name,std::time_t time,const cinatra::request& req,const std::string &path = "/")
+		{
+             auto session_ptr = cinatra::create_session(name,time,req,path);
+			 req_session = session_ptr;
+             return session_ptr;
+		}
+
+		std::shared_ptr<cinatra::session> start_session(const request& req)
+		{
+			auto session_ptr = cinatra::create_session("CSESSIONID",-1,req,"/");
+			req_session = session_ptr;
+			return session_ptr;
+		}
+
 	private:
 		
 		//std::map<std::string, std::string, ci_less> headers_;
@@ -165,6 +185,8 @@ namespace cinatra {
 		std::string chunk_size_;
 
 		bool delay_ = false;
+
+		std::shared_ptr<cinatra::session> req_session = nullptr;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
