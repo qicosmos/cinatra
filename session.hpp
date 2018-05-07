@@ -20,22 +20,30 @@ namespace cinatra{
     class session
     {
     public:
-        session(const std::string& name,std::size_t expire, const std::string& path = "", const std::string& domain = ""):cookie_(name,"")
+        static std::shared_ptr<session> make_session(const std::string& name,std::size_t expire, const std::string& path = "/", const std::string& domain = "")
         {
             uuids::uuid_system_generator uid{};
             std::string uuid_str = uuids::to_string(uid());
             remove_char(uuid_str,'-');
-            this->name = name;
-            this->id = uuid_str;
-            this->expire = expire;
-            this->path = path;
-            this->domain = domain;
-            std::time_t time = getTimeStamp();
-            this->timestamp = expire * 1000 + time;
+            std::shared_ptr<session> tmp_ptr = std::make_shared<session>(name,uuid_str,expire,path,domain);
             session::_threadLock.lock();
-            std::shared_ptr<session> construct_ptr(this);
-            GLOBAL_SESSION.insert(std::make_pair(this->id, construct_ptr));
+            GLOBAL_SESSION.insert(std::make_pair(uuid_str, tmp_ptr));
             session::_threadLock.unlock();
+            return tmp_ptr;
+        }
+    public:
+        session(const std::string& name,const std::string& uuid_str,std::size_t _expire, const std::string& path = "/", const std::string& domain = ""):cookie_("","")
+        {
+            this->id = uuid_str;
+            this->expire = _expire==-1?600:_expire;
+            std::time_t time = get_time_stamp();
+            this->time_stamp = this->expire + time;
+            cookie_.set_name(name);
+            cookie_.set_path(path);
+            cookie_.set_domain(domain);
+            cookie_.set_value(uuid_str);
+            cookie_.set_version(0);
+            cookie_.set_max_age(_expire==-1?-1:time_stamp);
         }
         void set_data(const std::string& name, std::any data)
         {
@@ -54,7 +62,7 @@ namespace cinatra{
             return Type{};
         }
     public:
-        static std::shared_ptr<session> get(std::string id)
+        static std::shared_ptr<session> get(const std::string& id)
         {
             if (!GLOBAL_SESSION.empty())
             {
@@ -76,10 +84,10 @@ namespace cinatra{
             session::_threadLock.lock();
             if (!GLOBAL_SESSION.empty())
             {
-                std::time_t nowTimeStamp = session::getTimeStamp();
+                std::time_t nowTimeStamp = session::get_time_stamp();
                 for (auto iter = GLOBAL_SESSION.begin(); iter != GLOBAL_SESSION.end();)
                 {
-                    if (iter->second->timestamp < nowTimeStamp)
+                    if (iter->second->time_stamp < nowTimeStamp)
                     {
                         iter = session::del(iter);
                     }
@@ -101,55 +109,21 @@ namespace cinatra{
             }
         }
     public:
-        const std::string get_name()
-        {
-            return name;
-        }
         const std::string get_id()
         {
             return id;
         }
-        const std::string get_path()
+        const std::time_t get_max_age()
         {
-            return path;
+            return expire;
         }
-        const std::string get_domain()
-        {
-            return domain;
-        }
-        void set_name(const std::string& _name)
+        void set_max_age(const std::time_t seconds)
         {
             session::_threadLock.lock();
-            name = _name;
-            session::_threadLock.unlock();
-        }
-        void set_id(const std::string& _id)
-        {
-            session::_threadLock.lock();
-            id = _id;
-            session::_threadLock.unlock();
-        }
-        void set_path(const std::string& _path)
-        {
-            session::_threadLock.lock();
-            path = _path;
-            session::_threadLock.unlock();
-        }
-        void set_domain(const std::string& _domain)
-        {
-            session::_threadLock.lock();
-            domain = _domain;
-            session::_threadLock.unlock();
-        }
-        void set_cookie()
-        {
-            session::_threadLock.lock();
-            cookie_.set_version(0);
-            cookie_.set_name(name);
-            cookie_.set_value(id);
-            cookie_.set_max_age(timestamp/1000);
-            cookie_.set_domain(domain);
-            cookie_.set_path(path);
+            expire = seconds==-1?600:seconds;
+            std::time_t time = get_time_stamp();
+            time_stamp = expire + time;
+            cookie_.set_max_age(seconds==-1?-1:time_stamp);
             session::_threadLock.unlock();
         }
         cinatra::cookie get_cookie()
@@ -159,26 +133,21 @@ namespace cinatra{
     public:
         static std::mutex _threadLock;
     private:
-        std::string name;
         std::string id;
-        std::string path;
-        std::string domain;
         std::size_t expire;
-        std::time_t timestamp;
+        std::time_t time_stamp;
         std::map<std::string, std::any> _data;
-        cinatra::cookie cookie_{"",""};
+        cinatra::cookie cookie_;
     private:
-        session()
-        {
-
-        }
+        session()= delete;
     public:
-        static std::time_t getTimeStamp()
+        static std::time_t get_time_stamp()
         {
-            std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> tp = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-            auto tmp = std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch());
-            std::time_t timestamp = tmp.count();
-            return timestamp;
+            return std::time(nullptr);
+//            std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> tp = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+//            auto tmp = std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch());
+//            std::time_t timestamp = tmp.count();
+//            return timestamp;
         }
     };
     std::mutex session::_threadLock;

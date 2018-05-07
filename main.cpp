@@ -52,26 +52,18 @@ int main() {
 	}
 	
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
-        //session ss("user",3600);
-//        cookie cc{"abc","1233233323"};
-//        cc.set_version(0);
-//        std::cout<<cc.to_string()<<std::endl;
-        auto session_ptr = req.get_session("abc");
-        if(session_ptr== nullptr)
-        {
-            std::cout<<req.get_url()<<std::endl;
-        }
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
     server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
-        auto session_handle = res.start_session("test_cookie",20,req);
+        auto session_handle = res.start_session(req);
 		session_handle->set_data("userid",std::string("1"));
+		session_handle->set_max_age(10);
         res.set_status_and_content(status_type::ok, "login");
     });
 
 	server.set_http_handler<GET,POST>("/islogin",[](const request& req, response& res) {
-		auto req_session = req.get_session("test_cookie");
+		auto req_session = req.get_session();
 		if(req_session== nullptr||req_session->get_data<std::string>("userid")!="1")
 		{
 			res.set_status_and_content(status_type::ok, "没有登录",res_content_type::string);

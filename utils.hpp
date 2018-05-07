@@ -489,7 +489,7 @@ public:\
 		return std::move(Vect);
 	}
 
-	const std::map<std::string,std::string> get_cookies(const std::string& cookies_str)
+	const std::map<std::string,std::string> get_cookies_map(const std::string& cookies_str)
 	{
 		std::map<std::string,std::string> cookies;
 		auto cookies_vec = str_split(cookies_str,"; ");

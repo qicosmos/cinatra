@@ -482,11 +482,28 @@ namespace cinatra {
 			return files_;
 		}
 
-        std::shared_ptr<session> get_session(const std::string& name) const
+		std::map<std::string,std::string> get_cookies() const
 		{
 			auto cookies_str = get_header_value("cookie");
-			auto cookies = get_cookies(std::string(cookies_str.data(),cookies_str.size()));
+			auto cookies = get_cookies_map(std::string(cookies_str.data(),cookies_str.size()));
+            return cookies;
+		}
+
+        std::shared_ptr<session> get_session(const std::string& name) const
+		{
+			auto cookies = get_cookies();
 			auto iter = cookies.find(name);
+			if(iter==cookies.end())
+			{
+				return nullptr;
+			}
+			return session::get(iter->second);
+		}
+
+		std::shared_ptr<session> get_session() const
+		{
+			auto cookies = get_cookies();
+			auto iter = cookies.find("CSESSIONID");
 			if(iter==cookies.end())
 			{
 				return nullptr;
