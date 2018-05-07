@@ -48,12 +48,7 @@ namespace cinatra {
 			return last_used_time_;
 		}
 
-	private:	
-		std::string name_;
-		std::string id_;
-		std::string path_;
-		std::string domain_;
-		std::size_t expire_;
+	private:
 		std::time_t last_used_time_;
 		std::mutex mtx_;
 		std::map<std::string, std::any> data_;
