@@ -9,7 +9,7 @@
 #include "function_traits.hpp"
 #include "mime_types.hpp"
 #include "memento.hpp"
-
+#include "session.hpp"
 namespace cinatra {
 	class http_router {
 	public:
@@ -48,6 +48,7 @@ namespace cinatra {
 		//elimate exception, resut type bool: true, success, false, failed
 		bool route(std::string_view method, std::string_view url, const request& req, response& res) {
 			std::string key(method.data(), method.length());
+			bool is_static_res_flag = false;
 			if (url.rfind('.') == std::string_view::npos) {
 			        url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
 				auto pos = url.rfind("index"sv);
@@ -58,13 +59,15 @@ namespace cinatra {
 			}
 			else {
 				key += std::string(STAIC_RES.data(), STAIC_RES.length());
+				is_static_res_flag = true;
 			}
 
 			auto it = map_invokers_.find(key);
 			if (it == map_invokers_.end()) {
 				return get_wildcard_function(key, req, res);
 			}
-
+			if(is_static_res_flag==false)
+				cinatra::session::tick_time();
 			it->second(req, res);
 			return true;
 		}

@@ -71,7 +71,7 @@ namespace cinatra{
         {
             return GLOBAL_SESSION.erase(iter);
         }
-        static void ticktime()
+        static void tick_time()
         {
             session::_threadLock.lock();
             if (!GLOBAL_SESSION.empty())

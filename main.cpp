@@ -65,7 +65,7 @@ int main() {
 	});
 
     server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
-        auto session_handle = res.start_session("test_cookie",3600,req);
+        auto session_handle = res.start_session("test_cookie",20,req);
 		session_handle->set_data("userid",std::string("1"));
         res.set_status_and_content(status_type::ok, "login");
     });
