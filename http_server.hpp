@@ -177,9 +177,9 @@ namespace cinatra {
                     return;
                 }
 #ifdef CINATRA_ENABLE_GZIP
-                res.set_status_and_content(status_type::ok,file_buffer.str(),content_encoding::gzip);
+                res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
 #else
-                res.set_status_and_content(status_type::ok,file_buffer.str());
+                res.set_status_and_content(status_type::ok, file_buffer.str());
 #endif
 
             });
