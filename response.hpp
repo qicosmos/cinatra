@@ -12,6 +12,7 @@
 #include "itoa.hpp"
 #include "utils.hpp"
 #include "mime_types.hpp"
+#include "session_utils.hpp"
 namespace cinatra {
 	class response {
 	public:
@@ -152,6 +153,14 @@ namespace cinatra {
 			}
 
 			return buffers;
+		}
+
+        cinatra::session* start_session(const std::string& name,std::time_t time,const cinatra::request& req,const std::string &path = "/")
+		{
+             cinatra::session* ptr = cinatra::create_session(name,time,req,path);
+             auto cookie_str = ptr->get_cookie().to_string();
+             add_header("Set-Cookie",cookie_str.c_str());
+             return ptr;
 		}
 
 	private:

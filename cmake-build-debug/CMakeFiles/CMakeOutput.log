@@ -1,0 +1,611 @@
+The system is: Linux - 4.14.0-deepin2-amd64 - x86_64
+Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+Compiler: /usr/bin/cc 
+Build flags: 
+Id flags:  
+
+The output was:
+0
+
+
+Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
+
+The C compiler identification is GNU, found in "/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/3.8.2/CompilerIdC/a.out"
+
+Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+Compiler: /usr/bin/c++ 
+Build flags: 
+Id flags:  
+
+The output was:
+0
+
+
+Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+
+The CXX compiler identification is GNU, found in "/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/3.8.2/CompilerIdCXX/a.out"
+
+Determining if the C compiler works passed with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_e6e9f/fast"
+/usr/bin/make -f CMakeFiles/cmTC_e6e9f.dir/build.make CMakeFiles/cmTC_e6e9f.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_e6e9f.dir/testCCompiler.c.o
+/usr/bin/cc    -o CMakeFiles/cmTC_e6e9f.dir/testCCompiler.c.o   -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp/testCCompiler.c
+Linking C executable cmTC_e6e9f
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_e6e9f.dir/link.txt --verbose=1
+/usr/bin/cc      -rdynamic CMakeFiles/cmTC_e6e9f.dir/testCCompiler.c.o  -o cmTC_e6e9f 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+Detecting C compiler ABI info compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_ee6be/fast"
+/usr/bin/make -f CMakeFiles/cmTC_ee6be.dir/build.make CMakeFiles/cmTC_ee6be.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o
+/usr/bin/cc    -o CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o   -c /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/CMakeCCompilerABI.c
+Linking C executable cmTC_ee6be
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_ee6be.dir/link.txt --verbose=1
+/usr/bin/cc     -v -rdynamic CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o  -o cmTC_ee6be 
+使用内建 specs。
+COLLECT_GCC=/usr/bin/cc
+COLLECT_LTO_WRAPPER=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper
+目标：x86_64-pc-linux-gnu
+配置为：./configure --prefix=/usr/local/gcc/gcc-7.3.0 --enable-languages=c,c++ --disable-multilib
+线程模型：posix
+gcc 版本 7.3.0 (GCC) 
+COMPILER_PATH=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/
+LIBRARY_PATH=/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../:/lib/:/usr/lib/
+COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_ee6be' '-mtune=generic' '-march=x86-64'
+ /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2 -plugin /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so -plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccg3wiVI.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -export-dynamic -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_ee6be /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0 -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../.. CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o -lgcc --as-needed -lgcc_s --no-as-needed -lc -lgcc --as-needed -lgcc_s --no-as-needed /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o /usr/lib/x86_64-linux-gnu/crtn.o
+COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_ee6be' '-mtune=generic' '-march=x86-64'
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+Parsed C implicit link information from above output:
+  link line regex: [^( *|.*[/\])(ld|([^/\]+-)?ld|collect2)[^/\]*( |$)]
+  ignore line: [Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp]
+  ignore line: []
+  ignore line: [Run Build Command:"/usr/bin/make" "cmTC_ee6be/fast"]
+  ignore line: [/usr/bin/make -f CMakeFiles/cmTC_ee6be.dir/build.make CMakeFiles/cmTC_ee6be.dir/build]
+  ignore line: [make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp']
+  ignore line: [Building C object CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o]
+  ignore line: [/usr/bin/cc    -o CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o   -c /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/CMakeCCompilerABI.c]
+  ignore line: [Linking C executable cmTC_ee6be]
+  ignore line: [/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_ee6be.dir/link.txt --verbose=1]
+  ignore line: [/usr/bin/cc     -v -rdynamic CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o  -o cmTC_ee6be ]
+  ignore line: [使用内建 specs。]
+  ignore line: [COLLECT_GCC=/usr/bin/cc]
+  ignore line: [COLLECT_LTO_WRAPPER=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper]
+  ignore line: [目标：x86_64-pc-linux-gnu]
+  ignore line: [配置为：./configure --prefix=/usr/local/gcc/gcc-7.3.0 --enable-languages=c,c++ --disable-multilib]
+  ignore line: [线程模型：posix]
+  ignore line: [gcc 版本 7.3.0 (GCC) ]
+  ignore line: [COMPILER_PATH=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/]
+  ignore line: [LIBRARY_PATH=/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../:/lib/:/usr/lib/]
+  ignore line: [COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_ee6be' '-mtune=generic' '-march=x86-64']
+  link line: [ /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2 -plugin /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so -plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccg3wiVI.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --eh-frame-hdr -m elf_x86_64 -export-dynamic -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_ee6be /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0 -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../.. CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o -lgcc --as-needed -lgcc_s --no-as-needed -lc -lgcc --as-needed -lgcc_s --no-as-needed /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o /usr/lib/x86_64-linux-gnu/crtn.o]
+    arg [/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2] ==> ignore
+    arg [-plugin] ==> ignore
+    arg [/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so] ==> ignore
+    arg [-plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper] ==> ignore
+    arg [-plugin-opt=-fresolution=/tmp/ccg3wiVI.res] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+    arg [-plugin-opt=-pass-through=-lc] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+    arg [--eh-frame-hdr] ==> ignore
+    arg [-m] ==> ignore
+    arg [elf_x86_64] ==> ignore
+    arg [-export-dynamic] ==> ignore
+    arg [-dynamic-linker] ==> ignore
+    arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+    arg [-o] ==> ignore
+    arg [cmTC_ee6be] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crt1.o] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crti.o] ==> ignore
+    arg [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o] ==> ignore
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0]
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64]
+    arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+    arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+    arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..]
+    arg [CMakeFiles/cmTC_ee6be.dir/CMakeCCompilerABI.c.o] ==> ignore
+    arg [-lgcc] ==> lib [gcc]
+    arg [--as-needed] ==> ignore
+    arg [-lgcc_s] ==> lib [gcc_s]
+    arg [--no-as-needed] ==> ignore
+    arg [-lc] ==> lib [c]
+    arg [-lgcc] ==> lib [gcc]
+    arg [--as-needed] ==> ignore
+    arg [-lgcc_s] ==> lib [gcc_s]
+    arg [--no-as-needed] ==> ignore
+    arg [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crtn.o] ==> ignore
+  remove lib [gcc]
+  remove lib [gcc_s]
+  remove lib [gcc]
+  remove lib [gcc_s]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0] ==> [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64] ==> [/usr/local/gcc/gcc-7.3.0/lib64]
+  collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+  collapse library dir [/lib/../lib64] ==> [/lib64]
+  collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..] ==> [/usr/local/gcc/gcc-7.3.0/lib]
+  implicit libs: [c]
+  implicit dirs: [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0;/usr/local/gcc/gcc-7.3.0/lib64;/lib/x86_64-linux-gnu;/lib64;/usr/lib/x86_64-linux-gnu;/usr/local/gcc/gcc-7.3.0/lib]
+  implicit fwks: []
+
+
+
+
+Detecting C [-std=c11] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_080a7/fast"
+/usr/bin/make -f CMakeFiles/cmTC_080a7.dir/build.make CMakeFiles/cmTC_080a7.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_080a7.dir/feature_tests.c.o
+/usr/bin/cc   -std=c11 -o CMakeFiles/cmTC_080a7.dir/feature_tests.c.o   -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.c
+Linking C executable cmTC_080a7
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_080a7.dir/link.txt --verbose=1
+/usr/bin/cc      -rdynamic CMakeFiles/cmTC_080a7.dir/feature_tests.c.o  -o cmTC_080a7 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: C_FEATURE:1c_function_prototypes
+    Feature record: C_FEATURE:1c_restrict
+    Feature record: C_FEATURE:1c_static_assert
+    Feature record: C_FEATURE:1c_variadic_macros
+
+
+Detecting C [-std=c99] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_8faff/fast"
+/usr/bin/make -f CMakeFiles/cmTC_8faff.dir/build.make CMakeFiles/cmTC_8faff.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_8faff.dir/feature_tests.c.o
+/usr/bin/cc   -std=c99 -o CMakeFiles/cmTC_8faff.dir/feature_tests.c.o   -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.c
+Linking C executable cmTC_8faff
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_8faff.dir/link.txt --verbose=1
+/usr/bin/cc      -rdynamic CMakeFiles/cmTC_8faff.dir/feature_tests.c.o  -o cmTC_8faff 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: C_FEATURE:1c_function_prototypes
+    Feature record: C_FEATURE:1c_restrict
+    Feature record: C_FEATURE:0c_static_assert
+    Feature record: C_FEATURE:1c_variadic_macros
+
+
+Detecting C [-std=c90] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_5f072/fast"
+/usr/bin/make -f CMakeFiles/cmTC_5f072.dir/build.make CMakeFiles/cmTC_5f072.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_5f072.dir/feature_tests.c.o
+/usr/bin/cc   -std=c90 -o CMakeFiles/cmTC_5f072.dir/feature_tests.c.o   -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.c
+Linking C executable cmTC_5f072
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5f072.dir/link.txt --verbose=1
+/usr/bin/cc      -rdynamic CMakeFiles/cmTC_5f072.dir/feature_tests.c.o  -o cmTC_5f072 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: C_FEATURE:1c_function_prototypes
+    Feature record: C_FEATURE:0c_restrict
+    Feature record: C_FEATURE:0c_static_assert
+    Feature record: C_FEATURE:0c_variadic_macros
+Determining if the CXX compiler works passed with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_a70bd/fast"
+/usr/bin/make -f CMakeFiles/cmTC_a70bd.dir/build.make CMakeFiles/cmTC_a70bd.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_a70bd.dir/testCXXCompiler.cxx.o
+/usr/bin/c++     -o CMakeFiles/cmTC_a70bd.dir/testCXXCompiler.cxx.o -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp/testCXXCompiler.cxx
+Linking CXX executable cmTC_a70bd
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_a70bd.dir/link.txt --verbose=1
+/usr/bin/c++       -rdynamic CMakeFiles/cmTC_a70bd.dir/testCXXCompiler.cxx.o  -o cmTC_a70bd 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+Detecting CXX compiler ABI info compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_1a5c4/fast"
+/usr/bin/make -f CMakeFiles/cmTC_1a5c4.dir/build.make CMakeFiles/cmTC_1a5c4.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o
+/usr/bin/c++     -o CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/CMakeCXXCompilerABI.cpp
+Linking CXX executable cmTC_1a5c4
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_1a5c4.dir/link.txt --verbose=1
+/usr/bin/c++      -v -rdynamic CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o  -o cmTC_1a5c4 
+使用内建 specs。
+COLLECT_GCC=/usr/bin/c++
+COLLECT_LTO_WRAPPER=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper
+目标：x86_64-pc-linux-gnu
+配置为：./configure --prefix=/usr/local/gcc/gcc-7.3.0 --enable-languages=c,c++ --disable-multilib
+线程模型：posix
+gcc 版本 7.3.0 (GCC) 
+COMPILER_PATH=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/
+LIBRARY_PATH=/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../:/lib/:/usr/lib/
+COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_1a5c4' '-shared-libgcc' '-mtune=generic' '-march=x86-64'
+ /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2 -plugin /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so -plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cceG35qa.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -export-dynamic -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_1a5c4 /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0 -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../.. CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o /usr/lib/x86_64-linux-gnu/crtn.o
+COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_1a5c4' '-shared-libgcc' '-mtune=generic' '-march=x86-64'
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+Parsed CXX implicit link information from above output:
+  link line regex: [^( *|.*[/\])(ld|([^/\]+-)?ld|collect2)[^/\]*( |$)]
+  ignore line: [Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp]
+  ignore line: []
+  ignore line: [Run Build Command:"/usr/bin/make" "cmTC_1a5c4/fast"]
+  ignore line: [/usr/bin/make -f CMakeFiles/cmTC_1a5c4.dir/build.make CMakeFiles/cmTC_1a5c4.dir/build]
+  ignore line: [make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp']
+  ignore line: [Building CXX object CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o]
+  ignore line: [/usr/bin/c++     -o CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/clion/bin/cmake/share/cmake-3.8/Modules/CMakeCXXCompilerABI.cpp]
+  ignore line: [Linking CXX executable cmTC_1a5c4]
+  ignore line: [/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_1a5c4.dir/link.txt --verbose=1]
+  ignore line: [/usr/bin/c++      -v -rdynamic CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o  -o cmTC_1a5c4 ]
+  ignore line: [使用内建 specs。]
+  ignore line: [COLLECT_GCC=/usr/bin/c++]
+  ignore line: [COLLECT_LTO_WRAPPER=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper]
+  ignore line: [目标：x86_64-pc-linux-gnu]
+  ignore line: [配置为：./configure --prefix=/usr/local/gcc/gcc-7.3.0 --enable-languages=c,c++ --disable-multilib]
+  ignore line: [线程模型：posix]
+  ignore line: [gcc 版本 7.3.0 (GCC) ]
+  ignore line: [COMPILER_PATH=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/]
+  ignore line: [LIBRARY_PATH=/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../:/lib/:/usr/lib/]
+  ignore line: [COLLECT_GCC_OPTIONS='-v' '-rdynamic' '-o' 'cmTC_1a5c4' '-shared-libgcc' '-mtune=generic' '-march=x86-64']
+  link line: [ /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2 -plugin /usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so -plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cceG35qa.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --eh-frame-hdr -m elf_x86_64 -export-dynamic -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_1a5c4 /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0 -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../.. CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o /usr/lib/x86_64-linux-gnu/crtn.o]
+    arg [/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/collect2] ==> ignore
+    arg [-plugin] ==> ignore
+    arg [/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/liblto_plugin.so] ==> ignore
+    arg [-plugin-opt=/usr/local/gcc/gcc-7.3.0/libexec/gcc/x86_64-pc-linux-gnu/7.3.0/lto-wrapper] ==> ignore
+    arg [-plugin-opt=-fresolution=/tmp/cceG35qa.res] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+    arg [-plugin-opt=-pass-through=-lc] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+    arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+    arg [--eh-frame-hdr] ==> ignore
+    arg [-m] ==> ignore
+    arg [elf_x86_64] ==> ignore
+    arg [-export-dynamic] ==> ignore
+    arg [-dynamic-linker] ==> ignore
+    arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+    arg [-o] ==> ignore
+    arg [cmTC_1a5c4] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crt1.o] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crti.o] ==> ignore
+    arg [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtbegin.o] ==> ignore
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0]
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64]
+    arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+    arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+    arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+    arg [-L/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..] ==> dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..]
+    arg [CMakeFiles/cmTC_1a5c4.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+    arg [-lstdc++] ==> lib [stdc++]
+    arg [-lm] ==> lib [m]
+    arg [-lgcc_s] ==> lib [gcc_s]
+    arg [-lgcc] ==> lib [gcc]
+    arg [-lc] ==> lib [c]
+    arg [-lgcc_s] ==> lib [gcc_s]
+    arg [-lgcc] ==> lib [gcc]
+    arg [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/crtend.o] ==> ignore
+    arg [/usr/lib/x86_64-linux-gnu/crtn.o] ==> ignore
+  remove lib [gcc_s]
+  remove lib [gcc]
+  remove lib [gcc_s]
+  remove lib [gcc]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0] ==> [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../../../lib64] ==> [/usr/local/gcc/gcc-7.3.0/lib64]
+  collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+  collapse library dir [/lib/../lib64] ==> [/lib64]
+  collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+  collapse library dir [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0/../../..] ==> [/usr/local/gcc/gcc-7.3.0/lib]
+  implicit libs: [stdc++;m;c]
+  implicit dirs: [/usr/local/gcc/gcc-7.3.0/lib/gcc/x86_64-pc-linux-gnu/7.3.0;/usr/local/gcc/gcc-7.3.0/lib64;/lib/x86_64-linux-gnu;/lib64;/usr/lib/x86_64-linux-gnu;/usr/local/gcc/gcc-7.3.0/lib]
+  implicit fwks: []
+
+
+
+
+Detecting CXX [-std=c++1z] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_6603f/fast"
+/usr/bin/make -f CMakeFiles/cmTC_6603f.dir/build.make CMakeFiles/cmTC_6603f.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_6603f.dir/feature_tests.cxx.o
+/usr/bin/c++    -std=c++1z -o CMakeFiles/cmTC_6603f.dir/feature_tests.cxx.o -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.cxx
+Linking CXX executable cmTC_6603f
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_6603f.dir/link.txt --verbose=1
+/usr/bin/c++       -rdynamic CMakeFiles/cmTC_6603f.dir/feature_tests.cxx.o  -o cmTC_6603f 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: CXX_FEATURE:1cxx_aggregate_default_initializers
+    Feature record: CXX_FEATURE:1cxx_alias_templates
+    Feature record: CXX_FEATURE:1cxx_alignas
+    Feature record: CXX_FEATURE:1cxx_alignof
+    Feature record: CXX_FEATURE:1cxx_attributes
+    Feature record: CXX_FEATURE:1cxx_attribute_deprecated
+    Feature record: CXX_FEATURE:1cxx_auto_type
+    Feature record: CXX_FEATURE:1cxx_binary_literals
+    Feature record: CXX_FEATURE:1cxx_constexpr
+    Feature record: CXX_FEATURE:1cxx_contextual_conversions
+    Feature record: CXX_FEATURE:1cxx_decltype
+    Feature record: CXX_FEATURE:1cxx_decltype_auto
+    Feature record: CXX_FEATURE:1cxx_decltype_incomplete_return_types
+    Feature record: CXX_FEATURE:1cxx_default_function_template_args
+    Feature record: CXX_FEATURE:1cxx_defaulted_functions
+    Feature record: CXX_FEATURE:1cxx_defaulted_move_initializers
+    Feature record: CXX_FEATURE:1cxx_delegating_constructors
+    Feature record: CXX_FEATURE:1cxx_deleted_functions
+    Feature record: CXX_FEATURE:1cxx_digit_separators
+    Feature record: CXX_FEATURE:1cxx_enum_forward_declarations
+    Feature record: CXX_FEATURE:1cxx_explicit_conversions
+    Feature record: CXX_FEATURE:1cxx_extended_friend_declarations
+    Feature record: CXX_FEATURE:1cxx_extern_templates
+    Feature record: CXX_FEATURE:1cxx_final
+    Feature record: CXX_FEATURE:1cxx_func_identifier
+    Feature record: CXX_FEATURE:1cxx_generalized_initializers
+    Feature record: CXX_FEATURE:1cxx_generic_lambdas
+    Feature record: CXX_FEATURE:1cxx_inheriting_constructors
+    Feature record: CXX_FEATURE:1cxx_inline_namespaces
+    Feature record: CXX_FEATURE:1cxx_lambdas
+    Feature record: CXX_FEATURE:1cxx_lambda_init_captures
+    Feature record: CXX_FEATURE:1cxx_local_type_template_args
+    Feature record: CXX_FEATURE:1cxx_long_long_type
+    Feature record: CXX_FEATURE:1cxx_noexcept
+    Feature record: CXX_FEATURE:1cxx_nonstatic_member_init
+    Feature record: CXX_FEATURE:1cxx_nullptr
+    Feature record: CXX_FEATURE:1cxx_override
+    Feature record: CXX_FEATURE:1cxx_range_for
+    Feature record: CXX_FEATURE:1cxx_raw_string_literals
+    Feature record: CXX_FEATURE:1cxx_reference_qualified_functions
+    Feature record: CXX_FEATURE:1cxx_relaxed_constexpr
+    Feature record: CXX_FEATURE:1cxx_return_type_deduction
+    Feature record: CXX_FEATURE:1cxx_right_angle_brackets
+    Feature record: CXX_FEATURE:1cxx_rvalue_references
+    Feature record: CXX_FEATURE:1cxx_sizeof_member
+    Feature record: CXX_FEATURE:1cxx_static_assert
+    Feature record: CXX_FEATURE:1cxx_strong_enums
+    Feature record: CXX_FEATURE:1cxx_template_template_parameters
+    Feature record: CXX_FEATURE:1cxx_thread_local
+    Feature record: CXX_FEATURE:1cxx_trailing_return_types
+    Feature record: CXX_FEATURE:1cxx_unicode_literals
+    Feature record: CXX_FEATURE:1cxx_uniform_initialization
+    Feature record: CXX_FEATURE:1cxx_unrestricted_unions
+    Feature record: CXX_FEATURE:1cxx_user_literals
+    Feature record: CXX_FEATURE:1cxx_variable_templates
+    Feature record: CXX_FEATURE:1cxx_variadic_macros
+    Feature record: CXX_FEATURE:1cxx_variadic_templates
+
+
+Detecting CXX [-std=c++14] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_89d96/fast"
+/usr/bin/make -f CMakeFiles/cmTC_89d96.dir/build.make CMakeFiles/cmTC_89d96.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_89d96.dir/feature_tests.cxx.o
+/usr/bin/c++    -std=c++14 -o CMakeFiles/cmTC_89d96.dir/feature_tests.cxx.o -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.cxx
+Linking CXX executable cmTC_89d96
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_89d96.dir/link.txt --verbose=1
+/usr/bin/c++       -rdynamic CMakeFiles/cmTC_89d96.dir/feature_tests.cxx.o  -o cmTC_89d96 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: CXX_FEATURE:1cxx_aggregate_default_initializers
+    Feature record: CXX_FEATURE:1cxx_alias_templates
+    Feature record: CXX_FEATURE:1cxx_alignas
+    Feature record: CXX_FEATURE:1cxx_alignof
+    Feature record: CXX_FEATURE:1cxx_attributes
+    Feature record: CXX_FEATURE:1cxx_attribute_deprecated
+    Feature record: CXX_FEATURE:1cxx_auto_type
+    Feature record: CXX_FEATURE:1cxx_binary_literals
+    Feature record: CXX_FEATURE:1cxx_constexpr
+    Feature record: CXX_FEATURE:1cxx_contextual_conversions
+    Feature record: CXX_FEATURE:1cxx_decltype
+    Feature record: CXX_FEATURE:1cxx_decltype_auto
+    Feature record: CXX_FEATURE:1cxx_decltype_incomplete_return_types
+    Feature record: CXX_FEATURE:1cxx_default_function_template_args
+    Feature record: CXX_FEATURE:1cxx_defaulted_functions
+    Feature record: CXX_FEATURE:1cxx_defaulted_move_initializers
+    Feature record: CXX_FEATURE:1cxx_delegating_constructors
+    Feature record: CXX_FEATURE:1cxx_deleted_functions
+    Feature record: CXX_FEATURE:1cxx_digit_separators
+    Feature record: CXX_FEATURE:1cxx_enum_forward_declarations
+    Feature record: CXX_FEATURE:1cxx_explicit_conversions
+    Feature record: CXX_FEATURE:1cxx_extended_friend_declarations
+    Feature record: CXX_FEATURE:1cxx_extern_templates
+    Feature record: CXX_FEATURE:1cxx_final
+    Feature record: CXX_FEATURE:1cxx_func_identifier
+    Feature record: CXX_FEATURE:1cxx_generalized_initializers
+    Feature record: CXX_FEATURE:1cxx_generic_lambdas
+    Feature record: CXX_FEATURE:1cxx_inheriting_constructors
+    Feature record: CXX_FEATURE:1cxx_inline_namespaces
+    Feature record: CXX_FEATURE:1cxx_lambdas
+    Feature record: CXX_FEATURE:1cxx_lambda_init_captures
+    Feature record: CXX_FEATURE:1cxx_local_type_template_args
+    Feature record: CXX_FEATURE:1cxx_long_long_type
+    Feature record: CXX_FEATURE:1cxx_noexcept
+    Feature record: CXX_FEATURE:1cxx_nonstatic_member_init
+    Feature record: CXX_FEATURE:1cxx_nullptr
+    Feature record: CXX_FEATURE:1cxx_override
+    Feature record: CXX_FEATURE:1cxx_range_for
+    Feature record: CXX_FEATURE:1cxx_raw_string_literals
+    Feature record: CXX_FEATURE:1cxx_reference_qualified_functions
+    Feature record: CXX_FEATURE:1cxx_relaxed_constexpr
+    Feature record: CXX_FEATURE:1cxx_return_type_deduction
+    Feature record: CXX_FEATURE:1cxx_right_angle_brackets
+    Feature record: CXX_FEATURE:1cxx_rvalue_references
+    Feature record: CXX_FEATURE:1cxx_sizeof_member
+    Feature record: CXX_FEATURE:1cxx_static_assert
+    Feature record: CXX_FEATURE:1cxx_strong_enums
+    Feature record: CXX_FEATURE:1cxx_template_template_parameters
+    Feature record: CXX_FEATURE:1cxx_thread_local
+    Feature record: CXX_FEATURE:1cxx_trailing_return_types
+    Feature record: CXX_FEATURE:1cxx_unicode_literals
+    Feature record: CXX_FEATURE:1cxx_uniform_initialization
+    Feature record: CXX_FEATURE:1cxx_unrestricted_unions
+    Feature record: CXX_FEATURE:1cxx_user_literals
+    Feature record: CXX_FEATURE:1cxx_variable_templates
+    Feature record: CXX_FEATURE:1cxx_variadic_macros
+    Feature record: CXX_FEATURE:1cxx_variadic_templates
+
+
+Detecting CXX [-std=c++11] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_03f6b/fast"
+/usr/bin/make -f CMakeFiles/cmTC_03f6b.dir/build.make CMakeFiles/cmTC_03f6b.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_03f6b.dir/feature_tests.cxx.o
+/usr/bin/c++    -std=c++11 -o CMakeFiles/cmTC_03f6b.dir/feature_tests.cxx.o -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.cxx
+Linking CXX executable cmTC_03f6b
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_03f6b.dir/link.txt --verbose=1
+/usr/bin/c++       -rdynamic CMakeFiles/cmTC_03f6b.dir/feature_tests.cxx.o  -o cmTC_03f6b 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: CXX_FEATURE:0cxx_aggregate_default_initializers
+    Feature record: CXX_FEATURE:1cxx_alias_templates
+    Feature record: CXX_FEATURE:1cxx_alignas
+    Feature record: CXX_FEATURE:1cxx_alignof
+    Feature record: CXX_FEATURE:1cxx_attributes
+    Feature record: CXX_FEATURE:0cxx_attribute_deprecated
+    Feature record: CXX_FEATURE:1cxx_auto_type
+    Feature record: CXX_FEATURE:0cxx_binary_literals
+    Feature record: CXX_FEATURE:1cxx_constexpr
+    Feature record: CXX_FEATURE:0cxx_contextual_conversions
+    Feature record: CXX_FEATURE:1cxx_decltype
+    Feature record: CXX_FEATURE:0cxx_decltype_auto
+    Feature record: CXX_FEATURE:1cxx_decltype_incomplete_return_types
+    Feature record: CXX_FEATURE:1cxx_default_function_template_args
+    Feature record: CXX_FEATURE:1cxx_defaulted_functions
+    Feature record: CXX_FEATURE:1cxx_defaulted_move_initializers
+    Feature record: CXX_FEATURE:1cxx_delegating_constructors
+    Feature record: CXX_FEATURE:1cxx_deleted_functions
+    Feature record: CXX_FEATURE:0cxx_digit_separators
+    Feature record: CXX_FEATURE:1cxx_enum_forward_declarations
+    Feature record: CXX_FEATURE:1cxx_explicit_conversions
+    Feature record: CXX_FEATURE:1cxx_extended_friend_declarations
+    Feature record: CXX_FEATURE:1cxx_extern_templates
+    Feature record: CXX_FEATURE:1cxx_final
+    Feature record: CXX_FEATURE:1cxx_func_identifier
+    Feature record: CXX_FEATURE:1cxx_generalized_initializers
+    Feature record: CXX_FEATURE:0cxx_generic_lambdas
+    Feature record: CXX_FEATURE:1cxx_inheriting_constructors
+    Feature record: CXX_FEATURE:1cxx_inline_namespaces
+    Feature record: CXX_FEATURE:1cxx_lambdas
+    Feature record: CXX_FEATURE:0cxx_lambda_init_captures
+    Feature record: CXX_FEATURE:1cxx_local_type_template_args
+    Feature record: CXX_FEATURE:1cxx_long_long_type
+    Feature record: CXX_FEATURE:1cxx_noexcept
+    Feature record: CXX_FEATURE:1cxx_nonstatic_member_init
+    Feature record: CXX_FEATURE:1cxx_nullptr
+    Feature record: CXX_FEATURE:1cxx_override
+    Feature record: CXX_FEATURE:1cxx_range_for
+    Feature record: CXX_FEATURE:1cxx_raw_string_literals
+    Feature record: CXX_FEATURE:1cxx_reference_qualified_functions
+    Feature record: CXX_FEATURE:0cxx_relaxed_constexpr
+    Feature record: CXX_FEATURE:0cxx_return_type_deduction
+    Feature record: CXX_FEATURE:1cxx_right_angle_brackets
+    Feature record: CXX_FEATURE:1cxx_rvalue_references
+    Feature record: CXX_FEATURE:1cxx_sizeof_member
+    Feature record: CXX_FEATURE:1cxx_static_assert
+    Feature record: CXX_FEATURE:1cxx_strong_enums
+    Feature record: CXX_FEATURE:1cxx_template_template_parameters
+    Feature record: CXX_FEATURE:1cxx_thread_local
+    Feature record: CXX_FEATURE:1cxx_trailing_return_types
+    Feature record: CXX_FEATURE:1cxx_unicode_literals
+    Feature record: CXX_FEATURE:1cxx_uniform_initialization
+    Feature record: CXX_FEATURE:1cxx_unrestricted_unions
+    Feature record: CXX_FEATURE:1cxx_user_literals
+    Feature record: CXX_FEATURE:0cxx_variable_templates
+    Feature record: CXX_FEATURE:1cxx_variadic_macros
+    Feature record: CXX_FEATURE:1cxx_variadic_templates
+
+
+Detecting CXX [-std=c++98] compiler features compiled with the following output:
+Change Dir: /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_49285/fast"
+/usr/bin/make -f CMakeFiles/cmTC_49285.dir/build.make CMakeFiles/cmTC_49285.dir/build
+make[1]: Entering directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_49285.dir/feature_tests.cxx.o
+/usr/bin/c++    -std=c++98 -o CMakeFiles/cmTC_49285.dir/feature_tests.cxx.o -c /home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/feature_tests.cxx
+Linking CXX executable cmTC_49285
+/usr/share/clion/bin/cmake/bin/cmake -E cmake_link_script CMakeFiles/cmTC_49285.dir/link.txt --verbose=1
+/usr/bin/c++       -rdynamic CMakeFiles/cmTC_49285.dir/feature_tests.cxx.o  -o cmTC_49285 
+make[1]: Leaving directory '/home/dy2018/CLionProjects/cinatra/cmake-build-debug/CMakeFiles/CMakeTmp'
+
+
+    Feature record: CXX_FEATURE:0cxx_aggregate_default_initializers
+    Feature record: CXX_FEATURE:0cxx_alias_templates
+    Feature record: CXX_FEATURE:0cxx_alignas
+    Feature record: CXX_FEATURE:0cxx_alignof
+    Feature record: CXX_FEATURE:0cxx_attributes
+    Feature record: CXX_FEATURE:0cxx_attribute_deprecated
+    Feature record: CXX_FEATURE:0cxx_auto_type
+    Feature record: CXX_FEATURE:0cxx_binary_literals
+    Feature record: CXX_FEATURE:0cxx_constexpr
+    Feature record: CXX_FEATURE:0cxx_contextual_conversions
+    Feature record: CXX_FEATURE:0cxx_decltype
+    Feature record: CXX_FEATURE:0cxx_decltype_auto
+    Feature record: CXX_FEATURE:0cxx_decltype_incomplete_return_types
+    Feature record: CXX_FEATURE:0cxx_default_function_template_args
+    Feature record: CXX_FEATURE:0cxx_defaulted_functions
+    Feature record: CXX_FEATURE:0cxx_defaulted_move_initializers
+    Feature record: CXX_FEATURE:0cxx_delegating_constructors
+    Feature record: CXX_FEATURE:0cxx_deleted_functions
+    Feature record: CXX_FEATURE:0cxx_digit_separators
+    Feature record: CXX_FEATURE:0cxx_enum_forward_declarations
+    Feature record: CXX_FEATURE:0cxx_explicit_conversions
+    Feature record: CXX_FEATURE:0cxx_extended_friend_declarations
+    Feature record: CXX_FEATURE:0cxx_extern_templates
+    Feature record: CXX_FEATURE:0cxx_final
+    Feature record: CXX_FEATURE:0cxx_func_identifier
+    Feature record: CXX_FEATURE:0cxx_generalized_initializers
+    Feature record: CXX_FEATURE:0cxx_generic_lambdas
+    Feature record: CXX_FEATURE:0cxx_inheriting_constructors
+    Feature record: CXX_FEATURE:0cxx_inline_namespaces
+    Feature record: CXX_FEATURE:0cxx_lambdas
+    Feature record: CXX_FEATURE:0cxx_lambda_init_captures
+    Feature record: CXX_FEATURE:0cxx_local_type_template_args
+    Feature record: CXX_FEATURE:0cxx_long_long_type
+    Feature record: CXX_FEATURE:0cxx_noexcept
+    Feature record: CXX_FEATURE:0cxx_nonstatic_member_init
+    Feature record: CXX_FEATURE:0cxx_nullptr
+    Feature record: CXX_FEATURE:0cxx_override
+    Feature record: CXX_FEATURE:0cxx_range_for
+    Feature record: CXX_FEATURE:0cxx_raw_string_literals
+    Feature record: CXX_FEATURE:0cxx_reference_qualified_functions
+    Feature record: CXX_FEATURE:0cxx_relaxed_constexpr
+    Feature record: CXX_FEATURE:0cxx_return_type_deduction
+    Feature record: CXX_FEATURE:0cxx_right_angle_brackets
+    Feature record: CXX_FEATURE:0cxx_rvalue_references
+    Feature record: CXX_FEATURE:0cxx_sizeof_member
+    Feature record: CXX_FEATURE:0cxx_static_assert
+    Feature record: CXX_FEATURE:0cxx_strong_enums
+    Feature record: CXX_FEATURE:1cxx_template_template_parameters
+    Feature record: CXX_FEATURE:0cxx_thread_local
+    Feature record: CXX_FEATURE:0cxx_trailing_return_types
+    Feature record: CXX_FEATURE:0cxx_unicode_literals
+    Feature record: CXX_FEATURE:0cxx_uniform_initialization
+    Feature record: CXX_FEATURE:0cxx_unrestricted_unions
+    Feature record: CXX_FEATURE:0cxx_user_literals
+    Feature record: CXX_FEATURE:0cxx_variable_templates
+    Feature record: CXX_FEATURE:0cxx_variadic_macros
+    Feature record: CXX_FEATURE:0cxx_variadic_templates

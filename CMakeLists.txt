@@ -49,13 +49,16 @@ set(CINATRA
 	router.hpp
 	define.h
 	url_encode_decode.hpp
+	cookie.hpp
+	session.hpp
+	session_utils.hpp
 	main.cpp
 	)
 
 add_executable(cinatra ${CINATRA})
 include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-target_link_libraries(cinatra ${Boost_LIBRARIES})
+target_link_libraries(cinatra ${Boost_LIBRARIES} uuid)
 if (ENABLE_SSL)
 	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
