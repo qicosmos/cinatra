@@ -170,15 +170,15 @@ namespace cinatra {
                 res.add_header("Access-Control-Allow-origin","*");
                 std::ifstream file("./"+real_file_name,std::ios_base::binary);
 				if(!file.is_open()){
-					res.set_status_and_content(status_type::not_found,"");
+					res.set_status_and_content(status_type::not_found, "");
 					return;
 				}
 				std::stringstream file_buffer;
                 file_buffer<<file.rdbuf();
 #ifdef CINATRA_ENABLE_GZIP
-                res.set_status_and_content(status_type::ok,file_buffer.str(),content_encoding::gzip);
+                res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
 #else
-                res.set_status_and_content(status_type::ok,file_buffer.str());
+                res.set_status_and_content(status_type::ok, file_buffer.str());
 #endif
 
             });

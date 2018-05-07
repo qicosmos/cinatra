@@ -73,7 +73,7 @@ namespace cinatra {
 			set_content(to_string(status).data());
 		}
 
-		void set_status_and_content(status_type status, std::string&& content,cinatra::res_content_type res_type = cinatra::res_content_type::none, content_encoding encoding = content_encoding::none) {
+		void set_status_and_content(status_type status, std::string&& content, res_content_type res_type = res_content_type::none, content_encoding encoding = content_encoding::none) {
 			status_ = status;
 			if(res_type!=cinatra::res_content_type::none){
 				auto iter = cinatra::res_mime_map.find(res_type);
