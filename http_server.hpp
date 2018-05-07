@@ -170,7 +170,7 @@ namespace cinatra {
                 res.add_header("Access-Control-Allow-origin","*");
                 std::ifstream file("./"+real_file_name,std::ios_base::binary);
 				if(!file.is_open()){
-					res.set_status_and_content(status_type::not_found,"");
+					res.set_status_and_content(status_type::not_found);
 					return;
 				}
 				std::stringstream file_buffer;
