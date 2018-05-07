@@ -169,13 +169,12 @@ namespace cinatra {
                 res.add_header("Content-type",std::move(res_content_type));
                 res.add_header("Access-Control-Allow-origin","*");
                 std::ifstream file("./"+real_file_name,std::ios_base::binary);
-                std::stringstream file_buffer;
+				if(!file.is_open()){
+					res.set_status_and_content(status_type::not_found,"");
+					return;
+				}
+				std::stringstream file_buffer;
                 file_buffer<<file.rdbuf();
-                if(file_buffer.str()=="")
-                {
-                    res.set_status_and_content(status_type::bad_request,"");
-                    return;
-                }
 #ifdef CINATRA_ENABLE_GZIP
                 res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
 #else
