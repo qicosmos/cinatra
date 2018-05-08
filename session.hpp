@@ -107,10 +107,12 @@ namespace cinatra {
 		{
 			return id_;
 		}
+
 		const std::time_t get_max_age()
 		{
 			return expire_;
 		}
+
 		void set_max_age(const std::time_t seconds)
 		{
 			session::_threadLock.lock();
@@ -120,6 +122,7 @@ namespace cinatra {
 			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
 			session::_threadLock.unlock();
 		}
+
 		cinatra::cookie get_cookie()
 		{
 			return cookie_;
