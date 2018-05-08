@@ -5,6 +5,7 @@
 namespace cinatra {
 	class cookie {
 	public:
+		cookie() = default;
 		cookie(const std::string& name, const std::string& value) : name_(name), value_(value) {
 
 		}
@@ -147,14 +148,14 @@ namespace cinatra {
 
 	private:
 		int          version_ = 0;
-		std::string  name_;
-		std::string  value_;
-		std::string  comment_;
-		std::string  domain_;
-		std::string  path_;
-		std::string  priority_;
+		std::string  name_ = "";
+		std::string  value_ = "";
+		std::string  comment_ = "";
+		std::string  domain_ = "";
+		std::string  path_ = "";
+		std::string  priority_ = "";
 		bool         secure_ = false;
-		std::time_t          max_age_ = -1;
+		std::time_t  max_age_ = -1;
 		bool         http_only_ = false;
 	};
 }

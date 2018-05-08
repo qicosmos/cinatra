@@ -407,7 +407,7 @@ namespace cinatra {
 						return {};
 
 					auto str = url.substr(item.length(), url.length() - item.length() - tail);
-					auto params = split(str, '/');
+					auto params = split(str, "/");
 					if (n >= params.size())
 						return {};
 
@@ -482,10 +482,10 @@ namespace cinatra {
 			return files_;
 		}
 
-		std::map<std::string,std::string> get_cookies() const
+		std::map<std::string_view, std::string_view> get_cookies() const
 		{
 			auto cookies_str = get_header_value("cookie");
-			auto cookies = get_cookies_map(std::string(cookies_str.data(),cookies_str.size()));
+			auto cookies = get_cookies_map(cookies_str);
             return cookies;
 		}
 
@@ -497,18 +497,12 @@ namespace cinatra {
 			{
 				return nullptr;
 			}
-			return session::get(iter->second);
+			return session::get(std::string(iter->second.data(), iter->second.length()));
 		}
 
 		std::shared_ptr<session> get_session() const
 		{
-			auto cookies = get_cookies();
-			auto iter = cookies.find("CSESSIONID");
-			if(iter==cookies.end())
-			{
-				return nullptr;
-			}
-			return session::get(iter->second);
+			return get_session(CSESSIONID);
 		}
 
 	private:

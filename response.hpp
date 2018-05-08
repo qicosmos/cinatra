@@ -26,9 +26,9 @@ namespace cinatra {
 		std::vector<boost::asio::const_buffer> to_buffers() {
 			std::vector<boost::asio::const_buffer> buffers;
 			add_header("Host", "cinatra");
-			if(req_session!= nullptr)
+			if(session_ != nullptr)
 			{
-				auto cookie_str = req_session->get_cookie().to_string();
+				auto cookie_str = session_->get_cookie().to_string();
 				add_header("Set-Cookie",cookie_str.c_str());
 			}
 			buffers.reserve(headers_.size() * 4 + 5);
@@ -52,15 +52,6 @@ namespace cinatra {
 		void add_header(std::string&& key, std::string&& value) {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
-
-		//std::string_view get_header_value(const std::string& key) const {
-		//	auto it = headers_.find(key);
-		//	if (it == headers_.end()) {
-		//		return {};
-		//	}
-
-		//	return std::string_view(it->second.data(), it->second.length());
-		//}
 
 		void set_status(status_type status) {
 			status_ = status;
@@ -160,18 +151,16 @@ namespace cinatra {
 			return buffers;
 		}
 
-        std::shared_ptr<cinatra::session> start_session(const std::string& name,std::time_t time,const cinatra::request& req,const std::string &path = "/")
+        std::shared_ptr<cinatra::session> start_session(const request& req, const std::string& name, std::time_t expire,const std::string &path = "/")
 		{
-             auto session_ptr = cinatra::create_session(name,time,req,path);
-			 req_session = session_ptr;
-             return session_ptr;
+			session_ = cinatra::create_session(req, name, expire, path);
+			return session_;
 		}
 
 		std::shared_ptr<cinatra::session> start_session(const request& req)
 		{
-			auto session_ptr = cinatra::create_session("CSESSIONID",-1,req,"/");
-			req_session = session_ptr;
-			return session_ptr;
+			session_ = cinatra::create_session(req, CSESSIONID);
+			return session_;
 		}
 
 	private:
@@ -186,7 +175,7 @@ namespace cinatra {
 
 		bool delay_ = false;
 
-		std::shared_ptr<cinatra::session> req_session = nullptr;
+		std::shared_ptr<cinatra::session> session_ = nullptr;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP

@@ -659,6 +659,28 @@ namespace uuids
          data.swap(other.data);
       }
 
+	  std::string to_short_str() {
+		  std::stringstream s;
+		  s << std::hex << std::setfill(static_cast<char>('0'))
+			  << std::setw(2) << (int)data[0]
+			  << std::setw(2) << (int)data[1]
+			  << std::setw(2) << (int)data[2]
+			  << std::setw(2) << (int)data[3]
+			  << std::setw(2) << (int)data[4]
+			  << std::setw(2) << (int)data[5]
+			  << std::setw(2) << (int)data[6]
+			  << std::setw(2) << (int)data[7]
+			  << std::setw(2) << (int)data[8]
+			  << std::setw(2) << (int)data[9]
+			  << std::setw(2) << (int)data[10]
+			  << std::setw(2) << (int)data[11]
+			  << std::setw(2) << (int)data[12]
+			  << std::setw(2) << (int)data[13]
+			  << std::setw(2) << (int)data[14]
+			  << std::setw(2) << (int)data[15];
+		  return s.str();
+	  }
+
       iterator begin() noexcept { return uuid_iterator(&data[0], 0); }
       const_iterator begin() const noexcept { return uuid_const_iterator(&data[0], 0); }
       iterator end() noexcept { return uuid_iterator(&data[0], state_size); }
