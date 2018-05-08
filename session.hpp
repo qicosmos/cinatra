@@ -35,7 +35,7 @@ namespace cinatra {
 		{
 			this->id_ = uuid_str;
 			this->expire_ = _expire == -1 ? 600 : _expire;
-			std::time_t time = get_time_stamp();
+			std::time_t time = std::time(nullptr);
 			this->time_stamp_ = this->expire_ + time;
 			cookie_.set_name(name);
 			cookie_.set_path(path);
@@ -87,7 +87,7 @@ namespace cinatra {
 			session::_threadLock.lock();
 			if (!GLOBAL_SESSION.empty())
 			{
-				std::time_t nowTimeStamp = session::get_time_stamp();
+				std::time_t nowTimeStamp = std::time(nullptr);
 				for (auto iter = GLOBAL_SESSION.begin(); iter != GLOBAL_SESSION.end();)
 				{
 					if (iter->second->time_stamp_ < nowTimeStamp)
@@ -115,7 +115,7 @@ namespace cinatra {
 		{
 			session::_threadLock.lock();
 			expire_ = seconds == -1 ? 600 : seconds;
-			std::time_t time = get_time_stamp();
+			std::time_t time = std::time(nullptr);
 			time_stamp_ = expire_ + time;
 			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
 			session::_threadLock.unlock();
@@ -127,18 +127,13 @@ namespace cinatra {
 	public:
 		static std::mutex _threadLock;
 	private:
+		session() = delete;
+
 		std::string id_;
 		std::size_t expire_;
 		std::time_t time_stamp_;
 		std::map<std::string, std::any> data_;
 		cinatra::cookie cookie_;
-	private:
-		session() = delete;
-	public:
-		static std::time_t get_time_stamp()
-		{
-			return std::time(nullptr);
-		}
 	};
 	std::mutex session::_threadLock;
 }
