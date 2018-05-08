@@ -30,37 +30,39 @@ namespace cinatra {
 			session::_threadLock.unlock();
 			return tmp_ptr;
 		}
-	public:
+
 		session(const std::string& name, const std::string& uuid_str, std::size_t _expire, const std::string& path = "/", const std::string& domain = "")
 		{
-			this->id = uuid_str;
-			this->expire = _expire == -1 ? 600 : _expire;
+			this->id_ = uuid_str;
+			this->expire_ = _expire == -1 ? 600 : _expire;
 			std::time_t time = get_time_stamp();
-			this->time_stamp = this->expire + time;
+			this->time_stamp_ = this->expire_ + time;
 			cookie_.set_name(name);
 			cookie_.set_path(path);
 			cookie_.set_domain(domain);
 			cookie_.set_value(uuid_str);
 			cookie_.set_version(0);
-			cookie_.set_max_age(_expire == -1 ? -1 : time_stamp);
+			cookie_.set_max_age(_expire == -1 ? -1 : time_stamp_);
 		}
+
 		void set_data(const std::string& name, std::any data)
 		{
 			session::_threadLock.lock();
-			_data[name] = std::move(data);
+			data_[name] = std::move(data);
 			session::_threadLock.unlock();
 		}
+
 		template<typename T>
 		T get_data(const std::string& name)
 		{
-			auto itert = _data.find(name);
-			if (itert != _data.end())
+			auto itert = data_.find(name);
+			if (itert != data_.end())
 			{
 				return std::any_cast<T>(itert->second);
 			}
 			return T{};
 		}
-	public:
+
 		static std::shared_ptr<session> get(const std::string& id)
 		{
 			if (!GLOBAL_SESSION.empty())
@@ -74,10 +76,12 @@ namespace cinatra {
 			}
 			return nullptr;
 		}
+
 		static std::map<std::string, std::shared_ptr<session>>::iterator del(std::map<std::string, std::shared_ptr<session>>::iterator iter)
 		{
 			return GLOBAL_SESSION.erase(iter);
 		}
+
 		static void tick_time()
 		{
 			session::_threadLock.lock();
@@ -86,7 +90,7 @@ namespace cinatra {
 				std::time_t nowTimeStamp = session::get_time_stamp();
 				for (auto iter = GLOBAL_SESSION.begin(); iter != GLOBAL_SESSION.end();)
 				{
-					if (iter->second->time_stamp < nowTimeStamp)
+					if (iter->second->time_stamp_ < nowTimeStamp)
 					{
 						iter = session::del(iter);
 					}
@@ -101,19 +105,19 @@ namespace cinatra {
 	public:
 		const std::string get_id()
 		{
-			return id;
+			return id_;
 		}
 		const std::time_t get_max_age()
 		{
-			return expire;
+			return expire_;
 		}
 		void set_max_age(const std::time_t seconds)
 		{
 			session::_threadLock.lock();
-			expire = seconds == -1 ? 600 : seconds;
+			expire_ = seconds == -1 ? 600 : seconds;
 			std::time_t time = get_time_stamp();
-			time_stamp = expire + time;
-			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp);
+			time_stamp_ = expire_ + time;
+			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
 			session::_threadLock.unlock();
 		}
 		cinatra::cookie get_cookie()
@@ -123,10 +127,10 @@ namespace cinatra {
 	public:
 		static std::mutex _threadLock;
 	private:
-		std::string id;
-		std::size_t expire;
-		std::time_t time_stamp;
-		std::map<std::string, std::any> _data;
+		std::string id_;
+		std::size_t expire_;
+		std::time_t time_stamp_;
+		std::map<std::string, std::any> data_;
 		cinatra::cookie cookie_;
 	private:
 		session() = delete;
