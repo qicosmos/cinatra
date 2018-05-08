@@ -47,18 +47,18 @@ namespace cinatra {
 		void set_data(const std::string& name, std::any data)
 		{
 			session::_threadLock.lock();
-			_data[name] = data;
+			_data[name] = std::move(data);
 			session::_threadLock.unlock();
 		}
-		template<typename Type>
-		Type get_data(const std::string& name)
+		template<typename T>
+		T get_data(const std::string& name)
 		{
 			auto itert = _data.find(name);
 			if (itert != _data.end())
 			{
-				return std::any_cast<Type>(itert->second);
+				return std::any_cast<T>(itert->second);
 			}
-			return Type{};
+			return T{};
 		}
 	public:
 		static std::shared_ptr<session> get(const std::string& id)
