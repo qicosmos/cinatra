@@ -158,10 +158,26 @@ namespace cinatra {
 			return session_;
 		}
 
-		std::shared_ptr<cinatra::session> start_session(std::string_view domain)
+		std::shared_ptr<cinatra::session> start_session()
 		{
-			session_ = session_manager::create_session(domain, CSESSIONID);
+			session_ = session_manager::create_session(domain_, CSESSIONID);
 			return session_;
+		}
+
+		void set_domain(std::string_view domain) {
+			domain_ = domain;
+		}
+
+		std::string_view get_domain() {
+			return domain_;
+		}
+
+		void set_path(std::string_view path) {
+			path_ = path;
+		}
+
+		std::string_view get_path() {
+			return path_;
 		}
 
 	private:
@@ -176,6 +192,8 @@ namespace cinatra {
 
 		bool delay_ = false;
 
+		std::string_view domain_;
+		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 	};
 }
