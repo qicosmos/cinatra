@@ -56,19 +56,20 @@ int main() {
 	});
 
     server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
-        auto session = res.start_session(req);
+        auto session = res.start_session(req.get_header_value("host"));
 		session->set_data("userid",std::string("1"));
 		session->set_max_age(10);
         res.set_status_and_content(status_type::ok, "login");
     });
 
 	server.set_http_handler<GET,POST>("/islogin",[](const request& req, response& res) {
-		auto req_session = req.get_session();
-		if(req_session== nullptr||req_session->get_data<std::string>("userid")!="1")
-		{
-			res.set_status_and_content(status_type::ok, "没有登录",res_content_type::string);
+		auto ptr = req.get_session();
+		auto session = ptr.lock();
+		if (session == nullptr|| session->get_data<std::string>("userid") != "1") {
+			res.set_status_and_content(status_type::ok, "没有登录", res_content_type::string);
 			return;
 		}
+		
 		res.set_status_and_content(status_type::ok, "已经登录",res_content_type::string);
 	});
 

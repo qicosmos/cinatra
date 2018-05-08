@@ -151,15 +151,15 @@ namespace cinatra {
 			return buffers;
 		}
 
-        std::shared_ptr<cinatra::session> start_session(const request& req, const std::string& name, std::time_t expire,const std::string &path = "/")
+        std::shared_ptr<cinatra::session> start_session(std::string_view domain, const std::string& name, std::time_t expire,const std::string &path = "/")
 		{
-			session_ = cinatra::create_session(req, name, expire, path);
+			session_ = session_manager::create_session(domain, name, expire, path);
 			return session_;
 		}
 
-		std::shared_ptr<cinatra::session> start_session(const request& req)
+		std::shared_ptr<cinatra::session> start_session(std::string_view domain)
 		{
-			session_ = cinatra::create_session(req, CSESSIONID);
+			session_ = session_manager::create_session(domain, CSESSIONID);
 			return session_;
 		}
 
