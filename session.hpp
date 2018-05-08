@@ -64,6 +64,7 @@ namespace cinatra {
 		void set_max_age(const std::time_t seconds)
 		{
 			std::unique_lock<std::mutex> lock(mtx_);
+			is_update_ = true;
 			expire_ = seconds == -1 ? 600 : seconds;
 			std::time_t now = std::time(nullptr);
 			time_stamp_ = now + expire_;
@@ -79,6 +80,18 @@ namespace cinatra {
 			return time_stamp_;
 		}
 
+		bool is_need_update()
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			return is_update_;
+		}
+
+		void set_need_update(bool flag)
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			is_update_ = flag;
+		}
+
 	private:
 		session() = delete;
 
@@ -88,5 +101,6 @@ namespace cinatra {
 		std::map<std::string, std::any> data_;
 		std::mutex mtx_;
 		cookie cookie_;
+		bool is_update_ = true;
 	};
 }
