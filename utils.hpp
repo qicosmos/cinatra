@@ -181,7 +181,7 @@ namespace cinatra {
 		return true;
 	}
 
-	inline std::vector<std::string_view> split(std::string_view s, const char delimiter) {
+	inline std::vector<std::string_view> split(std::string_view s, std::string_view delimiter) {
 		size_t start = 0;
 		size_t end = s.find_first_of(delimiter);
 
@@ -199,6 +199,10 @@ namespace cinatra {
 		}
 
 		return output;
+	}
+
+	inline void remove_char(std::string &str, const char ch) {
+		str.erase(std::remove(str.begin(), str.end(), ch), str.end());
 	}
 
     // var bools = [];
@@ -464,38 +468,13 @@ public:\
 		return get_time_str(std::time(nullptr));
 	}
 
-	std::vector<std::string> str_split(const std::string& str,std::string splitstr)
+	const std::map<std::string_view, std::string_view> get_cookies_map(std::string_view cookies_str)
 	{
-		std::vector<std::string> Vect;
-		const char* head =str.data();
-		const char* ptr = head;
-		char special = splitstr[0];
-		const int compareSize = splitstr.size();
-		while(*ptr!='\0')
-		{
-			if(*ptr==special)
-			{
-				std::string possibleSpecialStr(ptr,compareSize);
-				if(possibleSpecialStr==splitstr)
-				{
-					Vect.push_back(std::move(std::string(head,ptr-head)));
-					head = ptr+compareSize;
-					ptr+=compareSize;
-				}
-			}
-			ptr++;
-		}
-		Vect.push_back(std::move(std::string(head,ptr-head)));
-		return std::move(Vect);
-	}
-
-	const std::map<std::string,std::string> get_cookies_map(const std::string& cookies_str)
-	{
-		std::map<std::string,std::string> cookies;
-		auto cookies_vec = str_split(cookies_str,"; ");
+		std::map<std::string_view, std::string_view> cookies;
+		auto cookies_vec = split(cookies_str,"; ");
 		for(auto iter:cookies_vec)
 		{
-			auto cookie_key_vlaue = str_split(iter,"=");
+			auto cookie_key_vlaue = split(iter,"=");
 			if(cookie_key_vlaue.size()==2)
 			{
 				cookies[cookie_key_vlaue[0]] = cookie_key_vlaue[1];
