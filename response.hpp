@@ -26,10 +26,11 @@ namespace cinatra {
 		std::vector<boost::asio::const_buffer> to_buffers() {
 			std::vector<boost::asio::const_buffer> buffers;
 			add_header("Host", "cinatra");
-			if(session_ != nullptr)
+			if(session_ != nullptr && session_->is_need_update())
 			{
 				auto cookie_str = session_->get_cookie().to_string();
 				add_header("Set-Cookie",cookie_str.c_str());
+                session_->set_need_update(false);
 			}
 			buffers.reserve(headers_.size() * 4 + 5);
 			buffers.emplace_back(to_buffer(status_));
