@@ -222,6 +222,7 @@ namespace cinatra {
 			}
 			else { //4.3 complete request
 				   //5. check if has body
+				set_response_attr();
 				if (req_.has_body()) { //5.1 has body
 					auto type = get_content_type();
 					req_.set_http_type(type);
@@ -336,6 +337,18 @@ namespace cinatra {
 		void close() {
 			boost::system::error_code ec;
 			socket().close(ec);
+		}
+
+		void set_response_attr() {
+			auto host = req_.get_header_value("host");
+			if (!host.empty()) {
+				size_t pos = host.find(':');
+				if (pos != std::string_view::npos) {
+					res_.set_domain(host.substr(0, pos));
+				}
+			}
+			
+			res_.set_path(req_.get_url());
 		}
 
 		/****************** begin handle http body data *****************/

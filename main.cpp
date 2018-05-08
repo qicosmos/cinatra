@@ -56,7 +56,7 @@ int main() {
 	});
 
     server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
-        auto session = res.start_session(req.get_header_value("host"));
+        auto session = res.start_session();
 		session->set_data("userid",std::string("1"));
 		session->set_max_age(10);
         res.set_status_and_content(status_type::ok, "login");
