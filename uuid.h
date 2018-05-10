@@ -860,7 +860,7 @@ namespace uuids
          auto bytes = CFUUIDGetUUIDBytes(newId);
          CFRelease(newId);
 
-         std::array<uint8_t, 16> bytes =
+         std::array<uint8_t, 16> bytes_arr =
          { {
                bytes.byte0,
                bytes.byte1,
@@ -879,7 +879,7 @@ namespace uuids
                bytes.byte14,
                bytes.byte15
             } };
-         return uuid{ std::begin(bytes), std::end(bytes) };
+         return uuid{ std::begin(bytes_arr), std::end(bytes_arr) };
 #elif
          return uuid{};
 #endif
