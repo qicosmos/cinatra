@@ -13,6 +13,8 @@
 #include "utils.hpp"
 #include "mime_types.hpp"
 #include "session_manager.hpp"
+#include "nlohmann_json.hpp"
+#include "inja.hpp"
 namespace cinatra {
 	class response {
 	public:
@@ -179,6 +181,27 @@ namespace cinatra {
 		std::string_view get_path() {
 			return path_;
 		}
+
+        void render_html(const std::string& tpl_file_path,const nlohmann::json& tmp_data)
+        {
+            inja::Environment env = inja::Environment("./");
+            env.set_element_notation(inja::ElementNotation::Dot);
+            inja::Template tmpl = env.parse_template(tpl_file_path);
+#ifdef  CINATRA_ENABLE_GZIP
+            set_status_and_content(status_type::ok,env.render_template(tmpl, tmp_data),res_content_type::html,content_encoding::gzip);
+#else
+            set_status_and_content(status_type::ok,env.render_template(tmpl, tmp_data),res_content_type::html,content_encoding::none);
+#endif
+        }
+
+        void render_json(const nlohmann::json& json_data)
+        {
+#ifdef  CINATRA_ENABLE_GZIP
+            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
+#else
+            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::none);
+#endif
+        }
 
 	private:
 		

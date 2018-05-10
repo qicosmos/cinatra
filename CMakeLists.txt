@@ -51,7 +51,9 @@ set(CINATRA
 	url_encode_decode.hpp
 	cookie.hpp
 	session.hpp
-		session_manager.hpp
+	session_manager.hpp
+	nlohmann_json.hpp
+	inja.hpp
 	main.cpp
 	)
 
