@@ -72,6 +72,37 @@ int main() {
 		res.set_status_and_content(status_type::ok, "已经登录",res_content_type::string);
 	});
 
+    server.set_http_handler<GET,POST>("/html",[](const request& req,response& res){
+         inja::json json;
+         json["test_text"] = "hello,world";
+         json["header_text"] = "你好 cinatra";
+         res.render_html("./www/test.html",json);
+        /*
+         * ---------------------test.html---------------------------
+         * <html>
+    <head>
+      <meta charset="utf-8">
+    </head>
+    <body>
+        {% include "./header/header.html" %}
+            <h1>{{test_text}}</h1>
+    </body>
+</html>
+
+         ----------------------------------header.html---------------------
+         <div>{{header_text}}</div>
+*/
+    });
+
+    server.set_http_handler<GET,POST>("/json",[](const request& req, response& res) {
+         inja::json json;
+        json["abc"] = "abc";
+        json["success"] = true;
+        json["number"] = 100.005;
+        json["name"] = "中文名";
+        res.render_json(json);
+    });
+
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
 		auto s = req.get_query_value(0);
 		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()));
