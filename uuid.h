@@ -648,11 +648,11 @@ namespace uuids
 
       constexpr std::size_t size() const noexcept { return state_size; }
 
-      constexpr bool nil() const noexcept
-      {
-         for (size_t i = 0; i < data.size(); ++i) if (data[i] != 0) return false;
-         return true;
-      }
+      //constexpr bool nil() const noexcept
+      //{
+      //   for (size_t i = 0; i < data.size(); ++i) if (data[i] != 0) return false;
+      //   return true;
+      //}
 
       void swap(uuid & other) noexcept
       {
