@@ -203,10 +203,10 @@ namespace cinatra {
 #endif
         }
 
-		void redirect(const std::string& url)
+		void redirect(const std::string& url,bool is_forever = false)
 		{
 			add_header("Location",url.c_str());
-			set_status_and_content(status_type::moved_permanently);
+			is_forever==false?set_status_and_content(status_type::moved_temporarily):set_status_and_content(status_type::moved_permanently);
 		}
 
 	private:

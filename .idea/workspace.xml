@@ -13,7 +13,6 @@
   <component name="ChangeListManager">
     <list default="true" id="7cca826b-1ad8-49b0-ba66-cab3390aea17" name="Default" comment="增加易用接口">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/http_server.hpp" afterPath="$PROJECT_DIR$/http_server.hpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/main.cpp" afterPath="$PROJECT_DIR$/main.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/response.hpp" afterPath="$PROJECT_DIR$/response.hpp" />
     </list>
@@ -30,8 +29,8 @@
       <file leaf-file-name="main.cpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-3569">
-              <caret line="104" column="45" lean-forward="true" selection-start-line="104" selection-start-column="45" selection-end-line="104" selection-end-column="45" />
+            <state relative-caret-position="405">
+              <caret line="104" column="71" lean-forward="true" selection-start-line="104" selection-start-column="71" selection-end-line="104" selection-end-column="71" />
               <folding />
             </state>
           </provider>
@@ -43,6 +42,19 @@
             <state relative-caret-position="210">
               <caret line="14" column="25" lean-forward="false" selection-start-line="14" selection-start-column="8" selection-end-line="14" selection-end-column="25" />
               <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="response.hpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/response.hpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="461">
+              <caret line="208" column="140" lean-forward="true" selection-start-line="208" selection-start-column="140" selection-end-line="208" selection-end-column="140" />
+              <folding>
+                <element signature="e#5221#5343#0" expanded="true" />
+                <element signature="e#5611#5714#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -109,8 +121,8 @@
         <option value="$PROJECT_DIR$/session.hpp" />
         <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/http_server.hpp" />
-        <option value="$PROJECT_DIR$/main.cpp" />
         <option value="$PROJECT_DIR$/response.hpp" />
+        <option value="$PROJECT_DIR$/main.cpp" />
       </list>
     </option>
   </component>
@@ -199,7 +211,8 @@
       <workItem from="1525770116821" duration="300000" />
       <workItem from="1525770538961" duration="1178000" />
       <workItem from="1525941521870" duration="3075000" />
-      <workItem from="1526439132881" duration="891000" />
+      <workItem from="1526439132881" duration="962000" />
+      <workItem from="1526440659441" duration="515000" />
     </task>
     <task id="LOCAL-00001" summary="修改静态资源文件 路径不正确判断的问题">
       <created>1525657080582</created>
@@ -212,7 +225,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="27723000" />
+    <option name="totallyTimeSpent" value="28309000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="0" width="1920" height="1026" extended-state="6" />
@@ -337,7 +350,6 @@
         <state relative-caret-position="465">
           <caret line="31" column="60" lean-forward="false" selection-start-line="31" selection-start-column="60" selection-end-line="31" selection-end-column="60" />
           <folding>
-            <element signature="e#97#120#0" expanded="true" />
             <element signature="e#5221#5343#0" expanded="true" />
             <element signature="e#5611#5714#0" expanded="true" />
           </folding>
@@ -416,7 +428,6 @@
         <state relative-caret-position="2565">
           <caret line="171" column="48" lean-forward="true" selection-start-line="171" selection-start-column="48" selection-end-line="171" selection-end-column="48" />
           <folding>
-            <element signature="e#97#120#0" expanded="true" />
             <element signature="e#5221#5343#0" expanded="true" />
             <element signature="e#5611#5714#0" expanded="true" />
           </folding>
@@ -495,7 +506,6 @@
         <state relative-caret-position="2430">
           <caret line="162" column="24" lean-forward="false" selection-start-line="162" selection-start-column="24" selection-end-line="162" selection-end-column="24" />
           <folding>
-            <element signature="e#97#120#0" expanded="true" />
             <element signature="e#5221#5343#0" expanded="true" />
             <element signature="e#5611#5714#0" expanded="true" />
           </folding>
@@ -657,8 +667,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="384">
-          <caret line="207" column="47" lean-forward="true" selection-start-line="207" selection-start-column="47" selection-end-line="207" selection-end-column="47" />
+        <state relative-caret-position="461">
+          <caret line="208" column="140" lean-forward="true" selection-start-line="208" selection-start-column="140" selection-end-line="208" selection-end-column="140" />
           <folding>
             <element signature="e#5221#5343#0" expanded="true" />
             <element signature="e#5611#5714#0" expanded="true" />
@@ -668,8 +678,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-3569">
-          <caret line="104" column="45" lean-forward="true" selection-start-line="104" selection-start-column="45" selection-end-line="104" selection-end-column="45" />
+        <state relative-caret-position="405">
+          <caret line="104" column="71" lean-forward="true" selection-start-line="104" selection-start-column="71" selection-end-line="104" selection-end-column="71" />
           <folding />
         </state>
       </provider>

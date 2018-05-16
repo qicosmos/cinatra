@@ -102,7 +102,7 @@ int main() {
 	});
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
-		res.redirect("http://www.baidu.com");
+		res.redirect("http://www.baidu.com"); // res.redirect("/json");
 	});
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
