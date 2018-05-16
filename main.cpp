@@ -79,7 +79,7 @@ int main() {
         res.set_attr("header_text","你好 cinatra");
 //		json["test_text"] = "hello,world";
 //		json["header_text"] = "你好 cinatra";
-		res.render_html("./www/test.html");
+		res.render_view("./www/test.html");
 		/*
 		 * ---------------------test.html---------------------------
 		 * <html>
