@@ -203,6 +203,12 @@ namespace cinatra {
 #endif
         }
 
+		void redirect(const std::string& url)
+		{
+			add_header("Location",url.c_str());
+			set_status_and_content(status_type::moved_permanently);
+		}
+
 	private:
 		
 		//std::map<std::string, std::string, ci_less> headers_;
