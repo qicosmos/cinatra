@@ -10,6 +10,8 @@
 #include "nanolog.hpp"
 #include "function_traits.hpp"
 #include "url_encode_decode.hpp"
+#include "session_manager.hpp"
+#include "cookie.hpp"
 namespace cinatra {
 
 	template<class service_pool_policy = io_service_pool>
