@@ -135,6 +135,12 @@ namespace cinatra {
 			http_router_.register_handler<Is...>(STAIC_RES, std::forward<Function>(f), std::forward<AP>(ap)...);
 		}
 
+        void set_base_path(const std::string& key,const std::string& path)
+        {
+            base_path_[0] = std::move(key);
+            base_path_[1] = std::move(path);
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -189,6 +195,7 @@ namespace cinatra {
 		void init_conn_callback() {
             set_static_res_handler();
 			http_handler_ = [this](const request& req, response& res) {
+                res.set_base_path(this->base_path_[0],this->base_path_[1]);
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {
 					res.set_status_and_content(status_type::bad_request, "the url is not right");
@@ -203,6 +210,7 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = "./static/"; //default
+        std::string base_path_[2];
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
