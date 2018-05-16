@@ -25,13 +25,13 @@ struct check {
 			res.set_status_and_content(status_type::bad_request);
 			return false;
 		}*/
-		
+
 		return true;
 	}
 
 	bool after(const request& req, response& res) {
 		std::cout << "after check" << std::endl;
-		
+
 		return true;
 	}
 };
@@ -50,96 +50,98 @@ int main() {
 		LOG_INFO << "listen failed";
 		return -1;
 	}
-	
+
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
 
-    server.set_http_handler<GET,POST>("/login",[](const request& req, response& res) {
-        auto session = res.start_session();
-		session->set_data("userid",std::string("1"));
+	server.set_http_handler<GET, POST>("/login", [](const request& req, response& res) {
+		auto session = res.start_session();
+		session->set_data("userid", std::string("1"));
 		session->set_max_age(-1);
-        res.set_status_and_content(status_type::ok, "login");
-    });
+		res.set_status_and_content(status_type::ok, "login");
+	});
 
-	server.set_http_handler<GET,POST>("/islogin",[](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/islogin", [](const request& req, response& res) {
 		auto ptr = req.get_session();
 		auto session = ptr.lock();
-		if (session == nullptr|| session->get_data<std::string>("userid") != "1") {
+		if (session == nullptr || session->get_data<std::string>("userid") != "1") {
 			res.set_status_and_content(status_type::ok, "没有登录", res_content_type::string);
 			return;
 		}
-		res.set_status_and_content(status_type::ok, "已经登录",res_content_type::string);
+		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
 	});
 
-    server.set_http_handler<GET,POST>("/html",[](const request& req,response& res){
-         inja::json json;
-         json["test_text"] = "hello,world";
-         json["header_text"] = "你好 cinatra";
-         res.render_html("./www/test.html",json);
-        /*
-         * ---------------------test.html---------------------------
-         * <html>
-    <head>
-      <meta charset="utf-8">
-    </head>
-    <body>
-        {% include "./header/header.html" %}
-            <h1>{{test_text}}</h1>
-    </body>
+	server.set_http_handler<GET, POST>("/html", [](const request& req, response& res) {
+		inja::json json;
+		json["test_text"] = "hello,world";
+		json["header_text"] = "你好 cinatra";
+		res.render_html("./www/test.html", json);
+		/*
+		 * ---------------------test.html---------------------------
+		 * <html>
+	<head>
+	  <meta charset="utf-8">
+	</head>
+	<body>
+		{% include "./header/header.html" %}
+			<h1>{{test_text}}</h1>
+	</body>
 </html>
 
-         ----------------------------------header.html---------------------
-         <div>{{header_text}}</div>
+		 ----------------------------------header.html---------------------
+		 <div>{{header_text}}</div>
 */
-    });
+	});
 
-    server.set_http_handler<GET,POST>("/json",[](const request& req, response& res) {
-         inja::json json;
-        json["abc"] = "abc";
-        json["success"] = true;
-        json["number"] = 100.005;
-        json["name"] = "中文名";
-        res.render_json(json);
-    });
+	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
+		inja::json json;
+		json["abc"] = "abc";
+		json["success"] = true;
+		json["number"] = 100.005;
+		json["name"] = "中文";
+		res.render_json(json);
+	});
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
 		auto s = req.get_query_value(0);
 		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()));
 	});
 
-	server.set_http_handler<GET,POST>("/restype",[](const request& req,response& res){
-        auto type = req.get_query_value("type");
-        auto res_type = cinatra::res_content_type::string;
-        if(type=="html")
-        {
-            res_type = cinatra::res_content_type::html;
-        }else if(type=="json"){
-            res_type = cinatra::res_content_type::json;
-        }else if(type=="string"){
-            //do not anything;
-        }
-		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>",res_type);
+	server.set_http_handler<GET, POST>("/restype", [](const request& req, response& res) {
+		auto type = req.get_query_value("type");
+		auto res_type = cinatra::res_content_type::string;
+		if (type == "html")
+		{
+			res_type = cinatra::res_content_type::html;
+		}
+		else if (type == "json") {
+			res_type = cinatra::res_content_type::json;
+		}
+		else if (type == "string") {
+			//do not anything;
+		}
+		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>", res_type);
 	});
 
-    server.set_http_handler<GET,POST>("/getzh",[](const request& req,response& res){
-        auto zh = req.get_query_value("zh");
-        auto code_str = code_utils::get_string_by_urldecode(zh);
-        std::cout<<code_str.c_str()<<std::endl;
-        res.set_status_and_content(status_type::ok,code_str.c_str(),res_content_type::string);
-    });
+	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
+		auto zh = req.get_query_value("zh");
+		auto code_str = code_utils::get_string_by_urldecode(zh);
+		std::cout << code_str.c_str() << std::endl;
+		res.set_status_and_content(status_type::ok, code_str.c_str(), res_content_type::string);
+	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
 
-		res.set_status_and_content(status_type::ok, "hello world",res_content_type::none, content_encoding::gzip);
+		res.set_status_and_content(status_type::ok, "hello world", res_content_type::none, content_encoding::gzip);
 	});
 
-//	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
-//		auto res_path = req.get_res_path();
-//		std::cout << res_path << std::endl;
-//	});
+	//	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
+	//		auto res_path = req.get_res_path();
+	//		std::cout << res_path << std::endl;
+	//	});
 
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
@@ -224,7 +226,7 @@ int main() {
 			else {
 				res.set_continue(true);
 			}
-			
+
 			std::string file_name = std::to_string(n++) + std::string(extension.data(), extension.length());
 			auto file = std::make_shared<std::ofstream>(file_name, std::ios::binary);
 			if (!file->is_open()) {
@@ -334,9 +336,9 @@ int main() {
 		{
 			auto conn = req.get_conn();
 			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-			
+
 			std::string str;
-			const size_t len = 2*1024;
+			const size_t len = 2 * 1024;
 			str.resize(len);
 
 			in->read(&str[0], len);
@@ -344,7 +346,7 @@ int main() {
 			if (read_len != len) {
 				str.resize(read_len);
 			}
-			bool eof = (read_len==0|| read_len != len);
+			bool eof = (read_len == 0 || read_len != len);
 			conn->write_chunked_data(std::move(str), eof);
 		}
 		break;

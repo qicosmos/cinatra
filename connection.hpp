@@ -1030,7 +1030,7 @@ namespace cinatra {
 		std::string chunked_header_;
 		multipart_reader multipart_parser_;
 		//callback handler to application layer
-		http_handler& http_handler_ = nullptr;
+		const http_handler& http_handler_;
 		std::any tag_;
 	};
 }
