@@ -219,7 +219,7 @@ namespace cinatra {
             {
                 for(auto iter = tmp_data.begin();iter!=tmp_data.end();++iter)
                 {
-                    tmpl_json_data[iter.key()] = iter.value();
+                    tmpl_json_data_[iter.key()] = iter.value();
                 }
             }
 			std::string res_content_type_str = "text/html; charset=utf8";
@@ -230,7 +230,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
             set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data),std::move(res_content_type_str),content_encoding::gzip);
 #else
-            set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data),std::move(res_content_type_str),content_encoding::none);
+            set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data_),std::move(res_content_type_str),content_encoding::none);
 #endif
         }
 
@@ -247,7 +247,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
             set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data),std::move(res_content_type_str),content_encoding::gzip);
 #else
-            set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data),std::move(res_content_type_str),content_encoding::none);
+            set_status_and_content(status_type::ok,env.render_template(tmpl, tmpl_json_data_),std::move(res_content_type_str),content_encoding::none);
 #endif
         }
 
@@ -272,13 +272,13 @@ namespace cinatra {
 
         void set_base_path(const std::string&key,const std::string& path)
         {
-            tmpl_json_data[key] = path;
+            tmpl_json_data_[key] = path;
         }
 
         template<typename T>
         void set_attr(const std::string& key,const T& value)
         {
-            tmpl_json_data[key] = std::move(value);
+            tmpl_json_data_[key] = value;
         }
 
 	private:
@@ -297,7 +297,7 @@ namespace cinatra {
 		std::string_view domain_;
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
-        inja::json tmpl_json_data;
+        inja::json tmpl_json_data_;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
