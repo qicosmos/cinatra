@@ -15,6 +15,7 @@
 #include "session_manager.hpp"
 #include "nlohmann_json.hpp"
 #include "inja.hpp"
+#include "http_cache.hpp"
 namespace cinatra {
 	class response {
 	public:
@@ -44,6 +45,13 @@ namespace cinatra {
 			}
 
 			buffers.push_back(boost::asio::buffer(crlf));
+
+			if (http_cache::need_cache()) {
+				prefix_.clear();
+				for (auto& buf : buffers) {
+					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), buf.size());
+				}
+			}
 
 			if (body_type_ == content_type::string) {
 				buffers.emplace_back(boost::asio::buffer(content_.data(), content_.size()));
@@ -252,6 +260,10 @@ namespace cinatra {
 #endif
         }
 
+		std::string raw_content() {
+			return prefix_ + content_;
+		}
+
 		void redirect(const std::string& url,bool is_forever = false)
 		{
 			add_header("Location",url.c_str());
@@ -273,6 +285,7 @@ namespace cinatra {
 		
 		//std::map<std::string, std::string, ci_less> headers_;
 		std::vector<std::pair<std::string, std::string>> headers_;
+		std::string prefix_;
 		std::string content_;
 		content_type body_type_ = content_type::unknown;
 		status_type status_ = status_type::init;
