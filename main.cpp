@@ -1,7 +1,5 @@
 #include <iostream>
 #include "http_server.hpp"
-#include "cookie.hpp"
-#include "session_manager.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -51,7 +49,7 @@ int main() {
 		return -1;
 	}
 
-	//server.enable_cache(true);//set global cache
+	server.enable_cache(true);//set global cache
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
@@ -102,6 +100,10 @@ int main() {
 		json["number"] = 100.005;
 		json["name"] = "中文";
 		res.render_json(json);
+	});
+
+	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
+		res.redirect("http://www.baidu.com"); // res.redirect("/json");
 	});
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {

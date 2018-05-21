@@ -11,6 +11,8 @@
 #include "function_traits.hpp"
 #include "url_encode_decode.hpp"
 #include "http_cache.hpp"
+#include "session_manager.hpp"
+#include "cookie.hpp"
 
 namespace cinatra {
 	//cache
