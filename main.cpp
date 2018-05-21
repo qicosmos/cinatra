@@ -49,6 +49,7 @@ int main() {
 		return -1;
 	}
 
+    server.set_base_path("base_path","/feather");
 	//server.enable_cache(true);//set global cache
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
@@ -73,9 +74,12 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/html", [](const request& req, response& res) {
 		inja::json json;
-		json["test_text"] = "hello,world";
-		json["header_text"] = "你好 cinatra";
-		res.render_html("./www/test.html", json);
+        res.set_attr("number",1024);
+        res.set_attr("test_text","hello,world");
+        res.set_attr("header_text","你好 cinatra");
+//		json["test_text"] = "hello,world";
+//		json["header_text"] = "你好 cinatra";
+		res.render_view("./www/test.html");
 		/*
 		 * ---------------------test.html---------------------------
 		 * <html>
