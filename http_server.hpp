@@ -10,7 +10,24 @@
 #include "nanolog.hpp"
 #include "function_traits.hpp"
 #include "url_encode_decode.hpp"
+#include "http_cache.hpp"
+
 namespace cinatra {
+	//cache
+	template <typename T, typename U>
+	auto operator||(T n, U l) {
+		return std::tuple_cat(n, l);
+	}
+
+	template <typename U>
+	auto operator||(std::tuple<bool> n, const U& l) {
+		return l;
+	}
+
+	template <typename T>
+	auto operator||(const T& n, std::tuple<bool> l) {
+		return n;
+	}
 
 	template<class service_pool_policy = io_service_pool>
 	class http_server_ : private noncopyable {
@@ -22,6 +39,10 @@ namespace cinatra {
 #endif
 		{
 			init_conn_callback();
+		}
+
+		void enable_cache(bool b) {
+			http_cache::enable_cache(b);
 		}
 
 		template<typename F>
@@ -122,10 +143,45 @@ namespace cinatra {
 			keep_alive_timeout_ = seconds;
 		}
 
+		template <typename T, typename Tuple>
+		struct has_type;
+
+		template <typename T, typename... Us>
+		struct has_type<T, std::tuple<Us...>> : std::disjunction<std::is_same<T, Us>...> {};
+
+		template<typename T, typename... Args>
+		auto filter(const T& t, const Args&... args) {
+			return (std::make_tuple(t) || ... || std::make_tuple(args));
+		}
+
+		template<typename T>
+		bool need_cache(T&& t) {
+			if constexpr(std::is_same_v<T, bool>) {
+				return t;
+			}
+			else {
+				return false;
+			}
+		}
+
 		//set http handlers
 		template<http_method... Is, typename Function, typename... AP>
 		void set_http_handler(std::string_view name, Function&& f, AP&&... ap) {
-			http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
+			if constexpr(has_type<bool, std::tuple<std::decay_t<AP>...>>::value) {//for cache
+				bool b = false;
+				((!b&&(b = need_cache(std::forward<AP>(ap))), false),...);
+				if (b) {
+					http_cache::add_skip(name);
+				}
+				auto tp = filter(std::forward<AP>(ap)...);
+				auto lm = [this, name, f = std::move(f)](auto... ap) {
+					set_http_handler<Is...>(name, std::move(f), std::move(ap)...);
+				};
+				std::apply(lm, std::move(tp));
+			}
+			else {
+				http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
+			}
 		}
 
 		template<http_method... Is, typename Function, typename... AP>

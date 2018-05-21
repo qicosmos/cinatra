@@ -9,6 +9,7 @@
 #include "nanolog.hpp"
 #include "websocket.hpp"
 #include "define.h"
+#include "http_cache.hpp"
 
 namespace cinatra {
 	using http_handler = std::function<void(const request&, response&)>;
@@ -220,8 +221,23 @@ namespace cinatra {
 				//do_read();
 				do_read_head();
 			}
-			else { //4.3 complete request
-				   //5. check if has body
+			else {
+				if (http_cache::need_cache()&&!http_cache::not_cache(req_.get_url())) {
+					auto raw_url = req_.raw_url();
+					if (!http_cache::empty()) {
+						auto resp_str = http_cache::get(std::string(raw_url.data(), raw_url.length()));
+						//write back cache
+						if (!resp_str.empty()) {
+							boost::asio::async_write(socket_, boost::asio::buffer(resp_str.data(), resp_str.size()),
+								[self = this->shared_from_this(), resp_str = std::move(resp_str)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+								self->handle_write(ec);
+							});
+							return;
+						}
+					}
+				}
+				//4.3 complete request
+				//5. check if has body
 				set_response_attr();
 				if (req_.has_body()) { //5.1 has body
 					auto type = get_content_type();
@@ -299,6 +315,12 @@ namespace cinatra {
 			if (buffers.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
+			}
+
+			//cache
+			if (http_cache::need_cache() && !http_cache::not_cache(req_.get_url())) {
+				auto raw_url = req_.raw_url();
+				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
 
 			boost::asio::async_write(socket_, buffers,

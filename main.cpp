@@ -51,6 +51,7 @@ int main() {
 		return -1;
 	}
 
+	//server.enable_cache(true);//set global cache
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});

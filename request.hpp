@@ -68,18 +68,22 @@ namespace cinatra {
 			}
 
             //parse url and queries
-            std::string_view url = {url_, url_len_};
-			size_t npos = url.find('/');
+			raw_url_ = {url_, url_len_};
+			size_t npos = raw_url_.find('/');
 			if (npos == std::string_view::npos)
 				return -1;
 
-            size_t pos = url.find('?');
+            size_t pos = raw_url_.find('?');
             if(pos!=std::string_view::npos){
-                queries_ = parse_query(url.substr(pos+1, url_len_-pos-1));
+                queries_ = parse_query(raw_url_.substr(pos+1, url_len_-pos-1));
 				url_len_ = pos;
             }
 
 			return header_len_;
+		}
+
+		std::string_view raw_url() {
+			return raw_url_;
 		}
 
 		void set_body_len(size_t len) {
@@ -554,6 +558,7 @@ namespace cinatra {
 		int header_len_;
 		size_t body_len_;
 
+		std::string_view raw_url_;
 		std::string method_str_;
 		std::string url_str_;
 
