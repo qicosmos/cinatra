@@ -49,7 +49,7 @@ namespace cinatra {
 			if (http_cache::need_cache()) {
 				prefix_.clear();
 				for (auto& buf : buffers) {
-					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), buf.size());
+					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf));
 				}
 			}
 
