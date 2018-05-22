@@ -50,7 +50,7 @@ int main() {
 	}
 
     server.set_base_path("base_path","/feather");
-	server.enable_cache(true);//set global cache
+	//server.enable_cache(true);//set global cache
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	});
@@ -133,9 +133,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
 		auto zh = req.get_query_value("zh");
-		auto code_str = code_utils::get_string_by_urldecode(zh);
-		std::cout << code_str.c_str() << std::endl;
-		res.set_status_and_content(status_type::ok, code_str.c_str(), res_content_type::string);
+		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
