@@ -225,17 +225,23 @@ namespace cinatra {
 				if (http_cache::need_cache()&&!http_cache::not_cache(req_.get_url())) {
 					auto raw_url = req_.raw_url();
 					if (!http_cache::empty()) {
-						auto resp_str = http_cache::get(std::string(raw_url.data(), raw_url.length()));
+						auto resp_vec = http_cache::get(std::string(raw_url.data(), raw_url.length()));
 						//write back cache
-						if (!resp_str.empty()) {
-							boost::asio::async_write(socket_, boost::asio::buffer(resp_str.data(), resp_str.size()),
-								[self = this->shared_from_this(), resp_str = std::move(resp_str)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+						if (!resp_vec.empty()) {
+							std::vector<boost::asio::const_buffer> buffers;
+							for(auto &iter:resp_vec)
+							{
+								buffers.emplace_back(boost::asio::buffer(iter.data(),iter.size()));
+							}
+							boost::asio::async_write(socket_, buffers,
+								[self = this->shared_from_this(), resp_vec = std::move(resp_vec)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 								self->handle_write(ec);
 							});
 							return;
 						}
 					}
 				}
+
 				//4.3 complete request
 				//5. check if has body
 				set_response_attr();
