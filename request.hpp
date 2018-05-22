@@ -11,7 +11,7 @@
 #include "memento.hpp"
 #include "session.hpp"
 #include "session_manager.hpp"
-
+#include "url_encode_decode.hpp"
 namespace cinatra {
 	enum class data_proc_state : int8_t {
 		data_begin,
@@ -416,7 +416,16 @@ namespace cinatra {
 					auto params = split(str, "/");
 					if (n >= params.size())
 						return {};
-
+					if(code_utils::is_url_encode(params[n]))
+					{
+						auto code_iter = utf8_character_pathinfo_params.find(n);
+						if(code_iter!=utf8_character_pathinfo_params.end())
+						{
+							return std::string_view(code_iter->second.data(),code_iter->second.size());
+						}
+						utf8_character_pathinfo_params[n] = code_utils::get_string_by_urldecode(params[n]).c_str();
+						return std::string_view(utf8_character_pathinfo_params[n].data(),utf8_character_pathinfo_params[n].size());
+					}
 					return params[n];
 				}
 			}
@@ -431,9 +440,30 @@ namespace cinatra {
 				if (itf == form_url_map_.end())
 					return {};
 
+				if(code_utils::is_url_encode(itf->second))
+				{
+					std::string map_key = std::string(key.data(),key.size());
+					auto code_iter = utf8_character_params.find(map_key);
+					if(code_iter!=utf8_character_params.end())
+					{
+                        return std::string_view(code_iter->second.data(),code_iter->second.size());
+					}
+					utf8_character_params[map_key] = code_utils::get_string_by_urldecode(itf->second).c_str();
+					return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+				}
 				return itf->second;
 			}
-
+			if(code_utils::is_url_encode(it->second))
+			{
+				std::string map_key = std::string(key.data(),key.size());
+				auto code_iter = utf8_character_params.find(map_key);
+				if(code_iter!=utf8_character_params.end())
+				{
+					return std::string_view(code_iter->second.data(),code_iter->second.size());
+				}
+				utf8_character_params[map_key] = code_utils::get_string_by_urldecode(it->second).c_str();
+				return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+			}
 			return it->second;
 		}
 
@@ -579,5 +609,7 @@ namespace cinatra {
 
 		const std::multimap<std::string_view, std::string_view>* multipart_headers_;
 		std::vector<upload_file> files_;
+		mutable std::map<std::string,std::string> utf8_character_params;
+		mutable std::map<std::size_t,std::string> utf8_character_pathinfo_params;
 	};
 }
