@@ -51,10 +51,8 @@ namespace cinatra {
 			}
 
 			if (http_cache::need_cache()) {
-				int number = 0;
+				cache_data.clear();
 				for (auto& buf : buffers) {
-//					std::cout<<std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf))<<std::endl;
-//					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf));
 					cache_data.push_back(std::string(boost::asio::buffer_cast<const char*>(buf),boost::asio::buffer_size(buf)));
 				}
 			}
