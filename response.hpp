@@ -288,7 +288,6 @@ namespace cinatra {
 		
 		//std::map<std::string, std::string, ci_less> headers_;
 		std::vector<std::pair<std::string, std::string>> headers_;
-		std::string prefix_;
 		std::vector<std::string> cache_data;
 		std::string content_;
 		content_type body_type_ = content_type::unknown;
