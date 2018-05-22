@@ -46,15 +46,18 @@ namespace cinatra {
 
 			buffers.push_back(boost::asio::buffer(crlf));
 
-			if (http_cache::need_cache()) {
-				prefix_.clear();
-				for (auto& buf : buffers) {
-					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf));
-				}
-			}
-
 			if (body_type_ == content_type::string) {
 				buffers.emplace_back(boost::asio::buffer(content_.data(), content_.size()));
+			}
+
+			if (http_cache::need_cache()) {
+				prefix_.clear();
+				int number = 0;
+				for (auto& buf : buffers) {
+//					std::cout<<std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf))<<std::endl;
+//					prefix_+=std::string(boost::asio::buffer_cast<const char*>(buf), boost::asio::buffer_size(buf));
+					cache_data.push_back(std::string(boost::asio::buffer_cast<const char*>(buf),boost::asio::buffer_size(buf)));
+				}
 			}
 
 			return buffers;
@@ -260,8 +263,8 @@ namespace cinatra {
 #endif
         }
 
-		std::string raw_content() {
-			return prefix_ + content_;
+		std::vector<std::string> raw_content() {
+			return cache_data;
 		}
 
 		void redirect(const std::string& url,bool is_forever = false)
@@ -286,6 +289,7 @@ namespace cinatra {
 		//std::map<std::string, std::string, ci_less> headers_;
 		std::vector<std::pair<std::string, std::string>> headers_;
 		std::string prefix_;
+		std::vector<std::string> cache_data;
 		std::string content_;
 		content_type body_type_ = content_type::unknown;
 		status_type status_ = status_type::init;
