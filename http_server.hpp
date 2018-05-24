@@ -137,11 +137,7 @@ namespace cinatra {
 			keep_alive_timeout_ = seconds;
 		}
 
-		template <typename T, typename Tuple>
-		struct has_type;
-
-		template <typename T, typename... Us>
-		struct has_type<T, std::tuple<Us...>> : std::disjunction<std::is_same<T, Us>...> {};
+		/*
 
 		template<typename T, typename... Args>
 		auto filter(const T& t, const Args&... args) {
@@ -155,7 +151,7 @@ namespace cinatra {
 
 		auto filter(enable_cache<bool>) {
 			return std::tuple<>();
-		}
+		}*/
 
 		template<typename T>
 		bool need_cache(T&& t) {
@@ -176,7 +172,7 @@ namespace cinatra {
 				if (b) {
 					http_cache::add_skip(name);
 				}
-				auto tp = filter(std::forward<AP>(ap)...);
+				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
 				auto lm = [this, name, f = std::move(f)](auto... ap) {
 					http_router_.register_handler<Is...>(name, std::move(f), std::move(ap)...);
 				};
