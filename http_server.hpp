@@ -15,21 +15,13 @@
 #include "cookie.hpp"
 
 namespace cinatra {
+	
 	//cache
-	template <typename T, typename U>
-	auto operator||(T n, U l) {
-		return std::tuple_cat(n, l);
-	}
-
-	template <typename U>
-	auto operator||(std::tuple<bool> n, const U& l) {
-		return l;
-	}
-
-	template <typename T>
-	auto operator||(const T& n, std::tuple<bool> l) {
-		return n;
-	}
+	template<typename T>
+	struct enable_cache {
+		enable_cache(T t) :value(t) {}
+		T value;
+	};
 
 	template<class service_pool_policy = io_service_pool>
 	class http_server_ : private noncopyable {
@@ -43,7 +35,7 @@ namespace cinatra {
 			init_conn_callback();
 		}
 
-		void enable_cache(bool b) {
+		void enable_http_cache(bool b) {
 			http_cache::enable_cache(b);
 		}
 
@@ -157,9 +149,18 @@ namespace cinatra {
 		}
 
 		template<typename T>
+		auto filter(const T& t) {
+			return std::make_tuple(t);
+		}
+
+		auto filter(enable_cache<bool>) {
+			return std::tuple<>();
+		}
+
+		template<typename T>
 		bool need_cache(T&& t) {
-			if constexpr(std::is_same_v<T, bool>) {
-				return t;
+			if constexpr(std::is_same_v<T, enable_cache<bool>>) {
+				return t.value;
 			}
 			else {
 				return false;
@@ -169,26 +170,21 @@ namespace cinatra {
 		//set http handlers
 		template<http_method... Is, typename Function, typename... AP>
 		void set_http_handler(std::string_view name, Function&& f, AP&&... ap) {
-			if constexpr(has_type<bool, std::tuple<std::decay_t<AP>...>>::value) {//for cache
-				bool b = false;
-				((!b&&(b = need_cache(std::forward<AP>(ap))), false),...);
+			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
+				bool b = true;
+				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
 				if (b) {
 					http_cache::add_skip(name);
 				}
 				auto tp = filter(std::forward<AP>(ap)...);
 				auto lm = [this, name, f = std::move(f)](auto... ap) {
-					set_http_handler<Is...>(name, std::move(f), std::move(ap)...);
+					http_router_.register_handler<Is...>(name, std::move(f), std::move(ap)...);
 				};
 				std::apply(lm, std::move(tp));
 			}
 			else {
 				http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
 			}
-		}
-
-		template<http_method... Is, typename Function, typename... AP>
-		void set_static_res_handler(Function&& f, AP&&... ap) {
-			http_router_.register_handler<Is...>(STAIC_RES, std::forward<Function>(f), std::forward<AP>(ap)...);
 		}
 
         void set_base_path(const std::string& key,const std::string& path)
@@ -274,6 +270,25 @@ namespace cinatra {
 
 		http_handler http_handler_ = nullptr;
 	};
+
+	template <typename T, typename U>
+	auto operator||(const T& n, const U& l) {
+		return std::tuple_cat(n, l);
+	}
+
+	template <typename U>
+	auto operator||(std::tuple<enable_cache<bool>> , const U& l) {
+		return l;
+	}
+
+	template <typename T>
+	auto operator||(const T& n, std::tuple<enable_cache<bool>> ) {
+		return n;
+	}
+
+	auto operator||(std::tuple<enable_cache<bool>> , std::tuple<enable_cache<bool>> ) {
+		return std::tuple<>();
+	}
 
 	using http_server = http_server_<io_service_pool>;
 }
