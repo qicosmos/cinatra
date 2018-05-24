@@ -135,6 +135,9 @@ namespace cinatra {
 			proc_continue_ = true;
 			headers_.clear();
 			content_.clear();
+            tmpl_json_data_.clear();
+            session_ = nullptr;
+            cache_data.clear();
 		}
 
 		void set_continue(bool con) {

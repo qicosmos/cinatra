@@ -138,7 +138,7 @@ int main() {
         std::cout<<zh<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
-    
+
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;

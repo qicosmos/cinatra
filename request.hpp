@@ -174,6 +174,9 @@ namespace cinatra {
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
 			part_data_ = {};
+            utf8_character_params.clear();
+            utf8_character_pathinfo_params.clear();
+            queries_.clear();
 		}
 
 		void fit_size() {
