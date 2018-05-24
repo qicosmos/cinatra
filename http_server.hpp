@@ -251,10 +251,5 @@ namespace cinatra {
 		http_handler http_handler_ = nullptr;
 	};
 
-	template <typename T, typename U>
-	auto operator||(const T& n, const U& l) {
-		return std::tuple_cat(n, l);
-	}
-
 	using http_server = http_server_<io_service_pool>;
 }
