@@ -137,22 +137,6 @@ namespace cinatra {
 			keep_alive_timeout_ = seconds;
 		}
 
-		/*
-
-		template<typename T, typename... Args>
-		auto filter(const T& t, const Args&... args) {
-			return (std::make_tuple(t) || ... || std::make_tuple(args));
-		}
-
-		template<typename T>
-		auto filter(const T& t) {
-			return std::make_tuple(t);
-		}
-
-		auto filter(enable_cache<bool>) {
-			return std::tuple<>();
-		}*/
-
 		template<typename T>
 		bool need_cache(T&& t) {
 			if constexpr(std::is_same_v<T, enable_cache<bool>>) {
@@ -270,20 +254,6 @@ namespace cinatra {
 	template <typename T, typename U>
 	auto operator||(const T& n, const U& l) {
 		return std::tuple_cat(n, l);
-	}
-
-	template <typename U>
-	auto operator||(std::tuple<enable_cache<bool>> , const U& l) {
-		return l;
-	}
-
-	template <typename T>
-	auto operator||(const T& n, std::tuple<enable_cache<bool>> ) {
-		return n;
-	}
-
-	auto operator||(std::tuple<enable_cache<bool>> , std::tuple<enable_cache<bool>> ) {
-		return std::tuple<>();
 	}
 
 	using http_server = http_server_<io_service_pool>;
