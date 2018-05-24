@@ -54,7 +54,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
-	});
+	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/login", [](const request& req, response& res) {
 		auto session = res.start_session();
@@ -113,6 +113,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
 		auto s = req.get_query_value(0);
+        std::cout<<s<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()));
 	});
 
@@ -134,9 +135,10 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
 		auto zh = req.get_query_value("zh");
+        std::cout<<zh<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
-
+    
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
@@ -144,10 +146,6 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world", res_content_type::none, content_encoding::gzip);
 	});
 
-	//	server.set_static_res_handler<GET, POST>([](const request& req, response& res) {
-	//		auto res_path = req.get_res_path();
-	//		std::cout << res_path << std::endl;
-	//	});
 
 	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
 		auto name = req.get_header_value("name");
