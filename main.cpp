@@ -113,8 +113,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
 		auto s = req.get_query_value(0);
-        std::cout<<s<<std::endl;
-		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()));
+		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()),res_content_type::string);
 	});
 
 	server.set_http_handler<GET, POST>("/restype", [](const request& req, response& res) {
@@ -135,10 +134,9 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
 		auto zh = req.get_query_value("zh");
-        std::cout<<zh<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
-    
+
 	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
