@@ -494,7 +494,7 @@ public:\
 	{
 		static constexpr auto func()
 		{
-			return std::tuple();
+			return std::tuple<>();
 		}
 
 		template< class... Args >
