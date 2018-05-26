@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 project(cinatra)
-
+#set(CMAKE_BUILD_TYPE Release)
 if (MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
 else ()
@@ -48,13 +48,19 @@ set(CINATRA
 	http_router.hpp
 	router.hpp
 	define.h
+	url_encode_decode.hpp
+	cookie.hpp
+	session.hpp
+	session_manager.hpp
+	nlohmann_json.hpp
+	inja.hpp
 	main.cpp
 	)
 
 add_executable(cinatra ${CINATRA})
 include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-target_link_libraries(cinatra ${Boost_LIBRARIES})
+target_link_libraries(cinatra ${Boost_LIBRARIES} uuid)
 if (ENABLE_SSL)
 	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()

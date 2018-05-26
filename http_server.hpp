@@ -9,9 +9,19 @@
 #include "router.hpp"
 #include "nanolog.hpp"
 #include "function_traits.hpp"
-#include "mime_types.hpp"
+#include "url_encode_decode.hpp"
+#include "http_cache.hpp"
+#include "session_manager.hpp"
+#include "cookie.hpp"
 
 namespace cinatra {
+	
+	//cache
+	template<typename T>
+	struct enable_cache {
+		enable_cache(T t) :value(t) {}
+		T value;
+	};
 
 	template<class service_pool_policy = io_service_pool>
 	class http_server_ : private noncopyable {
@@ -23,6 +33,10 @@ namespace cinatra {
 #endif
 		{
 			init_conn_callback();
+		}
+
+		void enable_http_cache(bool b) {
+			http_cache::enable_cache(b);
 		}
 
 		template<typename F>
@@ -123,11 +137,41 @@ namespace cinatra {
 			keep_alive_timeout_ = seconds;
 		}
 
+		template<typename T>
+		bool need_cache(T&& t) {
+			if constexpr(std::is_same_v<T, enable_cache<bool>>) {
+				return t.value;
+			}
+			else {
+				return false;
+			}
+		}
+
 		//set http handlers
 		template<http_method... Is, typename Function, typename... AP>
 		void set_http_handler(std::string_view name, Function&& f, AP&&... ap) {
-			http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
+			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
+				bool b = true;
+				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
+				if (b) {
+					http_cache::add_skip(name);
+				}
+				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
+				auto lm = [this, name, f = std::move(f)](auto... ap) {
+					http_router_.register_handler<Is...>(name, std::move(f), std::move(ap)...);
+				};
+				std::apply(lm, std::move(tp));
+			}
+			else {
+				http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
+			}
 		}
+
+        void set_base_path(const std::string& key,const std::string& path)
+        {
+            base_path_[0] = std::move(key);
+            base_path_[1] = std::move(path);
+        }
 
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
@@ -150,8 +194,40 @@ namespace cinatra {
 			});
 		}
 
+        void set_static_res_handler()
+        {
+            http_router_.register_handler<POST,GET>(STAIC_RES, [](const request& req,response& res){
+                auto file_name =req.get_res_path();
+                std::string real_file_name= std::string(file_name.data(),file_name.size());
+                if(is_form_url_encode(file_name))
+                {
+                    real_file_name = code_utils::get_string_by_urldecode(file_name);
+                }
+                auto extension = get_extension(real_file_name.data());
+                auto mime = get_mime_type(extension);
+                std::string res_content_type = std::string(mime.data(),mime.size())+"; charset=utf8";
+                res.add_header("Content-type",std::move(res_content_type));
+                res.add_header("Access-Control-Allow-origin","*");
+                std::ifstream file("./"+real_file_name,std::ios_base::binary);
+				if(!file.is_open()){
+					res.set_status_and_content(status_type::not_found, "");
+					return;
+				}
+				std::stringstream file_buffer;
+                file_buffer<<file.rdbuf();
+#ifdef CINATRA_ENABLE_GZIP
+                res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
+#else
+                res.set_status_and_content(status_type::ok, file_buffer.str());
+#endif
+
+            });
+        }
+
 		void init_conn_callback() {
+            set_static_res_handler();
 			http_handler_ = [this](const request& req, response& res) {
+                res.set_base_path(this->base_path_[0],this->base_path_[1]);
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {
 					res.set_status_and_content(status_type::bad_request, "the url is not right");
@@ -165,7 +241,8 @@ namespace cinatra {
 		long keep_alive_timeout_ = 60; //max request timeout 60s
 
 		http_router http_router_;
-		std::string static_dir_ = "/tmp/"; //default
+		std::string static_dir_ = "./static/"; //default
+        std::string base_path_[2];
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;

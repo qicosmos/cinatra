@@ -7,11 +7,16 @@
 
 #pragma once
 #include <string>
+#include <sstream>
+#include <iomanip>
+#include <cstddef> //std::byte
 #include <string_view>
 #include <cstdlib>
 #include <cctype>
 #include <type_traits>
 #include <algorithm>
+#include <iostream>
+#include "define.h"
 
 namespace cinatra {
 	struct ci_less
@@ -176,24 +181,92 @@ namespace cinatra {
 		return true;
 	}
 
-	inline const std::string form_urldecode(std::string_view str) {
-		using namespace std;
-		string result;
-		string::size_type i;
-		for (i = 0; i < str.size(); ++i) {
-			if (str[i] == '+') {
-				result += ' ';
-			}
-			else if (str[i] == '%' && str.size() > i + 2) {
-				int val = std::strtol(&str[i + 1], 0, 16);
-				result += std::to_string(val);
-				i += 2;
+	inline std::vector<std::string_view> split(std::string_view s, std::string_view delimiter) {
+		size_t start = 0;
+		size_t end = s.find_first_of(delimiter);
+
+		std::vector<std::string_view> output;
+
+		while (end <= std::string_view::npos)
+		{
+			output.emplace_back(s.substr(start, end - start));
+
+			if (end == std::string_view::npos)
+				break;
+
+			start = end + 1;
+			end = s.find_first_of(delimiter, start);
+		}
+
+		return output;
+	}
+
+	inline void remove_char(std::string &str, const char ch) {
+		str.erase(std::remove(str.begin(), str.end(), ch), str.end());
+	}
+
+    // var bools = [];
+    // var valid_chr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-';
+    // for(var i = 0; i <= 127; ++ i) {
+    // 	var contain = valid_chr.indexOf(String.fromCharCode(i)) == -1;
+    // 	bools.push(contain?false:true);
+    // }
+    // console.log(JSON.stringify(bools))
+    // 浏览器运行 js 生成 valid_chr 数组
+
+    inline const constexpr bool valid_chr[128] =
+    {
+        false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,false,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,true,false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false
+    };
+
+    inline std::ostringstream& quote_impl(std::ostringstream& os, std::string_view str, std::string_view safe) {
+        os << std::setiosflags(std::ios::right) << std::setfill('0');
+        auto begin = reinterpret_cast<const std::byte*>(str.data());
+        auto end = begin + sizeof(char) * str.size();
+        std::for_each(begin, end, [&os, &safe] (auto& chr)
+        {
+            char chrval = (char) chr;
+            unsigned int intval = (unsigned int) chr;
+            if ((intval > 127 || !valid_chr[intval]) && safe.find(chrval) == std::string_view::npos)
+                os << '%' << std::setw(2) << std::hex << std::uppercase << intval;
+            else 
+                os << chrval;
+        });
+        return os;
+    }
+
+    inline const std::string quote(std::string_view str)
+    {
+        std::ostringstream os;
+        return quote_impl(os, str, "/").str();
+    }
+
+    inline const std::string quote_plus(std::string_view str)
+    {
+        if (str.find(' ') == std::string_view::npos) return quote(str);
+
+        std::ostringstream os;
+        auto strval = quote_impl(os, str, " ").str();
+        std::replace(strval.begin(), strval.end(), ' ', '+');
+        return strval;
+    }
+
+	std::string form_urldecode(const std::string &src) {
+		std::string ret;
+		char ch;
+		int i, ii;
+		for (i = 0; i<src.length(); i++) {
+			if (int(src[i]) == 37) {
+				sscanf(src.substr(i + 1, 2).c_str(), "%x", &ii);
+				ch = static_cast<char>(ii);
+				ret += ch;
+				i = i + 2;
 			}
 			else {
-				result += str[i];
+				ret += src[i];
 			}
 		}
-		return result;
+		return ret;
 	}
 
 	inline bool is_form_url_encode(std::string_view str) {
@@ -375,6 +448,71 @@ public:\
 		(get_str<Is>(arr[index++], name), ...);
 
 		return arr;
+	}
+
+	inline std::string get_time_str(std::time_t t) {
+		std::stringstream ss;
+		ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
+		return ss.str();
+	}
+
+    inline std::string get_gmt_time_str(std::time_t t)
+    {
+        struct tm* GMTime = gmtime(&t);
+        char buff[512]={0};
+        strftime(buff,sizeof(buff),"%a, %d %b %Y %H:%M:%S %Z",GMTime);
+        return buff;
+    }
+
+	inline std::string get_cur_time_str() {
+		return get_time_str(std::time(nullptr));
+	}
+
+	const std::map<std::string_view, std::string_view> get_cookies_map(std::string_view cookies_str)
+	{
+		std::map<std::string_view, std::string_view> cookies;
+		auto cookies_vec = split(cookies_str,"; ");
+		for(auto iter:cookies_vec)
+		{
+			auto cookie_key_vlaue = split(iter,"=");
+			if(cookie_key_vlaue.size()==2)
+			{
+				cookies[cookie_key_vlaue[0]] = cookie_key_vlaue[1];
+			}
+		}
+		return cookies;
+	};
+
+	template <typename T, typename Tuple>
+	struct has_type;
+
+	template <typename T, typename... Us>
+	struct has_type<T, std::tuple<Us...>> : std::disjunction<std::is_same<T, Us>...> {};
+
+	template< typename T>
+	struct filter_helper
+	{
+		static constexpr auto func()
+		{
+			return std::tuple<>();
+		}
+
+		template< class... Args >
+		static constexpr auto func(T&&, Args&&...args)
+		{
+			return filter_helper::func(std::forward<Args>(args)...);
+		}
+
+		template< class X, class... Args >
+		static constexpr auto func(X&&x, Args&&...args)
+		{
+			return std::tuple_cat(std::make_tuple(std::forward<X>(x)), filter_helper::func(std::forward<Args>(args)...));
+		}
+	};
+
+	template<typename T, typename... Args>
+	inline auto filter(Args&&... args) {
+		return filter_helper<T>::func(std::forward<Args>(args)...);
 	}
 }
 

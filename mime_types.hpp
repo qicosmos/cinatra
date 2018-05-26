@@ -363,7 +363,8 @@ namespace cinatra {
 	{ ".sv4cpio", "application/x-sv4cpio" },
 	{ ".sv4crc", "application/x-sv4crc" },
 	{ ".svf", "image/vnd" },
-	{ ".svg", "image/svg+xml" },
+	{ ".eot", "application/vnd.ms-fontobject" },
+	{ ".woff", "application/font-woff" },
 	{ ".svh", "image/svh" },
 	{ ".svr", "x-world/x-svr" },
 	{ ".swf", "application/x-shockwave-flash" },
@@ -487,6 +488,12 @@ namespace cinatra {
 	{ ".zac", "application/x-zaurus-zac" },
 	{ ".zip", "application/zip" },
 	{ ".json", "application/json" },
+	};
+
+	static std::map<cinatra::res_content_type,std::string_view> res_mime_map = {
+			{cinatra::res_content_type::html,"text/html; charset=utf8"},
+			{cinatra::res_content_type::json,"application/json; charset=utf8"},
+			{cinatra::res_content_type::string,"text/plain; charset=utf8"}
 	};
 
 	inline std::string_view get_mime_type(std::string_view extension) {

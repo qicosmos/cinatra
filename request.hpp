@@ -7,7 +7,11 @@
 #include "gzip.hpp"
 #endif
 #include "define.h"
- 
+#include "upload_file.hpp"
+#include "memento.hpp"
+#include "session.hpp"
+#include "session_manager.hpp"
+#include "url_encode_decode.hpp"
 namespace cinatra {
 	enum class data_proc_state : int8_t {
 		data_begin,
@@ -49,7 +53,7 @@ namespace cinatra {
 			if (header_len_ <0 )
 				return header_len_;
 
-			check_gizp();
+			check_gzip();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {
 				auto transfer_encoding = get_header_value("transfer-encoding");
@@ -64,18 +68,22 @@ namespace cinatra {
 			}
 
             //parse url and queries
-            std::string_view url = {url_, url_len_};
-			size_t npos = url.find('/');
+			raw_url_ = {url_, url_len_};
+			size_t npos = raw_url_.find('/');
 			if (npos == std::string_view::npos)
 				return -1;
 
-            size_t pos = url.find('?');
+            size_t pos = raw_url_.find('?');
             if(pos!=std::string_view::npos){
-                queries_ = parse_query(url.substr(pos+1, url_len_-pos-1));
+                queries_ = parse_query(raw_url_.substr(pos+1, url_len_-pos-1));
 				url_len_ = pos;
             }
 
 			return header_len_;
+		}
+
+		std::string_view raw_url() {
+			return raw_url_;
 		}
 
 		void set_body_len(size_t len) {
@@ -162,9 +170,13 @@ namespace cinatra {
 
 		void reset() {
 			cur_size_ = 0;
+			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
 			part_data_ = {};
+            utf8_character_params.clear();
+            utf8_character_pathinfo_params.clear();
+            queries_.clear();
 		}
 
 		void fit_size() {
@@ -181,7 +193,23 @@ namespace cinatra {
 				resize(MaxSize);
 			}
 		}
+		
+		//refactor later
+        	void expand_size(){
+            		auto total = total_len();
+            		auto size = buf_.size();
+            		if (size == MaxSize)
+                		return;
 
+            		if (total < MaxSize) {
+                		if (total > size)
+                    			resize(total);
+            		}
+            		else {
+                		resize(MaxSize);
+            		}
+        	}
+		
 		bool has_body() const {
 			return body_len_ != 0 || is_chunked_;
 		}
@@ -329,6 +357,12 @@ namespace cinatra {
 			return { url_str_.data(), url_str_.length() };
 		}
 
+		std::string_view get_res_path() const {
+			auto url = get_url();
+
+			return url.substr(1);
+		}
+
 		std::map<std::string_view, std::string_view> get_form_url_map() const{
 			return form_url_map_;
 		}
@@ -365,7 +399,7 @@ namespace cinatra {
 			http_type_ = type;
 		}
 
-		content_type get_http_type() const {
+		content_type get_content_type() const {
 			return http_type_;
 		}
 
@@ -373,16 +407,54 @@ namespace cinatra {
             return queries_;
         }
 
+		std::string_view get_query_value(size_t n) const {
+			auto url = get_url();
+			size_t tail = (url.back() == '/') ? 1 : 0;
+			for (auto item : memento::pathinfo_mem) {
+				if (url.find(item) != std::string_view::npos) {
+					if (item.length() == url.length())
+						return {};
+
+					auto str = url.substr(item.length(), url.length() - item.length() - tail);
+					auto params = split(str, "/");
+					if (n >= params.size())
+						return {};
+					if(code_utils::is_url_encode(params[n]))
+					{
+                        auto map_url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
+                        std::string map_key = std::string(map_url.data(),map_url.size())+ std::to_string(n);
+						utf8_character_pathinfo_params[map_key] = code_utils::get_string_by_urldecode(params[n]).c_str();
+						return std::string_view(utf8_character_pathinfo_params[map_key].data(),utf8_character_pathinfo_params[map_key].size());
+					}
+					return params[n];
+				}
+			}
+
+			return {};
+		}
+
 		std::string_view get_query_value(std::string_view key) const{
+            auto url = get_url();
+            url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
+            std::string map_key = std::string(url.data(),url.size())+std::string(key.data(),key.size());
 			auto it = queries_.find(key);
 			if (it == queries_.end()) {
 				auto itf = form_url_map_.find(key);
 				if (itf == form_url_map_.end())
 					return {};
 
+				if(code_utils::is_url_encode(itf->second))
+				{
+					utf8_character_params[map_key] = code_utils::get_string_by_urldecode(itf->second).c_str();
+					return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+				}
 				return itf->second;
 			}
-
+			if(code_utils::is_url_encode(it->second))
+			{
+				utf8_character_params[map_key] = code_utils::get_string_by_urldecode(it->second).c_str();
+				return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+			}
 			return it->second;
 		}
 
@@ -407,6 +479,59 @@ namespace cinatra {
 			return r;
 		}
 
+		bool open_upload_file(const std::string& filename) {
+			upload_file file;
+			bool r = file.open(filename);
+			if (!r)
+				return false;
+			
+			files_.push_back(std::move(file));
+			return true;
+		}
+
+		void write_upload_data(const char* data, size_t size) {
+			if (size == 0)
+				return;
+
+			assert(!files_.empty());
+
+			files_.back().write(data, size);
+		}
+
+		void close_upload_file() {
+			if (files_.empty())
+				return;
+
+			files_.back().close();
+		}
+
+		const std::vector<upload_file>& get_upload_files() const {
+			return files_;
+		}
+
+		std::map<std::string_view, std::string_view> get_cookies() const
+		{
+			auto cookies_str = get_header_value("cookie");
+			auto cookies = get_cookies_map(cookies_str);
+            return cookies;
+		}
+
+        std::weak_ptr<session> get_session(const std::string& name) const
+		{
+			auto cookies = get_cookies();
+			auto iter = cookies.find(name);
+			if(iter==cookies.end())
+			{
+				return {};
+			}
+			return session_manager::get_session(std::string(iter->second.data(), iter->second.length()));
+		}
+
+		std::weak_ptr<session> get_session() const
+		{
+			return get_session(CSESSIONID);
+		}
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -428,7 +553,7 @@ namespace cinatra {
 			url_len_ = 0;
 		}
 
-		void check_gizp() {
+		void check_gzip() {
 			auto encoding = get_header_value("content-encoding");
 			if (encoding.empty()) {
 				has_gzip_ = false;
@@ -454,6 +579,7 @@ namespace cinatra {
 		int header_len_;
 		size_t body_len_;
 
+		std::string_view raw_url_;
 		std::string method_str_;
 		std::string url_str_;
 
@@ -473,5 +599,8 @@ namespace cinatra {
 		content_type http_type_ = content_type::unknown;
 
 		const std::multimap<std::string_view, std::string_view>* multipart_headers_;
+		std::vector<upload_file> files_;
+		mutable std::map<std::string,std::string> utf8_character_params;
+		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
 	};
 }

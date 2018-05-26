@@ -9,6 +9,7 @@
 #include "nanolog.hpp"
 #include "websocket.hpp"
 #include "define.h"
+#include "http_cache.hpp"
 
 namespace cinatra {
 	using http_handler = std::function<void(const request&, response&)>;
@@ -33,7 +34,7 @@ namespace cinatra {
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
 			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
 		{
-			init_multipart_parser();
+			init_multipart_parser(true);
 		}
 
 		tcp_socket& socket()
@@ -43,6 +44,18 @@ namespace cinatra {
 #else
 			return socket_;
 #endif
+		}
+
+		std::string local_address() {
+			std::stringstream ss;
+			ss << socket_.local_endpoint();
+			return ss.str();
+		}
+
+		std::string remote_address() {
+			std::stringstream ss;
+			ss << socket_.remote_endpoint();
+			return ss.str();
 		}
 
 		void start() {
@@ -208,24 +221,53 @@ namespace cinatra {
 				//do_read();
 				do_read_head();
 			}
-			else { //4.3 complete request
-				   //5. check if has body
+			else {
+				if (req_.get_method() == "GET"&&http_cache::need_cache()&&!http_cache::not_cache(req_.get_url())) {
+					auto raw_url = req_.raw_url();
+					if (!http_cache::empty()) {
+						auto resp_vec = http_cache::get(std::string(raw_url.data(), raw_url.length()));
+						//write back cache
+						if (!resp_vec.empty()) {
+							std::vector<boost::asio::const_buffer> buffers;
+							for(auto &iter:resp_vec)
+							{
+								buffers.emplace_back(boost::asio::buffer(iter.data(),iter.size()));
+							}
+							boost::asio::async_write(socket_, buffers,
+								[self = this->shared_from_this(), resp_vec = std::move(resp_vec)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+								self->handle_write(ec);
+							});
+							return;
+						}
+					}
+				}
+
+				//4.3 complete request
+				//5. check if has body
+				set_response_attr();
 				if (req_.has_body()) { //5.1 has body
 					auto type = get_content_type();
 					req_.set_http_type(type);
 					switch (type) {
 					case cinatra::content_type::string:
 					case cinatra::content_type::unknown:
-						handle_string_body();
+						handle_string_body(bytes_transferred);
 						break;
 					case cinatra::content_type::multipart:
-						handle_multipart();
+						if (req_.total_len() <= 3 * 1024 * 1024) {
+							init_multipart_parser(false);
+							handle_string_body(bytes_transferred);
+						}
+						else {
+							init_multipart_parser(true);
+							handle_multipart();
+						}
 						break;
 					case cinatra::content_type::octet_stream:
 						handle_octet_stream(bytes_transferred);
 						break;
 					case cinatra::content_type::urlencoded:
-						handle_form_urlencoded();
+						handle_form_urlencoded(bytes_transferred);
 						break;
 					case cinatra::content_type::chunked:
 						handle_chunked(bytes_transferred);
@@ -273,12 +315,18 @@ namespace cinatra {
 
 		void do_write() {
 			reset_timer();
-			auto content_length = res_.get_header_value("content-length");
-			assert(!content_length.empty());
+			//auto content_length = res_.get_header_value("content-length");
+			//assert(!content_length.empty());
 			std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
 			if (buffers.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
+			}
+
+			//cache
+			if (req_.get_method() == "GET"&&http_cache::need_cache() && !http_cache::not_cache(req_.get_url())) {
+				auto raw_url = req_.raw_url();
+				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
 
 			boost::asio::async_write(socket_, buffers,
@@ -319,8 +367,20 @@ namespace cinatra {
 			socket().close(ec);
 		}
 
+		void set_response_attr() {
+			auto host = req_.get_header_value("host");
+			if (!host.empty()) {
+				size_t pos = host.find(':');
+				if (pos != std::string_view::npos) {
+					res_.set_domain(host.substr(0, pos));
+				}
+			}
+			
+			res_.set_path(req_.get_url());
+		}
+
 		/****************** begin handle http body data *****************/
-		void handle_string_body() {
+		void handle_string_body(std::size_t bytes_transferred) {
 			//defalt add limitation for string_body and else. you can remove the limitation for very big string.
 			if (req_.at_capacity()) {
 				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
@@ -331,7 +391,9 @@ namespace cinatra {
 				handle_body();
 			}
 			else {
-				req_.fit_size();
+				req_.expand_size();
+				size_t part_size = bytes_transferred - req_.header_len();
+				req_.reduce_left_body_size(part_size);
 				do_read_body();
 			}
 		}
@@ -393,7 +455,7 @@ namespace cinatra {
 
 		//-------------form urlencoded----------------//
 		//TODO: here later will refactor the duplicate code
-		void handle_form_urlencoded() {
+		void handle_form_urlencoded(size_t bytes_transferred) {
 			if (req_.at_capacity()) {
 				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
 				return;
@@ -403,7 +465,10 @@ namespace cinatra {
 				handle_url_urlencoded_body();
 			}
 			else {
-				req_.fit_size();
+				req_.expand_size();
+				size_t part_size = bytes_transferred - req_.header_len();
+				req_.reduce_left_body_size(part_size);
+				//req_.fit_size();
 				do_read_form_urlencoded();
 			}
 		}
@@ -457,25 +522,44 @@ namespace cinatra {
 			req_.set_part_data({});
 		}
 		//-------------multipart----------------------//
-		void init_multipart_parser() {
-			multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-				req_.set_multipart_headers(begin);
-				req_.set_state(data_proc_state::data_begin);
-				call_back();
-			};
-			multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-				req_.set_part_data({ buf, size });
-				req_.set_state(data_proc_state::data_continue);
-				call_back();
-			};
-			multipart_parser_.on_part_end = [this] {
-				req_.set_state(data_proc_state::data_end);
-				call_back();
-			};
-			multipart_parser_.on_end = [this] {
-				req_.set_state(data_proc_state::data_all_end);
-				call_back();
-			};
+		void init_multipart_parser(bool is_big) {
+			if (is_big) {
+				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
+					req_.set_multipart_headers(begin);
+					req_.set_state(data_proc_state::data_begin);
+					call_back();
+				};
+				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					req_.set_part_data({ buf, size });
+					req_.set_state(data_proc_state::data_continue);
+					call_back();
+				};
+				multipart_parser_.on_part_end = [this] {
+					req_.set_state(data_proc_state::data_end);
+					call_back();
+				};
+				multipart_parser_.on_end = [this] {
+					req_.set_state(data_proc_state::data_all_end);
+					call_back();
+				};
+			}
+			else {
+				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
+					req_.set_multipart_headers(headers);
+					auto filename = req_.get_multipart_file_name();
+					if (filename.empty())
+						return;
+					
+					auto ext = get_extension(filename);
+					std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+					req_.open_upload_file(name);
+				};
+				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					req_.write_upload_data(buf, size);
+				};
+				multipart_parser_.on_part_end = [this] {req_.close_upload_file(); };
+				multipart_parser_.on_end = [this] { call_back(); };
+			}			
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
@@ -597,7 +681,7 @@ namespace cinatra {
 
 			call_back();
 
-			if (req_.get_http_type() == content_type::chunked)
+			if (req_.get_content_type() == content_type::chunked)
 				return;
 
 			if (req_.get_state() == data_proc_state::data_error) {
@@ -801,6 +885,16 @@ namespace cinatra {
 				return;
 			}
 
+			if (req_.get_content_type() == content_type::multipart) {
+				bool has_error = parse_multipart(req_.header_len(), req_.current_size() - req_.header_len());
+				if (has_error) {
+					response_back(status_type::bad_request, "mutipart error");
+					return;
+				}
+				do_write();
+				return;
+			}
+
 			call_back();
 
 			if (!res_.need_delay())
@@ -964,7 +1058,7 @@ namespace cinatra {
 		std::string chunked_header_;
 		multipart_reader multipart_parser_;
 		//callback handler to application layer
-		http_handler& http_handler_ = nullptr;
+		const http_handler& http_handler_;
 		std::any tag_;
 	};
 }
