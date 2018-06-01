@@ -3,7 +3,12 @@
 #include <string>
 #include <vector>
 #include <string_view>
+#ifdef __GNUC__
+#include <experimental/filesystem>
+using namespace experimental;
+#else
 #include <filesystem>
+#endif
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
