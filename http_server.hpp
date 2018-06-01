@@ -5,9 +5,10 @@
 #include <string_view>
 #ifdef __GNUC__
 #include <experimental/filesystem>
-using namespace experimental;
+namespace fs = std::experimental::filesystem;
 #else
 #include <filesystem>
+namespace fs = std::filesystem;
 #endif
 #include "io_service_pool.hpp"
 #include "connection.hpp"
@@ -38,8 +39,8 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if(!std::filesystem::exists(static_dir_))
-				std::filesystem::create_directory(static_dir_);
+			if(!fs::exists(static_dir_))
+				fs::create_directory(static_dir_);
 
 			init_conn_callback();
 		}
