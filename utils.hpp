@@ -483,6 +483,37 @@ public:\
 		return cookies;
 	};
 
+	template <typename T, typename Tuple>
+	struct has_type;
+
+	template <typename T, typename... Us>
+	struct has_type<T, std::tuple<Us...>> : std::disjunction<std::is_same<T, Us>...> {};
+
+	template< typename T>
+	struct filter_helper
+	{
+		static constexpr auto func()
+		{
+			return std::tuple<>();
+		}
+
+		template< class... Args >
+		static constexpr auto func(T&&, Args&&...args)
+		{
+			return filter_helper::func(std::forward<Args>(args)...);
+		}
+
+		template< class X, class... Args >
+		static constexpr auto func(X&&x, Args&&...args)
+		{
+			return std::tuple_cat(std::make_tuple(std::forward<X>(x)), filter_helper::func(std::forward<Args>(args)...));
+		}
+	};
+
+	template<typename T, typename... Args>
+	inline auto filter(Args&&... args) {
+		return filter_helper<T>::func(std::forward<Args>(args)...);
+	}
 }
 
 #endif //CINATRA_UTILS_HPP
