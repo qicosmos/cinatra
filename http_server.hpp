@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <string_view>
+#include <filesystem>
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
@@ -32,6 +33,9 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
+			if(!std::filesystem::exists(static_dir_))
+				std::filesystem::create_directory(static_dir_);
+
 			init_conn_callback();
 		}
 
