@@ -7,7 +7,7 @@
 #ifdef _WIN32
 #include <direct.h>  
 #include <io.h>
-#elif _LINUX
+#elif __linux
 #include <stdarg.h>
 #include <sys/stat.h>
 #endif
@@ -25,7 +25,7 @@
 #ifdef _WIN32
 #define ACCESS_PROXY _access
 #define MKDIR(a) _mkdir((a))
-#elif _LINUX
+#elif __linux
 #define ACCESS_PROXY access
 #define MKDIR(a) mkdir((a),0755)
 #endif
