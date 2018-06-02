@@ -3,7 +3,13 @@
 #include <string>
 #include <vector>
 #include <string_view>
+
+#ifdef _WIN32
 #include <io.h>
+#else
+#include <stdio.h>  
+#include <unistd.h>
+#endif
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
