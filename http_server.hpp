@@ -5,10 +5,13 @@
 #include <string_view>
 
 #ifdef _WIN32
+#include <direct.h>  
 #include <io.h>
 #else
 #include <stdio.h>  
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #endif
 #include "io_service_pool.hpp"
 #include "connection.hpp"
@@ -40,7 +43,7 @@ namespace cinatra {
 #endif
 		{
 			if (access(static_dir_.data(), 0)!=0) {
-				throw std::invalid_argument(static_dir_ + " is not exist");
+				mkdir(static_dir_.data());
 			}
 
 			init_conn_callback();
