@@ -260,12 +260,15 @@ namespace cinatra {
 			return {};
 		}
 
-		const std::multimap<std::string_view, std::string_view>* get_multipart_headers() const {
+		const std::multimap<std::string_view, std::string_view>& get_multipart_headers() const {
 			return multipart_headers_;
 		}
 
 		std::string_view get_multipart_file_name() const {
-			auto it = multipart_headers_->begin();
+			if (multipart_headers_.empty())
+				return {};
+
+			auto it = multipart_headers_.begin();
 			auto val = it->second;
 			auto pos = val.find("filename");
 			if (pos == std::string_view::npos) {
@@ -283,7 +286,7 @@ namespace cinatra {
 		}
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
-			multipart_headers_ = &headers;
+			multipart_headers_ = headers;
 		}
 
 		std::map<std::string_view, std::string_view> parse_query(std::string_view str) {
@@ -598,7 +601,7 @@ namespace cinatra {
 		std::string_view part_data_;
 		content_type http_type_ = content_type::unknown;
 
-		const std::multimap<std::string_view, std::string_view>* multipart_headers_;
+		std::multimap<std::string_view, std::string_view> multipart_headers_;
 		std::vector<upload_file> files_;
 		mutable std::map<std::string,std::string> utf8_character_params;
 		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
