@@ -7,10 +7,8 @@
 #ifdef _WIN32
 #include <direct.h>  
 #include <io.h>
-#else
-#include <stdio.h>  
-#include <unistd.h>
-#include <sys/types.h>
+#elif _LINUX
+#include <stdarg.h>
 #include <sys/stat.h>
 #endif
 #include "io_service_pool.hpp"
@@ -23,6 +21,14 @@
 #include "http_cache.hpp"
 #include "session_manager.hpp"
 #include "cookie.hpp"
+
+#ifdef _WIN32
+#define ACCESS _access
+#define MKDIR(a) _mkdir((a))
+#elif _LINUX
+#define ACCESS access
+#define MKDIR(a) mkdir((a),0755)
+#endif
 
 namespace cinatra {
 	
@@ -42,8 +48,8 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if (access(static_dir_.data(), 0)!=0) {
-				mkdir(static_dir_.data());
+			if (ACCESS(static_dir_.data(), 0)!=0) {
+				MKDIR(static_dir_.data());
 			}
 
 			init_conn_callback();
