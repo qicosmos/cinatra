@@ -4,7 +4,7 @@
 #include <vector>
 #include <string_view>
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <filesystem>
 namespace fs = std::filesystem;
 #else
