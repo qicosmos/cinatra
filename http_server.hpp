@@ -3,13 +3,7 @@
 #include <string>
 #include <vector>
 #include <string_view>
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
+#include <io.h>
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
@@ -39,8 +33,9 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if(!fs::exists(static_dir_))
-				fs::create_directory(static_dir_);
+			if (access(static_dir_.data(), 0)!=0) {
+				throw std::invalid_argument(static_dir_ + " is not exist");
+			}
 
 			init_conn_callback();
 		}
