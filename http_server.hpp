@@ -23,10 +23,10 @@
 #include "cookie.hpp"
 
 #ifdef _WIN32
-#define ACCESS _access
+#define ACCESS_PROXY _access
 #define MKDIR(a) _mkdir((a))
 #elif _LINUX
-#define ACCESS access
+#define ACCESS_PROXY access
 #define MKDIR(a) mkdir((a),0755)
 #endif
 
@@ -48,7 +48,7 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if (ACCESS(static_dir_.data(), 0)!=0) {
+			if (ACCESS_PROXY(static_dir_.data(), 0)!=0) {
 				MKDIR(static_dir_.data());
 			}
 
