@@ -165,7 +165,7 @@ namespace cinatra {
 			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
 				bool b = true;
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
-				if (b) {
+				if (!b) {
 					http_cache::add_skip(name);
 				}
 				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
