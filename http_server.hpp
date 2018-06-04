@@ -10,6 +10,12 @@
 #elif __linux
 #include <stdarg.h>
 #include <sys/stat.h>
+#ifdef _MSC_VER
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
 #endif
 #include "io_service_pool.hpp"
 #include "connection.hpp"
@@ -21,14 +27,6 @@
 #include "http_cache.hpp"
 #include "session_manager.hpp"
 #include "cookie.hpp"
-
-#ifdef _WIN32
-#define ACCESS_PROXY _access
-#define MKDIR(a) _mkdir((a))
-#elif __linux
-#define ACCESS_PROXY access
-#define MKDIR(a) mkdir((a),0755)
-#endif
 
 namespace cinatra {
 	
@@ -48,8 +46,8 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if (ACCESS_PROXY(static_dir_.data(), 0)!=0) {
-				MKDIR(static_dir_.data());
+			if (!fs::exists(static_dir_.data())) {
+				fs::create_directory(static_dir_.data());
 			}
 
 			init_conn_callback();
@@ -173,7 +171,7 @@ namespace cinatra {
 			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
 				bool b = true;
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
-				if (b) {
+				if (!b) {
 					http_cache::add_skip(name);
 				}
 				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
