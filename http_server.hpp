@@ -255,7 +255,7 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = "./static/"; //default
-        std::string base_path_[2];
+        std::string base_path_[2] = {"base_path","/"};
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
