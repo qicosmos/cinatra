@@ -98,6 +98,12 @@ int main() {
 */
 	});
 
+//	server.set_http_handler<GET,POST>("/test_remove",[](const request& req, response& res){
+//		fs::remove(fs::path("./abc.txt"));
+//		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//	});
+    
+
 	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
 		inja::json json;
 		json["abc"] = "abc";

@@ -40,10 +40,6 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if (!fs::exists(static_dir_.data())) {
-				fs::create_directory(static_dir_.data());
-			}
-
 			init_conn_callback();
 		}
 
@@ -117,6 +113,11 @@ namespace cinatra {
 		}
 
 		void run() {
+		
+		        if (!fs::exists(static_dir_.data())) {
+			   fs::create_directory(static_dir_.data());
+			}
+			
 			io_service_pool_.run();
 		}
 
@@ -254,7 +255,7 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = "./static/"; //default
-        std::string base_path_[2];
+        std::string base_path_[2] = {"base_path","/"};
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
