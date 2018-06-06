@@ -4,12 +4,6 @@
 #include <vector>
 #include <string_view>
 
-#ifdef _WIN32
-#include <direct.h>  
-#include <io.h>
-#elif __linux
-#include <stdarg.h>
-#include <sys/stat.h>
 #ifdef _MSC_VER
 #include <filesystem>
 namespace fs = std::filesystem;
