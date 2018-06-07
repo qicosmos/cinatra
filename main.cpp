@@ -61,7 +61,7 @@ int main() {
 		session->set_data("userid", std::string("1"));
 		session->set_max_age(-1);
 		res.set_status_and_content(status_type::ok, "login");
-	});
+	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/islogin", [](const request& req, response& res) {
 		auto ptr = req.get_session();
@@ -71,7 +71,7 @@ int main() {
 			return;
 		}
 		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
-	});
+	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/html", [](const request& req, response& res) {
 		inja::json json;
@@ -102,7 +102,7 @@ int main() {
 //		fs::remove(fs::path("./abc.txt"));
 //		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //	});
-    
+
 
 	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
 		inja::json json;
