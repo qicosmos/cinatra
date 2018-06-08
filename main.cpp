@@ -51,7 +51,7 @@ int main() {
 
     server.set_base_path("base_path","/feather");
 	server.enable_http_cache(true);//set global cache
-
+    server.set_res_cache_max_age(86400);
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	},enable_cache{false});
