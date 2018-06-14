@@ -40,10 +40,6 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			if (!fs::exists(static_dir_.data())) {
-				fs::create_directory(static_dir_.data());
-			}
-
 			init_conn_callback();
 		}
 
@@ -117,6 +113,11 @@ namespace cinatra {
 		}
 
 		void run() {
+		
+		        if (!fs::exists(static_dir_.data())) {
+			   fs::create_directory(static_dir_.data());
+			}
+			
 			io_service_pool_.run();
 		}
 
@@ -185,6 +186,16 @@ namespace cinatra {
             base_path_[1] = std::move(path);
         }
 
+        void set_res_cache_max_age(std::time_t seconds)
+        {
+            static_res_cache_max_age = seconds;
+        }
+
+        std::time_t get_res_cache_max_age()
+        {
+            return static_res_cache_max_age;
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -208,7 +219,7 @@ namespace cinatra {
 
         void set_static_res_handler()
         {
-            http_router_.register_handler<POST,GET>(STAIC_RES, [](const request& req,response& res){
+            http_router_.register_handler<POST,GET>(STAIC_RES, [&static_res_cache_max_age = this->static_res_cache_max_age](const request& req,response& res){
                 auto file_name =req.get_res_path();
                 std::string real_file_name= std::string(file_name.data(),file_name.size());
                 if(is_form_url_encode(file_name))
@@ -227,6 +238,11 @@ namespace cinatra {
 				}
 				std::stringstream file_buffer;
                 file_buffer<<file.rdbuf();
+                if(static_res_cache_max_age>0)
+                {
+                    std::string max_age = std::string("max-age=")+std::to_string(static_res_cache_max_age);
+                    res.add_header("Cache-Control",max_age.data());
+                }
 #ifdef CINATRA_ENABLE_GZIP
                 res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
 #else
@@ -254,7 +270,8 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = "./static/"; //default
-        std::string base_path_[2];
+        std::string base_path_[2] = {"base_path","/"};
+        std::time_t static_res_cache_max_age = 0;
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
