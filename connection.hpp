@@ -547,18 +547,33 @@ namespace cinatra {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
 					auto filename = req_.get_multipart_file_name();
-					if (filename.empty())
+					if (filename.empty()) {
+						req_.set_state(data_proc_state::data_error);
+						res_.set_status_and_content(status_type::bad_request, "mutipart error");
 						return;
+					}						
 					
 					auto ext = get_extension(filename);
 					std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
 					req_.open_upload_file(name);
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					if (req_.get_state() == data_proc_state::data_error) {
+						return;
+					}
+
 					req_.write_upload_data(buf, size);
 				};
-				multipart_parser_.on_part_end = [this] {req_.close_upload_file(); };
-				multipart_parser_.on_end = [this] { call_back(); };
+				multipart_parser_.on_part_end = [this] {
+					if (req_.get_state() == data_proc_state::data_error)
+						return;
+					req_.close_upload_file(); 
+				};
+				multipart_parser_.on_end = [this] {
+					if (req_.get_state() == data_proc_state::data_error)
+						return;
+					call_back(); 
+				};
 			}			
 		}
 
