@@ -177,6 +177,7 @@ namespace cinatra {
             utf8_character_params.clear();
             utf8_character_pathinfo_params.clear();
             queries_.clear();
+            multipart_form_map_.clear();
 		}
 
 		void fit_size() {
@@ -284,6 +285,59 @@ namespace cinatra {
 			auto filename = val.substr(start, end - start);
 			return filename;
 		}
+
+        std::string_view get_multipart_key_name() const {
+            if (multipart_headers_.empty())
+                return {};
+
+            auto it = multipart_headers_.begin();
+            auto val = it->second;
+            auto pos = val.find("name");
+            if (pos == std::string_view::npos) {
+                return {};
+            }
+
+            auto start = val.find('"', pos) + 1;
+            auto end = val.rfind('"');
+            if (start == std::string_view::npos || end == std::string_view::npos || end<start) {
+                return {};
+            }
+
+            auto key_name = val.substr(start, end - start);
+            return key_name;
+        }
+
+        void save_multipart_key_value(const std::string& key,const std::string& value)
+        {
+			if(!key.empty())
+            multipart_form_map_.insert(std::make_pair(key,value));
+        }
+
+        std::string& get_multipart_value_by_key(const std::string& key)
+        {
+			if(!key.empty())
+            return multipart_form_map_[key];
+        }
+
+		void handle_multipart_key_value(){
+			if(!multipart_form_map_.empty()){
+                for(auto iter = multipart_form_map_.begin();iter!=multipart_form_map_.end();++iter){
+					form_url_map_.insert(std::make_pair(std::string_view(iter->first.data(),iter->first.size()),std::string_view(iter->second.data(),iter->second.size())));
+				}
+			}
+		}
+
+        bool is_multipart_file() const {
+            if (multipart_headers_.empty()){
+                return false;
+            }
+            auto it = multipart_headers_.find("Content-Type");
+            if(it!=multipart_headers_.end())
+            {
+                return true;
+            }
+            return false;
+        }
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
 			multipart_headers_ = headers;
@@ -591,7 +645,7 @@ namespace cinatra {
 
         std::map<std::string_view, std::string_view> queries_;
 		std::map<std::string_view, std::string_view> form_url_map_;
-
+        std::map<std::string,std::string> multipart_form_map_;
 		bool has_gzip_ = false;
 		std::string gzip_str_;
 

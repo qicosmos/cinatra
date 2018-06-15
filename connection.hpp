@@ -547,31 +547,49 @@ namespace cinatra {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
 					auto filename = req_.get_multipart_file_name();
-					if (filename.empty()) {
+					auto is_file_type = req_.is_multipart_file();
+					if (filename.empty()&&is_file_type) {
 						req_.set_state(data_proc_state::data_error);
 						res_.set_status_and_content(status_type::bad_request, "mutipart error");
 						return;
 					}						
-					
-					auto ext = get_extension(filename);
-					std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
-					req_.open_upload_file(name);
+					if(is_file_type)
+					{
+						auto ext = get_extension(filename);
+						std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+						req_.open_upload_file(name);
+					}else{
+						auto key = req_.get_multipart_key_name();
+						req_.save_multipart_key_value(std::string(key.data(),key.size()),"");
+					}
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+					auto is_file_type = req_.is_multipart_file();
 					if (req_.get_state() == data_proc_state::data_error) {
 						return;
 					}
-
-					req_.write_upload_data(buf, size);
+					if(is_file_type)
+					{
+						req_.write_upload_data(buf, size);
+					}else{
+						auto key = req_.get_multipart_key_name();
+						auto& value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
+						value+=std::string(buf,buf+size);
+					}
 				};
 				multipart_parser_.on_part_end = [this] {
+					auto is_file_type = req_.is_multipart_file();
 					if (req_.get_state() == data_proc_state::data_error)
 						return;
-					req_.close_upload_file(); 
+					if(is_file_type)
+					{
+						req_.close_upload_file();
+					}
 				};
 				multipart_parser_.on_end = [this] {
 					if (req_.get_state() == data_proc_state::data_error)
 						return;
+                    req_.handle_multipart_key_value();
 					call_back(); 
 				};
 			}			
