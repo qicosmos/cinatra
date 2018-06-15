@@ -50,7 +50,7 @@ int main() {
 	}
 
     server.set_base_path("base_path","/feather");
-	server.enable_http_cache(true);//set global cache
+	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
 	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
@@ -210,6 +210,8 @@ int main() {
 	//http upload(multipart) for small file
 	server.set_http_handler<GET, POST>("/upload_small_file", [&n](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::multipart);
+		auto text = req.get_query_value("text");
+		std::cout<<text<<std::endl;
 		auto& files = req.get_upload_files();
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
