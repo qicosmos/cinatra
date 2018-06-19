@@ -1,5 +1,6 @@
 #include <iostream>
 #include "http_server.hpp"
+#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -112,6 +113,13 @@ int main() {
 		json["name"] = "中文";
 		res.render_json(json);
 	}, enable_cache{ false });
+
+
+    server.set_http_handler<GET, POST>("/client", [](const request& req, response& res) {
+        http_client client("localhost:8080");
+        auto result = client.request("GET","/json");
+        res.set_status_and_content(status_type::ok, result->get_content(),res_content_type::string);
+    }, enable_cache{ false });
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");
