@@ -304,29 +304,49 @@ namespace cinatra {
       asio::streambuf streambuf;
 
       client_response(std::size_t max_response_streambuf_size) noexcept : streambuf(max_response_streambuf_size), content(streambuf) {}
+    public:
+        client_response& operator=(const client_response& res)
+        {
+            http_version = res.http_version;
+            status_code = res.status_code;
+            header = res.header;
+            boost::asio::streambuf::const_buffers_type cbt = res.streambuf.data();
+            save_content = std::string(boost::asio::buffers_begin(cbt), boost::asio::buffers_end(cbt));
+            std::ostream tmp(&streambuf);
+            tmp<< save_content;
+            return *this;
+        }
+        client_response(const client_response& res):http_version(res.http_version),status_code(res.status_code),header(res.header),streambuf(res.streambuf.size()),content(streambuf)
+        {
+            boost::asio::streambuf::const_buffers_type cbt = res.streambuf.data();
+            save_content = std::string(boost::asio::buffers_begin(cbt), boost::asio::buffers_end(cbt));
+            std::ostream tmp(&streambuf);
+            tmp<< save_content;
+        }
+
 
     private:
       std::string http_version, status_code;
 
-      Content content;
+      mutable  Content content;
+
+      std::string save_content;
 
       CaseInsensitiveMultimap header;
     public:
-        std::string get_status_code()
+        std::string get_status_code() const
         {
             return status_code;
         }
-        std::string get_http_version()
+        std::string get_http_version() const
         {
             return http_version;
         }
-        std::string get_content()
+        std::string get_content() const
         {
-            std::stringstream buff;
-            buff<<content.rdbuf();
-           return buff.str();
+            return save_content;
         }
-        const CaseInsensitiveMultimap& get_head()
+        const CaseInsensitiveMultimap& get_head() const
         {
             return header;
         }
@@ -415,11 +435,11 @@ namespace cinatra {
     /// Convenience function to perform synchronous request. The io_service is run within this function.
     /// If reusing the io_service for other tasks, use the asynchronous request functions instead.
     /// Do not use concurrently with the asynchronous request functions.
-    std::shared_ptr<client_response> request(const std::string &method, const std::string &path = std::string("/"),
+     client_response request(const std::string &method, const std::string &path = std::string("/"),
                                       std::string_view content = "", const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
-      std::shared_ptr<client_response> response;
+      client_response response(config.max_response_streambuf_size);
       error_code ec;
-      request(method, path, content, header, [&response, &ec](std::shared_ptr<client_response> response_, const error_code &ec_) {
+      request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
         response = response_;
         ec = ec_;
       });
@@ -450,11 +470,11 @@ namespace cinatra {
     /// Convenience function to perform synchronous request. The io_service is run within this function.
     /// If reusing the io_service for other tasks, use the asynchronous request functions instead.
     /// Do not use concurrently with the asynchronous request functions.
-    std::shared_ptr<client_response> request(const std::string &method, const std::string &path, std::istream &content,
+    client_response request(const std::string &method, const std::string &path, std::istream &content,
                                       const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
-      std::shared_ptr<client_response> response;
+      client_response response;
       error_code ec;
-      request(method, path, content, header, [&response, &ec](std::shared_ptr<client_response> response_, const error_code &ec_) {
+      request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
         response = response_;
         ec = ec_;
       });
@@ -480,10 +500,10 @@ namespace cinatra {
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
     void request(const std::string &method, const std::string &path, std::string_view content, const CaseInsensitiveMultimap &header,
-                 std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback_) {
+                 std::function<void(const client_response&, const error_code &)> &&request_callback_) {
       auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path, header));
       auto response = session->response;
-      auto request_callback = std::make_shared<std::function<void(std::shared_ptr<client_response>, const error_code &)>>(std::move(request_callback_));
+      auto request_callback = std::make_shared<std::function<void(const client_response&, const error_code &)>>(std::move(request_callback_));
       session->callback = [this, response, request_callback](const std::shared_ptr<Connection> &connection, const error_code &ec) {
         {
           std::unique_lock<std::mutex> lock(this->connections_mutex);
@@ -507,7 +527,10 @@ namespace cinatra {
         }
 
         if(*request_callback)
-          (*request_callback)(response, ec);
+        {
+            client_response tmp = *response;
+            (*request_callback)(tmp, ec);
+        }
       };
 
       std::ostream write_stream(session->request_streambuf.get());
@@ -528,27 +551,27 @@ namespace cinatra {
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
     void request(const std::string &method, const std::string &path, std::string_view content,
-                 std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback) {
+                 std::function<void(const client_response&, const error_code &)> &&request_callback) {
       request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     void request(const std::string &method, const std::string &path,
-                 std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback) {
+                 std::function<void(const client_response&, const error_code &)> &&request_callback) {
       request(method, path, std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback) {
+    void request(const std::string &method, std::function<void(const client_response&, const error_code &)> &&request_callback) {
       request(method, std::string("/"), std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     void request(const std::string &method, const std::string &path, std::istream &content, const CaseInsensitiveMultimap &header,
-                 std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback_) {
+                 std::function<void(const client_response&, const error_code &)> &&request_callback_) {
       auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path, header));
       auto response = session->response;
-      auto request_callback = std::make_shared<std::function<void(std::shared_ptr<client_response>, const error_code &)>>(std::move(request_callback_));
+      auto request_callback = std::make_shared<std::function<void(const client_response&, const error_code &)>>(std::move(request_callback_));
       session->callback = [this, response, request_callback](const std::shared_ptr<Connection> &connection, const error_code &ec) {
         {
           std::unique_lock<std::mutex> lock(this->connections_mutex);
@@ -571,8 +594,11 @@ namespace cinatra {
           }
         }
 
-        if(*request_callback)
-          (*request_callback)(response, ec);
+          if(*request_callback)
+          {
+              client_response tmp = *response;
+              (*request_callback)(tmp, ec);
+          }
       };
 
       content.seekg(0, std::ios::end);
@@ -596,7 +622,7 @@ namespace cinatra {
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     void request(const std::string &method, const std::string &path, std::istream &content,
-                 std::function<void(std::shared_ptr<client_response>, const error_code &)> &&request_callback) {
+                 std::function<void(const client_response&, const error_code &)> &&request_callback) {
       request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
@@ -948,5 +974,8 @@ namespace cinatra {
   };
     using http_client = http_client_<HTTP>;
 } // namespace cinatra
+namespace cinatra{
+    using client_response = http_client::client_response;
+}
 
 #endif /* CLIENT_HTTP_HPP */

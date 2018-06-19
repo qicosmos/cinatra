@@ -116,10 +116,19 @@ int main() {
 
 
     server.set_http_handler<GET, POST>("/client", [](const request& req, response& res) {
-        http_client client("localhost:8080");
+        http_client client("47.96.137.124:8080");
         auto result = client.request("GET","/json");
-        res.set_status_and_content(status_type::ok, result->get_content(),res_content_type::string);
+        res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
     }, enable_cache{ false });
+
+	server.set_http_handler<GET, POST>("/ansclient", [](const request& req, response& res) {
+		http_client client("47.96.137.124:8080");
+		client.request("GET","/json",[](const cinatra::client_response& response,const cinatra::error_code& er){
+           std::cout<<response.get_content()<<std::endl;
+		});
+		client.run();
+		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+	}, enable_cache{ false });
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");
