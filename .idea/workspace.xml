@@ -7,14 +7,14 @@
   </component>
   <component name="CMakeSettings">
     <configurations>
-      <configuration PROFILE_NAME="Debug" CONFIG_NAME="Debug" />
+      <configuration CONFIG_NAME="Debug" />
     </configurations>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4ccf09d8-f1e1-4790-9d6d-b3f5485318b6" name="Default" comment="修复keepalive下 中文自动转码的bug">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/http_client.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/http_client.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/main.cpp" afterDir="false" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/http_client.hpp" afterPath="$PROJECT_DIR$/http_client.hpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/main.cpp" afterPath="$PROJECT_DIR$/main.cpp" />
     </list>
     <ignored path="$PROJECT_DIR$/cmake-build-debug/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -24,17 +24,16 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
       <file leaf-file-name="upload_file.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/upload_file.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="420">
-              <caret line="28" column="19" selection-start-line="28" selection-start-column="13" selection-end-line="28" selection-end-column="19" />
+            <state relative-caret-position="0">
+              <caret line="28" column="19" lean-forward="false" selection-start-line="28" selection-start-column="13" selection-end-line="28" selection-end-column="19" />
               <folding>
-                <element signature="e#29#82#0" expanded="true" />
-                <element signature="e#177#195#0" expanded="true" />
+                <element signature="e#29#82#0" expanded="false" />
+                <element signature="e#177#195#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -43,11 +42,9 @@
       <file leaf-file-name="main.cpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="269">
-              <caret line="124" column="49" lean-forward="true" selection-start-line="124" selection-start-column="49" selection-end-line="124" selection-end-column="49" />
-              <folding>
-                <element signature="e#0#19#0" expanded="true" />
-              </folding>
+            <state relative-caret-position="119">
+              <caret line="143" column="35" lean-forward="true" selection-start-line="143" selection-start-column="35" selection-end-line="143" selection-end-column="35" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -55,18 +52,31 @@
       <file leaf-file-name="http_client.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/http_client.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="381">
-              <caret line="977" column="25" selection-start-line="977" selection-start-column="10" selection-end-line="977" selection-end-column="25" />
+            <state relative-caret-position="388">
+              <caret line="997" column="31" lean-forward="false" selection-start-line="997" selection-start-column="10" selection-end-line="997" selection-end-column="31" />
               <folding>
                 <element signature="e#49#66#0" expanded="true" />
-                <element signature="e#210#446#0" expanded="true" />
-                <element signature="e#453#478#0" expanded="true" />
-                <element signature="e#1085#1298#0" expanded="true" />
-                <element signature="e#9291#9310#0" expanded="true" />
-                <element signature="e#9339#9358#0" expanded="true" />
-                <element signature="e#12734#12752#0" expanded="true" />
-                <element signature="e#36614#36633#0" expanded="true" />
-                <element signature="e#36743#36745#0" expanded="true" />
+                <element signature="e#231#467#0" expanded="true" />
+                <element signature="e#474#499#0" expanded="true" />
+                <element signature="e#1106#1319#0" expanded="true" />
+                <element signature="e#15251#15271#0" expanded="true" />
+                <element signature="e#16672#16692#0" expanded="true" />
+                <element signature="e#20077#20097#0" expanded="true" />
+                <element signature="e#20582#20602#0" expanded="true" />
+                <element signature="e#21063#21083#0" expanded="true" />
+                <element signature="e#23844#23864#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="utils.hpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/utils.hpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="201">
+              <caret line="127" column="38" lean-forward="false" selection-start-line="127" selection-start-column="38" selection-end-line="127" selection-end-column="38" />
+              <folding>
+                <element signature="e#105#122#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -75,8 +85,9 @@
       <file leaf-file-name="CMakeLists.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="840">
-              <caret line="56" column="19" selection-start-line="56" selection-start-column="19" selection-end-line="56" selection-end-column="19" />
+            <state relative-caret-position="558">
+              <caret line="56" column="19" lean-forward="false" selection-start-line="56" selection-start-column="19" selection-end-line="56" selection-end-column="19" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -85,11 +96,11 @@
         <entry file="file://$PROJECT_DIR$/use_asio.hpp">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="30">
-              <caret line="2" column="27" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="27" />
+              <caret line="2" column="27" lean-forward="false" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="27" />
               <folding>
-                <element signature="e#43#369#0" expanded="true" />
-                <element signature="e#428#457#0" expanded="true" />
-                <element signature="e#580#654#0" expanded="true" />
+                <element signature="e#43#369#0" expanded="false" />
+                <element signature="e#428#457#0" expanded="false" />
+                <element signature="e#580#654#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -99,9 +110,9 @@
         <entry file="file://$PROJECT_DIR$/multipart_parser.hpp">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="120">
-              <caret line="8" column="26" selection-start-line="8" selection-start-column="10" selection-end-line="8" selection-end-column="26" />
+              <caret line="8" column="26" lean-forward="false" selection-start-line="8" selection-start-column="10" selection-end-line="8" selection-end-column="26" />
               <folding>
-                <element signature="e#59#76#0" expanded="true" />
+                <element signature="e#59#76#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -110,8 +121,8 @@
       <file leaf-file-name="connection.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/connection.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="8055">
-              <caret line="537" column="41" selection-start-line="537" selection-start-column="41" selection-end-line="537" selection-end-column="41" />
+            <state relative-caret-position="7935">
+              <caret line="537" column="41" lean-forward="false" selection-start-line="537" selection-start-column="41" selection-end-line="537" selection-end-column="41" />
               <folding>
                 <element signature="e#26947#26976#0" expanded="true" />
                 <element signature="e#27163#27192#0" expanded="true" />
@@ -151,6 +162,8 @@
       <find>client_response</find>
       <find>response-&gt;</find>
       <find>streambuf</find>
+      <find>path</find>
+      <find>content</find>
     </findStrings>
     <replaceStrings>
       <replace>client_response</replace>
@@ -184,14 +197,24 @@
     <packageJsonPaths />
   </component>
   <component name="OCFindUsagesOptions" text="true" ivars="false" properties="true" derivedClasses="false" />
-  <component name="ProjectFrameBounds" extendedState="7">
+  <component name="ProjectFrameBounds" extendedState="6">
     <option name="x" value="260" />
     <option name="y" value="20" />
     <option name="width" value="1400" />
     <option name="height" value="997" />
   </component>
   <component name="ProjectView">
-    <navigator proportions="" version="1">
+    <navigator currentView="ProjectPane" proportions="" version="1">
+      <flattenPackages />
+      <showMembers />
+      <showModules />
+      <showLibraryContents />
+      <hideEmptyPackages />
+      <abbreviatePackageNames />
+      <autoscrollToSource />
+      <autoscrollFromSource />
+      <sortByType />
+      <manualOrder />
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
@@ -199,14 +222,13 @@
         <subPane>
           <expand>
             <path>
-              <item name="cinatra" type="b2602c69:ProjectViewProjectNode" />
+              <item name="cinatra" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
               <item name="cinatra" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
         </subPane>
       </pane>
-      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -226,12 +248,19 @@
     </option>
   </component>
   <component name="RunManager" selected="Application.cinatra">
-    <configuration name="Build All" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Debug" EXPLICIT_BUILD_TARGET_NAME="all" />
-    <configuration name="cinatra" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="cinatra" TARGET_NAME="cinatra" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="cinatra" RUN_TARGET_NAME="cinatra" />
-    <list>
-      <item itemvalue="Application.Build All" />
-      <item itemvalue="Application.cinatra" />
+    <configuration name="Build All" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" CONFIG_NAME="Debug" EXPLICIT_BUILD_TARGET_NAME="all">
+      <envs />
+    </configuration>
+    <configuration name="cinatra" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="cinatra" TARGET_NAME="cinatra" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="cinatra" RUN_TARGET_NAME="cinatra">
+      <envs />
+    </configuration>
+    <list size="2">
+      <item index="0" class="java.lang.String" itemvalue="Application.cinatra" />
+      <item index="1" class="java.lang.String" itemvalue="Application.Build All" />
     </list>
+  </component>
+  <component name="ShelveChangesManager" show_recycled="false">
+    <option name="remove_strategy" value="false" />
   </component>
   <component name="SvnConfiguration">
     <configuration />
@@ -258,35 +287,36 @@
       <workItem from="1529055494922" duration="997000" />
       <workItem from="1529389969178" duration="8831000" />
       <workItem from="1529413049834" duration="8419000" />
+      <workItem from="1529460750207" duration="2184000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="50324000" />
+    <option name="totallyTimeSpent" value="52508000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="-4" y="0" width="1928" height="1041" extended-state="6" />
+    <frame x="260" y="20" width="1920" height="1045" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.18072917" />
-      <window_info anchor="bottom" id="TODO" order="6" />
-      <window_info anchor="bottom" id="Messages" order="7" sideWeight="0.49791667" weight="0.32942432" />
-      <window_info anchor="bottom" id="CMake" order="7" weight="0.31177095" />
-      <window_info anchor="bottom" id="Event Log" order="7" sideWeight="0.50208336" side_tool="true" weight="0.32979852" />
-      <window_info anchor="bottom" id="Version Control" order="7" />
-      <window_info anchor="bottom" id="Run" order="2" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info anchor="bottom" id="Terminal" order="7" />
-      <window_info id="Favorites" order="2" side_tool="true" />
-      <window_info active="true" anchor="bottom" id="Debug" order="3" sideWeight="0.49791667" visible="true" weight="0.3923241" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="right" id="Commander" order="0" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" id="Data View" order="3" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
-      <window_info anchor="bottom" id="Find" order="1" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32979852" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
+      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32979852" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="true" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
+      <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.3997879" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="true" content_ui="tabs" />
+      <window_info id="Data View" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
+      <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
+      <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
+      <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+      <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
     </layout>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -299,18 +329,22 @@
     <MESSAGE value="修复keepalive下 中文自动转码的bug" />
     <option name="LAST_COMMIT_MESSAGE" value="修复keepalive下 中文自动转码的bug" />
   </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager />
+    <watches-manager />
+  </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/http_router.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="795">
-          <caret line="53" column="95" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="95" />
+          <caret line="53" column="95" lean-forward="false" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="95" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3270">
-          <caret line="218" column="61" selection-start-line="218" selection-start-column="61" selection-end-line="218" selection-end-column="61" />
+          <caret line="218" column="61" lean-forward="false" selection-start-line="218" selection-start-column="61" selection-end-line="218" selection-end-column="61" />
         </state>
       </provider>
     </entry>
@@ -326,123 +360,114 @@
         <state relative-caret-position="9000">
           <caret line="600" column="84" lean-forward="true" selection-start-line="600" selection-start-column="84" selection-end-line="600" selection-end-column="84" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_router.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="795">
-          <caret line="53" column="95" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="95" />
+          <caret line="53" column="95" lean-forward="false" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="95" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3270">
-          <caret line="218" column="61" selection-start-line="218" selection-start-column="61" selection-end-line="218" selection-end-column="61" />
+          <caret line="218" column="61" lean-forward="false" selection-start-line="218" selection-start-column="61" selection-end-line="218" selection-end-column="61" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3600">
-          <caret line="240" column="68" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
+          <caret line="240" column="68" lean-forward="false" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="6345">
-          <caret line="423" column="143" selection-start-line="423" selection-start-column="143" selection-end-line="423" selection-end-column="143" />
+          <caret line="423" column="143" lean-forward="false" selection-start-line="423" selection-start-column="143" selection-end-line="423" selection-end-column="143" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
         </state>
       </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/http_router.hpp">
-      <provider selected="true" editor-type-id="text-editor" />
     </entry>
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3330">
-          <caret line="222" column="61" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
+          <caret line="222" column="61" lean-forward="false" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3600">
-          <caret line="240" column="68" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
+          <caret line="240" column="68" lean-forward="false" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="6900">
-          <caret line="460" column="17" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
+          <caret line="460" column="17" lean-forward="false" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
         </state>
       </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/http_router.hpp">
-      <provider selected="true" editor-type-id="text-editor" />
     </entry>
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3330">
-          <caret line="222" column="61" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
+          <caret line="222" column="61" lean-forward="false" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3600">
-          <caret line="240" column="68" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
+          <caret line="240" column="68" lean-forward="false" selection-start-line="240" selection-start-column="68" selection-end-line="240" selection-end-column="68" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="6900">
-          <caret line="460" column="17" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
+          <caret line="460" column="17" lean-forward="false" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -450,22 +475,17 @@
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="780">
-          <caret line="52" column="6" selection-start-line="52" selection-start-column="6" selection-end-line="52" selection-end-column="6" />
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
+          <caret line="52" column="6" lean-forward="false" selection-start-line="52" selection-start-column="6" selection-end-line="52" selection-end-column="6" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3330">
-          <caret line="222" column="61" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
+          <caret line="222" column="61" lean-forward="false" selection-start-line="222" selection-start-column="52" selection-end-line="222" selection-end-column="61" />
         </state>
       </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/http_router.hpp">
-      <provider selected="true" editor-type-id="text-editor" />
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
@@ -477,10 +497,10 @@
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="6900">
-          <caret line="460" column="17" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
+          <caret line="460" column="17" lean-forward="false" selection-start-line="460" selection-start-column="17" selection-end-line="460" selection-end-column="17" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -488,7 +508,7 @@
     <entry file="file://$PROJECT_DIR$/connection.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="4905">
-          <caret line="327" column="46" selection-start-line="327" selection-start-column="46" selection-end-line="327" selection-end-column="46" />
+          <caret line="327" column="46" lean-forward="false" selection-start-line="327" selection-start-column="46" selection-end-line="327" selection-end-column="46" />
           <folding>
             <element signature="e#26947#26976#0" expanded="true" />
             <element signature="e#27163#27192#0" expanded="true" />
@@ -499,7 +519,7 @@
     <entry file="file://$PROJECT_DIR$/url_encode_decode.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="179">
-          <caret line="302" column="23" selection-start-line="302" selection-start-column="23" selection-end-line="302" selection-end-column="23" />
+          <caret line="302" column="23" lean-forward="false" selection-start-line="302" selection-start-column="23" selection-end-line="302" selection-end-column="23" />
         </state>
       </provider>
     </entry>
@@ -508,31 +528,24 @@
     <entry file="file://$PROJECT_DIR$/http_server.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="2656">
-          <caret line="239" column="42" selection-start-line="239" selection-start-column="42" selection-end-line="239" selection-end-column="42" />
+          <caret line="239" column="42" lean-forward="false" selection-start-line="239" selection-start-column="42" selection-end-line="239" selection-end-column="42" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/multipart_reader.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="135">
-          <caret line="9" column="6" selection-start-line="9" selection-start-column="6" selection-end-line="9" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/utils.hpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="559">
-          <caret line="466" column="43" selection-start-line="466" selection-start-column="43" selection-end-line="466" selection-end-column="43" />
+          <caret line="9" column="6" lean-forward="false" selection-start-line="9" selection-start-column="6" selection-end-line="9" selection-end-column="6" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/upload_file.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="420">
-          <caret line="28" column="19" selection-start-line="28" selection-start-column="13" selection-end-line="28" selection-end-column="19" />
+        <state relative-caret-position="0">
+          <caret line="28" column="19" lean-forward="false" selection-start-line="28" selection-start-column="13" selection-end-line="28" selection-end-column="19" />
           <folding>
-            <element signature="e#29#82#0" expanded="true" />
-            <element signature="e#177#195#0" expanded="true" />
+            <element signature="e#29#82#0" expanded="false" />
+            <element signature="e#177#195#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -540,10 +553,10 @@
     <entry file="file://$PROJECT_DIR$/request.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="105">
-          <caret line="15" column="15" selection-start-line="15" selection-start-column="15" selection-end-line="15" selection-end-column="15" />
+          <caret line="15" column="15" lean-forward="false" selection-start-line="15" selection-start-column="15" selection-end-line="15" selection-end-column="15" />
           <folding>
-            <element signature="e#8782#8861#0" />
-            <element signature="e#9915#9992#0" />
+            <element signature="e#8782#8861#0" expanded="false" />
+            <element signature="e#9915#9992#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -551,17 +564,17 @@
     <entry file="file://$PROJECT_DIR$/multipart_parser.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="120">
-          <caret line="8" column="26" selection-start-line="8" selection-start-column="10" selection-end-line="8" selection-end-column="26" />
+          <caret line="8" column="26" lean-forward="false" selection-start-line="8" selection-start-column="10" selection-end-line="8" selection-end-column="26" />
           <folding>
-            <element signature="e#59#76#0" expanded="true" />
+            <element signature="e#59#76#0" expanded="false" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/connection.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="8055">
-          <caret line="537" column="41" selection-start-line="537" selection-start-column="41" selection-end-line="537" selection-end-column="41" />
+        <state relative-caret-position="7935">
+          <caret line="537" column="41" lean-forward="false" selection-start-line="537" selection-start-column="41" selection-end-line="537" selection-end-column="41" />
           <folding>
             <element signature="e#26947#26976#0" expanded="true" />
             <element signature="e#27163#27192#0" expanded="true" />
@@ -571,21 +584,14 @@
     </entry>
     <entry file="file:///usr/local/include/boost/asio/detail/type_traits.hpp" />
     <entry file="file:///usr/local/include/boost/system/error_code.hpp" />
-    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="840">
-          <caret line="56" column="19" selection-start-line="56" selection-start-column="19" selection-end-line="56" selection-end-column="19" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/use_asio.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="30">
-          <caret line="2" column="27" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="27" />
+          <caret line="2" column="27" lean-forward="false" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="27" />
           <folding>
-            <element signature="e#43#369#0" expanded="true" />
-            <element signature="e#428#457#0" expanded="true" />
-            <element signature="e#580#654#0" expanded="true" />
+            <element signature="e#43#369#0" expanded="false" />
+            <element signature="e#428#457#0" expanded="false" />
+            <element signature="e#580#654#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -593,21 +599,21 @@
     <entry file="file://$PROJECT_DIR$/session.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="105">
-          <caret line="17" column="10" selection-start-line="17" selection-start-column="10" selection-end-line="17" selection-end-column="10" />
+          <caret line="17" column="10" lean-forward="false" selection-start-line="17" selection-start-column="10" selection-end-line="17" selection-end-column="10" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_router.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="90">
-          <caret line="17" column="13" selection-start-line="17" selection-start-column="13" selection-end-line="17" selection-end-column="13" />
+          <caret line="17" column="13" lean-forward="false" selection-start-line="17" selection-start-column="13" selection-end-line="17" selection-end-column="13" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/response.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="201">
-          <caret line="83" column="13" selection-start-line="83" selection-start-column="13" selection-end-line="83" selection-end-column="13" />
+          <caret line="83" column="13" lean-forward="false" selection-start-line="83" selection-start-column="13" selection-end-line="83" selection-end-column="13" />
         </state>
       </provider>
     </entry>
@@ -616,45 +622,74 @@
     <entry file="file:///usr/local/include/boost/asio/buffer.hpp" />
     <entry file="file:///usr/local/include/boost/asio/basic_streambuf.hpp" />
     <entry file="file:///usr/local/include/boost/asio/streambuf.hpp" />
-    <entry file="file:///usr/include/boost/asio/impl/read_until.hpp">
+    <entry file="file:///usr/include/boost/asio/impl/read_until.hpp" />
+    <entry file="file:///usr/include/c++/7/bits/istream.tcc" />
+    <entry file="file:///usr/local/gcc/gcc-7.3.0/include/c++/7.3.0/string_view">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="305">
-          <caret line="700" selection-start-line="700" selection-end-line="700" />
+        <state relative-caret-position="201">
+          <caret line="646" column="14" lean-forward="false" selection-start-line="646" selection-start-column="14" selection-end-line="646" selection-end-column="14" />
+          <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file:///usr/include/c++/7/bits/istream.tcc">
+    <entry file="file://$PROJECT_DIR$/define.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="182">
-          <caret line="657" column="4" selection-start-line="657" selection-start-column="4" selection-end-line="657" selection-end-column="4" />
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/response_cv.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-91">
+          <caret line="17" column="8" lean-forward="false" selection-start-line="17" selection-start-column="8" selection-end-line="17" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="201">
+          <caret line="127" column="38" lean-forward="false" selection-start-line="127" selection-start-column="38" selection-end-line="127" selection-end-column="38" />
+          <folding>
+            <element signature="e#105#122#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="558">
+          <caret line="56" column="19" lean-forward="false" selection-start-line="56" selection-start-column="19" selection-end-line="56" selection-end-column="19" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/http_client.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="381">
-          <caret line="977" column="25" selection-start-line="977" selection-start-column="10" selection-end-line="977" selection-end-column="25" />
+        <state relative-caret-position="388">
+          <caret line="997" column="31" lean-forward="false" selection-start-line="997" selection-start-column="10" selection-end-line="997" selection-end-column="31" />
           <folding>
             <element signature="e#49#66#0" expanded="true" />
-            <element signature="e#210#446#0" expanded="true" />
-            <element signature="e#453#478#0" expanded="true" />
-            <element signature="e#1085#1298#0" expanded="true" />
-            <element signature="e#9291#9310#0" expanded="true" />
-            <element signature="e#9339#9358#0" expanded="true" />
-            <element signature="e#12734#12752#0" expanded="true" />
-            <element signature="e#36614#36633#0" expanded="true" />
-            <element signature="e#36743#36745#0" expanded="true" />
+            <element signature="e#231#467#0" expanded="true" />
+            <element signature="e#474#499#0" expanded="true" />
+            <element signature="e#1106#1319#0" expanded="true" />
+            <element signature="e#15251#15271#0" expanded="true" />
+            <element signature="e#16672#16692#0" expanded="true" />
+            <element signature="e#20077#20097#0" expanded="true" />
+            <element signature="e#20582#20602#0" expanded="true" />
+            <element signature="e#21063#21083#0" expanded="true" />
+            <element signature="e#23844#23864#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="269">
-          <caret line="124" column="49" lean-forward="true" selection-start-line="124" selection-start-column="49" selection-end-line="124" selection-end-column="49" />
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="119">
+          <caret line="143" column="35" lean-forward="true" selection-start-line="143" selection-start-column="35" selection-end-line="143" selection-end-column="35" />
+          <folding />
         </state>
       </provider>
     </entry>

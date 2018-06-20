@@ -8,6 +8,7 @@
 #include <vector>
 #include <sstream>
 #include <string_view>
+#include "utils.hpp"
 #ifdef ASIO_STANDALONE
 #include <asio.hpp>
 #include <asio/steady_timer.hpp>
@@ -435,9 +436,12 @@ namespace cinatra {
     /// Convenience function to perform synchronous request. The io_service is run within this function.
     /// If reusing the io_service for other tasks, use the asynchronous request functions instead.
     /// Do not use concurrently with the asynchronous request functions.
-     client_response request(const std::string &method, const std::string &path = std::string("/"),
+      template<http_method Method>
+     client_response request(const std::string &path = std::string("/"),
                                       std::string_view content = "", const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
-      client_response response(config.max_response_streambuf_size);
+       auto type_name = method_name(Method);
+       std::string method(type_name.data(),type_name.size());
+       client_response response(config.max_response_streambuf_size);
       error_code ec;
       request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
         response = response_;
@@ -470,8 +474,11 @@ namespace cinatra {
     /// Convenience function to perform synchronous request. The io_service is run within this function.
     /// If reusing the io_service for other tasks, use the asynchronous request functions instead.
     /// Do not use concurrently with the asynchronous request functions.
-    client_response request(const std::string &method, const std::string &path, std::istream &content,
+    template<http_method Method>
+    client_response request(const std::string &path, std::istream &content,
                                       const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
+      auto type_name = method_name(Method);
+      std::string method(type_name.data(),type_name.size());
       client_response response;
       error_code ec;
       request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
@@ -550,19 +557,28 @@ namespace cinatra {
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
-    void request(const std::string &method, const std::string &path, std::string_view content,
+    template<http_method Method>
+    void request(const std::string &path, std::string_view content,
                  std::function<void(const client_response&, const error_code &)> &&request_callback) {
+        auto type_name = method_name(Method);
+        std::string method(type_name.data(),type_name.size());
       request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, const std::string &path,
+    template<http_method Method>
+    void request(const std::string &path,
                  std::function<void(const client_response&, const error_code &)> &&request_callback) {
+      auto type_name = method_name(Method);
+      std::string method(type_name.data(),type_name.size());
       request(method, path, std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, std::function<void(const client_response&, const error_code &)> &&request_callback) {
+    template<http_method Method>
+    void request(std::function<void(const client_response&, const error_code &)> &&request_callback) {
+        auto type_name = method_name(Method);
+        std::string method(type_name.data(),type_name.size());
       request(method, std::string("/"), std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
@@ -621,8 +637,11 @@ namespace cinatra {
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, const std::string &path, std::istream &content,
+    template<http_method Method>
+    void request(const std::string &path, std::istream &content,
                  std::function<void(const client_response&, const error_code &)> &&request_callback) {
+        auto type_name = method_name(Method);
+        std::string method(type_name.data(),type_name.size());
       request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
     }
 
@@ -976,6 +995,7 @@ namespace cinatra {
 } // namespace cinatra
 namespace cinatra{
     using client_response = http_client::client_response;
+    using client_request_header = CaseInsensitiveMultimap;
 }
 
 #endif /* CLIENT_HTTP_HPP */
