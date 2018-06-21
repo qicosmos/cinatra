@@ -121,6 +121,13 @@ int main() {
 		res.render_json(json);
 	}, enable_cache{ false });
 
+    server.set_http_handler<GET, POST>("/client_ssl", [](const request& req, response& res) {
+        std::cout<<"client_ssl"<<std::endl;
+        https_client client("localhost:8010",false);
+        auto result = client.request<GET>("/");
+        res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
+    }, enable_cache{ false });
+
 
     server.set_http_handler<GET, POST>("/client", [](const request& req, response& res) {
         http_client client("localhost:8080");
@@ -149,7 +156,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/ansclient", [](const request& req, response& res) {
 		http_client client("localhost:8080");
-		client.request<GET>("/json",[](const cinatra::client_response& response,const cinatra::error_code& er){
+		client.request<GET>("/json",[](const cinatra::http_client::client_response& response,const cinatra::error_code& er){
            std::cout<<response.get_content()<<std::endl;
 		});
 		client.run();
