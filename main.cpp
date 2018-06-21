@@ -1,5 +1,6 @@
 #include <iostream>
 #include "http_server.hpp"
+#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -111,6 +112,48 @@ int main() {
 		json["number"] = 100.005;
 		json["name"] = "中文";
 		res.render_json(json);
+	}, enable_cache{ false });
+
+	server.set_http_handler<GET, POST>("/parsejson", [](const request& req, response& res) {
+		auto json_str = req.body();
+		auto json = inja::json::parse(json_str);
+		json["add_str"] = "parse_OK";
+		res.render_json(json);
+	}, enable_cache{ false });
+
+
+    server.set_http_handler<GET, POST>("/client", [](const request& req, response& res) {
+        http_client client("localhost:8080");
+        auto result = client.request<GET>("/json");
+        res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
+    }, enable_cache{ false });
+
+	server.set_http_handler<GET, POST>("/clientpost", [](const request& req, response& res) {
+		http_client client("localhost:8080");
+		inja::json json;
+		json["success"] = true;
+		json["message"] = "test_client_post";
+		json["time"] = std::time(nullptr);
+		auto result = client.request<POST>("/parsejson",json.dump());
+		res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
+	}, enable_cache{ false });
+
+
+	server.set_http_handler<GET, POST>("/client_head", [](const request& req, response& res) {
+		http_client client("localhost:8080");
+		client_request_header head;
+		head.insert(std::make_pair("name","abc"));
+		auto result = client.request<GET>("/test?id=123","",head);
+		res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
+	}, enable_cache{ false });
+
+	server.set_http_handler<GET, POST>("/ansclient", [](const request& req, response& res) {
+		http_client client("localhost:8080");
+		client.request<GET>("/json",[](const cinatra::client_response& response,const cinatra::error_code& er){
+           std::cout<<response.get_content()<<std::endl;
+		});
+		client.run();
+		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 	}, enable_cache{ false });
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
