@@ -123,7 +123,7 @@ int main() {
 
     server.set_http_handler<GET, POST>("/client_ssl", [](const request& req, response& res) {
         std::cout<<"client_ssl"<<std::endl;
-        https_client client("localhost:8010",false);
+        https_client client("localhost:8010",false); //tips:https host
         auto result = client.request<GET>("/");
         res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
     }, enable_cache{ false });
@@ -190,6 +190,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
 		auto zh = req.get_query_value("zh");
+        std::cout<<zh<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
 
