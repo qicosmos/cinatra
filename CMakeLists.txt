@@ -11,6 +11,7 @@ endif ()
 #option(ENABLE_GZIP  "Set to switch to build use gzip" OFF)
 SET(ENABLE_GZIP OFF)
 SET(ENABLE_SSL OFF)
+SET(ENABLE_CLIENT_SSL ON)
 if (ENABLE_SSL)
 	add_definitions(-DCINATRA_ENABLE_SSL)
 	message(STATUS "Use SSL")
@@ -20,10 +21,18 @@ if(ENABLE_GZIP)
 	add_definitions(-DCINATRA_ENABLE_GZIP)
 endif()
 
+if(ENABLE_CLIENT_SSL)
+	add_definitions(-DCINATRA_ENABLE_CLIENT_SSL)
+endif()
+
 find_package(Boost 1.60 REQUIRED COMPONENTS system)
 if (ENABLE_SSL)
 find_package(OpenSSL REQUIRED)
 endif()
+if (ENABLE_CLIENT_SSL)
+	find_package(OpenSSL REQUIRED)
+endif()
+
 if (ENABLE_GZIP)
 	find_package(ZLIB REQUIRED)
 endif()
@@ -54,6 +63,7 @@ set(CINATRA
 	session_manager.hpp
 	nlohmann_json.hpp
 	inja.hpp
+	http_client.hpp
 	main.cpp
 	)
 
@@ -64,6 +74,11 @@ target_link_libraries(cinatra ${Boost_LIBRARIES} uuid -lstdc++fs)
 if (ENABLE_SSL)
 	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
+
+if (ENABLE_CLIENT_SSL)
+	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
+endif()
+
 if (ENABLE_GZIP)
 	target_link_libraries(cinatra ${ZLIB_LIBRARIES})
 endif()
