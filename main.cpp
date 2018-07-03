@@ -1,6 +1,5 @@
 #include <iostream>
 #include "http_server.hpp"
-#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -121,47 +120,6 @@ int main() {
 		res.render_json(json);
 	}, enable_cache{ false });
 
-    server.set_http_handler<GET, POST>("/client_ssl", [](const request& req, response& res) {
-        std::cout<<"client_ssl"<<std::endl;
-        https_client client("localhost:8010",false); //tips:https host
-        auto result = client.request<GET>("/");
-        res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
-    }, enable_cache{ false });
-
-
-    server.set_http_handler<GET, POST>("/client", [](const request& req, response& res) {
-        http_client client("localhost:8080");
-        auto result = client.request<GET>("/json");
-        res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
-    }, enable_cache{ false });
-
-	server.set_http_handler<GET, POST>("/clientpost", [](const request& req, response& res) {
-		http_client client("localhost:8080");
-		inja::json json;
-		json["success"] = true;
-		json["message"] = "test_client_post";
-		json["time"] = std::time(nullptr);
-		auto result = client.request<POST>("/parsejson",json.dump());
-		res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
-	}, enable_cache{ false });
-
-
-	server.set_http_handler<GET, POST>("/client_head", [](const request& req, response& res) {
-		http_client client("localhost:8080");
-		client_request_header head;
-		head.insert(std::make_pair("name","abc"));
-		auto result = client.request<GET>("/test?id=123","",head);
-		res.set_status_and_content(status_type::ok, result.get_content(),res_content_type::string);
-	}, enable_cache{ false });
-
-	server.set_http_handler<GET, POST>("/ansclient", [](const request& req, response& res) {
-		http_client client("localhost:8080");
-		client.request<GET>("/json",[](const cinatra::http_client::client_response& response,const cinatra::error_code& er){
-           std::cout<<response.get_content()<<std::endl;
-		});
-		client.run();
-		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
-	}, enable_cache{ false });
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");

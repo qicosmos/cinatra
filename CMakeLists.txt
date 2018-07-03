@@ -11,7 +11,7 @@ endif ()
 #option(ENABLE_GZIP  "Set to switch to build use gzip" OFF)
 SET(ENABLE_GZIP OFF)
 SET(ENABLE_SSL OFF)
-SET(ENABLE_CLIENT_SSL ON)
+SET(ENABLE_CLIENT_SSL OFF)
 if (ENABLE_SSL)
 	add_definitions(-DCINATRA_ENABLE_SSL)
 	message(STATUS "Use SSL")
@@ -63,7 +63,6 @@ set(CINATRA
 	session_manager.hpp
 	nlohmann_json.hpp
 	inja.hpp
-	http_client.hpp
 	main.cpp
 	)
 
