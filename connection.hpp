@@ -523,76 +523,104 @@ namespace cinatra {
 		}
 		//-------------multipart----------------------//
 		void init_multipart_parser(bool is_big) {
-			if (is_big) {
-				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-					req_.set_multipart_headers(begin);
-					req_.set_state(data_proc_state::data_begin);
-					call_back();
-				};
-				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					req_.set_part_data({ buf, size });
-					req_.set_state(data_proc_state::data_continue);
-					call_back();
-				};
-				multipart_parser_.on_part_end = [this] {
-					req_.set_state(data_proc_state::data_end);
-					call_back();
-				};
-				multipart_parser_.on_end = [this] {
-					req_.set_state(data_proc_state::data_all_end);
-					call_back();
-				};
-			}
-			else {
+//			if (is_big) {
+//				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
+//					req_.set_multipart_headers(begin);
+//					req_.set_state(data_proc_state::data_begin);
+//					call_back();
+//				};
+//				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
+//					req_.set_part_data({ buf, size });
+//					req_.set_state(data_proc_state::data_continue);
+//					call_back();
+//				};
+//				multipart_parser_.on_part_end = [this] {
+//					req_.set_state(data_proc_state::data_end);
+//					call_back();
+//				};
+//				multipart_parser_.on_end = [this] {
+//					req_.set_state(data_proc_state::data_all_end);
+//					call_back();
+//				};
+//			}
+//			else {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
+                    req_.set_continue(true);
 					auto filename = req_.get_multipart_file_name();
 					auto is_file_type = req_.is_multipart_file();
-					if (filename.empty()&&is_file_type) {
-						req_.set_state(data_proc_state::data_error);
-						res_.set_status_and_content(status_type::bad_request, "mutipart error");
-						return;
-					}						
-					if(is_file_type)
-					{
-						auto ext = get_extension(filename);
-						std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
-						req_.open_upload_file(name);
-					}else{
-						auto key = req_.get_multipart_key_name();
-						req_.save_multipart_key_value(std::string(key.data(),key.size()),"");
-					}
+//					if (filename.empty()&&is_file_type) {
+//						req_.set_state(data_proc_state::data_error);
+//						res_.set_status_and_content(status_type::bad_request, "mutipart error");
+//						return;
+//					}
+                    if(is_file_type)
+                    {
+                        if(!filename.empty()){
+                            req_.set_state(data_proc_state::file_begin);
+                            call_back();
+                            if(!req_.need_continue()){
+                                return;
+                            }
+                            auto ext = get_extension(filename);
+                            std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+                            req_.open_upload_file(name);
+                        }
+                    }else{
+                        req_.set_state(data_proc_state::data_begin);
+                        call_back();
+                    }
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
 					auto is_file_type = req_.is_multipart_file();
+                    auto filename = req_.get_multipart_file_name();
 					if (req_.get_state() == data_proc_state::data_error) {
 						return;
 					}
 					if(is_file_type)
 					{
-						req_.write_upload_data(buf, size);
+                        if(!filename.empty()){
+                            req_.set_state(data_proc_state::file_continue);
+                            call_back();
+                            if(!req_.need_continue()){
+                                return;
+                            }
+                            req_.write_upload_data(buf, size);
+                        }
 					}else{
+                        req_.set_state(data_proc_state::data_continue);
+                        call_back();
+                        if(!req_.need_continue()){
+                            return;
+                        }
 						auto key = req_.get_multipart_key_name();
-						auto& value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
-						value+=std::string(buf,buf+size);
+                        req_.save_multipart_key_value(std::string(key.data(),key.size()),std::string(buf,buf+size));
 					}
 				};
 				multipart_parser_.on_part_end = [this] {
 					auto is_file_type = req_.is_multipart_file();
-					if (req_.get_state() == data_proc_state::data_error)
-						return;
+					if (req_.get_state() == data_proc_state::data_error){
+                         return;
+                    }
 					if(is_file_type)
 					{
+                        req_.set_state(data_proc_state::file_end);
+                        call_back();
 						req_.close_upload_file();
-					}
+					}else{
+                        req_.set_state(data_proc_state::data_end);
+                        call_back();
+                    }
 				};
 				multipart_parser_.on_end = [this] {
-					if (req_.get_state() == data_proc_state::data_error)
-						return;
+					if (req_.get_state() == data_proc_state::data_error){
+                        return;
+                    }
                     req_.handle_multipart_key_value();
+                    req_.set_state(data_proc_state::data_all_end);
 					call_back(); 
 				};
-			}			
+//			}
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
