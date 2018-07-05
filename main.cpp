@@ -1,5 +1,6 @@
 #include <iostream>
 #include "http_server.hpp"
+#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -99,8 +100,12 @@ int main() {
 	});
 
 //	server.set_http_handler<GET,POST>("/test_remove",[](const request& req, response& res){
-//		fs::remove(fs::path("./abc.txt"));
-//		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//        http_client client("localhost:8060");
+//        multipart_form form;
+//        form.append("text","caaaaaddd");
+//        form.append("file1",multipart_file("./test.png"));
+//        auto client_res = client.request<POST>("/upload_small_file",form);
+//		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
 //	});
 
 

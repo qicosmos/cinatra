@@ -63,6 +63,8 @@ set(CINATRA
 	session_manager.hpp
 	nlohmann_json.hpp
 	inja.hpp
+	http_client.hpp
+	multipart_form.hpp
 	main.cpp
 	)
 
