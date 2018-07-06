@@ -99,14 +99,14 @@ int main() {
 */
 	});
 ///client 测试代码
-//	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
-//        http_client client("localhost:8060");
-//        multipart_form form;
-//        form.append("text","caaaaaddd");
-//        form.append("file1",multipart_file("./test.png"));
-//        auto client_res = client.request<POST>("/upload_small_file",form);
-//		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
-//	});
+	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
+        http_client client("localhost:8060");
+        multipart_form form;
+        form.append("text","caaaaaddd");
+        form.append("file1",multipart_file("./test.png"));
+        auto client_res = client.request<POST>("/upload_small_file",form);
+		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+	});
 
 //    server.set_http_handler<GET,POST>("/test_client",[](const request& req, response& res){
 //        http_client client("localhost:8060");

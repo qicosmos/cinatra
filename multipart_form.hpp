@@ -38,6 +38,7 @@ public:
         }else{
             throw "file is not open";
         }
+        file.close();
         return file_buff.str();
     }
 
@@ -62,7 +63,7 @@ public:
     }
     void append(const std::string& name,const multipart_file& multi_file)
     {
-        form_data.insert(std::make_pair(name,multi_file.read_file()));
+        form_data.insert(std::make_pair(name,"file content place holder"));
         file_form.insert(std::make_pair(name,multi_file));
     }
     std::string to_body() const
@@ -78,12 +79,12 @@ public:
                content.append(iter->second).append("\r\n");
            }else{
               auto file_name =  file_iter->second._file_name;
-             auto extension_name = file_iter->second.extension_name;
-               content.append("Content-Disposition: form-data; ").append("name=").append("\"").append(iter->first).append("\"").append(" filename=").append("\"").append(file_name).append("\"").append("\r\n");
-               auto mime_type = cinatra::get_mime_type(std::basic_string_view(extension_name.data(),extension_name.size()));
-               content.append("Content-Type: ").append(mime_type).append("\r\n");
-               content.append("\r\n");
-               content.append(std::move(iter->second)).append("\r\n");
+              auto extension_name = file_iter->second.extension_name;
+              content.append("Content-Disposition: form-data; ").append("name=").append("\"").append(iter->first).append("\"").append(" filename=").append("\"").append(file_name).append("\"").append("\r\n");
+              auto mime_type = cinatra::get_mime_type(std::basic_string_view(extension_name.data(),extension_name.size()));
+              content.append("Content-Type: ").append(mime_type).append("\r\n");
+              content.append("\r\n");
+              content.append(file_iter->second.read_file()).append("\r\n");
            }
         }
         content.append(body_separator_str).append("--");
