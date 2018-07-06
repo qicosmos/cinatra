@@ -331,7 +331,7 @@ namespace cinatra {
             }
 
 
-            client_response(const client_response& res):http_version(res.http_version),status_code(res.status_code),header(res.header),streambuf(res.streambuf.size()),content(streambuf)
+            client_response(const client_response& res):http_version(res.http_version),status_code(res.status_code),header(res.header),streambuf(0),content(streambuf)
             {
 //                save_content = res.content.string();
 //                std::ostream tmp(&streambuf);

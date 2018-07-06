@@ -98,7 +98,7 @@ int main() {
 		 <div>{{header_text}}</div>
 */
 	});
-///client 测试代码
+//client 测试代码 begin
 //	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        multipart_form form;
@@ -165,6 +165,7 @@ int main() {
 //        client.run();
 //        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //    });
+//client 测试代码 end
 
 
 	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
