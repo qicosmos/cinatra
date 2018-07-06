@@ -98,8 +98,8 @@ int main() {
 		 <div>{{header_text}}</div>
 */
 	});
-
-//	server.set_http_handler<GET,POST>("/test_remove",[](const request& req, response& res){
+///client 测试代码
+//	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        multipart_form form;
 //        form.append("text","caaaaaddd");
@@ -107,6 +107,64 @@ int main() {
 //        auto client_res = client.request<POST>("/upload_small_file",form);
 //		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
 //	});
+
+//    server.set_http_handler<GET,POST>("/test_client",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        client.add_header("name","007");
+//        auto client_res = client.request<POST>("/test?id=1");
+//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//    });
+
+//    server.set_http_handler<GET,POST>("/clientpost_json",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        inja::json json;
+//        json["success"] = true;
+//        json["message"] = "just json test";
+//        auto client_res = client.request<POST>("/parsejson",json.dump());
+//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//    });
+
+//    server.set_http_handler<GET,POST>("/test_client_header",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        auto client_res = client.request<POST>("/aspect");
+//        auto header_pair_vec = client_res.get_header("aaaa");
+//        std::cout<<header_pair_vec[0].second<<std::endl;
+//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//    });
+
+//    server.set_http_handler<GET,POST>("/test_multipart_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        multipart_form form;
+//        form.append("text","caaaaaddd");
+//        form.append("file1",multipart_file("./test.png"));
+//         client.request<POST>("/upload_small_file",form,[](const http_client::client_response& response,const http_client::error_code& error){
+//             std::cout<<response.get_content()<<std::endl;
+//         });
+//        client.run();
+//		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//	});
+
+//    server.set_http_handler<GET,POST>("/test_client_json_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        inja::json json;
+//        json["success"] = true;
+//        json["message"] = "just json test";
+//        client.request<POST>("/parsejson",json.dump(),[](const http_client::client_response& response,const http_client::error_code& error){
+//            std::cout<<response.get_content()<<std::endl;
+//        });
+//        client.run();
+//        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//    });
+
+//    server.set_http_handler<GET,POST>("/test_client_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        client.add_header("name","007");
+//        client.request<POST>("/test?id=1",[](const http_client::client_response& response,const http_client::error_code& error){
+//             std::cout<<response.get_content()<<std::endl;
+//        });
+//        client.run();
+//        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//    });
 
 
 	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {

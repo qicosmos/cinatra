@@ -10,6 +10,7 @@
 #include <string_view>
 #include <string.h>
 #include <map>
+#include <vector>
 #include "utils.hpp"
 #include "multipart_form.hpp"
 #ifdef ASIO_STANDALONE
@@ -281,6 +282,7 @@ namespace cinatra {
   template <class socket_type>
   class ClientBase {
   public:
+    using error_code = cinatra::error_code;
     class Content : public std::istream {
       friend class ClientBase<socket_type>;
 
@@ -356,9 +358,17 @@ namespace cinatra {
         {
             return save_content;
         }
-        const CaseInsensitiveMultimap& get_head() const
+        const std::vector<std::pair<std::string,std::string>> get_header(const std::string& name) const
         {
-            return header;
+            std::vector<std::pair<std::string,std::string>> find_header;
+            auto number = header.count(name);
+            auto iter = header.find(name);
+            while(number>0){
+                find_header.push_back(std::make_pair(iter->first,iter->second));
+                iter++;
+                number--;
+            }
+            return find_header;
         }
 
     };
@@ -445,22 +455,25 @@ namespace cinatra {
     /// Convenience function to perform synchronous request. The io_service is run within this function.
     /// If reusing the io_service for other tasks, use the asynchronous request functions instead.
     /// Do not use concurrently with the asynchronous request functions.
+    void add_header(const std::string& name,const std::string& value){
+        request_header_.insert(std::make_pair(name,value));
+    }
+
     template<http_method Method>
     client_response request(const std::string &path,const multipart_form& multi_form) {
-        CaseInsensitiveMultimap multipart_head;
-        multipart_head.insert(std::make_pair("Content-Type",multi_form.content_type()));
+        request_header_.insert(std::make_pair("Content-Type",multi_form.content_type()));
         auto body = multi_form.to_body();
-        return request<Method>(path,std::string_view(body.data(),body.size()),multipart_head);
+        return request<Method>(path,std::string_view(body.data(),body.size()));
     }
 
       template<http_method Method>
      client_response request(const std::string &path = std::string("/"),
-                                      std::string_view content = "", const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
+                                      std::string_view content = "") {
        auto type_name = method_name(Method);
        std::string method(type_name.data(),type_name.size());
        client_response response(config.max_response_streambuf_size);
       error_code ec;
-      request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
+      request(method, path, content, [&response, &ec](const client_response& response_, const error_code &ec_) {
         response = response_;
         ec = ec_;
       });
@@ -493,13 +506,12 @@ namespace cinatra {
     /// Do not use concurrently with the asynchronous request functions.
 
     template<http_method Method>
-    client_response request(const std::string &path, std::istream &content,
-                                      const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
+    client_response request(const std::string &path, std::istream &content) {
       auto type_name = method_name(Method);
       std::string method(type_name.data(),type_name.size());
       client_response response;
       error_code ec;
-      request(method, path, content, header, [&response, &ec](const client_response& response_, const error_code &ec_) {
+      request(method, path, content, [&response, &ec](const client_response& response_, const error_code &ec_) {
         response = response_;
         ec = ec_;
       });
@@ -524,9 +536,15 @@ namespace cinatra {
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
-    void request(const std::string &method, const std::string &path, std::string_view content, const CaseInsensitiveMultimap &header,
-                 std::function<void(const client_response&, const error_code &)> &&request_callback_) {
-      auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path, header));
+
+      template<http_method Method>
+      void request(const std::string &path,const multipart_form& multi_form,std::function<void(const client_response&, const error_code &)> &&request_callback_) {
+          request_header_.insert(std::make_pair("Content-Type",multi_form.content_type()));
+          request<Method>(path,multi_form.to_body(),std::move(request_callback_));
+      }
+
+    void request(const std::string &method, const std::string &path, std::string_view content,std::function<void(const client_response&, const error_code &)> &&request_callback_) {
+      auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path));
       auto response = session->response;
       auto request_callback = std::make_shared<std::function<void(const client_response&, const error_code &)>>(std::move(request_callback_));
       session->callback = [this, response, request_callback](const std::shared_ptr<Connection> &connection, const error_code &ec) {
@@ -560,10 +578,10 @@ namespace cinatra {
 
       std::ostream write_stream(session->request_streambuf.get());
       if(content.size() > 0) {
-        auto header_it = header.find("Content-Length");
-        if(header_it == header.end()) {
-          header_it = header.find("Transfer-Encoding");
-          if(header_it == header.end() || header_it->second != "chunked")
+        auto header_it = request_header_.find("Content-Length");
+        if(header_it == request_header_.end()) {
+          header_it = request_header_.find("Transfer-Encoding");
+          if(header_it == request_header_.end() || header_it->second != "chunked")
             write_stream << "Content-Length: " << content.size() << "\r\n";
         }
       }
@@ -576,20 +594,18 @@ namespace cinatra {
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
     template<http_method Method>
-    void request(const std::string &path, std::string_view content,
-                 std::function<void(const client_response&, const error_code &)> &&request_callback) {
+    void request(const std::string &path, std::string_view content,std::function<void(const client_response&, const error_code &)> &&request_callback) {
         auto type_name = method_name(Method);
         std::string method(type_name.data(),type_name.size());
-      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
+      request(method, path, content, std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     template<http_method Method>
-    void request(const std::string &path,
-                 std::function<void(const client_response&, const error_code &)> &&request_callback) {
+    void request(const std::string &path,std::function<void(const client_response&, const error_code &)> &&request_callback) {
       auto type_name = method_name(Method);
       std::string method(type_name.data(),type_name.size());
-      request(method, path, std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
+      request(method, path, std::string(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
@@ -597,13 +613,12 @@ namespace cinatra {
     void request(std::function<void(const client_response&, const error_code &)> &&request_callback) {
         auto type_name = method_name(Method);
         std::string method(type_name.data(),type_name.size());
-      request(method, std::string("/"), std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
+      request(method, std::string("/"), std::string(), std::move(request_callback));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, const std::string &path, std::istream &content, const CaseInsensitiveMultimap &header,
-                 std::function<void(const client_response&, const error_code &)> &&request_callback_) {
-      auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path, header));
+    void request(const std::string &method, const std::string &path, std::istream &content,std::function<void(const client_response&, const error_code &)> &&request_callback_) {
+      auto session = std::make_shared<Session>(config.max_response_streambuf_size, get_connection(), create_request_header(method, path));
       auto response = session->response;
       auto request_callback = std::make_shared<std::function<void(const client_response&, const error_code &)>>(std::move(request_callback_));
       session->callback = [this, response, request_callback](const std::shared_ptr<Connection> &connection, const error_code &ec) {
@@ -640,10 +655,10 @@ namespace cinatra {
       content.seekg(0, std::ios::beg);
       std::ostream write_stream(session->request_streambuf.get());
       if(content_length > 0) {
-        auto header_it = header.find("Content-Length");
-        if(header_it == header.end()) {
-          header_it = header.find("Transfer-Encoding");
-          if(header_it == header.end() || header_it->second != "chunked")
+        auto header_it = request_header_.find("Content-Length");
+        if(header_it == request_header_.end()) {
+          header_it = request_header_.find("Transfer-Encoding");
+          if(header_it == request_header_.end() || header_it->second != "chunked")
             write_stream << "Content-Length: " << content_length << "\r\n";
         }
       }
@@ -660,7 +675,7 @@ namespace cinatra {
                  std::function<void(const client_response&, const error_code &)> &&request_callback) {
         auto type_name = method_name(Method);
         std::string method(type_name.data(),type_name.size());
-      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
+      request(method, path, content, std::move(request_callback));
     }
 
     /// Close connections
@@ -694,6 +709,8 @@ namespace cinatra {
 
     std::size_t concurrent_synchronous_requests = 0;
     std::mutex concurrent_synchronous_requests_mutex;
+
+    CaseInsensitiveMultimap request_header_;
 
     ClientBase(const std::string &host_port, unsigned short default_port) noexcept : default_port(default_port), handler_runner(new ScopeRunner()) {
       auto parsed_host_port = parse_host_port(host_port, default_port);
@@ -738,7 +755,7 @@ namespace cinatra {
     virtual std::shared_ptr<Connection> create_connection() noexcept = 0;
     virtual void connect(const std::shared_ptr<Session> &) = 0;
 
-    std::unique_ptr<asio::streambuf> create_request_header(const std::string &method, const std::string &path, const CaseInsensitiveMultimap &header) const {
+    std::unique_ptr<asio::streambuf> create_request_header(const std::string &method, const std::string &path) const {
       auto corrected_path = path;
       if(corrected_path == "")
         corrected_path = "/";
@@ -752,7 +769,7 @@ namespace cinatra {
       if(port != default_port)
         write_stream << ':' << std::to_string(port);
       write_stream << "\r\n";
-      for(auto &h : header)
+      for(auto &h : request_header_)
         write_stream << h.first << ": " << h.second << "\r\n";
       return streambuf;
     }
