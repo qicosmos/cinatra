@@ -334,6 +334,12 @@ namespace cinatra {
                 tmp<< save_content;
             }
 
+            client_response& vir_copy(){
+                save_content = content.string();
+                std::ostream tmp(&streambuf);
+                tmp<< save_content;
+                return *this;
+            }
 
         private:
             std::string http_version, status_code;
@@ -569,8 +575,7 @@ namespace cinatra {
 
                 if(*request_callback)
                 {
-                    client_response tmp = *response;
-                    (*request_callback)(tmp, ec);
+                    (*request_callback)(response->vir_copy(), ec);
                 }
             };
 
@@ -643,8 +648,7 @@ namespace cinatra {
 
                 if(*request_callback)
                 {
-                    client_response tmp = *response;
-                    (*request_callback)(tmp, ec);
+                    (*request_callback)(response->vir_copy(), ec);
                 }
             };
 
