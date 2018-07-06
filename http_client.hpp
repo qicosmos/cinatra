@@ -316,22 +316,27 @@ namespace cinatra {
             asio::streambuf streambuf;
 
             client_response(std::size_t max_response_streambuf_size) noexcept : streambuf(max_response_streambuf_size), content(streambuf) {}
-        public:
+
+        protected:
             client_response& operator=(const client_response& res)
             {
                 http_version = res.http_version;
                 status_code = res.status_code;
                 header = res.header;
-                save_content = res.content.string();
-                std::ostream tmp(&streambuf);
-                tmp<< save_content;
+//                save_content = res.content.string();
+//                std::ostream tmp(&streambuf);
+//                tmp<< save_content;
+                save_content = res.save_content;
                 return *this;
             }
+
+
             client_response(const client_response& res):http_version(res.http_version),status_code(res.status_code),header(res.header),streambuf(res.streambuf.size()),content(streambuf)
             {
-                save_content = res.content.string();
-                std::ostream tmp(&streambuf);
-                tmp<< save_content;
+//                save_content = res.content.string();
+//                std::ostream tmp(&streambuf);
+//                tmp<< save_content;
+                save_content = res.save_content;
             }
 
             client_response& vir_copy(){

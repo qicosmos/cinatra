@@ -129,7 +129,7 @@ int main() {
 //        auto client_res = client.request<POST>("/aspect");
 //        auto header_pair_vec = client_res.get_header("aaaa");
 //        std::cout<<header_pair_vec[0].second<<std::endl;
-//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//        res.set_status_and_content(status_type::ok, std::string(header_pair_vec[0].second),res_content_type::string);
 //    });
 //
 //    server.set_http_handler<GET,POST>("/test_multipart_asyn",[](const request& req, response& res){
