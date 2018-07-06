@@ -99,22 +99,22 @@ int main() {
 */
 	});
 ///client 测试代码
-	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
-        http_client client("localhost:8060");
-        multipart_form form;
-        form.append("text","caaaaaddd");
-        form.append("file1",multipart_file("./test.png"));
-        auto client_res = client.request<POST>("/upload_small_file",form);
-		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
-	});
-
+//	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        multipart_form form;
+//        form.append("text","caaaaaddd");
+//        form.append("file1",multipart_file("./test.png"));
+//        auto client_res = client.request<POST>("/upload_small_file",form);
+//		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//	});
+//
 //    server.set_http_handler<GET,POST>("/test_client",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        client.add_header("name","007");
 //        auto client_res = client.request<POST>("/test?id=1");
 //        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
 //    });
-
+//
 //    server.set_http_handler<GET,POST>("/clientpost_json",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        inja::json json;
@@ -123,7 +123,7 @@ int main() {
 //        auto client_res = client.request<POST>("/parsejson",json.dump());
 //        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
 //    });
-
+//
 //    server.set_http_handler<GET,POST>("/test_client_header",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        auto client_res = client.request<POST>("/aspect");
@@ -131,7 +131,7 @@ int main() {
 //        std::cout<<header_pair_vec[0].second<<std::endl;
 //        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
 //    });
-
+//
 //    server.set_http_handler<GET,POST>("/test_multipart_asyn",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        multipart_form form;
@@ -143,7 +143,7 @@ int main() {
 //        client.run();
 //		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //	});
-
+//
 //    server.set_http_handler<GET,POST>("/test_client_json_asyn",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        inja::json json;
@@ -155,7 +155,7 @@ int main() {
 //        client.run();
 //        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //    });
-
+//
 //    server.set_http_handler<GET,POST>("/test_client_asyn",[](const request& req, response& res){
 //        http_client client("localhost:8060");
 //        client.add_header("name","007");
