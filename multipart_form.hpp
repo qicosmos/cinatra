@@ -2,8 +2,8 @@
 // Created by xmh on 18-7-5.
 //
 
-#ifndef HTTP_CLIENT_DEMO_MULTIPART_FORM_HPP
-#define HTTP_CLIENT_DEMO_MULTIPART_FORM_HPP
+#ifndef HTTP_CLIENT_MULTIPART_FORM_HPP
+#define HTTP_CLIENT_MULTIPART_FORM_HPP
 #include <map>
 #include <random>
 #include "md5.hpp"
@@ -101,4 +101,4 @@ private:
     std::string body_content;
     std::string body_separator_str = "";
 };
-#endif //HTTP_CLIENT_DEMO_MULTIPART_FORM_HPP
+#endif //HTTP_CLIENT_MULTIPART_FORM_HPP
