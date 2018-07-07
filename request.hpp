@@ -19,7 +19,10 @@ namespace cinatra {
 		data_end,
 		data_all_end,
 		data_close,
-		data_error
+		data_error,
+		file_continue,
+		file_begin,
+		file_end
 	};
 
 	using tcp_socket = boost::asio::ip::tcp::socket;
@@ -170,6 +173,7 @@ namespace cinatra {
 
 		void reset() {
 			cur_size_ = 0;
+			receive_continue_flag = true;
 			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
@@ -313,11 +317,14 @@ namespace cinatra {
             multipart_form_map_.insert(std::make_pair(key,value));
         }
 
-        std::string& get_multipart_value_by_key(const std::string& key)
-        {
-			if(!key.empty())
-            return multipart_form_map_[key];
-        }
+//        std::string& get_multipart_value_by_key(const std::string& key)
+//        {
+//			if(!key.empty())
+//			{
+//				return multipart_form_map_[key];
+//			}
+//			return {};
+//        }
 
 		void handle_multipart_key_value(){
 			if(!multipart_form_map_.empty()){
@@ -551,7 +558,7 @@ namespace cinatra {
 				return;
 
 			assert(!files_.empty());
-
+            assert(files_.back().is_open());
 			files_.back().write(data, size);
 		}
 
@@ -587,6 +594,14 @@ namespace cinatra {
 		std::weak_ptr<session> get_session() const
 		{
 			return get_session(CSESSIONID);
+		}
+
+		void set_continue(bool value) const {
+			receive_continue_flag = value;
+		}
+
+		bool need_continue(){
+			return  receive_continue_flag;
 		}
 
 	private:
@@ -659,5 +674,6 @@ namespace cinatra {
 		std::vector<upload_file> files_;
 		mutable std::map<std::string,std::string> utf8_character_params;
 		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
+		mutable bool receive_continue_flag = true;
 	};
 }

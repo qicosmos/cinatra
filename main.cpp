@@ -1,5 +1,6 @@
 #include <iostream>
 #include "http_server.hpp"
+#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
@@ -97,11 +98,74 @@ int main() {
 		 <div>{{header_text}}</div>
 */
 	});
-
-//	server.set_http_handler<GET,POST>("/test_remove",[](const request& req, response& res){
-//		fs::remove(fs::path("./abc.txt"));
+//client 测试代码 begin
+//	server.set_http_handler<GET,POST>("/test_multipart",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        multipart_form form;
+//        form.append("text","caaaaaddd");
+//        form.append("file1",multipart_file("./test.png"));
+//        auto client_res = client.request<POST>("/upload_small_file",form);
+//		res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//	});
+//
+//    server.set_http_handler<GET,POST>("/test_client",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        client.add_header("name","007");
+//        auto client_res = client.request<POST>("/test?id=1");
+//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//    });
+//
+//    server.set_http_handler<GET,POST>("/clientpost_json",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        inja::json json;
+//        json["success"] = true;
+//        json["message"] = "just json test";
+//        auto client_res = client.request<POST>("/parsejson",json.dump());
+//        res.set_status_and_content(status_type::ok, client_res.get_content(),res_content_type::string);
+//    });
+//
+//    server.set_http_handler<GET,POST>("/test_client_header",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        auto client_res = client.request<POST>("/aspect");
+//        auto header_pair_vec = client_res.get_header("aaaa");
+//        std::cout<<header_pair_vec[0].second<<std::endl;
+//        res.set_status_and_content(status_type::ok, std::string(header_pair_vec[0].second),res_content_type::string);
+//    });
+//
+//    server.set_http_handler<GET,POST>("/test_multipart_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        multipart_form form;
+//        form.append("text","caaaaaddd");
+//        form.append("file1",multipart_file("./test.png"));
+//         client.request<POST>("/upload_small_file",form,[](const http_client::client_response& response,const http_client::error_code& error){
+//             std::cout<<response.get_content()<<std::endl;
+//         });
+//        client.run();
 //		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //	});
+//
+//    server.set_http_handler<GET,POST>("/test_client_json_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        inja::json json;
+//        json["success"] = true;
+//        json["message"] = "just json test";
+//        client.request<POST>("/parsejson",json.dump(),[](const http_client::client_response& response,const http_client::error_code& error){
+//            std::cout<<response.get_content()<<std::endl;
+//        });
+//        client.run();
+//        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//    });
+//
+//    server.set_http_handler<GET,POST>("/test_client_asyn",[](const request& req, response& res){
+//        http_client client("localhost:8060");
+//        client.add_header("name","007");
+//        client.request<POST>("/test?id=1",[](const http_client::client_response& response,const http_client::error_code& error){
+//             std::cout<<response.get_content()<<std::endl;
+//        });
+//        client.run();
+//        res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
+//    });
+//client 测试代码 end
 
 
 	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
@@ -112,6 +176,14 @@ int main() {
 		json["name"] = "中文";
 		res.render_json(json);
 	}, enable_cache{ false });
+
+	server.set_http_handler<GET, POST>("/parsejson", [](const request& req, response& res) {
+		auto json_str = req.body();
+		auto json = inja::json::parse(json_str);
+		json["add_str"] = "parse_OK";
+		res.render_json(json);
+	}, enable_cache{ false });
+
 
 	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");
@@ -140,6 +212,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
 		auto zh = req.get_query_value("zh");
+        std::cout<<zh<<std::endl;
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
 
@@ -210,74 +283,56 @@ int main() {
 	//http upload(multipart) for small file
 	server.set_http_handler<GET, POST>("/upload_small_file", [&n](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::multipart);
-		auto text = req.get_query_value("text");
-		std::cout<<text<<std::endl;
-		auto& files = req.get_upload_files();
-		for (auto& file : files) {
-			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
-		}
-		res.set_status_and_content(status_type::ok, files[0].get_file_path());
-	});
+        auto state = req.get_state();
+        switch(state){
+            case cinatra::data_proc_state::data_begin:
+            {
 
-	//http upload(multipart) for big file
-	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
-		assert(req.get_content_type() == content_type::multipart);
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
-			auto file_name_s = req.get_multipart_file_name();
-			auto extension = get_extension(file_name_s);
-			if (file_name_s.empty()) {
-				res.set_continue(false);
-				return;
-			}
-			else {
-				res.set_continue(true);
-			}
+            }
+                break;
+            case cinatra::data_proc_state::file_begin:
+            {
+                  //req.set_continue(false);  //不接受文件
+            }
+                break;
+            case cinatra::data_proc_state::data_continue:
+            {
 
-			std::string file_name = std::to_string(n++) + std::string(extension.data(), extension.length());
-			auto file = std::make_shared<std::ofstream>(file_name, std::ios::binary);
-			if (!file->is_open()) {
-				res.set_continue(false);
-				return;
-			}
-			else {
-				res.set_continue(true);
-			}
-			req.get_conn()->set_tag(file);
-		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
-			if (!res.need_continue()) {
-				return;
-			}
+            }
+                break;
+            case cinatra::data_proc_state::file_continue:
+            {
 
-			auto file = std::any_cast<std::shared_ptr<std::ofstream>>(req.get_conn()->get_tag());
-			auto part_data = req.get_part_data();
-			file->write(part_data.data(), part_data.length());
-		}
-		break;
-		case cinatra::data_proc_state::data_end:
-		{
-			std::cout << "one file finished" << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_all_end:
-		{
-			//all the upstream end
-			std::cout << "all files finished" << std::endl;
-			res.set_status_and_content(status_type::ok);
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			//network error
-		}
-		break;
-		}
+            }
+                break;
+            case cinatra::data_proc_state::data_end:
+            {
+
+            }
+                break;
+            case cinatra::data_proc_state::file_end:
+            {
+
+            }
+                break;
+            case cinatra::data_proc_state::data_all_end:
+            {
+                auto text = req.get_query_value("text");
+                std::cout<<text<<std::endl;
+                auto& files = req.get_upload_files();
+                for (auto& file : files) {
+                    std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
+                }
+                auto file_path = files.empty()==false?files[0].get_file_path():"";
+                res.set_status_and_content(status_type::ok, std::move(file_path));
+            }
+                break;
+            case cinatra::data_proc_state::data_error:
+            {
+                //network error
+            }
+            break;
+        }
 	});
 
 	//http upload(octet-stream)
