@@ -1,6 +1,5 @@
 #include <iostream>
 #include "http_server.hpp"
-#include "http_client.hpp"
 using namespace cinatra;
 
 struct log_t
