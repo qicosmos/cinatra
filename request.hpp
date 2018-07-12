@@ -182,6 +182,7 @@ namespace cinatra {
             utf8_character_pathinfo_params.clear();
             queries_.clear();
             multipart_form_map_.clear();
+			multipart_headers_.clear();
 		}
 
 		void fit_size() {
@@ -242,6 +243,7 @@ namespace cinatra {
 
 		void reduce_left_body_size(size_t size) {
 			left_body_len_ -= size;
+//			std::cout<<"left======="<<left_body_len_<<std::endl;
 		}
 
 		size_t left_body_size() {
@@ -317,14 +319,19 @@ namespace cinatra {
             multipart_form_map_.insert(std::make_pair(key,value));
         }
 
-//        std::string& get_multipart_value_by_key(const std::string& key)
-//        {
-//			if(!key.empty())
-//			{
-//				return multipart_form_map_[key];
-//			}
-//			return {};
-//        }
+
+        std::string get_multipart_value_by_key(const std::string& key)
+        {
+			if(!key.empty())
+			{
+				auto iter = multipart_form_map_.find(key);
+				if(iter!=multipart_form_map_.end()){
+					return iter->second;
+				}
+				return {};
+			}
+			return {};
+        }
 
 		void handle_multipart_key_value(){
 			if(!multipart_form_map_.empty()){

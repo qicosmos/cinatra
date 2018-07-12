@@ -549,11 +549,6 @@ namespace cinatra {
                     req_.set_continue(true);
 					auto filename = req_.get_multipart_file_name();
 					auto is_file_type = req_.is_multipart_file();
-//					if (filename.empty()&&is_file_type) {
-//						req_.set_state(data_proc_state::data_error);
-//						res_.set_status_and_content(status_type::bad_request, "mutipart error");
-//						return;
-//					}
                     if(is_file_type)
                     {
                         if(!filename.empty()){
@@ -572,7 +567,9 @@ namespace cinatra {
                     }
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					auto is_file_type = req_.is_multipart_file();
+					req_.set_part_data({ buf, size });
+					auto part_data = req_.get_part_data();
+				    auto is_file_type = req_.is_multipart_file();
                     auto filename = req_.get_multipart_file_name();
 					if (req_.get_state() == data_proc_state::data_error) {
 						return;
@@ -585,7 +582,7 @@ namespace cinatra {
                             if(!req_.need_continue()){
                                 return;
                             }
-                            req_.write_upload_data(buf, size);
+                            req_.write_upload_data(part_data.data(), part_data.size());
                         }
 					}else{
                         req_.set_state(data_proc_state::data_continue);
@@ -594,7 +591,10 @@ namespace cinatra {
                             return;
                         }
 						auto key = req_.get_multipart_key_name();
-                        req_.save_multipart_key_value(std::string(key.data(),key.size()),std::string(buf,buf+size));
+                        auto key_str = std::string(key.data(),key.size());
+                        auto form_text = req_.get_multipart_value_by_key(key_str);
+						form_text+=std::string(part_data.data(),part_data.size());
+                        req_.save_multipart_key_value(key_str,form_text);
 					}
 				};
 				multipart_parser_.on_part_end = [this] {
@@ -642,7 +642,6 @@ namespace cinatra {
 				req_.set_state(data_proc_state::data_error);
 				return true;
 			}
-
 			req_.reduce_left_body_size(length);
 			return false;
 		}
@@ -707,9 +706,7 @@ namespace cinatra {
 					call_back();
 					return;
 				}
-
 				bool has_error = parse_multipart(0, length);
-
 				if (has_error) {
 					response_back(status_type::bad_request, "mutipart error");
 					return;
@@ -719,7 +716,8 @@ namespace cinatra {
 					do_read_part_data();
 				}
 				else {
-					response_back(status_type::ok, "multipart finished");
+				    do_write();
+					//response_back(status_type::ok, "multipart finished");
 				}
 			});
 		}
