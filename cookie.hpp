@@ -67,11 +67,11 @@ namespace cinatra {
 			{
 				// Netscape cookie
 				result.append(value_);
-				if (!domain_.empty())
-				{
-					result.append("; domain=");
-					result.append(domain_);
-				}
+// 				if (!domain_.empty())
+// 				{
+// 					result.append("; domain=");
+// 					result.append(domain_);
+// 				}
 				if (!path_.empty())
 				{
 					result.append("; path=");
