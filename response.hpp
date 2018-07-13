@@ -185,7 +185,7 @@ namespace cinatra {
 			return buffers;
 		}
 
-        std::shared_ptr<cinatra::session> start_session(std::string_view domain, const std::string& name, std::time_t expire,const std::string &path = "/")
+        std::shared_ptr<cinatra::session> start_session(const std::string& name, std::time_t expire = -1,std::string_view domain = "", const std::string &path = "/")
 		{
 			session_ = session_manager::create_session(domain, name, expire, path);
 			return session_;
