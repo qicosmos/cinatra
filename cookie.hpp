@@ -108,12 +108,12 @@ namespace cinatra {
 					result.append(comment_);
 					result.append("\"");
 				}
-				if (!domain_.empty())
-				{
-					result.append("; Domain=\"");
-					result.append(domain_);
-					result.append("\"");
-				}
+				// if (!domain_.empty())
+				// {
+				// 	result.append("; Domain=\"");
+				// 	result.append(domain_);
+				// 	result.append("\"");
+				// }
 				if (!path_.empty())
 				{
 					result.append("; Path=\"");
