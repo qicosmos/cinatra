@@ -70,6 +70,7 @@ namespace cinatra {
 				set_body_len(atoi(header_value.data()));
 			}
 
+
             //parse url and queries
 			raw_url_ = {url_, url_len_};
 			size_t npos = raw_url_.find('/');
@@ -183,6 +184,7 @@ namespace cinatra {
             queries_.clear();
             multipart_form_map_.clear();
 			multipart_headers_.clear();
+			form_url_map_.clear();
 		}
 
 		void fit_size() {
@@ -243,7 +245,6 @@ namespace cinatra {
 
 		void reduce_left_body_size(size_t size) {
 			left_body_len_ -= size;
-//			std::cout<<"left======="<<left_body_len_<<std::endl;
 		}
 
 		size_t left_body_size() {
@@ -315,8 +316,13 @@ namespace cinatra {
 
         void save_multipart_key_value(const std::string& key,const std::string& value)
         {
-			if(!key.empty())
-            multipart_form_map_.insert(std::make_pair(key,value));
+			if(!key.empty()){
+				if(multipart_form_map_.find(key)!=multipart_form_map_.end()){
+					multipart_form_map_[key] = value;
+				}else{
+					multipart_form_map_.insert(std::make_pair(key,value));
+				}
+			}
         }
 
 
@@ -336,7 +342,14 @@ namespace cinatra {
 		void handle_multipart_key_value(){
 			if(!multipart_form_map_.empty()){
                 for(auto iter = multipart_form_map_.begin();iter!=multipart_form_map_.end();++iter){
-					form_url_map_.insert(std::make_pair(std::string_view(iter->first.data(),iter->first.size()),std::string_view(iter->second.data(),iter->second.size())));
+                	auto key = std::string_view(iter->first.data(),iter->first.size());
+                	auto value = std::string_view(iter->second.data(),iter->second.size());
+                	if(form_url_map_.find(key)!=form_url_map_.end())
+					{
+						form_url_map_[key] = value;
+					}else{
+						form_url_map_.insert(std::make_pair(key,value));
+                	}
 				}
 			}
 		}
@@ -354,6 +367,7 @@ namespace cinatra {
         }
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
+			multipart_headers_.clear();
 			multipart_headers_ = headers;
 		}
 

@@ -34,7 +34,7 @@ namespace cinatra {
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
 			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
 		{
-			init_multipart_parser(true);
+			init_multipart_parser();
 		}
 
 		tcp_socket& socket()
@@ -255,11 +255,11 @@ namespace cinatra {
 						break;
 					case cinatra::content_type::multipart:
 						if (req_.total_len() <= 3 * 1024 * 1024) {
-							init_multipart_parser(false);
+							init_multipart_parser();
 							handle_string_body(bytes_transferred);
 						}
 						else {
-							init_multipart_parser(true);
+							init_multipart_parser();
 							handle_multipart();
 						}
 						break;
@@ -522,42 +522,21 @@ namespace cinatra {
 			req_.set_part_data({});
 		}
 		//-------------multipart----------------------//
-		void init_multipart_parser(bool is_big) {
-//			if (is_big) {
-//				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-//					req_.set_multipart_headers(begin);
-//					req_.set_state(data_proc_state::data_begin);
-//					call_back();
-//				};
-//				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-//					req_.set_part_data({ buf, size });
-//					req_.set_state(data_proc_state::data_continue);
-//					call_back();
-//				};
-//				multipart_parser_.on_part_end = [this] {
-//					req_.set_state(data_proc_state::data_end);
-//					call_back();
-//				};
-//				multipart_parser_.on_end = [this] {
-//					req_.set_state(data_proc_state::data_all_end);
-//					call_back();
-//				};
-//			}
-//			else {
+		void init_multipart_parser() {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
                     req_.set_continue(true);
-					auto filename = req_.get_multipart_file_name();
-					auto is_file_type = req_.is_multipart_file();
-                    if(is_file_type)
+					is_multipart_form_file = req_.is_multipart_file();
+                    if(is_multipart_form_file)
                     {
-                        if(!filename.empty()){
+						multipart_form_file_name = req_.get_multipart_file_name();
+                        if(!multipart_form_file_name.empty()){
                             req_.set_state(data_proc_state::file_begin);
                             call_back();
                             if(!req_.need_continue()){
                                 return;
                             }
-                            auto ext = get_extension(filename);
+                            auto ext = get_extension({multipart_form_file_name.data(),multipart_form_file_name.size()});
                             std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
                             req_.open_upload_file(name);
                         }
@@ -569,14 +548,13 @@ namespace cinatra {
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
 					req_.set_part_data({ buf, size });
 					auto part_data = req_.get_part_data();
-				    auto is_file_type = req_.is_multipart_file();
-                    auto filename = req_.get_multipart_file_name();
 					if (req_.get_state() == data_proc_state::data_error) {
 						return;
 					}
-					if(is_file_type)
+					if(is_multipart_form_file)
 					{
-                        if(!filename.empty()){
+//						std::cout<<"filename.empty()==="<<multipart_form_file_name.empty()<<std::endl;
+                        if(!multipart_form_file_name.empty()){
                             req_.set_state(data_proc_state::file_continue);
                             call_back();
                             if(!req_.need_continue()){
@@ -590,19 +568,19 @@ namespace cinatra {
                         if(!req_.need_continue()){
                             return;
                         }
+						std::string save_text = std::string(part_data.data(),part_data.size());
 						auto key = req_.get_multipart_key_name();
                         auto key_str = std::string(key.data(),key.size());
-                        auto form_text = req_.get_multipart_value_by_key(key_str);
-						form_text+=std::string(part_data.data(),part_data.size());
-                        req_.save_multipart_key_value(key_str,form_text);
+                        auto before = req_.get_multipart_value_by_key(key_str);
+						before+=save_text;
+                        req_.save_multipart_key_value(key_str,before);
 					}
 				};
 				multipart_parser_.on_part_end = [this] {
-					auto is_file_type = req_.is_multipart_file();
 					if (req_.get_state() == data_proc_state::data_error){
                          return;
                     }
-					if(is_file_type)
+					if(is_multipart_form_file)
 					{
                         req_.set_state(data_proc_state::file_end);
                         call_back();
@@ -620,7 +598,6 @@ namespace cinatra {
                     req_.set_state(data_proc_state::data_all_end);
 					call_back(); 
 				};
-//			}
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
@@ -706,6 +683,7 @@ namespace cinatra {
 					call_back();
 					return;
 				}
+
 				bool has_error = parse_multipart(0, length);
 				if (has_error) {
 					response_back(status_type::bad_request, "mutipart error");
@@ -1119,5 +1097,7 @@ namespace cinatra {
 		//callback handler to application layer
 		const http_handler& http_handler_;
 		std::any tag_;
+		bool is_multipart_form_file = false;
+		std::string multipart_form_file_name;
 	};
 }
