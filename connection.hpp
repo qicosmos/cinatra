@@ -10,7 +10,7 @@
 #include "websocket.hpp"
 #include "define.h"
 #include "http_cache.hpp"
-
+#include "uuid.h"
 namespace cinatra {
 	using http_handler = std::function<void(const request&, response&)>;
 	using send_ok_handler = std::function<void()>;
@@ -537,7 +537,8 @@ namespace cinatra {
                                 return;
                             }
                             auto ext = get_extension({multipart_form_file_name.data(),multipart_form_file_name.size()});
-                            std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+                            auto new_file_name = uuids::uuid_system_generator{}().to_short_str();
+                            std::string name = static_dir_ + new_file_name + std::string(ext.data(), ext.length());
                             req_.open_upload_file(name);
                         }
                     }else{
