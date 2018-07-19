@@ -19,7 +19,10 @@ namespace cinatra {
 		data_end,
 		data_all_end,
 		data_close,
-		data_error
+		data_error,
+		file_continue,
+		file_begin,
+		file_end
 	};
 
 	using tcp_socket = boost::asio::ip::tcp::socket;
@@ -66,6 +69,7 @@ namespace cinatra {
 			else {
 				set_body_len(atoi(header_value.data()));
 			}
+
 
             //parse url and queries
 			raw_url_ = {url_, url_len_};
@@ -170,6 +174,7 @@ namespace cinatra {
 
 		void reset() {
 			cur_size_ = 0;
+			receive_continue_flag = true;
 			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
@@ -178,6 +183,8 @@ namespace cinatra {
             utf8_character_pathinfo_params.clear();
             queries_.clear();
             multipart_form_map_.clear();
+			multipart_headers_.clear();
+			form_url_map_.clear();
 		}
 
 		void fit_size() {
@@ -309,20 +316,40 @@ namespace cinatra {
 
         void save_multipart_key_value(const std::string& key,const std::string& value)
         {
-			if(!key.empty())
-            multipart_form_map_.insert(std::make_pair(key,value));
+			if(!key.empty()){
+				if(multipart_form_map_.find(key)!=multipart_form_map_.end()){
+					multipart_form_map_[key] = value;
+				}else{
+					multipart_form_map_.insert(std::make_pair(key,value));
+				}
+			}
         }
 
-        std::string& get_multipart_value_by_key(const std::string& key)
+
+        std::string get_multipart_value_by_key(const std::string& key)
         {
 			if(!key.empty())
-            return multipart_form_map_[key];
+			{
+				auto iter = multipart_form_map_.find(key);
+				if(iter!=multipart_form_map_.end()){
+					return iter->second;
+				}
+				return {};
+			}
+			return {};
         }
 
 		void handle_multipart_key_value(){
 			if(!multipart_form_map_.empty()){
                 for(auto iter = multipart_form_map_.begin();iter!=multipart_form_map_.end();++iter){
-					form_url_map_.insert(std::make_pair(std::string_view(iter->first.data(),iter->first.size()),std::string_view(iter->second.data(),iter->second.size())));
+                	auto key = std::string_view(iter->first.data(),iter->first.size());
+                	auto value = std::string_view(iter->second.data(),iter->second.size());
+                	if(form_url_map_.find(key)!=form_url_map_.end())
+					{
+						form_url_map_[key] = value;
+					}else{
+						form_url_map_.insert(std::make_pair(key,value));
+                	}
 				}
 			}
 		}
@@ -340,6 +367,7 @@ namespace cinatra {
         }
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
+			multipart_headers_.clear();
 			multipart_headers_ = headers;
 		}
 
@@ -551,7 +579,7 @@ namespace cinatra {
 				return;
 
 			assert(!files_.empty());
-
+            assert(files_.back().is_open());
 			files_.back().write(data, size);
 		}
 
@@ -587,6 +615,14 @@ namespace cinatra {
 		std::weak_ptr<session> get_session() const
 		{
 			return get_session(CSESSIONID);
+		}
+
+		void set_continue(bool value) const {
+			receive_continue_flag = value;
+		}
+
+		bool need_continue(){
+			return  receive_continue_flag;
 		}
 
 	private:
@@ -659,5 +695,6 @@ namespace cinatra {
 		std::vector<upload_file> files_;
 		mutable std::map<std::string,std::string> utf8_character_params;
 		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
+		mutable bool receive_continue_flag = true;
 	};
 }

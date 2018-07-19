@@ -1,323 +1,126 @@
 //
-// Created by xmh on 18-3-16.
+// Created by xmh on 18-7-2.
 //
 
-#ifndef CPPWEBSERVER_URL_ENCODE_DECODE_HPP
-#define CPPWEBSERVER_URL_ENCODE_DECODE_HPP
+#ifndef _URL_ENCODE_DECODE_HPP
+#define _URL_ENCODE_DECODE_HPP
+
 #include <string_view>
 #include <string>
-#include <cstring>
-#include <locale>
+#include<locale>
 #include <codecvt>
-//#include <boost/locale.hpp>
-/*
-!*()_-.
-a-zA-Z
-    for(int i=1; i<128; ++i)
-    {
-        if((i >= 'a' && i <= 'z') ||
-            (i >= 'A' && i <= 'Z') ||
-            i == '!' || i == '*' ||
-            i == '(' || i == ')' ||
-            i == '_' || i == '-' ||
-            i == '.')
-            std::cout << "1,";
-        else
-            std::cout << "0,";
-    }
-*/
-namespace  code_utils
-{
-    static const unsigned char c_urlflags[128] =
-            {
-                    0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,
-                    0,0,0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0,0,0,
-                    1,1,1,0,0,1,1,0,1,1, 1,1,1,1,1,1,1,1,0,0,
-                    0,0,0,0,0,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,
-                    1,1,1,1,1,1,1,1,1,1, 1,0,0,0,0,1,0,1,1,1,
-                    1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,
-                    1,1,1,0,0,0,0,0,
-            };
-    static unsigned char c_urlhex[16] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f' };
+#include <string>
 
-    template<class char_type>
-    static inline char_type * encode_hex(char_type * s, wchar_t u)
-    {
-        *s++ = '%';
-        *s++ = c_urlhex[(u >> 4) & 0x0f];
-        *s++ = c_urlhex[u & 0xf];
-        return s;
-    }
+namespace code_utils {
+	inline static std::string url_encode(const std::string &value) noexcept {
+		static auto hex_chars = "0123456789ABCDEF";
 
-    static inline wchar_t decode_hex(const wchar_t* &s)
-    {
-        if (iswxdigit(s[0]) && iswxdigit(s[1]))
-        {
-            wchar_t s1 = towlower(s[0]);
-            wchar_t s2 = towlower(s[1]);
-            if (iswdigit(s1)) s1 -= L'0';
-            else s1 -= 'a' - 10;
-            if (iswdigit(s2)) s2 -= L'0';
-            else s2 -= 'a' - 10;
+		std::string result;
+		result.reserve(value.size()); // Minimum size of result
 
-            s += 2;
-            return (s1 << 4) | s2;
-        }
+		for (auto &chr : value) {
+			if (!((chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'Z') || (chr >= 'a' && chr <= 'z') || chr == '-' || chr == '.' || chr == '_' || chr == '~'))
+				result += std::string("%") + hex_chars[static_cast<unsigned char>(chr) >> 4] + hex_chars[static_cast<unsigned char>(chr) & 15];
+			else
+				result += chr;
+		}
 
-        return 0;
-    }
+		return result;
+	}
 
-    static inline wchar_t decode_hex(const unsigned char* &s)
-    {
-        if (isxdigit(s[0]) && isxdigit(s[1]))
-        {
-            wchar_t s1 = (wchar_t)tolower(s[0]);
-            wchar_t s2 = (wchar_t)tolower(s[1]);
-            if (isdigit(s1)) s1 -= L'0';
-            else s1 -= 'a' - 10;
-            if (isdigit(s2)) s2 -= L'0';
-            else s2 -= 'a' - 10;
+	inline static std::string url_decode(const std::string &value) noexcept {
+		std::string result;
+		result.reserve(value.size() / 3 + (value.size() % 3)); // Minimum size of result
 
-            s += 2;
-            return (s1 << 4) | s2;
-        }
+		for (std::size_t i = 0; i < value.size(); ++i) {
+			auto &chr = value[i];
+			if (chr == '%' && i + 2 < value.size()) {
+				auto hex = value.substr(i + 1, 2);
+				auto decoded_chr = static_cast<char>(std::strtol(hex.c_str(), nullptr, 16));
+				result += decoded_chr;
+				i += 2;
+			}
+			else if (chr == '+')
+				result += ' ';
+			else
+				result += chr;
+		}
 
-        return 0;
-    }
-    static inline wchar_t decode_hex(const char* &s)
-    {
-        return decode_hex(reinterpret_cast<const unsigned char *&>(s));
-    }
+		return result;
+	}
 
-    static inline size_t xcslen_(const unsigned char* s)
-    {
-        return strlen((char *)s);
-    }
-    static inline size_t xcslen_(const char* s)
-    {
-        return strlen((char *)s);
-    }
-    static inline size_t xcslen_(const wchar_t* s)
-    {
-        return wcslen(s);
-    }
+	inline static std::string get_string_by_urldecode(const std::string_view& content)
+	{
+		return url_decode(std::string(content.data(), content.size()));
+	}
 
-    template<class char_type>
-    static inline size_t http_url_decode(const char_type * pszUrl, intptr_t nLength, wchar_t * sUrl)
-    {
-        if (!pszUrl || !*pszUrl)
-        {
-            if (sUrl) *sUrl = 0;
-            return 0;
-        }
-        else
-        {
-            if (nLength < 0) nLength = xcslen_(pszUrl);
+	inline static  bool is_url_encode(std::string_view str) {
+		return str.find("%") != std::string_view::npos || str.find("+") != std::string_view::npos;
+	}
 
-            if (sUrl)
-            {
-                const char_type * const pszEnd = pszUrl + nLength;
-                wchar_t * pszTarget = sUrl;
 
-                for (const char_type * s = pszUrl; *s && s < pszEnd;)
-                {
-                    wchar_t u = *s;
-                    if (u == L'%')
-                    {
-                        ++s;
-                        wchar_t s0 = 0, s1 = 0, s2 = 0;
-                        s0 = decode_hex(s);
-                        if (((s0 & 0xC0) == 0xC0) && (*s == L'%'))
-                        {
-                            ++s;
-                            s1 = decode_hex(s);
-                            if ((s0 & 0x20) && (s1 & 0x80) && *s == L'%')
-                            {
-                                ++s;
-                                s2 = decode_hex(s);
-                                s0 = ((s0 & 0x0F) << 12) | ((s1 & 0x3F) << 6) | (s2 & 0x3F);
-                            }
-                            else
-                            {
-                                s0 = ((s0 & 0x1F) << 6) | (s1 & 0x3F);
-                            }
-                        }
+	template<class Facet>
+	struct deletable_facet : Facet
+	{
+		template<class ...Args>
+		deletable_facet(Args&& ...args)
+			: Facet(std::forward<Args>(args)...) {}
+		~deletable_facet() {}
+	};
 
-                        if (s0)
-                        {
-                            *pszTarget++ = s0;
-                        }
-                        else
-                        {
-                            *pszTarget = L'%';
-                            *pszTarget++ = *s;
-                        }
-                    }
-                    else if (u == L'\\')
-                    {
-                        ++s;
-                        u = *s;
-                        if (u && (u == L'U' || u == L'u'))
-                        {
-                            ++s;
-                            wchar_t s0 = decode_hex(s);
-                            wchar_t s1 = decode_hex(s);
-                            if (s0 && s1)
-                            {
-                                *pszTarget++ = s0 | (s1 << 8);
-                            }
-                            else if (s0)
-                            {
-                                *pszTarget = s0;
-                            }
-                            else
-                            {
-                                *pszTarget++ = L'\\';
-                                *pszTarget++ = u;
-                            }
-                        }
-                        else
-                        {
-                            *pszTarget++ = L'\\';
-                            *pszTarget++ = *s++;
-                        }
-                    }
-                    else if (u == L'+')
-                    {
-                        *pszTarget++ = L' ';
-                        s++;
-                    }
-                    else
-                    {
-                        *pszTarget++ = *s++;
-                    }
-                }
+	inline static std::wstring gbk_to_utf16(const std::string &gbk)
+	{
+#ifdef _MSC_VER
+		const char* GBK_LOCALE_NAME = ".936";
+#else
+		const char* GBK_LOCALE_NAME = "zh_CN.GBK";
+#endif
 
-                return pszTarget - sUrl;
-            }
-            else
-            {
-                return nLength;
-            }
-        }
-    }
+		typedef deletable_facet<std::codecvt_byname<wchar_t, char, std::mbstate_t>> gbfacet_t;
 
-    template<class char_type>
-    static inline size_t http_url_encode(const wchar_t * pszUrl, char_type * sUrl)
-    {
-        if (!pszUrl || !*pszUrl)
-        {
-            if (sUrl) *sUrl = 0;
-            return 0;
-        }
-        else
-        {
-            if (sUrl)
-            {
-                char_type * pszTarget = sUrl;
+		std::wstring_convert<gbfacet_t> conv(new gbfacet_t(GBK_LOCALE_NAME));
+		std::wstring utf16 = conv.from_bytes(gbk);
+		return std::move(utf16);
+	}
 
-                for (const wchar_t * s = pszUrl; *s; ++s)
-                {
-                    wchar_t u = *s;
-                    if (u > 0x07FF)
-                    {
-                        pszTarget = encode_hex(pszTarget, ((u & 0xF000) >> 12) | 0xE0);
-                        pszTarget = encode_hex(pszTarget, ((u & 0x0FC0) >> 6) | 0x80);
-                        pszTarget = encode_hex(pszTarget, (u & 0x003F) | 0x80);
-                    }
-                    else if (u > 0x007F)
-                    {
-                        pszTarget = encode_hex(pszTarget, ((u & 0x07C0) >> 6) | 0xC0);
-                        pszTarget = encode_hex(pszTarget, (u & 0x003F) | 0x80);
-                    }
-                    else if (c_urlflags[u])
-                    {
-                        *pszTarget++ = (char_type)u;
-                    }
-                    else
-                    {
-                        pszTarget = encode_hex(pszTarget, u);
-                    }
-                }
+	inline static std::string utf16_to_gbk(const std::wstring &utf16)
+	{
+#ifdef _MSC_VER
+		const char* GBK_LOCALE_NAME = ".936";
+#else
+		const char* GBK_LOCALE_NAME = "zh_CN.GBK";
+#endif
 
-                return pszTarget - sUrl;
-            }
-            else
-            {
-                size_t nLength = 0;
-                for (const wchar_t * s = pszUrl; *s; ++s)
-                {
-                    wchar_t u = *s;
-                    if (u > 0x07FF) nLength += 9;
-                    else if (u > 0x007F) nLength += 6;
-                    else if (c_urlflags[u]) nLength += 1;
-                    else nLength += 3;
-                }
+		typedef deletable_facet<std::codecvt_byname<wchar_t, char, std::mbstate_t>> gbfacet_t;
+		std::wstring_convert<gbfacet_t> conv(new gbfacet_t(GBK_LOCALE_NAME));
 
-                return nLength;
-            }
-        }
-    }
+		std::string gbk = conv.to_bytes(utf16);
+		return std::move(gbk);
+	}
 
-    inline std::wstring url_decode(std::string_view text)
-    {
-        std::wstring str;
+	inline static std::wstring utf8_to_utf16(const std::string &utf8)
+	{
+		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+		std::wstring utf16 = conv.from_bytes(utf8);
+		return std::move(utf16);
+	}
 
-        if (!text.empty())
-        {
-            size_t length = http_url_decode(text.data(), text.size(), nullptr);
-            str.resize(length);
-            http_url_decode(text.data(), text.size(), str.data());
-        }
+	inline std::string utf16_to_utf8(const std::wstring &utf16)
+	{
+		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+		std::string utf8 = conv.to_bytes(utf16);
+		return std::move(utf8);
+	}
 
-        return str;
-    }
 
-    template<class string_type>
-    inline string_type url_encode(std::wstring_view text)
-    {
-        string_type str;
+	inline static std::string utf8_to_gbk(const std::string &utf8)
+	{
+		return utf16_to_gbk(utf8_to_utf16(utf8));
+	}
 
-        if (!text.empty())
-        {
-            size_t length = http_url_encode<decltype(str[0])>(text.data(), text.size(), nullptr);
-            str.resize(length);
-            http_url_encode(text.data(), text.size(), str.data());
-        }
-
-        return str;
-    }
-
-    inline std::string u8wstring_to_string(const std::wstring& wstr)
-    {
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-        return conv.to_bytes(wstr);
-    }
-
-    inline std::wstring u8string_to_wstring(const std::string& str)
-    {
-        std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
-        return conv.from_bytes(str);
-    }
-
-    inline std::string get_string_by_urldecode(const std::string_view& content)
-    {
-        return u8wstring_to_string(url_decode(content));
-    }
-
-    inline bool is_url_encode(std::string_view str) {
-        return str.find("%") != std::string_view::npos || str.find("+") != std::string_view::npos;
-    }
-
-//    inline std::string WStringToString(std::wstring wstr,std::string_view code="utf-8")
-//    {
-//        std::locale::global(std::locale(""));
-//        return boost::locale::conv::from_utf(wstr, std::string(code.data(),code.size()));
-//    }
-//
-//    inline std::string getStringByUrlDecode(std::string_view content,std::string_view code="utf-8")
-//    {
-//        return WStringToString(url_decode(content),code);
-//    }
+	inline static std::string gbk_to_utf8(const std::string &gbk)
+	{
+		return utf16_to_utf8(gbk_to_utf16(gbk));
+	}
 }
-#endif //CPPWEBSERVER_URL_ENCODE_DECODE_HPP
+#endif //_URL_ENCODE_DECODE_HPP
