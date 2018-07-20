@@ -26,6 +26,10 @@ namespace cinatra {
 			return r;
 		}
 
+        bool is_open(){
+            return file_.is_open();
+        }
+
         bool remove() const
         {
 			file_.close();
@@ -72,7 +76,9 @@ namespace cinatra {
 
 
 		void close() {
-			file_.close();
+            if(file_.is_open()){
+                file_.close();
+            }
 		}
 
 		size_t get_file_size() const{
