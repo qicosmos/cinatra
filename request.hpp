@@ -371,9 +371,11 @@ namespace cinatra {
 				return {};
 			}
 
-			val = { &str[pos], length - pos };
-			val = trim(val);
-			query.emplace(key, val);
+			if ((length - pos) > 0) {
+				val = { &str[pos], length - pos };
+				val = trim(val);
+				query.emplace(key, val);
+			}
 			return query;
 		}
 
