@@ -573,7 +573,7 @@ namespace cinatra {
 						req_.write_upload_data(buf, size);
 					}else{
 						auto key = req_.get_multipart_key_name();
-						auto& value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
+						auto value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
 						value+=std::string(buf,buf+size);
 					}
 				};

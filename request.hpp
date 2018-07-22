@@ -178,6 +178,7 @@ namespace cinatra {
             utf8_character_pathinfo_params.clear();
             queries_.clear();
             multipart_form_map_.clear();
+			copy_multipart_headers_.clear();
 		}
 
 		void fit_size() {
@@ -261,15 +262,25 @@ namespace cinatra {
 			return {};
 		}
 
-		const std::multimap<std::string_view, std::string_view>& get_multipart_headers() const {
-			return multipart_headers_;
-		}
+		//const std::multimap<std::string_view, std::string_view>& get_multipart_headers() const {
+		//	return multipart_headers_;
+		//}
 
 		std::string_view get_multipart_file_name() const {
-			if (multipart_headers_.empty())
+			if (multipart_headers_.empty()&&copy_multipart_headers_.empty())
 				return {};
 
-			auto it = multipart_headers_.begin();
+			if (!multipart_headers_.empty()) {
+				return get_multipart_file_name(multipart_headers_);
+			}
+			else {
+				return get_multipart_file_name(copy_multipart_headers_);
+			}
+		}
+
+		template<typename T>
+		std::string_view get_multipart_file_name(T& map) const {
+			auto it = map.begin();
 			auto val = it->second;
 			auto pos = val.find("filename");
 			if (pos == std::string_view::npos) {
@@ -313,10 +324,13 @@ namespace cinatra {
             multipart_form_map_.insert(std::make_pair(key,value));
         }
 
-        std::string& get_multipart_value_by_key(const std::string& key)
+        std::string get_multipart_value_by_key(const std::string& key)
         {
-			if(!key.empty())
-            return multipart_form_map_[key];
+			if (!key.empty()) {
+				return multipart_form_map_[key];
+			}
+
+			return {};
         }
 
 		void handle_multipart_key_value(){
@@ -329,14 +343,13 @@ namespace cinatra {
 
         bool is_multipart_file() const {
             if (multipart_headers_.empty()){
+				if (!copy_multipart_headers_.empty()) {
+					return copy_multipart_headers_.find("Content-Type") != copy_multipart_headers_.end();
+				}
                 return false;
             }
-            auto it = multipart_headers_.find("Content-Type");
-            if(it!=multipart_headers_.end())
-            {
-                return true;
-            }
-            return false;
+
+			return multipart_headers_.find("Content-Type") != multipart_headers_.end();
         }
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
@@ -610,6 +623,10 @@ namespace cinatra {
 			url_str_ = std::string(url_, url_len_);
 			method_len_ = 0;
 			url_len_ = 0;
+			for (auto pair : multipart_headers_) {
+				copy_multipart_headers_.emplace(std::string(pair.first), std::string(pair.second));
+			}
+			multipart_headers_.clear();
 		}
 
 		void check_gzip() {
@@ -641,6 +658,7 @@ namespace cinatra {
 		std::string_view raw_url_;
 		std::string method_str_;
 		std::string url_str_;
+		std::multimap<std::string, std::string> copy_multipart_headers_;
 
 		size_t cur_size_ = 0;
 		size_t left_body_len_ = 0;
