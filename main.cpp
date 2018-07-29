@@ -227,7 +227,7 @@ int main() {
 		{
 		case cinatra::data_proc_state::data_begin:
 		{
-			auto file_name_s = req.get_multipart_file_name();
+			auto file_name_s = req.get_multipart_field_name("filename");
 			auto extension = get_extension(file_name_s);
 			if (file_name_s.empty()) {
 				res.set_continue(false);

@@ -546,7 +546,7 @@ namespace cinatra {
 			else {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
-					auto filename = req_.get_multipart_file_name();
+					auto filename = req_.get_multipart_field_name("filename");
 					auto is_file_type = req_.is_multipart_file();
 					if (filename.empty()&&is_file_type) {
 						req_.set_state(data_proc_state::data_error);
@@ -559,7 +559,7 @@ namespace cinatra {
 						std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
 						req_.open_upload_file(name);
 					}else{
-						auto key = req_.get_multipart_key_name();
+						auto key = req_.get_multipart_field_name("name");
 						req_.save_multipart_key_value(std::string(key.data(),key.size()),"");
 					}
 				};
@@ -572,7 +572,7 @@ namespace cinatra {
 					{
 						req_.write_upload_data(buf, size);
 					}else{
-						auto key = req_.get_multipart_key_name();
+						auto key = req_.get_multipart_field_name("name");
 						auto value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
 						value+=std::string(buf,buf+size);
 					}
