@@ -34,7 +34,7 @@ namespace cinatra {
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
 			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
 		{
-			init_multipart_parser(true);
+			init_multipart_parser();
 		}
 
 		tcp_socket& socket()
@@ -254,14 +254,7 @@ namespace cinatra {
 						handle_string_body(bytes_transferred);
 						break;
 					case cinatra::content_type::multipart:
-						if (req_.total_len() <= 3 * 1024 * 1024) {
-							init_multipart_parser(false);
-							handle_string_body(bytes_transferred);
-						}
-						else {
-							init_multipart_parser(true);
-							handle_multipart();
-						}
+						handle_multipart();
 						break;
 					case cinatra::content_type::octet_stream:
 						handle_octet_stream(bytes_transferred);
@@ -522,38 +515,17 @@ namespace cinatra {
 			req_.set_part_data({});
 		}
 		//-------------multipart----------------------//
-		void init_multipart_parser(bool is_big) {
-			if (is_big) {
-				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-					req_.set_multipart_headers(begin);
-					req_.set_state(data_proc_state::data_begin);
-					call_back();
-				};
-				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					req_.set_part_data({ buf, size });
-					req_.set_state(data_proc_state::data_continue);
-					call_back();
-				};
-				multipart_parser_.on_part_end = [this] {
-					req_.set_state(data_proc_state::data_end);
-					call_back();
-				};
-				multipart_parser_.on_end = [this] {
-					req_.set_state(data_proc_state::data_all_end);
-					call_back();
-				};
-			}
-			else {
+		void init_multipart_parser() {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
 					auto filename = req_.get_multipart_field_name("filename");
-					auto is_file_type = req_.is_multipart_file();
-					if (filename.empty()&&is_file_type) {
+					is_multi_part_file_ = req_.is_multipart_file();
+					if (filename.empty()&& is_multi_part_file_) {
 						req_.set_state(data_proc_state::data_error);
 						res_.set_status_and_content(status_type::bad_request, "mutipart error");
 						return;
 					}						
-					if(is_file_type)
+					if(is_multi_part_file_)
 					{
 						auto ext = get_extension(filename);
 						std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
@@ -564,24 +536,20 @@ namespace cinatra {
 					}
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					auto is_file_type = req_.is_multipart_file();
 					if (req_.get_state() == data_proc_state::data_error) {
 						return;
 					}
-					if(is_file_type)
-					{
+					if(is_multi_part_file_){
 						req_.write_upload_data(buf, size);
 					}else{
 						auto key = req_.get_multipart_field_name("name");
-						auto value = req_.get_multipart_value_by_key(std::string(key.data(),key.size()));
-						value+=std::string(buf,buf+size);
+						req_.update_multipart_value(key, buf, size);
 					}
 				};
 				multipart_parser_.on_part_end = [this] {
-					auto is_file_type = req_.is_multipart_file();
 					if (req_.get_state() == data_proc_state::data_error)
 						return;
-					if(is_file_type)
+					if(is_multi_part_file_)
 					{
 						req_.close_upload_file();
 					}
@@ -591,8 +559,7 @@ namespace cinatra {
 						return;
                     req_.handle_multipart_key_value();
 					call_back(); 
-				};
-			}			
+				};		
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
@@ -691,7 +658,8 @@ namespace cinatra {
 					do_read_part_data();
 				}
 				else {
-					response_back(status_type::ok, "multipart finished");
+					//response_back(status_type::ok, "multipart finished");
+					do_write();
 				}
 			});
 		}
@@ -1090,6 +1058,7 @@ namespace cinatra {
 
 		std::string chunked_header_;
 		multipart_reader multipart_parser_;
+		bool is_multi_part_file_;
 		//callback handler to application layer
 		const http_handler& http_handler_;
 		std::any tag_;

@@ -207,8 +207,8 @@ int main() {
 
 	std::atomic_int n = 0;
 
-	//http upload(multipart) for small file
-	server.set_http_handler<GET, POST>("/upload_small_file", [&n](const request& req, response& res) {
+	//http upload(multipart)
+	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::multipart);
 		auto text = req.get_query_value("text");
 		std::cout<<text<<std::endl;
@@ -216,68 +216,8 @@ int main() {
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-		res.set_status_and_content(status_type::ok, files[0].get_file_path());
-	});
 
-	//http upload(multipart) for big file
-	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
-		assert(req.get_content_type() == content_type::multipart);
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
-			auto file_name_s = req.get_multipart_field_name("filename");
-			auto extension = get_extension(file_name_s);
-			if (file_name_s.empty()) {
-				res.set_continue(false);
-				return;
-			}
-			else {
-				res.set_continue(true);
-			}
-
-			std::string file_name = std::to_string(n++) + std::string(extension.data(), extension.length());
-			auto file = std::make_shared<std::ofstream>(file_name, std::ios::binary);
-			if (!file->is_open()) {
-				res.set_continue(false);
-				return;
-			}
-			else {
-				res.set_continue(true);
-			}
-			req.get_conn()->set_tag(file);
-		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
-			if (!res.need_continue()) {
-				return;
-			}
-
-			auto file = std::any_cast<std::shared_ptr<std::ofstream>>(req.get_conn()->get_tag());
-			auto part_data = req.get_part_data();
-			file->write(part_data.data(), part_data.length());
-		}
-		break;
-		case cinatra::data_proc_state::data_end:
-		{
-			std::cout << "one file finished" << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_all_end:
-		{
-			//all the upstream end
-			std::cout << "all files finished" << std::endl;
-			res.set_status_and_content(status_type::ok);
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			//network error
-		}
-		break;
-		}
+		res.set_status_and_content(status_type::ok, "multipart finished");
 	});
 
 	//http upload(octet-stream)

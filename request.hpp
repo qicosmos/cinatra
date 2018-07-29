@@ -286,10 +286,17 @@ namespace cinatra {
         void save_multipart_key_value(const std::string& key,const std::string& value)
         {
 			if(!key.empty())
-            multipart_form_map_.insert(std::make_pair(key,value));
+            multipart_form_map_.emplace(key,value);
         }
 
-        std::string get_multipart_value_by_key(const std::string& key)
+		void update_multipart_value(const std::string& key, const char* buf, size_t size) {
+			auto it = multipart_form_map_.find(key);
+			if (it != multipart_form_map_.end()) {
+				multipart_form_map_[key] += std::string(buf, size);
+			}
+		}
+
+        std::string get_multipart_value_by_key1(const std::string& key)
         {
 			if (!key.empty()) {
 				return multipart_form_map_[key];
@@ -299,10 +306,13 @@ namespace cinatra {
         }
 
 		void handle_multipart_key_value(){
-			if(!multipart_form_map_.empty()){
-                for(auto iter = multipart_form_map_.begin();iter!=multipart_form_map_.end();++iter){
-					form_url_map_.insert(std::make_pair(std::string_view(iter->first.data(),iter->first.size()),std::string_view(iter->second.data(),iter->second.size())));
-				}
+			if(multipart_form_map_.empty()){
+				return;
+			}
+
+			for (auto pair : multipart_form_map_) {
+				form_url_map_.emplace(std::string_view(pair.first.data(), pair.first.size()), 
+					std::string_view(pair.second.data(), pair.second.size()));
 			}
 		}
 
@@ -316,7 +326,7 @@ namespace cinatra {
 
 		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
 			for (auto pair : headers) {
-				multipart_headers_.emplace(std::string(pair.first.data(), pair.first.size()), std::string(pair.second.data(), pair.second.size()));
+				multipart_headers_[std::string(pair.first.data(), pair.first.size())] = std::string(pair.second.data(), pair.second.size());
 			}
 		}
 
@@ -635,7 +645,7 @@ namespace cinatra {
 		std::string_view part_data_;
 		content_type http_type_ = content_type::unknown;
 
-		std::multimap<std::string, std::string> multipart_headers_;
+		std::map<std::string, std::string> multipart_headers_;
 		std::vector<upload_file> files_;
 		mutable std::map<std::string,std::string> utf8_character_params;
 		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
