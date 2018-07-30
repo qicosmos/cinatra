@@ -150,8 +150,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		//http upload(multipart)
 		server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::multipart);
-			auto text = req.get_query_value("text");
-			std::cout<<text<<std::endl;
+			
 			auto& files = req.get_upload_files();
 			for (auto& file : files) {
 				std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
