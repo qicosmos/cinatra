@@ -727,7 +727,8 @@ namespace cinatra {
 					return;
 				}
 
-				req_.call_event(data_proc_state::data_begin);
+				req_.set_state(data_proc_state::data_begin);
+				call_back();
 
 				req_.set_current_size(0);
 				do_read_websocket_head(SHORT_HEADER);
