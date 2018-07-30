@@ -223,42 +223,12 @@ int main() {
 	//http upload(octet-stream)
 	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::octet_stream);
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
-			std::string file_name = std::to_string(n++);;
-			auto file = std::make_shared<std::ofstream>(file_name, std::ios::binary);
-			if (!file->is_open()) {
-				res.set_continue(false);
-				return;
-			}
-			req.get_conn()->set_tag(file);
+		auto& files = req.get_upload_files();
+		for (auto& file : files) {
+			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
-			if (!res.need_continue()) {
-				return;
-			}
 
-			auto file = std::any_cast<std::shared_ptr<std::ofstream>>(req.get_conn()->get_tag());
-			auto part_data = req.get_part_data();
-			file->write(part_data.data(), part_data.length());
-		}
-		break;
-		case cinatra::data_proc_state::data_end:
-		{
-			std::cout << "one file finished" << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			//network error
-		}
-		break;
-		}
+		res.set_status_and_content(status_type::ok, "octet-stream finished");
 	});
 
 	//http download(chunked)

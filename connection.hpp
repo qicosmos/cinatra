@@ -393,14 +393,17 @@ namespace cinatra {
 
 		//-------------octet-stream----------------//
 		void handle_octet_stream(size_t bytes_transferred) {
-			call_back();
+			//call_back();
+			std::string name = static_dir_ + std::to_string(std::time(0));
+			req_.open_upload_file(name);
+
 			req_.set_state(data_proc_state::data_continue);//data
 			size_t part_size = bytes_transferred - req_.header_len();
 			if (part_size != 0) {
 				req_.reduce_left_body_size(part_size);
 				req_.set_part_data({ req_.current_part(), part_size });
-
-				call_back();
+				req_.write_upload_data(req_.current_part(), part_size);
+				//call_back();
 			}
 
 			if (req_.has_recieved_all()) {
@@ -428,8 +431,8 @@ namespace cinatra {
 				}
 
 				req_.set_part_data({ req_.buffer(), bytes_transferred });
-
-				call_back();
+				req_.write_upload_data(req_.buffer(), bytes_transferred);
+				//call_back();
 
 				req_.reduce_left_body_size(bytes_transferred);
 
