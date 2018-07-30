@@ -217,10 +217,8 @@ int main() {
 		}
 	});
 
-	std::atomic_int n = 0;
-
 	//http upload(multipart)
-	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/upload_multipart", [](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::multipart);
 		auto text = req.get_query_value("text");
 		std::cout<<text<<std::endl;
@@ -233,7 +231,7 @@ int main() {
 	});
 
 	//http upload(octet-stream)
-	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/upload_octet_stream", [](const request& req, response& res) {
 		assert(req.get_content_type() == content_type::octet_stream);
 		auto& files = req.get_upload_files();
 		for (auto& file : files) {
@@ -243,60 +241,9 @@ int main() {
 		res.set_status_and_content(status_type::ok, "octet-stream finished");
 	});
 
-	//http download(chunked)
-	server.set_http_handler<GET, POST>("/download_chunked", [](const request& req, response& res) {
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
-			std::string filename = "3.jpg";
-			auto in = std::make_shared<std::ifstream>(filename, std::ios::binary);
-			if (!in->is_open()) {
-				req.get_conn()->on_close();
-				return;
-			}
-
-			auto conn = req.get_conn();
-			conn->set_tag(in);
-			auto extension = get_extension(filename.data());
-			auto mime = get_mime_type(extension);
-			conn->write_chunked_header(mime);
-		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
-			auto conn = req.get_conn();
-			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-
-			std::string str;
-			const size_t len = 2 * 1024;
-			str.resize(len);
-
-			in->read(&str[0], len);
-			size_t read_len = (size_t)in->gcount();
-			if (read_len != len) {
-				str.resize(read_len);
-			}
-			bool eof = (read_len == 0 || read_len != len);
-			conn->write_chunked_data(std::move(str), eof);
-		}
-		break;
-		case cinatra::data_proc_state::data_end:
-		{
-			std::cout << "chunked send finish" << std::endl;
-			auto conn = req.get_conn();
-			conn->on_close();
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			//network error
-		}
-		break;
-		}
-	});
-
+	//chunked download
+	//http://127.0.0.1:8080/assets/show.jpg
+	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked
 	server.run();
 	return 0;
 }
