@@ -188,12 +188,12 @@ namespace cinatra {
 
         void set_res_cache_max_age(std::time_t seconds)
         {
-            static_res_cache_max_age = seconds;
+            static_res_cache_max_age_ = seconds;
         }
 
         std::time_t get_res_cache_max_age()
         {
-            return static_res_cache_max_age;
+            return static_res_cache_max_age_;
         }
 
 	private:
@@ -219,73 +219,30 @@ namespace cinatra {
 
 		void set_static_res_handler()
 		{
-			http_router_.register_handler<POST,GET>(STAIC_RES, [&static_res_cache_max_age = this->static_res_cache_max_age](const request& req,response& res){
+			http_router_.register_handler<POST,GET>(STAIC_RES, [this](const request& req, response& res){
 				auto state = req.get_state();
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
 					{
-						auto file_name =req.get_res_path();
-						std::string real_file_name= std::string(file_name.data(),file_name.size());
-						if(is_form_url_encode(file_name))
-						{
-							real_file_name = code_utils::get_string_by_urldecode(file_name);
-						}
-						auto extension = get_extension(real_file_name.data());
-						auto mime = get_mime_type(extension);
+						std::string real_file_name = req.get_filename_from_path();
+						auto mime = req.get_mime(real_file_name); 
 						auto in = std::make_shared<std::ifstream>("./"+real_file_name,std::ios_base::binary);
 						if (!in->is_open()) {
-							res.set_status_and_content(status_type::not_found, "");
+							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
-						auto file_begin = in->tellg();
-						in->seekg(0,std::ios_base::end);
-						auto  file_size = in->tellg();
-						in->seekg(file_begin);
-						if(file_size<=5*1024*1024){
-							res.add_header("Access-Control-Allow-origin","*");
-							res.add_header("Content-type",std::string(mime.data(),mime.size())+"; charset=utf8");
-							std::stringstream file_buffer;
-							file_buffer<< in->rdbuf();
-							if(static_res_cache_max_age>0)
-							{
-								std::string max_age = std::string("max-age=")+std::to_string(static_res_cache_max_age);
-								res.add_header("Cache-Control",max_age.data());
-							}
-#ifdef CINATRA_ENABLE_GZIP
-							res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
-#else
-							res.set_status_and_content(status_type::ok, file_buffer.str());
-#endif
+						
+						if(is_small_file(in.get())){
+							send_small_file(res, in.get(), mime);
 							return;
-						}else{
-							std::string res_content_header = std::string(mime.data(),mime.size())+"; charset=utf8";
-							res_content_header+=std::string("\r\n")+std::string("Access-Control-Allow-origin: *");
-							if(static_res_cache_max_age>0)
-							{
-								std::string max_age = std::string("max-age=")+std::to_string(static_res_cache_max_age);
-								res_content_header+=std::string("\r\n")+std::string("Cache-Control: ")+max_age;
-							}
-							auto conn = req.get_conn();
-							conn->set_tag(in);
-							conn->write_chunked_header(std::string_view(res_content_header.data(),res_content_header.size()));
 						}
+
+						write_chunked_header(req, in, mime);
 					}
 						break;
 					case cinatra::data_proc_state::data_continue:
 					{
-						auto conn = req.get_conn();
-						auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-
-						std::string str;
-						const size_t len = 3 * 1024*1024;
-						str.resize(len);
-						in->read(&str[0], len);
-						size_t read_len = (size_t)in->gcount();
-						if (read_len != len) {
-							str.resize(read_len);
-						}
-						bool eof = (read_len == 0 || read_len != len);
-						conn->write_chunked_data(std::move(str), eof);
+						write_chunked_body(req);
 					}
 						break;
 					case cinatra::data_proc_state::data_end:
@@ -301,6 +258,61 @@ namespace cinatra {
 						break;
 				}
 			});
+		}
+
+		bool is_small_file(std::ifstream* in) const {
+			auto file_begin = in->tellg();
+			in->seekg(0, std::ios_base::end);
+			auto  file_size = in->tellg();
+			in->seekg(file_begin);
+
+			return file_size <= 5 * 1024 * 1024;
+		}
+
+		void send_small_file(response& res, std::ifstream* in, std::string_view mime) {
+			res.add_header("Access-Control-Allow-origin", "*");
+			res.add_header("Content-type", std::string(mime.data(), mime.size()) + "; charset=utf8");
+			std::stringstream file_buffer;
+			file_buffer << in->rdbuf();
+			if (static_res_cache_max_age_>0)
+			{
+				std::string max_age = std::string("max-age=") + std::to_string(static_res_cache_max_age_);
+				res.add_header("Cache-Control", max_age.data());
+			}
+#ifdef CINATRA_ENABLE_GZIP
+			res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
+#else
+			res.set_status_and_content(status_type::ok, file_buffer.str());
+#endif
+		}
+
+		void write_chunked_header(const request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
+			std::string res_content_header = std::string(mime.data(), mime.size()) + "; charset=utf8";
+			res_content_header += std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
+			if (static_res_cache_max_age_>0)
+			{
+				std::string max_age = std::string("max-age=") + std::to_string(static_res_cache_max_age_);
+				res_content_header += std::string("\r\n") + std::string("Cache-Control: ") + max_age;
+			}
+			auto conn = req.get_conn();
+			conn->set_tag(in);
+			conn->write_chunked_header(std::string_view(res_content_header.data(), res_content_header.size()));
+		}
+
+		void write_chunked_body(const request& req) {
+			auto conn = req.get_conn();
+			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
+
+			std::string str;
+			const size_t len = 3 * 1024 * 1024;
+			str.resize(len);
+			in->read(&str[0], len);
+			size_t read_len = (size_t)in->gcount();
+			if (read_len != len) {
+				str.resize(read_len);
+			}
+			bool eof = (read_len == 0 || read_len != len);
+			conn->write_chunked_data(std::move(str), eof);
 		}
 
 		void init_conn_callback() {
@@ -322,7 +334,7 @@ namespace cinatra {
 		http_router http_router_;
 		std::string static_dir_ = "./static/"; //default
         std::string base_path_[2] = {"base_path","/"};
-        std::time_t static_res_cache_max_age = 0;
+        std::time_t static_res_cache_max_age_ = 0;
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;

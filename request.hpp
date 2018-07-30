@@ -12,6 +12,8 @@
 #include "session.hpp"
 #include "session_manager.hpp"
 #include "url_encode_decode.hpp"
+#include "mime_types.hpp"
+
 namespace cinatra {
 	enum class data_proc_state : int8_t {
 		data_begin,
@@ -310,7 +312,7 @@ namespace cinatra {
 				return;
 			}
 
-			for (auto pair : multipart_form_map_) {
+			for (auto& pair : multipart_form_map_) {
 				form_url_map_.emplace(std::string_view(pair.first.data(), pair.first.size()), 
 					std::string_view(pair.second.data(), pair.second.size()));
 			}
@@ -407,6 +409,23 @@ namespace cinatra {
 			auto url = get_url();
 
 			return url.substr(1);
+		}
+
+		std::string get_filename_from_path() const {
+			auto file_name = get_res_path();
+			std::string real_file_name = std::string(file_name.data(), file_name.size());
+			if (is_form_url_encode(file_name))
+			{
+				real_file_name = code_utils::get_string_by_urldecode(file_name);
+			}
+
+			return real_file_name;
+		}
+
+		std::string_view get_mime(std::string_view filename) const{
+			auto extension = get_extension(filename.data());
+			auto mime = get_mime_type(extension);
+			return mime;
 		}
 
 		std::map<std::string_view, std::string_view> get_form_url_map() const{
