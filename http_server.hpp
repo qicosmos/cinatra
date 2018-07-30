@@ -228,7 +228,7 @@ namespace cinatra {
 						auto mime = req.get_mime(real_file_name); 
 						auto in = std::make_shared<std::ifstream>("./"+real_file_name,std::ios_base::binary);
 						if (!in->is_open()) {
-							res.set_status_and_content(status_type::not_found);
+							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
 						
