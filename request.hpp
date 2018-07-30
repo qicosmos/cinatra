@@ -37,6 +37,8 @@ namespace cinatra {
 
 	class request {
 	public:
+		using event_call_back = std::function<void(request&)>;
+
 		request(conn_type* con) : con_(con){
 			buf_.resize(1024);
 		}
@@ -640,6 +642,15 @@ namespace cinatra {
 			return static_resource_file_size_;
 		}
 
+		void on(data_proc_state event_type, event_call_back&& event_call_back)
+		{
+			event_call_backs_[(size_t)event_type] = std::move(event_call_back);
+		}
+
+		void call_event(data_proc_state event_type) {
+			event_call_backs_[(size_t)event_type](*this);
+		}
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -714,5 +725,6 @@ namespace cinatra {
 		std::int64_t range_start_pos_;
 		bool is_range_resource_ = 0;
 		std::int64_t static_resource_file_size_ = 0;
+		std::array<event_call_back, (size_t)data_proc_state::data_error + 1> event_call_backs_ = {};
 	};
 }
