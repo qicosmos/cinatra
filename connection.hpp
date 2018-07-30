@@ -112,10 +112,14 @@ namespace cinatra {
 			send_msg(std::move(header), std::move(msg));
 		}
 
-		void write_chunked_header(std::string_view mime) {
+		void write_chunked_header(std::string_view mime,bool is_range=false) {
 			req_.set_http_type(content_type::chunked);
 			reset_timer();
-			chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+			if(!is_range){
+                chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+			}else{
+                chunked_header_ = http_range_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+            }
 			boost::asio::async_write(socket_,
 				boost::asio::buffer(chunked_header_),
 				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {

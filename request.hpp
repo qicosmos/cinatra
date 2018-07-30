@@ -180,6 +180,9 @@ namespace cinatra {
             utf8_character_pathinfo_params_.clear();
             queries_.clear();
             multipart_form_map_.clear();
+			is_range_resource_ = false;
+			range_start_pos_ = 0;
+			static_resource_file_size_ = 0;
 		}
 
 		void fit_size() {
@@ -598,6 +601,45 @@ namespace cinatra {
 			return get_session(CSESSIONID);
 		}
 
+		void set_range_flag(bool flag) const
+		{
+			is_range_resource_ = flag;
+		}
+
+		bool is_range() const
+		{
+			return is_range_resource_;
+		}
+
+		void set_range_start_pos(std::string_view range_header) const
+		{
+			if(is_range_resource_)
+			{
+               auto l_str_pos = range_header.find("=");
+               auto r_str_pos = range_header.rfind("-");
+               auto pos_str = range_header.substr(l_str_pos+1,r_str_pos-l_str_pos-1);
+               range_start_pos_ = std::atoll(pos_str.data());
+			}
+		}
+
+		std::int64_t get_range_start_pos() const
+        {
+            if(is_range_resource_){
+                return  range_start_pos_;
+            }
+            return 0;
+        }
+
+        void save_request_static_file_size(std::int64_t size) const
+		{
+			static_resource_file_size_ = size;
+		}
+
+		std::int64_t get_request_static_file_size() const
+		{
+			return static_resource_file_size_;
+		}
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -667,7 +709,10 @@ namespace cinatra {
 
 		std::map<std::string, std::string> multipart_headers_;
 		std::vector<upload_file> files_;
-		std::map<std::string,std::string> utf8_character_params_;
-		std::map<std::string,std::string> utf8_character_pathinfo_params_;
+		std::map<std::string,std::string> utf8_character_params;
+		std::map<std::string,std::string> utf8_character_pathinfo_params;
+		std::int64_t range_start_pos_;
+		bool is_range_resource_ = 0;
+		std::int64_t static_resource_file_size_ = 0;
 	};
 }

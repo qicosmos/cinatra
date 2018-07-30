@@ -231,8 +231,10 @@ namespace cinatra {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
-						
-						if(is_small_file(in.get())){
+                        auto range_header = req.get_header_value("range");
+						req.set_range_flag(!range_header.empty());
+						req.set_range_start_pos(range_header);
+						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
 							return;
 						}
@@ -260,12 +262,12 @@ namespace cinatra {
 			});
 		}
 
-		bool is_small_file(std::ifstream* in) const {
+		bool is_small_file(std::ifstream* in,const request& req) const {
 			auto file_begin = in->tellg();
 			in->seekg(0, std::ios_base::end);
 			auto  file_size = in->tellg();
 			in->seekg(file_begin);
-
+			req.save_request_static_file_size(file_size);
 			return file_size <= 5 * 1024 * 1024;
 		}
 
@@ -289,6 +291,7 @@ namespace cinatra {
 		void write_chunked_header(request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
 			std::string res_content_header = std::string(mime.data(), mime.size()) + "; charset=utf8";
 			res_content_header += std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
+			res_content_header += std::string("\r\n") + std::string("Accept-Ranges: bytes");
 			if (static_res_cache_max_age_>0)
 			{
 				std::string max_age = std::string("max-age=") + std::to_string(static_res_cache_max_age_);
@@ -296,13 +299,19 @@ namespace cinatra {
 			}
 			auto conn = req.get_conn();
 			conn->set_tag(in);
-			conn->write_chunked_header(std::string_view(res_content_header.data(), res_content_header.size()));
+			if(req.is_range())
+			{
+				std::int64_t file_pos  = req.get_range_start_pos();
+				in->seekg(file_pos);
+				auto end_str = std::to_string(req.get_request_static_file_size());
+				res_content_header += std::string("\r\n") +std::string("Content-Range: bytes ")+std::to_string(file_pos)+std::string("-")+std::to_string(req.get_request_static_file_size()-1)+std::string("/")+end_str;
+			}
+			conn->write_chunked_header(std::string_view(res_content_header.data(), res_content_header.size()),req.is_range());
 		}
 
 		void write_chunked_body(request& req) {
 			auto conn = req.get_conn();
 			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-
 			std::string str;
 			const size_t len = 3 * 1024 * 1024;
 			str.resize(len);
