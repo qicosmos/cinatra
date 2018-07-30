@@ -196,7 +196,7 @@ int main() {
 			auto part_data = req.get_part_data();
 			//echo
 			std::string str = std::string(part_data.data(), part_data.length());
-			req.get_conn()->send_ws_msg(std::move(str), opcode::text);
+			req.get_conn()->send_ws_string(std::move(str));
 			std::cout << part_data.data() << std::endl;
 		});
 
