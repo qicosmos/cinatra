@@ -176,8 +176,8 @@ namespace cinatra {
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
 			part_data_ = {};
-            utf8_character_params.clear();
-            utf8_character_pathinfo_params.clear();
+            utf8_character_params_.clear();
+            utf8_character_pathinfo_params_.clear();
             queries_.clear();
             multipart_form_map_.clear();
 		}
@@ -472,7 +472,7 @@ namespace cinatra {
             return queries_;
         }
 
-		std::string_view get_query_value(size_t n) const {
+		std::string_view get_query_value(size_t n) {
 			auto url = get_url();
 			size_t tail = (url.back() == '/') ? 1 : 0;
 			for (auto item : memento::pathinfo_mem) {
@@ -488,8 +488,9 @@ namespace cinatra {
 					{
                         auto map_url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
                         std::string map_key = std::string(map_url.data(),map_url.size())+ std::to_string(n);
-						utf8_character_pathinfo_params[map_key] = code_utils::get_string_by_urldecode(params[n]).c_str();
-						return std::string_view(utf8_character_pathinfo_params[map_key].data(),utf8_character_pathinfo_params[map_key].size());
+
+						auto ret = utf8_character_pathinfo_params_.emplace(map_key, code_utils::get_string_by_urldecode(params[n]));
+						return std::string_view(ret.first->second.data(), ret.first->second.size());
 					}
 					return params[n];
 				}
@@ -498,7 +499,7 @@ namespace cinatra {
 			return {};
 		}
 
-		std::string_view get_query_value(std::string_view key) const{
+		std::string_view get_query_value(std::string_view key){
             auto url = get_url();
             url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
             std::string map_key = std::string(url.data(),url.size())+std::string(key.data(),key.size());
@@ -510,15 +511,15 @@ namespace cinatra {
 
 				if(code_utils::is_url_encode(itf->second))
 				{
-					utf8_character_params[map_key] = code_utils::get_string_by_urldecode(itf->second).c_str();
-					return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+					auto ret= utf8_character_params_.emplace(map_key, code_utils::get_string_by_urldecode(itf->second));
+					return std::string_view(ret.first->second.data(), ret.first->second.size());
 				}
 				return itf->second;
 			}
 			if(code_utils::is_url_encode(it->second))
 			{
-				utf8_character_params[map_key] = code_utils::get_string_by_urldecode(it->second).c_str();
-				return std::string_view(utf8_character_params[map_key].data(),utf8_character_params[map_key].size());
+				auto ret = utf8_character_params_.emplace(map_key, code_utils::get_string_by_urldecode(it->second));
+				return std::string_view(ret.first->second.data(), ret.first->second.size());
 			}
 			return it->second;
 		}
@@ -666,7 +667,7 @@ namespace cinatra {
 
 		std::map<std::string, std::string> multipart_headers_;
 		std::vector<upload_file> files_;
-		mutable std::map<std::string,std::string> utf8_character_params;
-		mutable std::map<std::string,std::string> utf8_character_pathinfo_params;
+		std::map<std::string,std::string> utf8_character_params_;
+		std::map<std::string,std::string> utf8_character_pathinfo_params_;
 	};
 }

@@ -26,7 +26,7 @@ namespace cinatra {
 			return r;
 		}
 
-        bool remove() const
+        bool remove()
         {
 			file_.close();
             bool flag = fs::remove(fs::path(file_path_.c_str()));
@@ -47,7 +47,7 @@ namespace cinatra {
             return flag;
         }
 
-		bool move_to(const std::string& directory_path,const std::string& file_name = "") const
+		bool move_to(const std::string& directory_path,const std::string& file_name = "")
 		{
 			check_and_create_directory(directory_path);
 			auto write_file_name = file_path_.substr(file_path_.rfind("/")+1);
@@ -62,7 +62,7 @@ namespace cinatra {
 			return (flag0&&flag1);
 		}
 
-		void rename_file(const std::string& new_file_name) const
+		void rename_file(const std::string& new_file_name)
 		{
 			auto directory_path = file_path_.substr(0,file_path_.rfind("/"));
 			auto new_file_path = directory_path+"/"+new_file_name;
@@ -100,8 +100,8 @@ namespace cinatra {
         }
 	private:
 		//std::string file_name_;
-		mutable std::string file_path_;
-		mutable std::ofstream file_;
-		mutable size_t file_size_ = 0;
+		std::string file_path_;
+		std::ofstream file_;
+		size_t file_size_ = 0;
 	};
 }

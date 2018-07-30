@@ -13,7 +13,7 @@
 #include "uuid.h"
 
 namespace cinatra {
-	using http_handler = std::function<void(const request&, response&)>;
+	using http_handler = std::function<void(request&, response&)>;
 	using send_ok_handler = std::function<void()>;
 	using send_failed_handler = std::function<void(const boost::system::error_code&)>;
 

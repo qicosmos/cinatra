@@ -38,7 +38,7 @@ namespace cinatra {
 		}
 
 		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		void register_handler(std::string_view name, Type (T::* f)(const request&, response&), T1 t, Ap&&... ap) {
+		void register_handler(std::string_view name, Type (T::* f)(request&, response&), T1 t, Ap&&... ap) {
 			register_handler_impl<Is...>(name, f, t, std::forward<Ap>(ap)...);
 		}
 
@@ -47,7 +47,7 @@ namespace cinatra {
 		}
 
 		//elimate exception, resut type bool: true, success, false, failed
-		bool route(std::string_view method, std::string_view url, const request& req, response& res) {
+		bool route(std::string_view method, std::string_view url, request& req, response& res) {
 			std::string key(method.data(), method.length());
 			bool is_static_res_flag = false;
 			if (url.rfind('.') == std::string_view::npos) {
@@ -74,7 +74,7 @@ namespace cinatra {
 		}
 
 	private:
-		bool get_wildcard_function(const std::string& key, const request& req, response& res) {
+		bool get_wildcard_function(const std::string& key, request& req, response& res) {
 			for (auto& pair : wildcard_invokers_) {
 				if (key.find(pair.first) != std::string::npos) {
 					pair.second(req, res);
@@ -111,8 +111,8 @@ namespace cinatra {
 		}
 
 		template<typename Function, typename... AP>
-		void invoke(const request& req, response& res, Function f, AP... ap) {
-			using result_type = std::result_of_t<Function(const request&, response&)>;
+		void invoke(request& req, response& res, Function f, AP... ap) {
+			using result_type = std::result_of_t<Function(request&, response&)>;
 			std::tuple<AP...> tp(std::move(ap)...);
 			bool r = do_ap_before(req, res, tp);
 
@@ -146,7 +146,7 @@ namespace cinatra {
 		}
 
 		template<typename Function, typename Self, typename... AP>
-		void invoke_mem(const request& req, response& res, Function f, Self self, AP... ap) {
+		void invoke_mem(request& req, response& res, Function f, Self self, AP... ap) {
 			using result_type = typename timax::function_traits<Function>::result_type;
 			std::tuple<AP...> tp(std::move(ap)...);
 			bool r = do_ap_before(req, res, tp);
@@ -169,13 +169,13 @@ namespace cinatra {
 		}
 
 		template<typename Tuple>
-		bool do_ap_before(const request& req, response& res, Tuple& tp) {
+		bool do_ap_before(request& req, response& res, Tuple& tp) {
 			bool r = true;
 			for_each_l(tp, [&r, &req, &res](auto& item) {
 				if (!r)
 					return;
 
-				if constexpr (has_before<decltype(item), const request&, response&>::value)
+				if constexpr (has_before<decltype(item), request&, response&>::value)
 					r = item.before(req, res);
 			}, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 
@@ -183,30 +183,30 @@ namespace cinatra {
 		}
 
 		template<typename Tuple>
-		void do_void_after(const request& req, response& res, Tuple& tp) {
+		void do_void_after(request& req, response& res, Tuple& tp) {
 			bool r = true;
 			for_each_r(tp, [&r, &req, &res](auto& item) {
 				if (!r)
 					return;
 
-				if constexpr (has_after<decltype(item), const request&, response&>::value)
+				if constexpr (has_after<decltype(item), request&, response&>::value)
 					r = item.after(req, res);
 			}, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 		}
 
 		template<typename T, typename Tuple>
-		void do_after(T&& result, const request& req, response& res, Tuple& tp) {
+		void do_after(T&& result, request& req, response& res, Tuple& tp) {
 			bool r = true;
 			for_each_r(tp, [&r, result = std::move(result), &req, &res](auto& item){
 				if (!r)
 					return;
 
-				if constexpr (has_after<decltype(item), T, const request&, response&>::value)
+				if constexpr (has_after<decltype(item), T, request&, response&>::value)
 					r = item.after(std::move(result), req, res);
 			}, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 		}
 
-		typedef std::function<void(const request&, response&)> invoker_function;
+		typedef std::function<void(request&, response&)> invoker_function;
 		std::map<std::string, invoker_function> map_invokers_;
 		std::unordered_map<std::string, invoker_function> wildcard_invokers_; //for url/*
 	};
