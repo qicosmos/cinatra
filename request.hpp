@@ -601,7 +601,7 @@ namespace cinatra {
 			return get_session(CSESSIONID);
 		}
 
-		void set_range_flag(bool flag) const
+		void set_range_flag(bool flag)
 		{
 			is_range_resource_ = flag;
 		}
@@ -611,7 +611,7 @@ namespace cinatra {
 			return is_range_resource_;
 		}
 
-		void set_range_start_pos(std::string_view range_header) const
+		void set_range_start_pos(std::string_view range_header)
 		{
 			if(is_range_resource_)
 			{
@@ -630,7 +630,7 @@ namespace cinatra {
             return 0;
         }
 
-        void save_request_static_file_size(std::int64_t size) const
+        void save_request_static_file_size(std::int64_t size)
 		{
 			static_resource_file_size_ = size;
 		}
@@ -709,8 +709,8 @@ namespace cinatra {
 
 		std::map<std::string, std::string> multipart_headers_;
 		std::vector<upload_file> files_;
-		std::map<std::string,std::string> utf8_character_params;
-		std::map<std::string,std::string> utf8_character_pathinfo_params;
+		std::map<std::string,std::string> utf8_character_params_;
+		std::map<std::string,std::string> utf8_character_pathinfo_params_;
 		std::int64_t range_start_pos_;
 		bool is_range_resource_ = 0;
 		std::int64_t static_resource_file_size_ = 0;
