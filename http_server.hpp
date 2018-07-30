@@ -231,9 +231,7 @@ namespace cinatra {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
-                        auto range_header = req.get_header_value("range");
-						req.set_range_flag(!range_header.empty());
-						req.set_range_start_pos(range_header);
+                        
 						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
 							return;
@@ -289,6 +287,10 @@ namespace cinatra {
 		}
 
 		void write_chunked_header(request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
+			auto range_header = req.get_header_value("range");
+			req.set_range_flag(!range_header.empty());
+			req.set_range_start_pos(range_header);
+
 			std::string res_content_header = std::string(mime.data(), mime.size()) + "; charset=utf8";
 			res_content_header += std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
 			res_content_header += std::string("\r\n") + std::string("Accept-Ranges: bytes");
