@@ -262,7 +262,7 @@ namespace cinatra {
 			});
 		}
 
-		bool is_small_file(std::ifstream* in,const request& req) const {
+		bool is_small_file(std::ifstream* in,request& req) const {
 			auto file_begin = in->tellg();
 			in->seekg(0, std::ios_base::end);
 			auto  file_size = in->tellg();
