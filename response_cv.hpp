@@ -150,6 +150,12 @@ namespace cinatra {
 		/*"Content-Type: video/mp4\r\n"
 		"\r\n";*/
 
+	inline const std::string http_range_chunk_header =
+				"HTTP/1.1 206 Partial Content\r\n"
+				"Transfer-Encoding: chunked\r\n";
+				/*"Content-Type: video/mp4\r\n"
+				"\r\n";*/
+
 	inline boost::asio::const_buffer to_buffer(status_type status) {
 		switch (status) {
 		case status_type::switching_protocols:
