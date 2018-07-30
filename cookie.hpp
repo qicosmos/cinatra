@@ -67,11 +67,6 @@ namespace cinatra {
 			{
 				// Netscape cookie
 				result.append(value_);
-//				if (!domain_.empty())
-//				{
-//					result.append("; domain=");
-//					result.append(domain_);
-//				}
 				if (!path_.empty())
 				{
 					result.append("; path=");
@@ -108,12 +103,7 @@ namespace cinatra {
 					result.append(comment_);
 					result.append("\"");
 				}
-//				if (!domain_.empty())
-//				{
-//					result.append("; Domain=\"");
-//					result.append(domain_);
-//					result.append("\"");
-//				}
+
 				if (!path_.empty())
 				{
 					result.append("; Path=\"");
