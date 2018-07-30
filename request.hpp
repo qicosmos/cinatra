@@ -312,7 +312,7 @@ namespace cinatra {
 				return;
 			}
 
-			for (auto pair : multipart_form_map_) {
+			for (auto& pair : multipart_form_map_) {
 				form_url_map_.emplace(std::string_view(pair.first.data(), pair.first.size()), 
 					std::string_view(pair.second.data(), pair.second.size()));
 			}
