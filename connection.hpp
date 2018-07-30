@@ -10,6 +10,7 @@
 #include "websocket.hpp"
 #include "define.h"
 #include "http_cache.hpp"
+#include "uuid.h"
 
 namespace cinatra {
 	using http_handler = std::function<void(const request&, response&)>;
@@ -394,7 +395,7 @@ namespace cinatra {
 		//-------------octet-stream----------------//
 		void handle_octet_stream(size_t bytes_transferred) {
 			//call_back();
-			std::string name = static_dir_ + std::to_string(std::time(0));
+			std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str();
 			req_.open_upload_file(name);
 
 			req_.set_state(data_proc_state::data_continue);//data
@@ -531,7 +532,8 @@ namespace cinatra {
 					if(is_multi_part_file_)
 					{
 						auto ext = get_extension(filename);
-						std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
+						std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str()
+							+ std::string(ext.data(), ext.length());
 						req_.open_upload_file(name);
 					}else{
 						auto key = req_.get_multipart_field_name("name");
