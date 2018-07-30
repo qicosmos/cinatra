@@ -1075,4 +1075,9 @@ namespace cinatra {
 		const http_handler& http_handler_;
 		std::any tag_;
 	};
+
+	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
+	inline constexpr data_proc_state ws_message = data_proc_state::data_continue;
+	inline constexpr data_proc_state ws_close = data_proc_state::data_close;
+	inline constexpr data_proc_state ws_error = data_proc_state::data_error;
 }

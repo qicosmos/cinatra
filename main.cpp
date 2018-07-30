@@ -188,11 +188,11 @@ int main() {
 	server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
 		assert(req.get_content_type() == content_type::websocket);
 
-		req.on(data_proc_state::data_begin, [](request& req){
+		req.on(ws_open, [](request& req){
 			std::cout << "websocket start" << std::endl;
 		});
 
-		req.on(data_proc_state::data_continue, [](request& req) {
+		req.on(ws_message, [](request& req) {
 			auto part_data = req.get_part_data();
 			//echo
 			std::string str = std::string(part_data.data(), part_data.length());
@@ -200,12 +200,12 @@ int main() {
 			std::cout << part_data.data() << std::endl;
 		});
 
-		req.on(data_proc_state::data_close, [](request& req) {
+		req.on(ws_close, [](request& req) {
 			std::cout << "websocket close" << std::endl;
 		});
 
-		req.on(data_proc_state::data_error, [](request& req) {
-			std::cout << "network error" << std::endl;
+		req.on(ws_error, [](request& req) {
+			std::cout << "websocket error" << std::endl;
 		});
 	});
 
