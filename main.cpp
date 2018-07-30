@@ -56,6 +56,18 @@ int main() {
 		res.set_status_and_content(status_type::ok, "hello world");
 	},enable_cache{false});
 
+    server.set_http_handler<GET, POST>("/string", [](const request& req, response& res) {
+        res.render_string("OK");
+    },enable_cache{false});
+
+    server.set_http_handler<GET, POST>("/404", [](const request& req, response& res) {
+        res.render_404();
+    },enable_cache{false});
+
+    server.set_http_handler<GET, POST>("/404_custom", [](const request& req, response& res) {
+        res.render_404("./404.html");
+    },enable_cache{false});
+
 	server.set_http_handler<GET, POST>("/login", [](const request& req, response& res) {
 		auto session = res.start_session();
 		session->set_data("userid", std::string("1"));
