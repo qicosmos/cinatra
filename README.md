@@ -146,7 +146,6 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
 
-		std::atomic_int n = 0;
 		//http upload(multipart)
 		server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::multipart);
@@ -175,7 +174,6 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
 
-		std::atomic_int n = 0;
 		//http upload(octet-stream)
 		server.set_http_handler<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::octet_stream);
