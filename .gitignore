@@ -1,6 +1,8 @@
 # Prerequisites
 *.d
-
+.idea
+cmake-build-debug
+.vscode
 # Compiled Object files
 *.slo
 *.lo
