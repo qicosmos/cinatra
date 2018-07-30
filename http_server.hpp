@@ -219,7 +219,7 @@ namespace cinatra {
 
 		void set_static_res_handler()
 		{
-			http_router_.register_handler<POST,GET>(STAIC_RES, [this](const request& req, response& res){
+			http_router_.register_handler<POST,GET>(STAIC_RES, [this](request& req, response& res){
 				auto state = req.get_state();
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
@@ -288,7 +288,7 @@ namespace cinatra {
 #endif
 		}
 
-		void write_chunked_header(const request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
+		void write_chunked_header(request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
 			std::string res_content_header = std::string(mime.data(), mime.size()) + "; charset=utf8";
 			res_content_header += std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
 			res_content_header += std::string("\r\n") + std::string("Accept-Ranges: bytes");
@@ -309,7 +309,7 @@ namespace cinatra {
 			conn->write_chunked_header(std::string_view(res_content_header.data(), res_content_header.size()),req.is_range());
 		}
 
-		void write_chunked_body(const request& req) {
+		void write_chunked_body(request& req) {
 			auto conn = req.get_conn();
 			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
 			std::string str;
@@ -326,7 +326,7 @@ namespace cinatra {
 
 		void init_conn_callback() {
             set_static_res_handler();
-			http_handler_ = [this](const request& req, response& res) {
+			http_handler_ = [this](request& req, response& res) {
                 res.set_base_path(this->base_path_[0],this->base_path_[1]);
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {

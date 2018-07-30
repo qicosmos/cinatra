@@ -4,12 +4,12 @@ using namespace cinatra;
 
 struct log_t
 {
-	bool before(const request& req, response& res) {
+	bool before(request& req, response& res) {
 		std::cout << "before log" << std::endl;
 		return true;
 	}
 
-	bool after(const request& req, response& res) {
+	bool after(request& req, response& res) {
 		std::cout << "after log" << std::endl;
 		res.add_header("aaaa", "bbcc");
 		return true;
@@ -17,7 +17,7 @@ struct log_t
 };
 
 struct check {
-	bool before(const request& req, response& res) {
+	bool before(request& req, response& res) {
 		/*std::cout << "before check" << std::endl;
 		if (req.get_header_value("name").empty()) {
 			res.set_status_and_content(status_type::bad_request);
@@ -27,7 +27,7 @@ struct check {
 		return true;
 	}
 
-	bool after(const request& req, response& res) {
+	bool after(request& req, response& res) {
 		std::cout << "after check" << std::endl;
 
 		return true;
@@ -52,30 +52,30 @@ int main() {
     server.set_base_path("base_path","/feather");
 	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
-	server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	},enable_cache{false});
 
-    server.set_http_handler<GET, POST>("/string", [](const request& req, response& res) {
+    server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
         res.render_string("OK");
     },enable_cache{false});
 
-    server.set_http_handler<GET, POST>("/404", [](const request& req, response& res) {
+    server.set_http_handler<GET, POST>("/404", [](request& req, response& res) {
         res.render_404();
     },enable_cache{false});
 
-    server.set_http_handler<GET, POST>("/404_custom", [](const request& req, response& res) {
+    server.set_http_handler<GET, POST>("/404_custom", [](request& req, response& res) {
         res.render_404("./404.html");
     },enable_cache{false});
 
-	server.set_http_handler<GET, POST>("/login", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/login", [](request& req, response& res) {
 		auto session = res.start_session();
 		session->set_data("userid", std::string("1"));
 		session->set_max_age(-1);
 		res.set_status_and_content(status_type::ok, "login");
 	},enable_cache{false});
 
-	server.set_http_handler<GET, POST>("/islogin", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/islogin", [](request& req, response& res) {
 		auto ptr = req.get_session();
 		auto session = ptr.lock();
 		if (session == nullptr || session->get_data<std::string>("userid") != "1") {
@@ -85,7 +85,7 @@ int main() {
 		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
 	},enable_cache{false});
 
-	server.set_http_handler<GET, POST>("/html", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
 		inja::json json;
         res.set_attr("number",1024);
         res.set_attr("test_text","hello,world");
@@ -110,13 +110,13 @@ int main() {
 */
 	});
 
-//	server.set_http_handler<GET,POST>("/test_remove",[](const request& req, response& res){
+//	server.set_http_handler<GET,POST>("/test_remove",[](request& req, response& res){
 //		fs::remove(fs::path("./abc.txt"));
 //		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
 //	});
 
 
-	server.set_http_handler<GET, POST>("/json", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {
 		inja::json json;
 		json["abc"] = "abc";
 		json["success"] = true;
@@ -125,16 +125,16 @@ int main() {
 		res.render_json(json);
 	}, enable_cache{ false });
 
-	server.set_http_handler<GET,POST>("/redirect",[](const request& req, response& res){
+	server.set_http_handler<GET,POST>("/redirect",[](request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");
 	});
 
-	server.set_http_handler<GET, POST>("/pathinfo/*", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/pathinfo/*", [](request& req, response& res) {
 		auto s = req.get_query_value(0);
 		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()),res_content_type::string);
 	});
 
-	server.set_http_handler<GET, POST>("/restype", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/restype", [](request& req, response& res) {
 		auto type = req.get_query_value("type");
 		auto res_type = cinatra::res_content_type::string;
 		if (type == "html")
@@ -150,12 +150,12 @@ int main() {
 		res.set_status_and_content(status_type::ok, "<a href='http://www.baidu.com'>hello world 百度</a>", res_type);
 	});
 
-	server.set_http_handler<GET, POST>("/getzh", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/getzh", [](request& req, response& res) {
 		auto zh = req.get_query_value("zh");
 		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
 	});
 
-	server.set_http_handler<GET, POST>("/gzip", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/gzip", [](request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
 
@@ -163,7 +163,7 @@ int main() {
 	});
 
 
-	server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
 			res.set_status_and_content(status_type::bad_request, "no name");
@@ -180,12 +180,12 @@ int main() {
 	});
 
 	//aspect
-	server.set_http_handler<GET, POST>("/aspect", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	}, check{}, log_t{});
 
 	//web socket
-	server.set_http_handler<GET, POST>("/ws", [](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
 		assert(req.get_content_type() == content_type::websocket);
 		auto state = req.get_state();
 		switch (state)
@@ -217,10 +217,8 @@ int main() {
 		}
 	});
 
-	std::atomic_int n = 0;
-
 	//http upload(multipart)
-	server.set_http_handler<GET, POST>("/upload_multipart", [&n](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
 		assert(req.get_content_type() == content_type::multipart);
 		auto text = req.get_query_value("text");
 		std::cout<<text<<std::endl;
@@ -233,7 +231,7 @@ int main() {
 	});
 
 	//http upload(octet-stream)
-	server.set_http_handler<GET, POST>("/upload_octet_stream", [&n](const request& req, response& res) {
+	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
 		assert(req.get_content_type() == content_type::octet_stream);
 		auto& files = req.get_upload_files();
 		for (auto& file : files) {
@@ -243,60 +241,9 @@ int main() {
 		res.set_status_and_content(status_type::ok, "octet-stream finished");
 	});
 
-	//http download(chunked)
-	server.set_http_handler<GET, POST>("/download_chunked", [](const request& req, response& res) {
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
-			std::string filename = "3.jpg";
-			auto in = std::make_shared<std::ifstream>(filename, std::ios::binary);
-			if (!in->is_open()) {
-				req.get_conn()->on_close();
-				return;
-			}
-
-			auto conn = req.get_conn();
-			conn->set_tag(in);
-			auto extension = get_extension(filename.data());
-			auto mime = get_mime_type(extension);
-			conn->write_chunked_header(mime);
-		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
-			auto conn = req.get_conn();
-			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-
-			std::string str;
-			const size_t len = 2 * 1024;
-			str.resize(len);
-
-			in->read(&str[0], len);
-			size_t read_len = (size_t)in->gcount();
-			if (read_len != len) {
-				str.resize(read_len);
-			}
-			bool eof = (read_len == 0 || read_len != len);
-			conn->write_chunked_data(std::move(str), eof);
-		}
-		break;
-		case cinatra::data_proc_state::data_end:
-		{
-			std::cout << "chunked send finish" << std::endl;
-			auto conn = req.get_conn();
-			conn->on_close();
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			//network error
-		}
-		break;
-		}
-	});
-
+	//chunked download
+	//http://127.0.0.1:8080/assets/show.jpg
+	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked
 	server.run();
 	return 0;
 }
