@@ -61,10 +61,6 @@ int main() {
         res.render_string(std::to_string(std::time(nullptr)));
     },enable_cache{true});
 
-	server.set_http_handler<GET, POST>("/test2", [](request& req, response& res) {
-		res.render_string("OK");
-	});
-
     server.set_http_handler<GET, POST>("/404", [](request& req, response& res) {
         res.render_404();
     },enable_cache{false});
