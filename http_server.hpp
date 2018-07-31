@@ -40,6 +40,7 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
+			http_cache::set_cache_max_age(86400);
 			init_conn_callback();
 		}
 
@@ -195,6 +196,16 @@ namespace cinatra {
         {
             return static_res_cache_max_age_;
         }
+
+        void set_cache_max_age(std::time_t seconds)
+		{
+			http_cache::set_cache_max_age(seconds);
+		}
+
+		std::time_t get_cache_max_age()
+		{
+			return http_cache::get_cache_max_age();
+		}
 
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
