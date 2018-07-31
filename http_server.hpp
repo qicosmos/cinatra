@@ -169,6 +169,8 @@ namespace cinatra {
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
 				if (!b) {
 					http_cache::add_skip(name);
+				}else{
+					http_cache::add_single_cache(name);
 				}
 				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
 				auto lm = [this, name, f = std::move(f)](auto... ap) {
@@ -268,7 +270,7 @@ namespace cinatra {
 					}
 						break;
 				}
-			});
+			},enable_cache{false});
 		}
 
 		bool is_small_file(std::ifstream* in,request& req) const {
@@ -341,6 +343,7 @@ namespace cinatra {
             set_static_res_handler();
 			http_handler_ = [this](request& req, response& res) {
                 res.set_base_path(this->base_path_[0],this->base_path_[1]);
+                res.set_url(req.get_url());
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {
 					res.set_status_and_content(status_type::bad_request, "the url is not right");

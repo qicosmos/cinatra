@@ -18,11 +18,11 @@ struct log_t
 
 struct check {
 	bool before(request& req, response& res) {
-		/*std::cout << "before check" << std::endl;
+		std::cout << "before check" << std::endl;
 		if (req.get_header_value("name").empty()) {
-			res.set_status_and_content(status_type::bad_request);
+			res.render_404();
 			return false;
-		}*/
+		}
 
 		return true;
 	}
@@ -50,16 +50,16 @@ int main() {
 	}
 
     server.set_base_path("base_path","/feather");
-	server.enable_http_cache(true);//set global cache
+	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.set_status_and_content(status_type::ok,"hello world");
 	},enable_cache{false});
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
-        res.render_string("OK");
-    },enable_cache{false});
+        res.render_string(std::to_string(std::time(nullptr)));
+    },enable_cache{true});
 
     server.set_http_handler<GET, POST>("/404", [](request& req, response& res) {
         res.render_404();
@@ -94,28 +94,7 @@ int main() {
 //		json["test_text"] = "hello,world";
 //		json["header_text"] = "你好 cinatra";
 		res.render_view("./www/test.html");
-		/*
-		 * ---------------------test.html---------------------------
-		 <html>
-			<head>
-			  <meta charset="utf-8">
-			</head>
-			<body>
-				{% include "./header/header.html" %}
-					<h1>{{test_text}}</h1>
-			</body>
-		 </html>
-
-		 ----------------------------------header.html---------------------
-		 <div>{{header_text}}</div>
-		*/
 	});
-
-//	server.set_http_handler<GET,POST>("/test_remove",[](request& req, response& res){
-//		fs::remove(fs::path("./abc.txt"));
-//		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
-//	});
-
 
 	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {
 		inja::json json;
@@ -133,7 +112,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](request& req, response& res) {
 		auto s = req.get_query_value(0);
-		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()),res_content_type::string);
+		res.render_string(std::string(s.data(), s.length()));
 	});
 
 	server.set_http_handler<GET, POST>("/restype", [](request& req, response& res) {
@@ -154,13 +133,12 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](request& req, response& res) {
 		auto zh = req.get_query_value("zh");
-		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
+		res.render_string(std::string(zh.data(),zh.size()));
 	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
-
 		res.set_status_and_content(status_type::ok, "hello world", res_content_type::none, content_encoding::gzip);
 	});
 
@@ -168,22 +146,21 @@ int main() {
 	server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
-			res.set_status_and_content(status_type::bad_request, "no name");
+			res.render_string("no name");
 			return;
 		}
 
 		auto id = req.get_query_value("id");
 		if (id.empty()) {
-			res.set_status_and_content(status_type::bad_request);
+			res.render_404();
 			return;
 		}
-
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.render_string("hello world");
 	});
 
 	//aspect
 	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.render_string("hello world");
 	}, check{}, log_t{});
 
 	//web socket
@@ -220,8 +197,7 @@ int main() {
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-
-		res.set_status_and_content(status_type::ok, "multipart finished");
+		res.render_string("multipart finished");
 	});
 
 	//http upload(octet-stream)
@@ -231,8 +207,7 @@ int main() {
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-
-		res.set_status_and_content(status_type::ok, "octet-stream finished");
+		res.render_string("octet-stream finished");
 	});
 
 	//chunked download
