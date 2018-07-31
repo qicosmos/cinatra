@@ -101,6 +101,16 @@ namespace cinatra {
 		}
 
 		template<typename... Fs>
+		void send_ws_string(std::string msg, Fs&&... fs) {
+			send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
+		}
+
+		template<typename... Fs>
+		void send_ws_binary(std::string msg, Fs&&... fs) {
+			send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
+		}
+
+		template<typename... Fs>
 		void send_ws_msg(std::string msg, opcode op = opcode::text, Fs&&... fs) {
 			constexpr const size_t size = sizeof...(Fs);
 			static_assert(size != 0 || size != 2);
@@ -731,8 +741,7 @@ namespace cinatra {
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					timer_.cancel();
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 
 					close();
 					return;
@@ -747,8 +756,7 @@ namespace cinatra {
 					auto payload_length = ws_.payload_length();
 					req_.set_body_len(payload_length);
 					if (req_.at_capacity(payload_length)) {
-						req_.set_state(data_proc_state::data_error);
-						call_back();
+						req_.call_event(data_proc_state::data_error);
 						close();
 						return;
 					}
@@ -762,8 +770,7 @@ namespace cinatra {
 					do_read_websocket_head(ws_.left_header_len());
 				}
 				else {
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 					close();
 				}
 			});
@@ -774,8 +781,7 @@ namespace cinatra {
 			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), length),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 					close();
 					return;
 				}
@@ -806,8 +812,7 @@ namespace cinatra {
 			switch (ret)
 			{
 			case cinatra::ws_frame_type::WS_ERROR_FRAME:
-				req_.set_state(data_proc_state::data_error);
-				call_back();
+				req_.call_event(data_proc_state::data_error);
 				close();
 				return false;
 			case cinatra::ws_frame_type::WS_OPENING_FRAME:
@@ -815,9 +820,8 @@ namespace cinatra {
 			case cinatra::ws_frame_type::WS_TEXT_FRAME:
 			case cinatra::ws_frame_type::WS_BINARY_FRAME:
 			{
-				req_.set_state(data_proc_state::data_continue);
-				req_.set_part_data({ payload.data(), payload.length() });
-				call_back();
+				req_.set_part_data({ payload.data(), payload.length() });				
+				req_.call_event(data_proc_state::data_continue);
 			}
 			//on message
 			break;
@@ -826,9 +830,8 @@ namespace cinatra {
 				close_frame close_frame = ws_.parse_close_payload(payload.data(), payload.length());
 				const int MAX_CLOSE_PAYLOAD = 123;
 				size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, payload.length());
-				req_.set_state(data_proc_state::data_close);
 				req_.set_part_data({ close_frame.message, len });
-				call_back();
+				req_.call_event(data_proc_state::data_close);
 
 				std::string close_msg = ws_.format_close_payload(opcode::close, close_frame.message, len);
 				auto header = ws_.format_header(close_msg.length(), opcode::close);
@@ -1072,4 +1075,9 @@ namespace cinatra {
 		const http_handler& http_handler_;
 		std::any tag_;
 	};
+
+	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
+	inline constexpr data_proc_state ws_message = data_proc_state::data_continue;
+	inline constexpr data_proc_state ws_close = data_proc_state::data_close;
+	inline constexpr data_proc_state ws_error = data_proc_state::data_error;
 }

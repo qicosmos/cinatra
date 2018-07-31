@@ -103,7 +103,6 @@ namespace cinatra {
 					result.append(comment_);
 					result.append("\"");
 				}
-
 				if (!path_.empty())
 				{
 					result.append("; Path=\"");
