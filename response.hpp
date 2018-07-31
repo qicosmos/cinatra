@@ -50,7 +50,7 @@ namespace cinatra {
 				buffers.emplace_back(boost::asio::buffer(content_.data(), content_.size()));
 			}
 
-			if (http_cache::need_cache()) {
+			if (http_cache::need_cache(raw_url_)) {
 				cache_data.clear();
 				for (auto& buf : buffers) {
 					cache_data.push_back(std::string(boost::asio::buffer_cast<const char*>(buf),boost::asio::buffer_size(buf)));
@@ -213,6 +213,16 @@ namespace cinatra {
 			return path_;
 		}
 
+		void set_url(std::string_view url)
+		{
+			raw_url_ = url;
+		}
+
+		std::string_view get_url(std::string_view url)
+		{
+			return raw_url_;
+		}
+
 		void  handle_render_view(const std::string& tpl_file_path,const nlohmann::json& tmp_data,status_type server_type =status_type::ok )
 		{
 			inja::Environment env = inja::Environment("./");
@@ -304,6 +314,7 @@ namespace cinatra {
 	private:
 		
 		//std::map<std::string, std::string, ci_less> headers_;
+		std::string_view raw_url_;
 		std::vector<std::pair<std::string, std::string>> headers_;
 		std::vector<std::string> cache_data;
 		std::string content_;

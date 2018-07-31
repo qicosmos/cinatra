@@ -169,6 +169,8 @@ namespace cinatra {
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
 				if (!b) {
 					http_cache::add_skip(name);
+				}else{
+					http_cache::add_single_cache(name);
 				}
 				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
 				auto lm = [this, name, f = std::move(f)](auto... ap) {
@@ -242,9 +244,7 @@ namespace cinatra {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
-                        auto range_header = req.get_header_value("range");
-						req.set_range_flag(!range_header.empty());
-						req.set_range_start_pos(range_header);
+                        
 						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
 							return;
@@ -300,6 +300,10 @@ namespace cinatra {
 		}
 
 		void write_chunked_header(request& req, std::shared_ptr<std::ifstream> in, std::string_view mime) {
+			auto range_header = req.get_header_value("range");
+			req.set_range_flag(!range_header.empty());
+			req.set_range_start_pos(range_header);
+
 			std::string res_content_header = std::string(mime.data(), mime.size()) + "; charset=utf8";
 			res_content_header += std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
 			res_content_header += std::string("\r\n") + std::string("Accept-Ranges: bytes");
@@ -339,6 +343,7 @@ namespace cinatra {
             set_static_res_handler();
 			http_handler_ = [this](request& req, response& res) {
                 res.set_base_path(this->base_path_[0],this->base_path_[1]);
+                res.set_url(req.get_url());
 				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 				if (!success) {
 					res.set_status_and_content(status_type::bad_request, "the url is not right");

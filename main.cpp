@@ -18,11 +18,11 @@ struct log_t
 
 struct check {
 	bool before(request& req, response& res) {
-		/*std::cout << "before check" << std::endl;
+		std::cout << "before check" << std::endl;
 		if (req.get_header_value("name").empty()) {
-			res.set_status_and_content(status_type::bad_request);
+			res.render_404();
 			return false;
-		}*/
+		}
 
 		return true;
 	}
@@ -50,16 +50,20 @@ int main() {
 	}
 
     server.set_base_path("base_path","/feather");
-	server.enable_http_cache(true);//set global cache
+	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.set_status_and_content(status_type::ok,"hello world");
 	},enable_cache{false});
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
-        res.render_string("OK");
-    },enable_cache{false});
+        res.render_string(std::to_string(std::time(nullptr)));
+    },enable_cache{true});
+
+	server.set_http_handler<GET, POST>("/test2", [](request& req, response& res) {
+		res.render_string("OK");
+	});
 
     server.set_http_handler<GET, POST>("/404", [](request& req, response& res) {
         res.render_404();
@@ -96,7 +100,6 @@ int main() {
 		res.render_view("./www/test.html");
 	});
 
-
 	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {
 		inja::json json;
 		json["abc"] = "abc";
@@ -113,7 +116,7 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/pathinfo/*", [](request& req, response& res) {
 		auto s = req.get_query_value(0);
-		res.set_status_and_content(status_type::ok, std::string(s.data(), s.length()),res_content_type::string);
+		res.render_string(std::string(s.data(), s.length()));
 	});
 
 	server.set_http_handler<GET, POST>("/restype", [](request& req, response& res) {
@@ -134,13 +137,12 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/getzh", [](request& req, response& res) {
 		auto zh = req.get_query_value("zh");
-		res.set_status_and_content(status_type::ok, std::string(zh.data(),zh.size()), res_content_type::string);
+		res.render_string(std::string(zh.data(),zh.size()));
 	});
 
 	server.set_http_handler<GET, POST>("/gzip", [](request& req, response& res) {
 		auto body = req.body();
 		std::cout << body.data() << std::endl;
-
 		res.set_status_and_content(status_type::ok, "hello world", res_content_type::none, content_encoding::gzip);
 	});
 
@@ -148,55 +150,46 @@ int main() {
 	server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
 		auto name = req.get_header_value("name");
 		if (name.empty()) {
-			res.set_status_and_content(status_type::bad_request, "no name");
+			res.render_string("no name");
 			return;
 		}
 
 		auto id = req.get_query_value("id");
 		if (id.empty()) {
-			res.set_status_and_content(status_type::bad_request);
+			res.render_404();
 			return;
 		}
-
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.render_string("hello world");
 	});
 
 	//aspect
 	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
+		res.render_string("hello world");
 	}, check{}, log_t{});
 
 	//web socket
 	server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
 		assert(req.get_content_type() == content_type::websocket);
-		auto state = req.get_state();
-		switch (state)
-		{
-		case cinatra::data_proc_state::data_begin:
-		{
+
+		req.on(ws_open, [](request& req){
 			std::cout << "websocket start" << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_continue:
-		{
+		});
+
+		req.on(ws_message, [](request& req) {
 			auto part_data = req.get_part_data();
 			//echo
 			std::string str = std::string(part_data.data(), part_data.length());
-			req.get_conn()->send_ws_msg(std::move(str), opcode::text);
+			req.get_conn()->send_ws_string(std::move(str));
 			std::cout << part_data.data() << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_close:
-		{
+		});
+
+		req.on(ws_close, [](request& req) {
 			std::cout << "websocket close" << std::endl;
-		}
-		break;
-		case cinatra::data_proc_state::data_error:
-		{
-			std::cout << "network error" << std::endl;
-		}
-		break;
-		}
+		});
+
+		req.on(ws_error, [](request& req) {
+			std::cout << "websocket error" << std::endl;
+		});
 	});
 
 	//http upload(multipart)
@@ -208,8 +201,7 @@ int main() {
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-
-		res.set_status_and_content(status_type::ok, "multipart finished");
+		res.render_string("multipart finished");
 	});
 
 	//http upload(octet-stream)
@@ -219,8 +211,7 @@ int main() {
 		for (auto& file : files) {
 			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
 		}
-
-		res.set_status_and_content(status_type::ok, "octet-stream finished");
+		res.render_string("octet-stream finished");
 	});
 
 	//chunked download

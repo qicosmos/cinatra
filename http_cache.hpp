@@ -17,6 +17,7 @@ namespace cinatra {
 			if (std::distance(cur_it_, cache_.end()) > MAX_CACHE_SIZE) {
 				cur_it_ = cache_.begin();
 			}
+
 			cur_it_ = cache_.emplace(key, content).first;
 			cache_time_[key] = std::time(nullptr) + max_cache_age_;
 		}
@@ -51,12 +52,21 @@ namespace cinatra {
 			skip_cache_.emplace(key);
 		}
 
+		static void add_single_cache(std::string_view key)
+		{
+			need_single_cache_.emplace(key);
+		}
+
 		static void enable_cache(bool b) {
 			need_cache_ = b;
 		}
 
-		static bool need_cache() {
-			return need_cache_;
+		static bool need_cache(std::string_view key) {
+			if(need_cache_){
+				return need_cache_;
+			}else{
+                return need_single_cache_.find(key)!= need_single_cache_.end();
+			}
 		}
 
 		static bool not_cache(std::string_view key) {
@@ -79,6 +89,7 @@ namespace cinatra {
 		static std::unordered_map<std::string, std::vector<std::string>> cache_;
 		static std::unordered_map<std::string, std::vector<std::string>>::iterator cur_it_;
 		static std::unordered_set<std::string_view> skip_cache_;
+		static std::unordered_set<std::string_view> need_single_cache_;
 		static std::time_t max_cache_age_;
 		static std::unordered_map<std::string, std::time_t > cache_time_;
 	};
@@ -90,4 +101,5 @@ namespace cinatra {
 	std::unordered_set<std::string_view> http_cache::skip_cache_;
 	std::time_t http_cache::max_cache_age_ = 0;
 	std::unordered_map<std::string, std::time_t > http_cache::cache_time_;
+	std::unordered_set<std::string_view> http_cache::need_single_cache_;
 }
