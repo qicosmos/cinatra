@@ -94,27 +94,7 @@ int main() {
 //		json["test_text"] = "hello,world";
 //		json["header_text"] = "你好 cinatra";
 		res.render_view("./www/test.html");
-		/*
-		 * ---------------------test.html---------------------------
-		 * <html>
-	<head>
-	  <meta charset="utf-8">
-	</head>
-	<body>
-		{% include "./header/header.html" %}
-			<h1>{{test_text}}</h1>
-	</body>
-</html>
-
-		 ----------------------------------header.html---------------------
-		 <div>{{header_text}}</div>
-*/
 	});
-
-//	server.set_http_handler<GET,POST>("/test_remove",[](request& req, response& res){
-//		fs::remove(fs::path("./abc.txt"));
-//		res.set_status_and_content(status_type::ok, "OK",res_content_type::string);
-//	});
 
 
 	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {

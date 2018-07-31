@@ -17,7 +17,6 @@ namespace cinatra {
 			if (std::distance(cur_it_, cache_.end()) > MAX_CACHE_SIZE) {
 				cur_it_ = cache_.begin();
 			}
-
 			cur_it_ = cache_.emplace(key, content).first;
 			cache_time_[key] = std::time(nullptr) + max_cache_age_;
 		}

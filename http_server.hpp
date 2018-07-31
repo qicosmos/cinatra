@@ -270,7 +270,7 @@ namespace cinatra {
 					}
 						break;
 				}
-			});
+			},enable_cache{false});
 		}
 
 		bool is_small_file(std::ifstream* in,request& req) const {
