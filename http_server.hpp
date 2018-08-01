@@ -232,7 +232,7 @@ namespace cinatra {
 
 		void set_static_res_handler()
 		{
-			http_router_.register_handler<POST,GET>(STAIC_RES, [this](request& req, response& res){
+			set_http_handler<POST,GET>(STAIC_RES, [this](request& req, response& res){
 				auto state = req.get_state();
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
