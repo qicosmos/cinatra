@@ -648,6 +648,7 @@ namespace cinatra {
 		}
 
 		void call_event(data_proc_state event_type) {
+			if(event_call_backs_[(size_t)event_type])
 			event_call_backs_[(size_t)event_type](*this);
 		}
 
