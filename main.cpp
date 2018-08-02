@@ -2,6 +2,7 @@
 #include "http_server.hpp"
 using namespace cinatra;
 
+#include "controller/testcontroller.hpp"
 struct log_t
 {
 	bool before(request& req, response& res) {
@@ -56,6 +57,10 @@ int main() {
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok,"hello world");
 	},enable_cache{false});
+
+	test_controller t_ctr;
+    server.set_http_handler<GET, POST>("/controller_clean",&test_controller::method);
+	server.set_http_handler<GET, POST>("/controller_record",&test_controller::method,&t_ctr);
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
         res.render_string(std::to_string(std::time(nullptr)));

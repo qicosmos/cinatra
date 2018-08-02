@@ -85,4 +85,57 @@ namespace timax
 	{
 		return static_cast<typename function_traits<Function>::pointer>(lambda);
 	}
+
+	template<typename Function>
+	struct get_class_from_member_function
+	{
+		using type = void;
+	};
+
+	template<typename Ret,typename Class,typename...Args>
+	struct get_class_from_member_function<Ret(Class::*)(Args...)>
+	{
+		using type = Class;
+	};
+
+	template<typename Ret,typename Class,typename...Args>
+	struct get_class_from_member_function<Ret(Class::*)(Args...) const>
+	{
+		using type = Class;
+	};
+
+	template<typename T,typename...Args>
+	struct contains_give_type:std::false_type
+	{
+        static auto filter(Args&&...tp)
+		{
+			return std::tuple<Args...>(std::move(tp)...);
+		}
+	};
+
+	template<typename T,typename...Args>
+	struct contains_give_type<T,T,Args...>:std::true_type
+	{
+         static auto filter(T t,Args...tp)
+		 {
+			 return std::tuple<Args...>(std::move(tp)...);
+		 }
+
+		 static T get_point(T t,Args...tp)
+		 {
+		 	return t;
+		 }
+	};
+
+	template<typename T,typename U = void >
+	struct is_functor:std::false_type
+	{
+
+	};
+
+	template<typename T>
+	struct is_functor<T, std::void_t<decltype(&T::operator())>>:std::true_type
+	{
+
+	};
 }

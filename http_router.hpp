@@ -15,7 +15,7 @@ namespace cinatra {
 	class http_router {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
-		void register_handler(std::string_view name, Function&& f, Ap&&... ap) {
+		std::enable_if_t <timax::is_functor<Function>::value> register_handler(std::string_view name, Function&& f, Ap&&... ap) {
 			if (name == "/*"sv) {
 				assert("register error");
 				return;
@@ -37,9 +37,9 @@ namespace cinatra {
 			}
 		}
 
-		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		void register_handler(std::string_view name, Type (T::* f)(request&, response&), T1 t, Ap&&... ap) {
-			register_handler_impl<Is...>(name, f, t, std::forward<Ap>(ap)...);
+		template <http_method... Is, class T, class Type, typename... Ap>
+		std::enable_if_t<!timax::is_functor<Type(request&,response&)>::value> register_handler(std::string_view name, Type (T::* f)(request&, response&), Ap&&... ap) {
+			register_handler_impl<Is...>(name, f, std::forward<Ap>(ap)...);
 		}
 
 		void remove_handler(std::string name) {
@@ -84,17 +84,17 @@ namespace cinatra {
 			return false;
 		}
 
-		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		void register_handler_impl(std::string_view name, Type T::* f, T1 t, Ap&&... ap) {
+		template <http_method... Is, class T, class Type, typename... Ap>
+		void register_handler_impl(std::string_view name, Type T::* f, Ap&&... ap) {
 			if constexpr(sizeof...(Is) > 0) {
 				auto arr = get_arr<Is...>(name);
 
 				for (auto& s : arr) {
-					register_member_func(name, s, f, t, std::forward<Ap>(ap)...);
+					register_member_func(name, s, f, std::forward<Ap>(ap)...);
 				}
 			}
 			else {
-				register_member_func(name, std::string(name.data(), name.length()), f, t, std::forward<Ap>(ap)...);
+				register_member_func(name, std::string(name.data(), name.length()), f, std::forward<Ap>(ap)...);
 			}
 		}
 
@@ -133,39 +133,67 @@ namespace cinatra {
 			}
 		}
 
-		template<typename Function, typename Self, typename... AP>
-		void register_member_func(std::string_view raw_name, const std::string& name, Function f, Self self, AP&&... ap) {
+		template<typename Function,typename... AP>
+		void register_member_func(std::string_view raw_name, const std::string& name, Function f, AP&&... ap) {
 			if (raw_name.back() == '*') {
-				this->wildcard_invokers_[name.substr(0, name.size() - 2)] = std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, f, self, std::move(ap)...);
+				this->wildcard_invokers_[name.substr(0, name.size() - 2)] = std::bind(&http_router::invoke_mem<Function, AP...>, this,
+					std::placeholders::_1, std::placeholders::_2, f, std::move(ap)...);
 			}
 			else {
-				this->map_invokers_[name] = std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, f, self, std::move(ap)...);
+				this->map_invokers_[name] = std::bind(&http_router::invoke_mem<Function, AP...>, this,
+					std::placeholders::_1, std::placeholders::_2, f, std::move(ap)...);
 			}
 		}
 
-		template<typename Function, typename Self, typename... AP>
-		void invoke_mem(request& req, response& res, Function f, Self self, AP... ap) {
+         template<typename Class,typename Function,typename...AP>
+         std::enable_if_t<timax::contains_give_type<Class*,AP...>::value> invoke_mem_impl(request& req, response& res, Function f, AP... ap)
+		 {
+			 using result_type = typename timax::function_traits<Function>::result_type;
+			 auto tp = timax::contains_give_type<Class*,AP...>::filter(std::move(ap)...);
+			 bool r = do_ap_before(req, res, tp);
+			 if (!r)
+				 return;
+			 auto self = timax::contains_give_type<Class*,AP...>::get_point(std::move(ap)...);
+			 if constexpr(std::is_void_v<result_type>) {
+				 //business
+				 (*self.*f)(req, res);
+				 //after
+				 do_void_after(req, res, tp);
+			 }
+			 else {
+				 //business
+				 result_type result = (*self.*f)(req, res);
+				 //after
+				 do_after(std::move(result), req, res, tp);
+			 }
+		 }
+
+		template<typename Class,typename Function,typename...AP>
+		std::enable_if_t<!timax::contains_give_type<Class*,AP...>::value> invoke_mem_impl(request& req, response& res, Function f, AP... ap)
+		{
 			using result_type = typename timax::function_traits<Function>::result_type;
 			std::tuple<AP...> tp(std::move(ap)...);
 			bool r = do_ap_before(req, res, tp);
-
 			if (!r)
 				return;
-
+			Class obj;
 			if constexpr(std::is_void_v<result_type>) {
 				//business
-				(*self.*f)(req, res);
+				(obj.*f)(req, res);
 				//after
 				do_void_after(req, res, tp);
 			}
 			else {
 				//business
-				result_type result = (*self.*f)(req, res);
+				result_type result = (obj.*f)(req, res);
 				//after
 				do_after(std::move(result), req, res, tp);
 			}
+		}
+
+		template<typename Function, typename... AP>
+		void invoke_mem(request& req, response& res, Function f, AP... ap) {
+			invoke_mem_impl<typename timax::get_class_from_member_function<Function>::type>(req,res,f,ap...);
 		}
 
 		template<typename Tuple>
