@@ -78,17 +78,17 @@ int main() {
 		auto session = res.start_session();
 		session->set_data("userid", std::string("1"));
 		session->set_max_age(-1);
-		res.set_status_and_content(status_type::ok, "login");
+		res.render_string("login");
 	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/islogin", [](request& req, response& res) {
 		auto ptr = req.get_session();
 		auto session = ptr.lock();
 		if (session == nullptr || session->get_data<std::string>("userid") != "1") {
-			res.set_status_and_content(status_type::ok, "没有登录", res_content_type::string);
+			res.render_string("没有登录");
 			return;
 		}
-		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
+		res.render_string("已经登录");
 	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
