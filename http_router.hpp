@@ -15,7 +15,7 @@ namespace cinatra {
 	class http_router {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
-		std::enable_if_t <timax::is_functor<Function>::value> register_handler(std::string_view name, Function&& f, Ap&&... ap) {
+		std::enable_if_t<!timax::is_member_function<Function>::value> register_handler(std::string_view name, Function&& f, Ap&&... ap) {
 			if (name == "/*"sv) {
 				assert("register error");
 				return;
@@ -37,7 +37,7 @@ namespace cinatra {
 			}
 		}
 
-		template <http_method... Is, class T, class Type, typename... Ap>
+		 template <http_method... Is, class T, class Type, typename... Ap>
 		 void register_handler(std::string_view name, Type (T::* f)(request&, response&), Ap&&... ap) {
 			register_handler_impl<Is...>(name, f, std::forward<Ap>(ap)...);
 		}

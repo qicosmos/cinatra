@@ -35,11 +35,6 @@ struct check {
 	}
 };
 
-void show(request&,response&)
-{
-
-}
-
 int main() {
 	nanolog::initialize(nanolog::GuaranteedLogger(), "/tmp/", "nanolog", 1);
 	const int max_thread_num = 4;
@@ -64,7 +59,6 @@ int main() {
 	});
 
 	test_controller t_ctr;
-    server.set_http_handler<GET, POST>("/controller_function",&show);
     server.set_http_handler<GET, POST>("/controller_clean",&test_controller::method);
 	server.set_http_handler<GET, POST>("/controller_record",&test_controller::method,&t_ctr);
 
