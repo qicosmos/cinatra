@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <iostream>
 #include "define.h"
-
+#include <map>
 namespace cinatra {
 	struct ci_less
 	{
