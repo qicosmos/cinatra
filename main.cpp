@@ -55,8 +55,8 @@ int main() {
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok,"hello world");
-	},enable_cache{false});
+		res.render_string("hello world");
+	});
 
 	test_controller t_ctr;
     server.set_http_handler<GET, POST>("/controller_clean",&test_controller::method);
@@ -68,18 +68,18 @@ int main() {
 
     server.set_http_handler<GET, POST>("/404", [](request& req, response& res) {
         res.render_404();
-    },enable_cache{false});
+    });
 
     server.set_http_handler<GET, POST>("/404_custom", [](request& req, response& res) {
         res.render_404("./404.html");
-    },enable_cache{false});
+    });
 
 	server.set_http_handler<GET, POST>("/login", [](request& req, response& res) {
 		auto session = res.start_session();
 		session->set_data("userid", std::string("1"));
 		session->set_max_age(-1);
 		res.render_string("login");
-	},enable_cache{false});
+	},enable_cache{false});  //if set global cache true,enable_cache{false} can disable for this api;
 
 	server.set_http_handler<GET, POST>("/islogin", [](request& req, response& res) {
 		auto ptr = req.get_session();
@@ -89,7 +89,7 @@ int main() {
 			return;
 		}
 		res.render_string("已经登录");
-	},enable_cache{false});
+	},enable_cache{false}); //if set global cache true,enable_cache{false} can disable for this api;
 
 	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
 		inja::json json;
