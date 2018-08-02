@@ -38,7 +38,7 @@ namespace cinatra {
 		}
 
 		template <http_method... Is, class T, class Type, typename... Ap>
-		std::enable_if_t<!timax::is_functor<Type(request&,response&)>::value> register_handler(std::string_view name, Type (T::* f)(request&, response&), Ap&&... ap) {
+		 void register_handler(std::string_view name, Type (T::* f)(request&, response&), Ap&&... ap) {
 			register_handler_impl<Is...>(name, f, std::forward<Ap>(ap)...);
 		}
 
