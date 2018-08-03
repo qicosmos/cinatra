@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
-project(cinatra)
+set(project_name cinatra)
+project(${project_name})
 #set(CMAKE_BUILD_TYPE Release)
 if (MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
@@ -66,19 +67,19 @@ set(CINATRA
 	main.cpp
 	)
 
-add_executable(cinatra ${CINATRA})
+add_executable(${project_name} ${CINATRA})
 include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-target_link_libraries(cinatra ${Boost_LIBRARIES} uuid -lstdc++fs)
+target_link_libraries(${project_name} ${Boost_LIBRARIES} uuid -lstdc++fs)
 if (ENABLE_SSL)
-	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
+	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 
 if (ENABLE_CLIENT_SSL)
-	target_link_libraries(cinatra ${OPENSSL_LIBRARIES} pthread -ldl)
+	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 
 if (ENABLE_GZIP)
-	target_link_libraries(cinatra ${ZLIB_LIBRARIES})
+	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
-install(TARGETS cinatra DESTINATION include)
+install(TARGETS ${project_name} DESTINATION include)
