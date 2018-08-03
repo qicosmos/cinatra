@@ -90,7 +90,7 @@ namespace cinatra {
 		}
 
 		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		std::enable_if_t<std::is_same_v<T*, T1>> register_handler_impl(std::string_view name, Type T::* f, T1 t, Ap&&... ap) {
+		void register_handler_impl(std::string_view name, Type T::* f, T1 t, Ap&&... ap) {
 			if constexpr(sizeof...(Is) > 0) {
 				auto arr = get_arr<Is...>(name);
 
@@ -174,7 +174,7 @@ namespace cinatra {
 				if (self)
 					result = (*self.*f)(req, res);
 				else
-					(nonpointer_type{}.*f)(req, res);
+					result = (nonpointer_type{}.*f)(req, res);
 				//after
 				do_after(std::move(result), req, res, tp);
 			}
