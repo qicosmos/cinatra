@@ -42,6 +42,11 @@ namespace cinatra {
 			register_handler_impl<Is...>(name, f, t, std::forward<Ap>(ap)...);
 		}
 
+		template <http_method... Is, class T, class Type, typename... Ap>
+		void register_handler(std::string_view name, Type(T::* f)(request&, response&), Ap&&... ap) {
+			register_handler_impl<Is...>(name, f, (T*)nullptr, std::forward<Ap>(ap)...);
+		}
+
 		void remove_handler(std::string name) {
 			this->map_invokers_.erase(name);
 		}
@@ -153,16 +158,23 @@ namespace cinatra {
 
 			if (!r)
 				return;
-
+			using nonpointer_type = std::remove_pointer_t<Self>;
 			if constexpr(std::is_void_v<result_type>) {
 				//business
-				(*self.*f)(req, res);
+				if(self)
+					(*self.*f)(req, res);
+				else
+					(nonpointer_type{}.*f)(req, res);
 				//after
 				do_void_after(req, res, tp);
 			}
 			else {
 				//business
-				result_type result = (*self.*f)(req, res);
+				result_type result;
+				if (self)
+					result = (*self.*f)(req, res);
+				else
+					(nonpointer_type{}.*f)(req, res);
 				//after
 				do_after(std::move(result), req, res, tp);
 			}
