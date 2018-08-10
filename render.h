@@ -634,14 +634,14 @@ static void to_render_data_impl(const nlohmann::json& json, Object&& render_data
 	}
 }
 
-static void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map)
+inline void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map)
 {
 	for (auto iter = json.begin(); iter != json.end(); ++iter) {
 		to_render_data_impl(iter.value(), render_map, iter.key());
 	}
 }
 
-static std::string render_file(const std::string& tpl_filepath, const nlohmann::json& data)
+inline std::string render_file(const std::string& tpl_filepath, const nlohmann::json& data)
 {
 	std::stringstream buff;
 	std::ifstream file(tpl_filepath);
