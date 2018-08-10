@@ -34,6 +34,23 @@ struct check {
 	}
 };
 
+struct person
+{
+	void foo(request& req, response& res) 
+	{
+		std::cout << i << std::endl;
+		res.render_string("ok");
+	}
+
+	void foo1(request& req, response& res)
+	{
+		std::cout << i << std::endl;
+		res.render_string("ok");
+	}
+
+	int i=0;
+};
+
 int main() {
 	nanolog::initialize(nanolog::GuaranteedLogger(), "/tmp/", "nanolog", 1);
 	const int max_thread_num = 4;
@@ -56,6 +73,10 @@ int main() {
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok,"hello world");
 	},enable_cache{false});
+
+	person p{ 2 };
+	server.set_http_handler<GET, POST>("/a", &person::foo, enable_cache{ false }, log_t{});
+	server.set_http_handler<GET, POST>("/b", &person::foo1, log_t{}, enable_cache{ false });
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
         res.render_string(std::to_string(std::time(nullptr)));
@@ -87,17 +108,14 @@ int main() {
 	},enable_cache{false});
 
 	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
-		inja::json json;
         res.set_attr("number",1024);
         res.set_attr("test_text","hello,world");
         res.set_attr("header_text","你好 cinatra");
-//		json["test_text"] = "hello,world";
-//		json["header_text"] = "你好 cinatra";
 		res.render_view("./www/test.html");
 	});
 
 	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {
-		inja::json json;
+		nlohmann::json json;
 		json["abc"] = "abc";
 		json["success"] = true;
 		json["number"] = 100.005;

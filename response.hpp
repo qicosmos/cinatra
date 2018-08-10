@@ -14,7 +14,7 @@
 #include "mime_types.hpp"
 #include "session_manager.hpp"
 #include "nlohmann_json.hpp"
-#include "inja.hpp"
+#include <render.h>
 #include "http_cache.hpp"
 namespace cinatra {
 	class response {
@@ -225,9 +225,9 @@ namespace cinatra {
 
 		void  handle_render_view(const std::string& tpl_file_path,const nlohmann::json& tmp_data,status_type server_type =status_type::ok )
 		{
-			inja::Environment env = inja::Environment("./");
-			env.set_element_notation(inja::ElementNotation::Dot);
-			inja::Template tmpl = env.parse_template(tpl_file_path);
+			//inja::Environment env = inja::Environment("./");
+			//env.set_element_notation(inja::ElementNotation::Dot);
+			//inja::Template tmpl = env.parse_template(tpl_file_path);
 			std::string res_content_type_str = "text/html; charset=utf8";
 			auto extension = get_extension(tpl_file_path.data());
 			auto mime = get_mime_type(extension);
@@ -237,7 +237,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
 			set_status_and_content(server_type, env.render_template(tmpl, tmp_data),std::move(res_content_type_str),content_encoding::gzip);
 #else
-			set_status_and_content(server_type, env.render_template(tmpl, tmp_data),std::move(res_content_type_str),content_encoding::none);
+			set_status_and_content(server_type, render::render_file(tpl_file_path, tmp_data),std::move(res_content_type_str),content_encoding::none);
 #endif
 		}
 
@@ -328,7 +328,7 @@ namespace cinatra {
 		std::string_view domain_;
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
-        inja::json tmpl_json_data_;
+		nlohmann::json tmpl_json_data_;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
