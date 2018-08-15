@@ -63,7 +63,7 @@ set(CINATRA
 	session.hpp
 	session_manager.hpp
 	nlohmann_json.hpp
-	inja.hpp
+	render.h
 	main.cpp
 	)
 
