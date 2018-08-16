@@ -76,7 +76,7 @@ int main() {
 
 	person p{ 2 };
 	server.set_http_handler<GET, POST>("/a", &person::foo, enable_cache{ false }, log_t{});
-	server.set_http_handler<GET, POST>("/b", &person::foo1, log_t{}, enable_cache{ false });
+	server.set_http_handler<GET, POST>("/b", &person::foo1,&p, log_t{}, enable_cache{ false });
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
         res.render_string(std::to_string(std::time(nullptr)));

@@ -85,4 +85,22 @@ namespace timax
 	{
 		return static_cast<typename function_traits<Function>::pointer>(lambda);
 	}
+
+	template<typename T>
+	struct is_member_function:std::false_type
+	{
+
+	};
+
+	template<typename Ret,typename Class,typename...Args>
+	struct is_member_function<Ret(Class::*)(Args...)>:std::true_type
+	{
+
+	};
+
+	template<typename Ret,typename Class,typename...Args>
+	struct is_member_function<Ret(Class::* const)(Args...)>:std::true_type
+	{
+
+	};
 }
