@@ -265,6 +265,20 @@ public:
         auto r = read_variable();
         return std::string(r.first, r.second);
     }
+	range_t read_include_variable() {
+		skip_whitespace();
+		auto r = read_while([](char c) { return  c>32&&c != '}'; });
+		if (r.first == r.second)
+			throw "Did not find variable at read_variable().";
+		return r;
+	}
+	std::string read_include_str() {
+		auto r = read_include_variable();
+		return std::string(r.first, r.second);
+	}
+	std::string read_inline_str() {		
+		return read_include_str();
+	}
 
     void eat(char c) {
         if (peek() != c)
@@ -463,7 +477,49 @@ static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx,
                             break;
                         }
                     }
-                } else {
+                }
+				else if (p.equal(command, "inline")) {
+					// $inline {{ <block> }}
+					p.eat_with_whitespace("{{");
+
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						std::string include_file = p.read_inline_str();
+						std::stringstream buff;
+						std::ifstream file(include_file);
+						if (!file.is_open()) {
+							throw std::runtime_error("html template file can not open");
+						}
+						buff << file.rdbuf();
+						out << buff;
+					}
+					p.skip_whitespace();
+					p.eat("}}");
+				}else if (p.equal(command, "include")) {
+					// $include {{ <block> }}
+					p.eat_with_whitespace("{{");
+
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						std::string include_file = p.read_include_str();
+						std::stringstream buff;
+						std::ifstream file(include_file);
+						if (!file.is_open()) {
+							throw std::runtime_error("html template file can not open");
+						}
+						buff << file.rdbuf();
+						std::stringstream result;
+						render::parse(buff.str(), dic, render::from_ios(result));
+						out << result;
+					}
+					p.skip_whitespace();
+					p.eat("}}");
+				}
+				else {
                     throw "Unexpected command " + std::string(command.first, command.second) + ". It must be \"for\" or \"if\"";
                 }
             }
@@ -486,6 +542,10 @@ struct output_type {
     void flush() {
         ios << std::flush;
     }
+
+	void operator<<(std::stringstream& s) {
+		ios << s.rdbuf();
+	}
 
     output_type(output_type&&) = default;
     output_type& operator=(output_type&&) = default;
@@ -634,14 +694,14 @@ static void to_render_data_impl(const nlohmann::json& json, Object&& render_data
 	}
 }
 
-inline void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map)
+static void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map)
 {
 	for (auto iter = json.begin(); iter != json.end(); ++iter) {
 		to_render_data_impl(iter.value(), render_map, iter.key());
 	}
 }
 
-inline std::string render_file(const std::string& tpl_filepath, const nlohmann::json& data)
+static std::string render_file(const std::string& tpl_filepath, const nlohmann::json& data)
 {
 	std::stringstream buff;
 	std::ifstream file(tpl_filepath);
