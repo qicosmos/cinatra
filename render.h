@@ -16,6 +16,9 @@
 
 namespace render {
 
+	template<class Input, class Dictionary, class Output>
+	static void parse(Input&& input, Dictionary&& dic, Output&& out);
+
 class object {
     struct holder {
         virtual ~holder() { }
@@ -339,197 +342,6 @@ static object get_variable(parser<Iterator>& p, const Dictionary& dic, tmpl_cont
     }
 }
 
-template<class Iterator, class Dictionary, class F>
-static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx, bool skip, F& out) {
-    while (p) {
-        auto r = p.read_while_or_eof([](char c) { return c != '}' && c != '$'; });
-        if (not skip)
-            out.put(r.first, r.second);
-        if (!p)
-            break;
-
-        char c = p.peek();
-        if (c == '}') {
-            if (p.has_next() && p.next() == '}') {
-                // end of block
-                break;
-            } else {
-                p.read();
-                if (not skip)
-                    output_string(out, "}");
-            }
-        } else if (c == '$') {
-            p.read();
-            c = p.peek();
-            if (c == '$') {
-                // $$
-                p.read();
-                if (not skip)
-                    output_string(out, "$");
-            } else if (c == '#') {
-                // $# comments
-                p.read_while_or_eof([](char peek) {
-                    return peek != '\n';
-                });
-            } else if (c == '{') {
-                p.read();
-                c = p.peek();
-                if (c == '{') {
-                    // ${{
-                    p.read();
-                    if (not skip)
-                        output_string(out, "{{");
-                } else {
-                    // ${variable}
-                    object obj = get_variable(p, dic, ctx, skip);
-                    p.eat_with_whitespace("}");
-
-                    if (not skip) {
-                        std::string str = obj.str();
-                        out.put(str.begin(), str.end());
-                    }
-                }
-            } else if (c == '}') {
-                p.read();
-                c = p.peek();
-                if (c == '}') {
-                    // $}}
-                    p.read();
-                    if (not skip)
-                        output_string(out, "}}");
-                } else {
-                    throw std::string("Unexpected character '") + c + "'. It must be '}' after \"$}\"";
-                }
-            } else {
-                auto command = p.read_ident();
-                if (p.equal(command, "for")) {
-                    // $for x in xs {{ <block> }}
-                    auto var1 = p.read_ident_str();
-                    auto in = p.read_ident();
-                    if (not p.equal(in, "in"))
-                        throw "Unexpected string \"" + std::string(in.first, in.second) + "\". It must be \"in\"";
-                    object obj = get_variable(p, dic, ctx, skip);
-                    p.eat_with_whitespace("{{");
-
-                    if (skip) {
-                        block(p, dic, ctx, true, out);
-                    } else {
-                        auto context = p.save();
-                        auto& vec = ctx[var1];
-                        obj.map([&](object v) {
-                            vec.push_back(std::move(v));
-                            block(p, dic, ctx, skip, out);
-                            vec.pop_back();
-                            p.load(context);
-                        });
-                        block(p, dic, ctx, true, out);
-                    }
-                    p.eat("}}");
-                } else if (p.equal(command, "if")) {
-                    // $if x {{ <block> }}
-                    // $elseif y {{ <block> }}
-                    // $elseif z {{ <block> }}
-                    // $else {{ <block> }}
-                    object obj = get_variable(p, dic, ctx, skip);
-                    p.eat_with_whitespace("{{");
-                    bool run; // if `skip` is true, `run` is an unspecified value.
-                    if (skip) {
-                        block(p, dic, ctx, true, out);
-                    } else {
-                        run = static_cast<bool>(obj);
-                        block(p, dic, ctx, not run, out);
-                    }
-                    p.eat("}}");
-                    while (true) {
-                        auto context = p.save();
-                        p.skip_whitespace_or_eof();
-                        if (!p) {
-                            p.load(context);
-                            break;
-                        }
-                        c = p.peek();
-                        if (c == '$') {
-                            p.read();
-                            auto command = p.read_ident();
-                            if (p.equal(command, "elseif")) {
-                                object obj = get_variable(p, dic, ctx, skip || run);
-                                p.eat_with_whitespace("{{");
-                                if (skip || run) {
-                                    block(p, dic, ctx, true, out);
-                                } else {
-                                    bool run_ = static_cast<bool>(obj);
-                                    block(p, dic, ctx, not run_, out);
-                                    if (run_)
-                                        run = true;
-                                }
-                                p.eat("}}");
-                            } else if (p.equal(command, "else")) {
-                                p.eat_with_whitespace("{{");
-                                block(p, dic, ctx, skip || run, out);
-                                p.eat("}}");
-                                break;
-                            } else {
-                                p.load(context);
-                                break;
-                            }
-                        } else {
-                            p.load(context);
-                            break;
-                        }
-                    }
-                }
-				else if (p.equal(command, "inline")) {
-					// $inline {{ <block> }}
-					p.eat_with_whitespace("{{");
-
-					if (skip) {
-						block(p, dic, ctx, true, out);
-					}
-					else {
-						std::string include_file = p.read_inline_str();
-						std::stringstream buff;
-						std::ifstream file(include_file);
-						if (!file.is_open()) {
-							throw std::runtime_error("html template file can not open");
-						}
-						buff << file.rdbuf();
-						out << buff;
-					}
-					p.skip_whitespace();
-					p.eat("}}");
-				}else if (p.equal(command, "include")) {
-					// $include {{ <block> }}
-					p.eat_with_whitespace("{{");
-
-					if (skip) {
-						block(p, dic, ctx, true, out);
-					}
-					else {
-						std::string include_file = p.read_include_str();
-						std::stringstream buff;
-						std::ifstream file(include_file);
-						if (!file.is_open()) {
-							throw std::runtime_error("html template file can not open");
-						}
-						buff << file.rdbuf();
-						std::stringstream result;
-						render::parse(buff.str(), dic, render::from_ios(result));
-						out << result;
-					}
-					p.skip_whitespace();
-					p.eat("}}");
-				}
-				else {
-                    throw "Unexpected command " + std::string(command.first, command.second) + ". It must be \"for\" or \"if\"";
-                }
-            }
-        } else {
-            assert(false && "must not go through.");
-            throw "Must not go through.";
-        }
-    }
-}
-
 template<class IOS>
 struct output_type {
     IOS ios;
@@ -553,6 +365,219 @@ struct output_type {
     output_type(const output_type&) = delete;
     output_type& operator=(const output_type&) = delete;
 };
+
+template<class IOS>
+static output_type<IOS> from_ios(IOS&& ios) {
+	return output_type<IOS>(std::forward<IOS>(ios));
+}
+
+template<class Iterator, class Dictionary, class F>
+static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx, bool skip, F& out) {
+	while (p) {
+		auto r = p.read_while_or_eof([](char c) { return c != '}' && c != '$'; });
+		if (not skip)
+			out.put(r.first, r.second);
+		if (!p)
+			break;
+
+		char c = p.peek();
+		if (c == '}') {
+			if (p.has_next() && p.next() == '}') {
+				// end of block
+				break;
+			}
+			else {
+				p.read();
+				if (not skip)
+					output_string(out, "}");
+			}
+		}
+		else if (c == '$') {
+			p.read();
+			c = p.peek();
+			if (c == '$') {
+				// $$
+				p.read();
+				if (not skip)
+					output_string(out, "$");
+			}
+			else if (c == '#') {
+				// $# comments
+				p.read_while_or_eof([](char peek) {
+					return peek != '\n';
+				});
+			}
+			else if (c == '{') {
+				p.read();
+				c = p.peek();
+				if (c == '{') {
+					// ${{
+					p.read();
+					if (not skip)
+						output_string(out, "{{");
+				}
+				else {
+					// ${variable}
+					object obj = get_variable(p, dic, ctx, skip);
+					p.eat_with_whitespace("}");
+
+					if (not skip) {
+						std::string str = obj.str();
+						out.put(str.begin(), str.end());
+					}
+				}
+			}
+			else if (c == '}') {
+				p.read();
+				c = p.peek();
+				if (c == '}') {
+					// $}}
+					p.read();
+					if (not skip)
+						output_string(out, "}}");
+				}
+				else {
+					throw std::string("Unexpected character '") + c + "'. It must be '}' after \"$}\"";
+				}
+			}
+			else {
+				auto command = p.read_ident();
+				if (p.equal(command, "for")) {
+					// $for x in xs {{ <block> }}
+					auto var1 = p.read_ident_str();
+					auto in = p.read_ident();
+					if (not p.equal(in, "in"))
+						throw "Unexpected string \"" + std::string(in.first, in.second) + "\". It must be \"in\"";
+					object obj = get_variable(p, dic, ctx, skip);
+					p.eat_with_whitespace("{{");
+
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						auto context = p.save();
+						auto& vec = ctx[var1];
+						obj.map([&](object v) {
+							vec.push_back(std::move(v));
+							block(p, dic, ctx, skip, out);
+							vec.pop_back();
+							p.load(context);
+						});
+						block(p, dic, ctx, true, out);
+					}
+					p.eat("}}");
+				}
+				else if (p.equal(command, "if")) {
+					// $if x {{ <block> }}
+					// $elseif y {{ <block> }}
+					// $elseif z {{ <block> }}
+					// $else {{ <block> }}
+					object obj = get_variable(p, dic, ctx, skip);
+					p.eat_with_whitespace("{{");
+					bool run; // if `skip` is true, `run` is an unspecified value.
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						run = static_cast<bool>(obj);
+						block(p, dic, ctx, not run, out);
+					}
+					p.eat("}}");
+					while (true) {
+						auto context = p.save();
+						p.skip_whitespace_or_eof();
+						if (!p) {
+							p.load(context);
+							break;
+						}
+						c = p.peek();
+						if (c == '$') {
+							p.read();
+							auto command = p.read_ident();
+							if (p.equal(command, "elseif")) {
+								object obj = get_variable(p, dic, ctx, skip || run);
+								p.eat_with_whitespace("{{");
+								if (skip || run) {
+									block(p, dic, ctx, true, out);
+								}
+								else {
+									bool run_ = static_cast<bool>(obj);
+									block(p, dic, ctx, not run_, out);
+									if (run_)
+										run = true;
+								}
+								p.eat("}}");
+							}
+							else if (p.equal(command, "else")) {
+								p.eat_with_whitespace("{{");
+								block(p, dic, ctx, skip || run, out);
+								p.eat("}}");
+								break;
+							}
+							else {
+								p.load(context);
+								break;
+							}
+						}
+						else {
+							p.load(context);
+							break;
+						}
+					}
+				}
+				else if (p.equal(command, "inline")) {
+					// $inline {{ <block> }}
+					p.eat_with_whitespace("{{");
+
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						std::string include_file = p.read_inline_str();
+						std::stringstream buff;
+						std::ifstream file(include_file);
+						if (!file.is_open()) {
+							throw std::runtime_error("html template file can not open");
+						}
+						buff << file.rdbuf();
+						out << buff;
+					}
+					p.skip_whitespace();
+					p.eat("}}");
+				}
+				else if (p.equal(command, "include")) {
+					// $include {{ <block> }}
+					p.eat_with_whitespace("{{");
+
+					if (skip) {
+						block(p, dic, ctx, true, out);
+					}
+					else {
+						std::string include_file = p.read_include_str();
+						std::stringstream buff;
+						std::ifstream file(include_file);
+						if (!file.is_open()) {
+							throw std::runtime_error("html template file can not open");
+						}
+						buff << file.rdbuf();
+						std::stringstream result;
+						render::parse(buff.str(), dic, internal::from_ios(result));
+						out << result;
+					}
+					p.skip_whitespace();
+					p.eat("}}");
+				}
+				else {
+					throw "Unexpected command " + std::string(command.first, command.second) + ". It must be \"for\" or \"if\"";
+				}
+			}
+		}
+		else {
+			assert(false && "must not go through.");
+			throw "Must not go through.";
+		}
+	}
+}
 
 struct cstring : std::iterator<std::forward_iterator_tag, char> {
     cstring() : p(nullptr) { }
@@ -593,11 +618,6 @@ private:
 
 }
 
-template<class IOS>
-static internal::output_type<IOS> from_ios(IOS&& ios) {
-    return internal::output_type<IOS>(std::forward<IOS>(ios));
-}
-
 template<class Input, class Dictionary, class Output>
 static void parse(Input&& input, Dictionary&& dic, Output&& out) {
     auto first = std::begin(input);
@@ -617,7 +637,7 @@ static void parse(Input&& input, Dictionary&& dic, Output&& out) {
 }
 template<class Input, class Dictionary>
 static void parse(Input&& input, Dictionary&& dic) {
-    parse(std::forward<Input>(input), std::forward<Dictionary>(dic), from_ios(std::cout));
+    parse(std::forward<Input>(input), std::forward<Dictionary>(dic), internal::from_ios(std::cout));
 }
 template<class Dictionary, class Output>
 static void parse(const char* input, Dictionary&& dic, Output&& out) {
@@ -625,7 +645,7 @@ static void parse(const char* input, Dictionary&& dic, Output&& out) {
 }
 template<class Dictionary>
 static void parse(const char* input, Dictionary&& dic) {
-    parse(internal::cstring(input), std::forward<Dictionary>(dic), from_ios(std::cout));
+    parse(internal::cstring(input), std::forward<Dictionary>(dic), internal::from_ios(std::cout));
 }
 
 void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map);
@@ -712,7 +732,7 @@ static std::string render_file(const std::string& tpl_filepath, const nlohmann::
 	std::stringstream result;
 	std::map<std::string, object> render_map;
 	to_render_data(data, render_map);
-	render::parse(buff.str(), render_map, render::from_ios(result));
+	render::parse(buff.str(), render_map, internal::from_ios(result));
 	return result.str();
 }
 
@@ -721,7 +741,7 @@ static std::string render_string(const std::string& tpl_str, const nlohmann::jso
 	std::stringstream result;
 	std::map<std::string, object> render_map;
 	to_render_data(data, render_map);
-	render::parse(tpl_str, render_map, render::from_ios(result));
+	render::parse(tpl_str, render_map, internal::from_ios(result));
 	return result.str();
 }
 
