@@ -648,9 +648,9 @@ static void parse(const char* input, Dictionary&& dic) {
     parse(internal::cstring(input), std::forward<Dictionary>(dic), internal::from_ios(std::cout));
 }
 
-void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map);
+static void to_render_data(const nlohmann::json& json, std::map<std::string, object>& render_map);
 template<typename Object>
-void to_render_data_impl(const nlohmann::json& json, Object&& render_data, const std::string& key);
+static void to_render_data_impl(const nlohmann::json& json, Object&& render_data, const std::string& key);
 
 template<typename Object>
 static void to_render_data_impl(const nlohmann::json& json, Object&& render_data, const std::string& key)
