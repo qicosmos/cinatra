@@ -71,6 +71,11 @@ namespace cinatra {
 				set_body_len(atoi(header_value.data()));
 			}
 
+			auto cookie = get_header_value("cookie");
+			if (!cookie.empty()) {
+				cookie_str_ = std::string(cookie.data(), cookie.length());
+			}
+
             //parse url and queries
 			raw_url_ = {url_, url_len_};
 			size_t npos = raw_url_.find('/');
@@ -181,6 +186,7 @@ namespace cinatra {
             utf8_character_params_.clear();
             utf8_character_pathinfo_params_.clear();
             queries_.clear();
+			cookie_str_.clear();
             multipart_form_map_.clear();
 			is_range_resource_ = false;
 			range_start_pos_ = 0;
@@ -582,8 +588,8 @@ namespace cinatra {
 
 		std::map<std::string_view, std::string_view> get_cookies() const
 		{
-			auto cookies_str = get_header_value("cookie");
-			auto cookies = get_cookies_map(cookies_str);
+			//auto cookies_str = get_header_value("cookie");
+			auto cookies = get_cookies_map(cookie_str_);
             return cookies;
 		}
 
@@ -703,6 +709,7 @@ namespace cinatra {
 		std::string_view raw_url_;
 		std::string method_str_;
 		std::string url_str_;
+		std::string cookie_str_;
 
 		size_t cur_size_ = 0;
 		size_t left_body_len_ = 0;
