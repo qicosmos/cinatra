@@ -1051,8 +1051,8 @@ namespace cinatra {
 		//-----------------send message----------------//
 		socket_type socket_;
 		boost::asio::steady_timer timer_;
-		request req_;
 		response res_;
+		request req_;
 		websocket ws_;
 		bool is_upgrade_ = false;
 		bool keep_alive_ = false;
