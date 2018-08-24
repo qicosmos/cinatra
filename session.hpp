@@ -71,11 +71,12 @@ namespace cinatra {
 			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
 		}
 
-		void remove() {
+		void remove()
+		{
 			set_max_age(0);
 		}
 
-		cinatra::cookie get_cookie()
+		cinatra::cookie& get_cookie()
 		{
 			return cookie_;
 		}

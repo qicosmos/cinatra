@@ -33,7 +33,7 @@ namespace cinatra {
 			socket_(io_service),
 #endif
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
+			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
 		{
 			init_multipart_parser();
 		}
