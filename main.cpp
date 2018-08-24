@@ -76,7 +76,7 @@ int main() {
 
 	person p{ 2 };
 	server.set_http_handler<GET, POST>("/a", &person::foo, enable_cache{ false }, log_t{});
-	server.set_http_handler<GET, POST>("/b", &person::foo1, log_t{}, enable_cache{ false });
+//	server.set_http_handler<GET, POST>("/b", &person::foo1, log_t{}, enable_cache{ false });
 
     server.set_http_handler<GET, POST>("/string", [](request& req, response& res) {
         res.render_string(std::to_string(std::time(nullptr)));
@@ -114,14 +114,20 @@ int main() {
 		res.render_view("./www/test.html");
 	});
 
-	server.set_http_handler<GET, POST>("/json", [](request& req, response& res) {
+	server.set_http_handler<GET, POST,OPTIONS>("/json", [](request& req, response& res) {
 		nlohmann::json json;
-		json["abc"] = "abc";
-		json["success"] = true;
-		json["number"] = 100.005;
-		json["name"] = "中文";
-		json["time_stamp"] = std::time(nullptr);
-		res.render_json(json);
+        res.add_header("Access-Control-Allow-Origin","*");
+		if(req.get_method()=="OPTIONS"){
+            res.add_header("Access-Control-Allow-Headers","Authorization");
+            res.render_string("");
+		}else{
+            json["abc"] = "abc";
+            json["success"] = true;
+            json["number"] = 100.005;
+            json["name"] = "中文";
+            json["time_stamp"] = std::time(nullptr);
+            res.render_json(json);
+		}
 	});
 
 	server.set_http_handler<GET,POST>("/redirect",[](request& req, response& res){

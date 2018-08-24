@@ -13,7 +13,7 @@
 #include "session_manager.hpp"
 #include "url_encode_decode.hpp"
 #include "mime_types.hpp"
-
+#include "response.hpp"
 namespace cinatra {
 	enum class data_proc_state : int8_t {
 		data_begin,
@@ -39,7 +39,7 @@ namespace cinatra {
 	public:
 		using event_call_back = std::function<void(request&)>;
 
-		request(conn_type* con) : con_(con){
+		request(conn_type* con,response& res) : con_(con),res_(res){
 			buf_.resize(1024);
 		}
 
@@ -593,18 +593,20 @@ namespace cinatra {
             return cookies;
 		}
 
-        std::weak_ptr<session> get_session(const std::string& name) const
+        std::weak_ptr<session> get_session(const std::string& name)
 		{
 			auto cookies = get_cookies();
 			auto iter = cookies.find(name);
-			if(iter==cookies.end())
+			std::weak_ptr<session> ref;
+			if(iter!=cookies.end())
 			{
-				return {};
+				ref = session_manager::get_session(std::string(iter->second.data(), iter->second.length()));
 			}
-			return session_manager::get_session(std::string(iter->second.data(), iter->second.length()));
+			res_.set_session(ref);
+			return ref;
 		}
 
-		std::weak_ptr<session> get_session() const
+		std::weak_ptr<session> get_session()
 		{
 			return get_session(CSESSIONID);
 		}
@@ -693,7 +695,7 @@ namespace cinatra {
 
 		constexpr const static size_t MaxSize = 3 * 1024 * 1024;
 		conn_type* con_ = nullptr;
-
+        response& res_;
 		std::vector<char> buf_;
 
 		size_t num_headers_ = 0;

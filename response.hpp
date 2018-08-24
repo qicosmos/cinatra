@@ -311,6 +311,13 @@ namespace cinatra {
             tmpl_json_data_[key] = value;
         }
 
+		void set_session(std::weak_ptr<cinatra::session> sessionref)
+		{
+			if(sessionref.lock()){
+				session_ = sessionref.lock();
+			}
+		}
+
 	private:
 		
 		//std::map<std::string, std::string, ci_less> headers_;
