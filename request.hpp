@@ -662,7 +662,7 @@ namespace cinatra {
 
 		template<typename... T>
 		void set_aspect_data(T&&... data) {
-			aspect_data_.push_back(std::forward<T>(data)...);
+			(aspect_data_.push_back(std::forward<T>(data)), ...);
 		}
 
 		void set_aspect_data(std::vector<std::string>&& data) {
