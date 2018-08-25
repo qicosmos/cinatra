@@ -660,6 +660,19 @@ namespace cinatra {
 			event_call_backs_[(size_t)event_type](*this);
 		}
 
+		template<typename... T>
+		void set_aspect_data(T&&... data) {
+			aspect_data_.push_back(std::forward<T>(data)...);
+		}
+
+		void set_aspect_data(std::vector<std::string>&& data) {
+			aspect_data_ = std::move(data);
+		}
+
+		std::vector<std::string> get_aspect_data() {
+			return std::move(aspect_data_);
+		}
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -735,6 +748,7 @@ namespace cinatra {
 		std::int64_t range_start_pos_;
 		bool is_range_resource_ = 0;
 		std::int64_t static_resource_file_size_ = 0;
+		std::vector<std::string> aspect_data_;
 		std::array<event_call_back, (size_t)data_proc_state::data_error + 1> event_call_backs_ = {};
 	};
 }

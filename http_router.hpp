@@ -187,7 +187,8 @@ namespace cinatra {
 				if (!r)
 					return;
 
-				if constexpr (has_before<decltype(item), request&, response&>::value)
+				constexpr bool has_befor_mtd = has_before<decltype(item), request&, response&>::value;
+				if constexpr (has_befor_mtd)
 					r = item.before(req, res);
 			}, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 
@@ -201,7 +202,8 @@ namespace cinatra {
 				if (!r)
 					return;
 
-				if constexpr (has_after<decltype(item), request&, response&>::value)
+				constexpr bool has_after_mtd = has_after<decltype(item), request&, response&>::value;
+				if constexpr (has_after_mtd)
 					r = item.after(req, res);
 			}, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 		}
