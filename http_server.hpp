@@ -209,6 +209,19 @@ namespace cinatra {
 			return http_cache::get_cache_max_age();
 		}
 
+
+		void set_public_root_directory(const std::string& name)
+        {
+        	if(name != ""){
+				public_root_path_ = name;
+        	}
+        }
+
+        std::string get_public_root_directory()
+        {
+            return public_root_path_;
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -239,7 +252,7 @@ namespace cinatra {
 					{
 						std::string real_file_name = req.get_filename_from_path();
 						auto mime = req.get_mime(real_file_name); 
-						auto in = std::make_shared<std::ifstream>("./"+real_file_name,std::ios_base::binary);
+						auto in = std::make_shared<std::ifstream>("./"+public_root_path_+"/"+real_file_name.substr(public_root_path_.size()),std::ios_base::binary);
 						if (!in->is_open()) {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
@@ -360,6 +373,7 @@ namespace cinatra {
 		std::string static_dir_ = "./static/"; //default
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
+        std::string public_root_path_ = "public";
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
