@@ -64,6 +64,7 @@ namespace cinatra {
 
 		const std::string get_id()
 		{
+			std::unique_lock<std::mutex> lock(mtx_);
 			return id_;
 		}
 
@@ -108,6 +109,7 @@ namespace cinatra {
 
 		void write_session_to_file()
 		{
+			std::unique_lock<std::mutex> lock(mtx_);
 			std::string file_path = std::string("./")+static_session_db_dir+"/"+id_;
 			std::ofstream file(file_path,std::ios_base::out);
 			if(file.is_open()){
@@ -118,7 +120,6 @@ namespace cinatra {
 
 		nlohmann::json serialize_to_object()
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
 			nlohmann::json root;
 			root["id"] = id_;
 			root["expire"] = expire_;

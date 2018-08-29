@@ -28,8 +28,8 @@ namespace cinatra {
 			{
 				std::unique_lock<std::mutex> lock(mtx_);
 				map_.emplace(std::move(uuid_str), s);
+				write_session_to_file(s);
 			}
-			write_session_to_file(s);
 			return s;
 		}
 
@@ -50,15 +50,12 @@ namespace cinatra {
 		}
 
 		static void del_session(const std::string& id) {
-			{
-				std::unique_lock<std::mutex> lock(mtx_);
-				auto it = map_.find(id);
-				if (it != map_.end()){
-					fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
-					map_.erase(it);
-				}
-			}
-			write_all_session_to_file();
+            std::unique_lock<std::mutex> lock(mtx_);
+            auto it = map_.find(id);
+            if (it != map_.end()){
+                fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
+                map_.erase(it);
+            }
 		}
 
 		static void check_expire() {
@@ -66,31 +63,22 @@ namespace cinatra {
 				return;
 
 			auto now = std::time(nullptr);
-			{
-				std::unique_lock<std::mutex> lock(mtx_);
-				for (auto it = map_.begin(); it != map_.end();) {
-					if (now - it->second->time_stamp() >= max_age_) {
-						fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
-						it = map_.erase(it);
-					}
-					else {
-						++it;
-					}
-				}
-			}
-
-			write_all_session_to_file();
+			std::unique_lock<std::mutex> lock(mtx_);
+            for (auto it = map_.begin(); it != map_.end();) {
+                if (now - it->second->time_stamp() >= max_age_) {
+                    fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
+                    it = map_.erase(it);
+                }
+                else {
+                    write_session_to_file(it->second);
+                    ++it;
+                }
+            }
 		}
 
 		static void write_session_to_file(std::shared_ptr<session> session)
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			std::string file_path = std::string("./")+session_db_directory+"/"+session->get_id();
-			std::ofstream file(file_path,std::ios_base::out);
-			if(file.is_open()){
-				file << session->serialize_to_object();
-			}
-			file.close();
+			session->write_session_to_file();
 		}
 
 		static void write_all_session_to_file()
