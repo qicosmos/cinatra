@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <iomanip>
+#include <cctype>
 #include "nlohmann_json.hpp"
 
 namespace render {
@@ -169,11 +170,13 @@ public:
     Iterator last_;
     std::string line_;
     int line_number_;
+	const std::string& src_str_;
 
 public:
     typedef std::pair<Iterator, Iterator> range_t;
 
-    parser(Iterator first, Iterator last) : next_(first), last_(last), line_number_(1) {
+    parser(Iterator first, Iterator last, const std::string& str) : next_(first), last_(last),
+		line_number_(1), src_str_(str){
         assert(first != last);
         current_ = next_++;
     }
@@ -226,6 +229,10 @@ public:
         line_ = *std::get<1>(context);
         line_number_ = std::get<2>(context);
     }
+
+	std::string_view sv_str() {
+		return { src_str_.data()+(current_- src_str_.begin()), src_str_.length() };
+	}
 
     template<class F>
     range_t read_while(F f) {
@@ -296,6 +303,7 @@ public:
         skip_whitespace();
         eat(p);
     }
+
     static bool equal(std::pair<Iterator, Iterator> p, const char* str) {
         while (p.first != p.second && *str)
             if (*p.first++ != *str++)
@@ -340,6 +348,52 @@ static object get_variable(parser<Iterator>& p, const Dictionary& dic, tmpl_cont
         }
         return obj;
     }
+}
+
+static inline void ltrim(std::string &s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+		return !std::isspace(ch);
+	}));
+}
+
+static inline void rtrim(std::string &s) {
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+		return !std::isspace(ch);
+	}).base(), s.end());
+}
+
+template<class Dictionary>
+static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip, std::string_view str, bool b) {
+	if (skip) {
+		return object();
+	}
+
+	auto pos0 = str.find_first_of(".");
+	auto key = str.substr(0, pos0);
+	auto s = std::string(key.data(), key.length());
+	ltrim(s);
+	object obj;
+	auto it = ctx.find(s);
+	if (it == ctx.end()) {
+		auto it2 = dic.find(s);
+		if (it2 != dic.end()) {
+			obj = it2->second;
+		}
+		else {
+			throw std::string("Variable is not found");
+		}
+	}
+
+	obj = it->second.back();
+	auto pos = str.find("=");
+	auto name = str.substr(pos0 + 1, pos - 3);
+	std::string name_s = std::string(name.data(), name.length());
+	rtrim(name_s);
+
+	bool r = static_cast<bool>(obj[name_s]);
+	obj = r == b;
+
+	return obj;
 }
 
 template<class IOS>
@@ -472,7 +526,26 @@ static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx,
 					// $elseif y {{ <block> }}
 					// $elseif z {{ <block> }}
 					// $else {{ <block> }}
-					object obj = get_variable(p, dic, ctx, skip);
+					object obj;
+					auto cmd_sv = p.sv_str();
+					auto pos = cmd_sv.find("{{");
+					std::string_view str1 = cmd_sv.substr(0, pos);
+					if (str1.find("false")!=std::string_view::npos) {
+						obj = get_variable0(dic, ctx, skip, str1, false);
+						while (p.has_next()) {
+							if (p.peek() == '{')
+								break;
+
+							p.read();
+						}
+					}
+					else if (str1.find("true") != std::string_view::npos) {
+						obj = get_variable0(dic, ctx, skip, str1, true);
+					}
+					else {
+						obj = get_variable(p, dic, ctx, skip);
+					}
+					
 					p.eat_with_whitespace("{{");
 					bool run; // if `skip` is true, `run` is an unspecified value.
 					if (skip) {
@@ -624,7 +697,7 @@ static void parse(Input&& input, Dictionary&& dic, Output&& out) {
     auto last = std::end(input);
     if (first == last) return;
 
-    auto p = internal::parser<decltype(first)>(first, last);
+    auto p = internal::parser<decltype(first)>(first, last, input);
     internal::tmpl_context ctx;
     try {
         internal::block(p, dic, ctx, false, out);
