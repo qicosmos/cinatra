@@ -107,6 +107,17 @@ int main() {
 		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
 	},enable_cache{false});
 
+	server.set_http_handler<GET, POST>("/getstime", [](request& req, response& res) {
+		auto ptr = req.get_session();
+		auto session = ptr.lock();
+		if (session == nullptr || session->get_data<std::string>("userid") != "1") {
+			res.set_status_and_content(status_type::ok, "没有登录", res_content_type::string);
+			return;
+		}
+		session->set_max_age(600);
+		res.set_status_and_content(status_type::ok, "OK", res_content_type::string);
+	},enable_cache{false});
+
 	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
         res.set_attr("number",1024);
         res.set_attr("test_text","hello,world");
