@@ -19,4 +19,5 @@ namespace cinatra {
 
 	inline const std::string_view STAIC_RES = "cinatra_staic_resource";
 	inline const std::string CSESSIONID = "CSESSIONID";
+	inline std::string static_session_db_dir = "session";
 }

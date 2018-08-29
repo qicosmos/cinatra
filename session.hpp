@@ -13,11 +13,14 @@
 #include "uuid.h"
 #include <memory>
 #include "cookie.hpp"
+#include "nlohmann_json.hpp"
+#include "define.h"
 namespace cinatra {
 
 	class session
 	{
 	public:
+		session() = default;
 		session(const std::string& name, const std::string& uuid_str, std::size_t expire, 
 			const std::string& path = "/", const std::string& domain = "")
 		{
@@ -32,11 +35,14 @@ namespace cinatra {
 			cookie_.set_version(0);
 			cookie_.set_max_age(expire == -1 ? -1 : time_stamp_);
 		}
-
-		void set_data(const std::string& name, std::any data)
+        template<typename T>
+		void set_data(const std::string& name, T&& data)
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			data_[name] = std::move(data);
+			{
+				std::unique_lock<std::mutex> lock(mtx_);
+				data_[name] = std::move(data);
+			}
+			write_session_to_file();
 		}
 
 		template<typename T>
@@ -46,7 +52,7 @@ namespace cinatra {
 			auto itert = data_.find(name);
 			if (itert != data_.end())
 			{
-				return std::any_cast<T>(itert->second);
+				return (*itert).get<T>();
 			}
 			return T{};
 		}
@@ -63,12 +69,15 @@ namespace cinatra {
 
 		void set_max_age(const std::time_t seconds)
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			is_update_ = true;
-			expire_ = seconds == -1 ? 86400 : seconds;
-			std::time_t now = std::time(nullptr);
-			time_stamp_ = now + expire_;
-			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
+			{
+				std::unique_lock<std::mutex> lock(mtx_);
+				is_update_ = true;
+				expire_ = seconds == -1 ? 86400 : seconds;
+				std::time_t now = std::time(nullptr);
+				time_stamp_ = now + expire_;
+				cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
+			}
+			write_session_to_file();
 		}
 
 		void remove()
@@ -97,13 +106,64 @@ namespace cinatra {
 			is_update_ = flag;
 		}
 
+		void write_session_to_file()
+		{
+			std::string file_path = std::string("./")+static_session_db_dir+"/"+id_;
+			std::ofstream file(file_path,std::ios_base::out);
+			if(file.is_open()){
+				file << serialize_to_object();
+			}
+			file.close();
+		}
+
+		nlohmann::json serialize_to_object()
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			nlohmann::json root;
+			root["id"] = id_;
+			root["expire"] = expire_;
+			root["time_stamp"] = time_stamp_;
+			root["data"] = data_;
+			root["cookie"]["version"] = cookie_.get_version();
+			root["cookie"]["name"] = cookie_.get_name();
+			root["cookie"]["value"] = cookie_.get_value();
+			root["cookie"]["comment"] = cookie_.get_comment();
+			root["cookie"]["domain"] =cookie_.get_domain();
+			root["cookie"]["path"] = cookie_.get_path();
+			root["cookie"]["priority"] = cookie_.get_priority();
+			root["cookie"]["secure"] = cookie_.get_secure();
+			root["cookie"]["max_age"] = cookie_.get_max_age();
+			root["cookie"]["http_only"] = cookie_.get_http_only();
+			return  root;
+		}
+
+		void serialize_from_object(nlohmann::json root)
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			id_ = root["id"];
+			expire_ = root["expire"];
+			time_stamp_ = root["time_stamp"];
+			data_ = root["data"];
+			cookie_.set_version(root["cookie"]["version"]);
+			cookie_.set_name(root["cookie"]["name"]);
+			cookie_.set_value(root["cookie"]["value"]);
+			cookie_.set_comment(root["cookie"]["comment"]);
+			cookie_.set_domain(root["cookie"]["domain"]);
+			cookie_.set_path(root["cookie"]["path"]);
+			cookie_.set_priority(root["cookie"]["priority"]);
+			cookie_.set_secure(root["cookie"]["secure"]);
+			cookie_.set_max_age(root["cookie"]["max_age"]);
+			cookie_.set_http_only(root["cookie"]["http_only"]);
+			is_update_ = true;
+		}
+
 	private:
-		session() = delete;
 
 		std::string id_;
 		std::size_t expire_;
 		std::time_t time_stamp_;
-		std::map<std::string, std::any> data_;
+//		std::map<std::string, std::any> data_;
+	    nlohmann::json data_;
 		std::mutex mtx_;
 		cookie cookie_;
 		bool is_update_ = true;

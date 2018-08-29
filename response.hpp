@@ -29,11 +29,12 @@ namespace cinatra {
 		std::vector<boost::asio::const_buffer> to_buffers() {
 			std::vector<boost::asio::const_buffer> buffers;
 			add_header("Host", "cinatra");
-			if(session_ != nullptr && session_->is_need_update())
+			if(session_ != nullptr && (session_->is_need_update() || session_->get_cookie().is_need_update()))
 			{
 				auto cookie_str = session_->get_cookie().to_string();
 				add_header("Set-Cookie",cookie_str.c_str());
-                session_->set_need_update(false);
+				session_->set_need_update(false);
+				session_->get_cookie().set_need_update(false);
 			}
 			buffers.reserve(headers_.size() * 4 + 5);
 			buffers.emplace_back(to_buffer(status_));
@@ -101,9 +102,9 @@ namespace cinatra {
 					set_content(std::move(encode_str));
 				}
 			}
-			else 
+			else
 #endif
-				set_content(std::move(content));
+			set_content(std::move(content));
 		}
 
 		void set_status_and_content(status_type status, std::string&& content,std::string&& res_content_type_str, content_encoding encoding = content_encoding::none) {
@@ -135,9 +136,9 @@ namespace cinatra {
 			proc_continue_ = true;
 			headers_.clear();
 			content_.clear();
-            tmpl_json_data_.clear();
-            session_ = nullptr;
-            cache_data.clear();
+			tmpl_json_data_.clear();
+			session_ = nullptr;
+			cache_data.clear();
 		}
 
 		void set_continue(bool con) {
@@ -185,7 +186,7 @@ namespace cinatra {
 			return buffers;
 		}
 
-        std::shared_ptr<cinatra::session> start_session(const std::string& name, std::time_t expire = -1,std::string_view domain = "", const std::string &path = "/")
+		std::shared_ptr<cinatra::session> start_session(const std::string& name, std::time_t expire = -1,std::string_view domain = "", const std::string &path = "/")
 		{
 			session_ = session_manager::create_session(domain, name, expire, path);
 			return session_;
@@ -241,33 +242,33 @@ namespace cinatra {
 #endif
 		}
 
-        void render_view(const std::string& tpl_file_path,const nlohmann::json& tmp_data)
-        {
-            if(tmp_data.is_object())
-            {
-                for(auto iter = tmp_data.begin();iter!=tmp_data.end();++iter)
-                {
-                    tmpl_json_data_[iter.key()] = iter.value();
-                }
-            }
+		void render_view(const std::string& tpl_file_path,const nlohmann::json& tmp_data)
+		{
+			if(tmp_data.is_object())
+			{
+				for(auto iter = tmp_data.begin();iter!=tmp_data.end();++iter)
+				{
+					tmpl_json_data_[iter.key()] = iter.value();
+				}
+			}
 			handle_render_view(tpl_file_path,tmpl_json_data_);
-        }
+		}
 
-        void render_view(const std::string& tpl_file_path)
-        {
+		void render_view(const std::string& tpl_file_path)
+		{
 			handle_render_view(tpl_file_path,tmpl_json_data_);
-        }
+		}
 
-        void render_json(const nlohmann::json& json_data)
-        {
+		void render_json(const nlohmann::json& json_data)
+		{
 #ifdef  CINATRA_ENABLE_GZIP
-            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
+			set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
 #else
-            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::none);
+			set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::none);
 #endif
-        }
+		}
 
-        void render_string(std::string&& content)
+		void render_string(std::string&& content)
 		{
 #ifdef  CINATRA_ENABLE_GZIP
 			set_status_and_content(status_type::ok,std::move(content),res_content_type::string,content_encoding::gzip);
@@ -276,19 +277,19 @@ namespace cinatra {
 #endif
 		}
 
-        void render_404(const std::string& tpl_file_path = "")
-        {
-        	if(!tpl_file_path.empty())
+		void render_404(const std::string& tpl_file_path = "")
+		{
+			if(!tpl_file_path.empty())
 			{
 				handle_render_view(tpl_file_path,tmpl_json_data_,status_type::not_found);
 				return;
 			}
 #ifdef  CINATRA_ENABLE_GZIP
-            set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::gzip);
+			set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::gzip);
 #else
-            set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::none);
+			set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::none);
 #endif
-        }
+		}
 
 		std::vector<std::string> raw_content() {
 			return cache_data;
@@ -300,16 +301,16 @@ namespace cinatra {
 			is_forever==false?set_status_and_content(status_type::moved_temporarily):set_status_and_content(status_type::moved_permanently);
 		}
 
-        void set_base_path(const std::string&key,const std::string& path)
-        {
-            tmpl_json_data_[key] = path;
-        }
+		void set_base_path(const std::string&key,const std::string& path)
+		{
+			tmpl_json_data_[key] = path;
+		}
 
-        template<typename T>
-        void set_attr(const std::string& key,const T& value)
-        {
-            tmpl_json_data_[key] = value;
-        }
+		template<typename T>
+		void set_attr(const std::string& key,const T& value)
+		{
+			tmpl_json_data_[key] = value;
+		}
 
 		void set_session(std::weak_ptr<cinatra::session> sessionref)
 		{
@@ -319,7 +320,7 @@ namespace cinatra {
 		}
 
 	private:
-		
+
 		//std::map<std::string, std::string, ci_less> headers_;
 		std::string_view raw_url_;
 		std::vector<std::pair<std::string, std::string>> headers_;
