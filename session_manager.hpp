@@ -53,8 +53,10 @@ namespace cinatra {
 			{
 				std::unique_lock<std::mutex> lock(mtx_);
 				auto it = map_.find(id);
-				if (it != map_.end())
+				if (it != map_.end()){
+					fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
 					map_.erase(it);
+				}
 			}
 			write_all_session_to_file();
 		}
@@ -68,6 +70,7 @@ namespace cinatra {
 				std::unique_lock<std::mutex> lock(mtx_);
 				for (auto it = map_.begin(); it != map_.end();) {
 					if (now - it->second->time_stamp() >= max_age_) {
+						fs::remove(std::string("./")+session_db_directory+"/"+it->second->get_id());
 						it = map_.erase(it);
 					}
 					else {
