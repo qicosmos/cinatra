@@ -35,6 +35,7 @@ namespace cinatra {
 				add_header("Set-Cookie",cookie_str.c_str());
 				session_->set_need_update(false);
 				session_->get_cookie().set_need_update(false);
+				session_->write_session_to_file();
 			}
 			buffers.reserve(headers_.size() * 4 + 5);
 			buffers.emplace_back(to_buffer(status_));

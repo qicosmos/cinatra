@@ -70,7 +70,7 @@ namespace cinatra {
                     it = map_.erase(it);
                 }
                 else {
-                    write_session_to_file(it->second);
+//                    write_session_to_file(it->second);
                     ++it;
                 }
             }
@@ -81,18 +81,18 @@ namespace cinatra {
 			session->write_session_to_file();
 		}
 
-		static void write_all_session_to_file()
-		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			for(auto iter = map_.begin();iter!=map_.end();++iter){
-				std::string file_path = std::string("./")+session_db_directory+"/"+iter->second->get_id();
-				std::ofstream file(file_path,std::ios_base::out);
-				if(file.is_open()){
-					file << iter->second->serialize_to_object();
-				}
-				file.close();
-			}
-		}
+//		static void write_all_session_to_file()
+//		{
+//			std::unique_lock<std::mutex> lock(mtx_);
+//			for(auto iter = map_.begin();iter!=map_.end();++iter){
+//				std::string file_path = std::string("./")+session_db_directory+"/"+iter->second->get_id();
+//				std::ofstream file(file_path,std::ios_base::out);
+//				if(file.is_open()){
+//					file << iter->second->serialize_to_object();
+//				}
+//				file.close();
+//			}
+//		}
 
 		static void read_all_session_from_file()
 		{
