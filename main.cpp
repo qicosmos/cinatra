@@ -106,7 +106,7 @@ int main() {
 		}
 		res.set_status_and_content(status_type::ok, "已经登录", res_content_type::string);
 	},enable_cache{false});
-	
+
 
 	server.set_http_handler<GET, POST>("/html", [](request& req, response& res) {
         res.set_attr("number",1024);

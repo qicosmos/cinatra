@@ -81,6 +81,17 @@ namespace cinatra {
 			write_session_to_file();
 		}
 
+		void add_max_age(const std::time_t seconds)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mtx_);
+                is_update_ = true;
+                time_stamp_ += seconds;
+                cookie_.set_max_age(time_stamp_ == -1 ? -1 : time_stamp_);
+            }
+            write_session_to_file();
+        }
+
 		void remove()
 		{
 			set_max_age(0);
