@@ -363,7 +363,7 @@ static inline void rtrim(std::string &s) {
 }
 
 template<class Dictionary>
-static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip, std::string_view str, bool b) {
+static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip, std::string_view str, std::string& val) {
 	if (skip) {
 		return object();
 	}
@@ -390,8 +390,17 @@ static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip,
 	std::string name_s = std::string(name.data(), name.length());
 	rtrim(name_s);
 
-	bool r = static_cast<bool>(obj[name_s]);
-	obj = r == b;
+	bool b = val == "true";
+
+	if (val == "false" || val == "true") {
+		bool r = static_cast<bool>(obj[name_s]);
+		obj = r == b;
+	}
+	else {
+		std::string s = obj[name_s].str();
+		obj = s == val;
+	}
+	
 
 	return obj;
 }
@@ -528,19 +537,19 @@ static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx,
 					// $else {{ <block> }}
 					object obj;
 					auto cmd_sv = p.sv_str();
-					auto pos = cmd_sv.find("{{");
-					std::string_view str1 = cmd_sv.substr(0, pos);
-					if (str1.find("false")!=std::string_view::npos) {
-						obj = get_variable0(dic, ctx, skip, str1, false);
+					if (cmd_sv.find("==")) {
+						auto pos = cmd_sv.find("{{");
+						std::string_view str1 = cmd_sv.substr(0, pos);
+						auto left = str1.substr(str1.find("=")+2);
+						std::string left_s = std::string(left.data(), left.length());
+						rtrim(left_s);
+						obj = get_variable0(dic, ctx, skip, str1, left_s);
 						while (p.has_next()) {
 							if (p.peek() == '{')
 								break;
 
 							p.read();
 						}
-					}
-					else if (str1.find("true") != std::string_view::npos) {
-						obj = get_variable0(dic, ctx, skip, str1, true);
 					}
 					else {
 						obj = get_variable(p, dic, ctx, skip);
