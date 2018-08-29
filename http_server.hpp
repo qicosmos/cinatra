@@ -255,7 +255,10 @@ namespace cinatra {
 						std::string file_path_str = "";
 						if(real_file_name.find(public_root_path_)!=std::string::npos && real_file_name.size() > public_root_path_.size()){
 							file_path_str = "./"+public_root_path_+"/"+real_file_name.substr(public_root_path_.size());
+						}else {
+							file_path_str = "./" + real_file_name;
 						}
+						
 						auto in = std::make_shared<std::ifstream>(file_path_str,std::ios_base::binary);
 						if (!in->is_open()) {
 							res.set_status_and_content(status_type::not_found,"");
