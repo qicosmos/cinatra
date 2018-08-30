@@ -424,10 +424,10 @@ namespace cinatra {
 
 		std::string get_filename_from_path() const {
 			auto file_name = get_res_path();
-			std::string real_file_name = std::string(file_name.data(), file_name.size());
+			std::string real_file_name = "./"+std::string(file_name.data(), file_name.size());
 			if (is_form_url_encode(file_name))
 			{
-				real_file_name = code_utils::get_string_by_urldecode(file_name);
+				real_file_name = "./"+code_utils::get_string_by_urldecode(file_name);
 			}
 
 			return real_file_name;

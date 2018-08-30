@@ -114,11 +114,14 @@ namespace cinatra {
 		}
 
 		void run() {
-		
-		        if (!fs::exists(static_dir_.data())) {
-			   fs::create_directory(static_dir_.data());
+			if (!fs::exists(public_root_path_.data())) {
+				fs::create_directory(public_root_path_.data());
 			}
-			
+
+			if (!fs::exists(static_dir_.data())) {
+				fs::create_directory(static_dir_.data());
+			}
+
 			io_service_pool_.run();
 		}
 
@@ -135,7 +138,7 @@ namespace cinatra {
 		}
 
 		void set_static_dir(std::string&& path) {
-			static_dir_ = std::move(path);
+			static_dir_ = public_root_path_+std::move(path);
 		}
 
 		const std::string& static_dir() const {
@@ -251,10 +254,13 @@ namespace cinatra {
 					case cinatra::data_proc_state::data_begin:
 					{
 						std::string real_file_name = req.get_filename_from_path();
-						auto mime = req.get_mime(real_file_name);
+						auto mime = req.get_mime({ real_file_name.data() + 1, real_file_name.length() - 1 });
 						std::string file_path_str = "";
 						if(real_file_name.find(public_root_path_)!=std::string::npos && real_file_name.size() > public_root_path_.size()){
-							file_path_str = "./"+public_root_path_+"/"+real_file_name.substr(public_root_path_.size());
+							file_path_str = public_root_path_+real_file_name.substr(public_root_path_.size());
+						}
+						else if (real_file_name.find(static_dir_)!= std::string::npos) {
+							file_path_str = std::move(real_file_name);
 						}
 						
 						auto in = std::make_shared<std::ifstream>(file_path_str,std::ios_base::binary);
