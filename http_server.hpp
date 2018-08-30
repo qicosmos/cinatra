@@ -41,6 +41,8 @@ namespace cinatra {
 #endif
 		{
 			http_cache::set_cache_max_age(86400);
+			session_manager::set_session_db_directory(session_db_dir_);
+			static_session_db_dir = session_db_dir_;
 			init_conn_callback();
 		}
 
@@ -118,6 +120,12 @@ namespace cinatra {
 		        if (!fs::exists(static_dir_.data())) {
 			   fs::create_directory(static_dir_.data());
 			}
+
+			if(!fs::exists(session_db_dir_.data())){
+                fs::create_directory(session_db_dir_.data());
+		    }
+
+			session_manager::read_all_session_from_db();
 			
 			io_service_pool_.run();
 		}
@@ -222,6 +230,33 @@ namespace cinatra {
             return public_root_path_;
         }
 
+        void set_session_db_directory(const std::string& dir)
+        {
+			session_manager::set_session_db_directory(dir);
+			static_session_db_dir = dir;
+            session_db_dir_ = dir;
+        }
+
+        std::string get_session_db_directory()
+        {
+            return session_db_dir_;
+        }
+
+        void set_save_session_interface(const std::function<void(const std::string& key,const std::string& value)>& f)
+        {
+            session::set_save_function(f);
+        }
+
+        void set_read_all_session_interface(const std::function<nlohmann::json()>& f)
+        {
+            session::set_read_function(f);
+        }
+
+        void set_remove_session_interface(const std::function<void(const std::string& key)>& f)
+		{
+			session::set_remove_function(f);
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -256,7 +291,6 @@ namespace cinatra {
 						if(real_file_name.find(public_root_path_)!=std::string::npos && real_file_name.size() > public_root_path_.size()){
 							file_path_str = "./"+public_root_path_+"/"+real_file_name.substr(public_root_path_.size());
 						}
-						
 						auto in = std::make_shared<std::ifstream>(file_path_str,std::ios_base::binary);
 						if (!in->is_open()) {
 							res.set_status_and_content(status_type::not_found,"");
@@ -379,6 +413,7 @@ namespace cinatra {
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
         std::string public_root_path_ = "public";
+        std::string session_db_dir_ = "session";
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;

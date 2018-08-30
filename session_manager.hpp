@@ -6,6 +6,15 @@
 #define CINATRA_SESSION_UTILS_HPP
 #include "session.hpp"
 #include "request.hpp"
+#include <fstream>
+#ifdef _MSC_VER
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif
+
 namespace cinatra {
 	class session_manager {
 	public:
@@ -19,8 +28,8 @@ namespace cinatra {
 			{
 				std::unique_lock<std::mutex> lock(mtx_);
 				map_.emplace(std::move(uuid_str), s);
+				save_session_to_db(s);
 			}
-
 			return s;
 		}
 
@@ -41,10 +50,12 @@ namespace cinatra {
 		}
 
 		static void del_session(const std::string& id) {
-			std::unique_lock<std::mutex> lock(mtx_);
-			auto it = map_.find(id);
-			if (it != map_.end())
-				map_.erase(it);
+            std::unique_lock<std::mutex> lock(mtx_);
+            auto it = map_.find(id);
+            if (it != map_.end()){
+				remove_session_from_db(it->second->get_id());
+                map_.erase(it);
+            }
 		}
 
 		static void check_expire() {
@@ -53,27 +64,104 @@ namespace cinatra {
 
 			auto now = std::time(nullptr);
 			std::unique_lock<std::mutex> lock(mtx_);
-			for (auto it = map_.begin(); it != map_.end();) {
-				if (now - it->second->time_stamp() >= max_age_) {
-					it = map_.erase(it);
-				}
-				else {
-					++it;
-				}
-			}
+            for (auto it = map_.begin(); it != map_.end();) {
+                if (now - it->second->time_stamp() >= max_age_) {
+					remove_session_from_db(it->second->get_id());
+                    it = map_.erase(it);
+                }
+                else {
+                    // write_session_to_file(it->second);
+                    ++it;
+                }
+            }
 		}
+
+		static void save_session_to_db(std::shared_ptr<session> session)
+		{
+			session->write_session_to_db();
+		}
+
+
+		static void read_all_session_from_db()
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			auto& function = session::get_read_function();
+			if(function)
+			{
+				auto json = function();
+				for(nlohmann::json::iterator iter = json.begin();iter!=json.end();++iter){
+					auto s = std::make_shared<session>();
+					s->serialize_from_object(iter.value());
+					map_.emplace(iter.key(), s);
+				}
+				return;
+			}
+
+			read_all_session_from_file();
+		}
+
+		static void remove_session_from_db(const std::string& key)
+		{
+			auto& function = session::get_remove_function();
+			if(function)
+			{
+				function(key);
+				return;
+			}
+			fs::remove(std::string("./")+session_db_directory+"/"+key);
+		}
+
+
+		// static void write_all_session_to_file()
+		// {
+		// 	std::unique_lock<std::mutex> lock(mtx_);
+		// 	for(auto iter = map_.begin();iter!=map_.end();++iter){
+		// 		std::string file_path = std::string("./")+session_db_directory+"/"+iter->second->get_id();
+		// 		std::ofstream file(file_path,std::ios_base::out);
+		// 		if(file.is_open()){
+		// 			file << iter->second->serialize_to_object();
+		// 		}
+		// 		file.close();
+		// 	}
+		// }
+
 
 		static void set_max_inactive_interval(int seconds) {
 			max_age_ = seconds;
+		}
+
+		static void set_session_db_directory(const std::string& name)
+		{
+			session_db_directory = name;
+		}
+
+	private:
+		static void read_all_session_from_file()
+		{
+			std::string session_path = std::string("./")+session_db_directory;
+			for(auto& iter:fs::directory_iterator(session_path.data())){
+				auto fp = iter.path();
+				std::ifstream file(session_path+"/"+fp.filename().c_str(),std::ios_base::in);
+				if(file.is_open()){
+					nlohmann::json json;
+					file >> json;
+					auto s = std::make_shared<session>();
+					s->serialize_from_object(json);
+					file.close();
+					map_.emplace(s->get_id(), s);
+				}
+			}
 		}
 
 	private:	
 		static std::map<std::string, std::shared_ptr<session>> map_;
 		static std::mutex mtx_;
 		static int max_age_;
+		static std::string session_db_directory;
 	};
 	std::map<std::string, std::shared_ptr<session>> session_manager::map_;
 	std::mutex session_manager::mtx_;
 	int session_manager::max_age_ = 0;
+	std::string session_manager::session_db_directory;
 }
 #endif //CINATRA_SESSION_UTILS_HPP

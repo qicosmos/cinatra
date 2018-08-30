@@ -13,11 +13,14 @@
 #include "uuid.h"
 #include <memory>
 #include "cookie.hpp"
+#include "nlohmann_json.hpp"
+#include "define.h"
 namespace cinatra {
 
 	class session
 	{
 	public:
+		session() = default;
 		session(const std::string& name, const std::string& uuid_str, std::size_t expire, 
 			const std::string& path = "/", const std::string& domain = "")
 		{
@@ -32,11 +35,14 @@ namespace cinatra {
 			cookie_.set_version(0);
 			cookie_.set_max_age(expire == -1 ? -1 : time_stamp_);
 		}
-
-		void set_data(const std::string& name, std::any data)
+        template<typename T>
+		void set_data(const std::string& name, T&& data)
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			data_[name] = std::move(data);
+			{
+				std::unique_lock<std::mutex> lock(mtx_);
+				data_[name] = std::move(data);
+			}
+			write_session_to_db();
 		}
 
 		template<typename T>
@@ -46,7 +52,7 @@ namespace cinatra {
 			auto itert = data_.find(name);
 			if (itert != data_.end())
 			{
-				return std::any_cast<T>(itert->second);
+				return (*itert).get<T>();
 			}
 			return T{};
 		}
@@ -58,18 +64,33 @@ namespace cinatra {
 
 		const std::string get_id()
 		{
+			std::unique_lock<std::mutex> lock(mtx_);
 			return id_;
 		}
 
 		void set_max_age(const std::time_t seconds)
 		{
-			std::unique_lock<std::mutex> lock(mtx_);
-			is_update_ = true;
-			expire_ = seconds == -1 ? 86400 : seconds;
-			std::time_t now = std::time(nullptr);
-			time_stamp_ = now + expire_;
-			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
+			{
+				std::unique_lock<std::mutex> lock(mtx_);
+				is_update_ = true;
+				expire_ = seconds == -1 ? 86400 : seconds;
+				std::time_t now = std::time(nullptr);
+				time_stamp_ = now + expire_;
+				cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
+			}
+			write_session_to_db();
 		}
+
+		void add_max_age(const std::time_t seconds)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mtx_);
+                is_update_ = true;
+                time_stamp_ += seconds;
+                cookie_.set_max_age(time_stamp_ == -1 ? -1 : time_stamp_);
+            }
+			write_session_to_db();
+        }
 
 		void remove()
 		{
@@ -97,15 +118,117 @@ namespace cinatra {
 			is_update_ = flag;
 		}
 
+		void write_session_to_db()
+		{
+		   if(save_handler_function_)
+		   {
+		   	   auto json = serialize_to_object();
+			   save_handler_function_(json["id"],json.dump());
+			   return;
+		   }
+			write_session_to_file();
+		}
+
+		void write_session_to_file()
+		{
+            std::string file_path;
+            {
+                std::unique_lock<std::mutex> lock(mtx_);
+                file_path = std::string("./")+static_session_db_dir+"/"+id_;
+            }
+			std::ofstream file(file_path,std::ios_base::out);
+			if(file.is_open()){
+				file << serialize_to_object();
+			}
+			file.close();
+		}
+
+		nlohmann::json serialize_to_object()
+		{
+            std::unique_lock<std::mutex> lock(mtx_);
+			nlohmann::json root;
+			root["id"] = id_;
+			root["expire"] = expire_;
+			root["time_stamp"] = time_stamp_;
+			root["data"] = data_;
+			root["cookie"]["version"] = cookie_.get_version();
+			root["cookie"]["name"] = cookie_.get_name();
+			root["cookie"]["value"] = cookie_.get_value();
+			root["cookie"]["comment"] = cookie_.get_comment();
+			root["cookie"]["domain"] =cookie_.get_domain();
+			root["cookie"]["path"] = cookie_.get_path();
+			root["cookie"]["priority"] = cookie_.get_priority();
+			root["cookie"]["secure"] = cookie_.get_secure();
+			root["cookie"]["max_age"] = cookie_.get_max_age();
+			root["cookie"]["http_only"] = cookie_.get_http_only();
+			return  root;
+		}
+
+		void serialize_from_object(nlohmann::json root)
+		{
+			std::unique_lock<std::mutex> lock(mtx_);
+			id_ = root["id"];
+			expire_ = root["expire"];
+			time_stamp_ = root["time_stamp"];
+			data_ = root["data"];
+			cookie_.set_version(root["cookie"]["version"]);
+			cookie_.set_name(root["cookie"]["name"]);
+			cookie_.set_value(root["cookie"]["value"]);
+			cookie_.set_comment(root["cookie"]["comment"]);
+			cookie_.set_domain(root["cookie"]["domain"]);
+			cookie_.set_path(root["cookie"]["path"]);
+			cookie_.set_priority(root["cookie"]["priority"]);
+			cookie_.set_secure(root["cookie"]["secure"]);
+			cookie_.set_max_age(root["cookie"]["max_age"]);
+			cookie_.set_http_only(root["cookie"]["http_only"]);
+			is_update_ = true;
+		}
+
+		static void set_save_function(const std::function<void(const std::string& key,const std::string& value)>& f)
+        {
+            save_handler_function_ = f;
+        }
+
+        static std::function<void(const std::string& key,const std::string& value)>& get_save_function()
+        {
+            return save_handler_function_;
+        }
+
+        static void set_read_function(const std::function<nlohmann::json()>& f)
+        {
+            read_handler_function_ = f;
+        }
+
+        static std::function<nlohmann::json ()>& get_read_function()
+        {
+            return read_handler_function_;
+        }
+
+        static void set_remove_function(const std::function<void(const std::string& key)>& f)
+		{
+			remove_handler_function_ = f;
+		}
+
+		static std::function<void(const std::string& key)>& get_remove_function()
+		{
+			return remove_handler_function_;
+		}
+
 	private:
-		session() = delete;
 
 		std::string id_;
 		std::size_t expire_;
 		std::time_t time_stamp_;
-		std::map<std::string, std::any> data_;
+//		std::map<std::string, std::any> data_;
+	    nlohmann::json data_;
 		std::mutex mtx_;
 		cookie cookie_;
 		bool is_update_ = true;
+        static std::function<void(const std::string& key,const std::string& value)> save_handler_function_;
+        static std::function<nlohmann::json()> read_handler_function_;
+		static std::function<void(const std::string& key)> remove_handler_function_;
 	};
+    std::function<void(const std::string& key,const std::string& value)> session::save_handler_function_ = nullptr;
+    std::function<nlohmann::json()> session::read_handler_function_ = nullptr;
+	std::function<void(const std::string& key)> session::remove_handler_function_ = nullptr;
 }
