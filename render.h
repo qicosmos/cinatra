@@ -230,8 +230,11 @@ public:
         line_number_ = std::get<2>(context);
     }
 
-	std::string_view sv_str() {
-		return { src_str_.data()+(current_- src_str_.begin()), src_str_.length() };
+	inline std::string_view sv_str() {
+		size_t b = current_ - src_str_.begin();
+		size_t e = (size_t)line_number_ + 20;
+		size_t len = e > src_str_.length() ? src_str_.length() : e;
+		return { src_str_.data()+(current_- src_str_.begin()), len };
 	}
 
     template<class F>
@@ -363,12 +366,15 @@ static inline void rtrim(std::string &s) {
 }
 
 template<class Dictionary>
-static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip, std::string_view str, std::string& val) {
+static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip, std::string_view str, const std::string& val) {
 	if (skip) {
 		return object();
 	}
 
 	auto pos0 = str.find_first_of(".");
+	if (pos0 == std::string_view::npos) {
+		pos0 = str.find_first_of("=");
+	}
 	auto key = str.substr(0, pos0);
 	auto s = std::string(key.data(), key.length());
 	ltrim(s);
@@ -378,6 +384,8 @@ static object get_variable0(const Dictionary& dic, tmpl_context& ctx, bool skip,
 		auto it2 = dic.find(s);
 		if (it2 != dic.end()) {
 			obj = it2->second;
+			obj = (obj.str() == val);
+			return obj;
 		}
 		else {
 			throw std::string("Variable is not found");
@@ -537,7 +545,7 @@ static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx,
 					// $else {{ <block> }}
 					object obj;
 					auto cmd_sv = p.sv_str();
-					if (cmd_sv.find("==")) {
+					if (cmd_sv.find("==")!= std::string_view::npos) {
 						auto pos = cmd_sv.find("{{");
 						std::string_view str1 = cmd_sv.substr(0, pos);
 						auto left = str1.substr(str1.find("=")+2);
@@ -551,7 +559,8 @@ static void block(parser<Iterator>& p, const Dictionary& dic, tmpl_context& ctx,
 							p.read();
 						}
 					}
-					else {
+					else 
+					{
 						obj = get_variable(p, dic, ctx, skip);
 					}
 					
