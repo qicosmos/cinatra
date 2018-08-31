@@ -422,15 +422,22 @@ namespace cinatra {
 			return url.substr(1);
 		}
 
+		std::string get_relative_filename() const {
+			auto file_name = get_url();
+			if (is_form_url_encode(file_name)){
+				return "."+code_utils::get_string_by_urldecode(file_name);
+			}
+			
+			return "."+std::string(file_name.data(), file_name.size());
+		}
+
 		std::string get_filename_from_path() const {
 			auto file_name = get_res_path();
-			std::string real_file_name = "./"+std::string(file_name.data(), file_name.size());
-			if (is_form_url_encode(file_name))
-			{
-				real_file_name = "./"+code_utils::get_string_by_urldecode(file_name);
+			if (is_form_url_encode(file_name)) {
+				return code_utils::get_string_by_urldecode(file_name);
 			}
 
-			return real_file_name;
+			return std::string(file_name.data(), file_name.size());
 		}
 
 		std::string_view get_mime(std::string_view filename) const{

@@ -58,7 +58,7 @@ namespace code_utils {
 		return conv.from_bytes(str);
 	}
 
-	inline static std::string get_string_by_urldecode(const std::string_view& content)
+	inline static std::string get_string_by_urldecode(std::string_view content)
 	{
 		return url_decode(std::string(content.data(), content.size()));
 	}
