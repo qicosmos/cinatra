@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by qiyu on 12/19/17.
 //
 
@@ -15,6 +15,7 @@
 #include <cctype>
 #include <type_traits>
 #include <algorithm>
+#include <map>
 #include <iostream>
 #include "define.h"
 
