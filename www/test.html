@@ -1,14 +1,13 @@
 <html>
 	<head>
-		<base href="{{base_path}}">
 		<meta charset="utf-8">
 		<link rel="stylesheet" type="text/css" href="./www/uikit.min.css" />
 	</head>
 	<body>
-		{% include "./header/header.html" %}
-			<h1>{{test_text}}</h1>
+		<h1>${header_text}</h1>
+			<h1>${test_text}</h1>
 	</body>
 	<script>
-		 console.log("{{number}}"*1);
+		 console.log("${number}"*1);
 	</script>
 </html>

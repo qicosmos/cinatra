@@ -10,9 +10,10 @@
 #include "websocket.hpp"
 #include "define.h"
 #include "http_cache.hpp"
+#include "uuid.h"
 
 namespace cinatra {
-	using http_handler = std::function<void(const request&, response&)>;
+	using http_handler = std::function<void(request&, response&)>;
 	using send_ok_handler = std::function<void()>;
 	using send_failed_handler = std::function<void(const boost::system::error_code&)>;
 
@@ -32,9 +33,9 @@ namespace cinatra {
 			socket_(io_service),
 #endif
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this), static_dir_(static_dir)
+			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
 		{
-			init_multipart_parser(true);
+			init_multipart_parser();
 		}
 
 		tcp_socket& socket()
@@ -100,6 +101,16 @@ namespace cinatra {
 		}
 
 		template<typename... Fs>
+		void send_ws_string(std::string msg, Fs&&... fs) {
+			send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
+		}
+
+		template<typename... Fs>
+		void send_ws_binary(std::string msg, Fs&&... fs) {
+			send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
+		}
+
+		template<typename... Fs>
 		void send_ws_msg(std::string msg, opcode op = opcode::text, Fs&&... fs) {
 			constexpr const size_t size = sizeof...(Fs);
 			static_assert(size != 0 || size != 2);
@@ -111,10 +122,14 @@ namespace cinatra {
 			send_msg(std::move(header), std::move(msg));
 		}
 
-		void write_chunked_header(std::string_view mime) {
+		void write_chunked_header(std::string_view mime,bool is_range=false) {
 			req_.set_http_type(content_type::chunked);
 			reset_timer();
-			chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+			if(!is_range){
+                chunked_header_ = http_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+			}else{
+                chunked_header_ = http_range_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
+            }
 			boost::asio::async_write(socket_,
 				boost::asio::buffer(chunked_header_),
 				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
@@ -222,7 +237,7 @@ namespace cinatra {
 				do_read_head();
 			}
 			else {
-				if (req_.get_method() == "GET"&&http_cache::need_cache()&&!http_cache::not_cache(req_.get_url())) {
+				if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url())&&!http_cache::not_cache(req_.get_url())) {
 					auto raw_url = req_.raw_url();
 					if (!http_cache::empty()) {
 						auto resp_vec = http_cache::get(std::string(raw_url.data(), raw_url.length()));
@@ -254,14 +269,7 @@ namespace cinatra {
 						handle_string_body(bytes_transferred);
 						break;
 					case cinatra::content_type::multipart:
-						if (req_.total_len() <= 3 * 1024 * 1024) {
-							init_multipart_parser(false);
-							handle_string_body(bytes_transferred);
-						}
-						else {
-							init_multipart_parser(true);
-							handle_multipart();
-						}
+						handle_multipart();
 						break;
 					case cinatra::content_type::octet_stream:
 						handle_octet_stream(bytes_transferred);
@@ -324,7 +332,7 @@ namespace cinatra {
 			}
 
 			//cache
-			if (req_.get_method() == "GET"&&http_cache::need_cache() && !http_cache::not_cache(req_.get_url())) {
+			if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url()) && !http_cache::not_cache(req_.get_url())) {
 				auto raw_url = req_.raw_url();
 				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
@@ -400,14 +408,17 @@ namespace cinatra {
 
 		//-------------octet-stream----------------//
 		void handle_octet_stream(size_t bytes_transferred) {
-			call_back();
+			//call_back();
+			std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str();
+			req_.open_upload_file(name);
+
 			req_.set_state(data_proc_state::data_continue);//data
 			size_t part_size = bytes_transferred - req_.header_len();
 			if (part_size != 0) {
 				req_.reduce_left_body_size(part_size);
 				req_.set_part_data({ req_.current_part(), part_size });
-
-				call_back();
+				req_.write_upload_data(req_.current_part(), part_size);
+				//call_back();
 			}
 
 			if (req_.has_recieved_all()) {
@@ -435,8 +446,8 @@ namespace cinatra {
 				}
 
 				req_.set_part_data({ req_.buffer(), bytes_transferred });
-
-				call_back();
+				req_.write_upload_data(req_.buffer(), bytes_transferred);
+				//call_back();
 
 				req_.reduce_left_body_size(bytes_transferred);
 
@@ -522,44 +533,52 @@ namespace cinatra {
 			req_.set_part_data({});
 		}
 		//-------------multipart----------------------//
-		void init_multipart_parser(bool is_big) {
-			if (is_big) {
-				multipart_parser_.on_part_begin = [this](const multipart_headers &begin) {
-					req_.set_multipart_headers(begin);
-					req_.set_state(data_proc_state::data_begin);
-					call_back();
-				};
-				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					req_.set_part_data({ buf, size });
-					req_.set_state(data_proc_state::data_continue);
-					call_back();
-				};
-				multipart_parser_.on_part_end = [this] {
-					req_.set_state(data_proc_state::data_end);
-					call_back();
-				};
-				multipart_parser_.on_end = [this] {
-					req_.set_state(data_proc_state::data_all_end);
-					call_back();
-				};
-			}
-			else {
+		void init_multipart_parser() {
 				multipart_parser_.on_part_begin = [this](const multipart_headers & headers) {
 					req_.set_multipart_headers(headers);
-					auto filename = req_.get_multipart_file_name();
-					if (filename.empty())
+					auto filename = req_.get_multipart_field_name("filename");
+					is_multi_part_file_ = req_.is_multipart_file();
+					if (filename.empty()&& is_multi_part_file_) {
+						req_.set_state(data_proc_state::data_error);
+						res_.set_status_and_content(status_type::bad_request, "mutipart error");
 						return;
-					
-					auto ext = get_extension(filename);
-					std::string name = static_dir_ + std::to_string(std::time(0)) + std::string(ext.data(), ext.length());
-					req_.open_upload_file(name);
+					}						
+					if(is_multi_part_file_)
+					{
+						auto ext = get_extension(filename);
+						std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str()
+							+ std::string(ext.data(), ext.length());
+						req_.open_upload_file(name);
+					}else{
+						auto key = req_.get_multipart_field_name("name");
+						req_.save_multipart_key_value(std::string(key.data(),key.size()),"");
+					}
 				};
 				multipart_parser_.on_part_data = [this](const char* buf, size_t size) {
-					req_.write_upload_data(buf, size);
+					if (req_.get_state() == data_proc_state::data_error) {
+						return;
+					}
+					if(is_multi_part_file_){
+						req_.write_upload_data(buf, size);
+					}else{
+						auto key = req_.get_multipart_field_name("name");
+						req_.update_multipart_value(key, buf, size);
+					}
 				};
-				multipart_parser_.on_part_end = [this] {req_.close_upload_file(); };
-				multipart_parser_.on_end = [this] { call_back(); };
-			}			
+				multipart_parser_.on_part_end = [this] {
+					if (req_.get_state() == data_proc_state::data_error)
+						return;
+					if(is_multi_part_file_)
+					{
+						req_.close_upload_file();
+					}
+				};
+				multipart_parser_.on_end = [this] {
+					if (req_.get_state() == data_proc_state::data_error)
+						return;
+                    req_.handle_multipart_key_value();
+					call_back(); 
+				};		
 		}
 
 		bool parse_multipart(size_t size, std::size_t length) {
@@ -658,7 +677,8 @@ namespace cinatra {
 					do_read_part_data();
 				}
 				else {
-					response_back(status_type::ok, "multipart finished");
+					//response_back(status_type::ok, "multipart finished");
+					do_write();
 				}
 			});
 		}
@@ -721,8 +741,7 @@ namespace cinatra {
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					timer_.cancel();
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 
 					close();
 					return;
@@ -737,8 +756,7 @@ namespace cinatra {
 					auto payload_length = ws_.payload_length();
 					req_.set_body_len(payload_length);
 					if (req_.at_capacity(payload_length)) {
-						req_.set_state(data_proc_state::data_error);
-						call_back();
+						req_.call_event(data_proc_state::data_error);
 						close();
 						return;
 					}
@@ -752,8 +770,7 @@ namespace cinatra {
 					do_read_websocket_head(ws_.left_header_len());
 				}
 				else {
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 					close();
 				}
 			});
@@ -764,8 +781,7 @@ namespace cinatra {
 			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), length),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
-					req_.set_state(data_proc_state::data_error);
-					call_back();
+					req_.call_event(data_proc_state::data_error);
 					close();
 					return;
 				}
@@ -796,8 +812,7 @@ namespace cinatra {
 			switch (ret)
 			{
 			case cinatra::ws_frame_type::WS_ERROR_FRAME:
-				req_.set_state(data_proc_state::data_error);
-				call_back();
+				req_.call_event(data_proc_state::data_error);
 				close();
 				return false;
 			case cinatra::ws_frame_type::WS_OPENING_FRAME:
@@ -805,9 +820,8 @@ namespace cinatra {
 			case cinatra::ws_frame_type::WS_TEXT_FRAME:
 			case cinatra::ws_frame_type::WS_BINARY_FRAME:
 			{
-				req_.set_state(data_proc_state::data_continue);
-				req_.set_part_data({ payload.data(), payload.length() });
-				call_back();
+				req_.set_part_data({ payload.data(), payload.length() });				
+				req_.call_event(data_proc_state::data_continue);
 			}
 			//on message
 			break;
@@ -816,9 +830,8 @@ namespace cinatra {
 				close_frame close_frame = ws_.parse_close_payload(payload.data(), payload.length());
 				const int MAX_CLOSE_PAYLOAD = 123;
 				size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, payload.length());
-				req_.set_state(data_proc_state::data_close);
 				req_.set_part_data({ close_frame.message, len });
-				call_back();
+				req_.call_event(data_proc_state::data_close);
 
 				std::string close_msg = ws_.format_close_payload(opcode::close, close_frame.message, len);
 				auto header = ws_.format_header(close_msg.length(), opcode::close);
@@ -1038,8 +1051,8 @@ namespace cinatra {
 		//-----------------send message----------------//
 		socket_type socket_;
 		boost::asio::steady_timer timer_;
-		request req_;
 		response res_;
+		request req_;
 		websocket ws_;
 		bool is_upgrade_ = false;
 		bool keep_alive_ = false;
@@ -1057,8 +1070,14 @@ namespace cinatra {
 
 		std::string chunked_header_;
 		multipart_reader multipart_parser_;
+		bool is_multi_part_file_;
 		//callback handler to application layer
 		const http_handler& http_handler_;
 		std::any tag_;
 	};
+
+	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
+	inline constexpr data_proc_state ws_message = data_proc_state::data_continue;
+	inline constexpr data_proc_state ws_close = data_proc_state::data_close;
+	inline constexpr data_proc_state ws_error = data_proc_state::data_error;
 }

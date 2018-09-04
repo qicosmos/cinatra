@@ -22,7 +22,7 @@ namespace cinatra {
 			const std::string& path = "/", const std::string& domain = "")
 		{
 			id_ = uuid_str;
-			expire_ = expire == -1 ? 600 : expire;
+			expire_ = expire == -1 ? 86400 : expire;
 			std::time_t now = std::time(nullptr);
 			time_stamp_ = expire_ + now;
 			cookie_.set_name(name);
@@ -65,13 +65,18 @@ namespace cinatra {
 		{
 			std::unique_lock<std::mutex> lock(mtx_);
 			is_update_ = true;
-			expire_ = seconds == -1 ? 600 : seconds;
+			expire_ = seconds == -1 ? 86400 : seconds;
 			std::time_t now = std::time(nullptr);
 			time_stamp_ = now + expire_;
 			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);
 		}
 
-		cinatra::cookie get_cookie()
+		void remove()
+		{
+			set_max_age(0);
+		}
+
+		cinatra::cookie& get_cookie()
 		{
 			return cookie_;
 		}
