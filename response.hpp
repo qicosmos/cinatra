@@ -60,6 +60,78 @@ namespace cinatra {
 			return buffers;
 		}
 
+		void prepare_to_buffers()
+		{
+			left_content_size_ = content_.size();
+			content_iter_ = content_.data();
+		}
+
+		std::vector<boost::asio::const_buffer>  headers_to_buffers()
+		{
+			std::vector<boost::asio::const_buffer> buffers;
+			add_header("Host", "cinatra");
+			add_header("Transfer-Encoding","chunked");
+			if(session_ != nullptr && session_->is_need_update())
+			{
+				auto cookie_str = session_->get_cookie().to_string();
+				add_header("Set-Cookie",cookie_str.c_str());
+				session_->set_need_update(false);
+			}
+			buffers.reserve(headers_.size() * 4 + 5);
+			buffers.emplace_back(to_buffer(status_));
+			for (auto const& h : headers_) {
+				buffers.emplace_back(boost::asio::buffer(h.first));
+				buffers.emplace_back(boost::asio::buffer(name_value_separator));
+				buffers.emplace_back(boost::asio::buffer(h.second));
+				buffers.emplace_back(boost::asio::buffer(crlf));
+			}
+
+			buffers.push_back(boost::asio::buffer(crlf));
+			return buffers;
+		}
+
+		std::vector<boost::asio::const_buffer> get_part_content_buffers(bool& eof)
+		{
+			 std::vector<boost::asio::const_buffer> buffers;
+			 if(left_content_size_== 0){
+				 buffers = to_chunked_buffers("",0,true);
+				 eof = true;
+				 return buffers;
+			 }
+             if((left_content_size_-chunked_read_part_buff_size_)>0){
+				 buffers = to_chunked_buffers(content_iter_,chunked_read_part_buff_size_,false);
+				 left_content_size_-=chunked_read_part_buff_size_;
+				 content_iter_+=chunked_read_part_buff_size_;
+                 eof = false;
+             }else if((left_content_size_-chunked_read_part_buff_size_) <= 0){
+				 buffers = to_chunked_buffers(content_iter_,left_content_size_,false);
+				 left_content_size_ = 0;
+				 content_iter_+= left_content_size_;
+                 eof = false;
+             }
+             return buffers;
+		}
+
+		void set_response_header(const std::vector<std::pair<std::string, std::string>>& header)
+		{
+			headers_ = header;
+		}
+
+		std::vector<std::pair<std::string, std::string>> get_response_header()
+		{
+			return headers_;
+		}
+
+		void set_response_content(const std::string& content)
+		{
+			content_ = content;
+		}
+
+		std::string get_response_content()
+		{
+			return content_;
+		}
+
 		void add_header(std::string&& key, std::string&& value) {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
@@ -138,6 +210,8 @@ namespace cinatra {
             tmpl_json_data_.clear();
             session_ = nullptr;
             cache_data.clear();
+			left_content_size_ = 0;
+			content_iter_ = nullptr;
 		}
 
 		void set_continue(bool con) {
@@ -149,9 +223,9 @@ namespace cinatra {
 		}
 
 		void set_content(std::string&& content) {
-			char temp[20] = {};
-			itoa_fwd((int)content.size(), temp);
-			add_header("Content-Length", temp);
+			// char temp[20] = {};
+			// itoa_fwd((int)content.size(), temp);
+			// add_header("Content-Length", temp);
 
 			body_type_ = content_type::string;
 			content_ = std::move(content);
@@ -336,6 +410,10 @@ namespace cinatra {
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 		nlohmann::json tmpl_json_data_;
+
+		const int64_t chunked_read_part_buff_size_ = 512*1024; //512kb
+		int64_t	left_content_size_ = 0;
+		const char* content_iter_ = nullptr;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP

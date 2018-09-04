@@ -71,7 +71,8 @@ int main() {
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok,"hello world");
+//		res.set_status_and_content(status_type::ok,"hello world");
+		res.render_string("hello world");
 	},enable_cache{false});
 
 	person p{ 2 };
@@ -111,24 +112,19 @@ int main() {
         res.set_attr("number",1024);
         res.set_attr("test_text","hello,world");
         res.set_attr("header_text","你好 cinatra");
-		res.render_view("./www/test.html");
+		res.render_view("./public/www/test.html");
 	});
 
 	server.set_http_handler<GET, POST,OPTIONS>("/json", [](request& req, response& res) {
 		nlohmann::json json;
         res.add_header("Access-Control-Allow-Origin","*");
-		if(req.get_method()=="OPTIONS"){
-            res.add_header("Access-Control-Allow-Headers","Authorization");
-            res.render_string("");
-		}else{
-            json["abc"] = "abc";
-            json["success"] = true;
-            json["number"] = 100.005;
-            json["name"] = "中文";
-            json["time_stamp"] = std::time(nullptr);
-            res.render_json(json);
-		}
-	});
+		json["abc"] = "abc";
+		json["success"] = true;
+		json["number"] = 100.005;
+		json["name"] = "中文";
+		json["time_stamp"] = std::time(nullptr);
+		res.render_json(json);
+	},enable_cache{true});
 
 	server.set_http_handler<GET,POST>("/redirect",[](request& req, response& res){
 		res.redirect("http://www.baidu.com"); // res.redirect("/json");
