@@ -25,21 +25,19 @@ namespace cinatra {
 	};
 
 	using tcp_socket = boost::asio::ip::tcp::socket;
-	template <typename socket_type>
 	class connection;
-#ifdef CINATRA_ENABLE_SSL
-	using Socket = boost::asio::ssl::stream<tcp_socket>;
-#else
-	using Socket = tcp_socket;
-#endif
 
-	using conn_type = connection<Socket>;
+#ifdef CINATRA_ENABLE_SSL
+	using ssl_socket = boost::asio::ssl::stream<tcp_socket>;
+	using ssl_context = boost::asio::ssl::context;
+	using ssl_context_sptr = std::shared_ptr<boost::asio::ssl::context>;
+#endif
 
 	class request {
 	public:
 		using event_call_back = std::function<void(request&)>;
 
-		request(conn_type* con,response& res) : con_(con),res_(res){
+		request(connection* con,response& res) : con_(con),res_(res){
 			buf_.resize(1024);
 		}
 
@@ -714,7 +712,7 @@ namespace cinatra {
 		}
 
 		constexpr const static size_t MaxSize = 3 * 1024 * 1024;
-		conn_type* con_ = nullptr;
+		connection* con_ = nullptr;
         response& res_;
 		std::vector<char> buf_;
 

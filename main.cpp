@@ -56,11 +56,11 @@ int main() {
 	const int max_thread_num = 4;
 	http_server server(max_thread_num);
 #ifdef CINATRA_ENABLE_SSL
-	server.init_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
-	bool r = server.listen("0.0.0.0", "https");
-#else
-	bool r = server.listen("0.0.0.0", "8080");
+	auto ctx_ = server.create_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
+	bool r = server.listen("0.0.0.0", "8080", ctx_);
 #endif
+	r &= server.listen("0.0.0.0", "8000");
+
 	if (!r) {
 		LOG_INFO << "listen failed";
 		return -1;

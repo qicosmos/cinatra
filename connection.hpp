@@ -17,45 +17,49 @@ namespace cinatra {
 	using send_ok_handler = std::function<void()>;
 	using send_failed_handler = std::function<void(const boost::system::error_code&)>;
 
-	template <typename socket_type>
-	class connection :public std::enable_shared_from_this<connection<socket_type>>, private noncopyable {
+	class connection :public std::enable_shared_from_this<connection>, private noncopyable {
 	public:
 		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
-			http_handler& handler, std::string& static_dir
-#ifdef CINATRA_ENABLE_SSL
-			, boost::asio::ssl::context& ctx
-#endif
-		)
+			http_handler& handler, std::string& static_dir)
 			:
-#ifdef CINATRA_ENABLE_SSL
-			socket_(io_service, ctx),
-#else
-			socket_(io_service),
-#endif
+			tcp_socket_(std::make_shared<tcp_socket>(io_service)),
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
+			timer_(io_service), http_handler_(handler), req_(this, res_), static_dir_(static_dir)
 		{
 			init_multipart_parser();
 		}
 
+#ifdef CINATRA_ENABLE_SSL
+		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
+			http_handler& handler, std::string& static_dir, ssl_context& ctx)
+			:
+			ssl_socket_(std::make_shared<ssl_socket>(io_service, ctx)),
+			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
+			timer_(io_service), http_handler_(handler), req_(this, res_), static_dir_(static_dir)
+		{
+			init_multipart_parser();
+		}
+#endif
+
 		tcp_socket& socket()
 		{
 #ifdef CINATRA_ENABLE_SSL
-			return socket_.next_layer();
-#else
-			return socket_;
+			if (ssl_socket_)
+				return ssl_socket_->next_layer();
+			else
 #endif
+			return *tcp_socket_;
 		}
 
 		std::string local_address() {
 			std::stringstream ss;
-			ss << socket_.local_endpoint();
+			ss << socket().local_endpoint();
 			return ss.str();
 		}
 
 		std::string remote_address() {
 			std::stringstream ss;
-			ss << socket_.remote_endpoint();
+			ss << socket().remote_endpoint();
 			return ss.str();
 		}
 
@@ -130,9 +134,9 @@ namespace cinatra {
 			}else{
                 chunked_header_ = http_range_chunk_header + "Content-Type: " + std::string(mime.data(), mime.length()) + "\r\n\r\n";
             }
-			boost::asio::async_write(socket_,
-				boost::asio::buffer(chunked_header_),
-				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+
+			async_write_(boost::asio::buffer(chunked_header_),
+			[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 				self->handle_chunked_header(ec);
 			});
 		}
@@ -147,7 +151,7 @@ namespace cinatra {
 			}
 
 			auto self = this->shared_from_this();
-			boost::asio::async_write(socket_, buffers, [this, self, buf = std::move(buf), eof](const boost::system::error_code& ec, size_t) {
+			async_write_(buffers, [this, self, buf = std::move(buf), eof](const boost::system::error_code& ec, size_t) {
 				if (ec) {
 					return;
 				}
@@ -171,35 +175,66 @@ namespace cinatra {
 		//	close();
 		//}
 	private:
+		template<class _Buf, class _Handler>
+		void async_read_(_Buf&& buffer, _Handler && handler)
+		{
+#ifdef CINATRA_ENABLE_SSL
+			if (ssl_socket_)
+				boost::asio::async_read(*ssl_socket_, std::forward<_Buf>(buffer), std::forward<_Handler>(handler));
+			else
+#endif
+				boost::asio::async_read(*tcp_socket_, std::forward<_Buf>(buffer), std::forward<_Handler>(handler));
+		}
+
+		template<class _Buf, class _Handler>
+		void async_read_some_(_Buf&& buffer, _Handler && handler)
+		{
+#ifdef CINATRA_ENABLE_SSL
+			if (ssl_socket_)
+				ssl_socket_->async_read_some(std::forward<_Buf>(buffer), std::forward<_Handler>(handler));
+			else
+#endif
+				tcp_socket_->async_read_some(std::forward<_Buf>(buffer), std::forward<_Handler>(handler));
+		}
+		
+		template<class _Buf, class _Handler>
+		void async_write_(_Buf&& buffers, _Handler && handler)
+		{
+#ifdef CINATRA_ENABLE_SSL
+			if (ssl_socket_)
+				boost::asio::async_write(*ssl_socket_, std::forward<_Buf>(buffers), std::forward<_Handler>(handler));
+			else
+#endif
+				boost::asio::async_write(*tcp_socket_, std::forward<_Buf>(buffers), std::forward<_Handler>(handler));
+		}
+		
 		void do_read() {
 			req_.reset();
 			res_.reset();
 			reset_timer();
 
 #ifdef CINATRA_ENABLE_SSL
-			async_handshake();
-#else
+			if (ssl_socket_)
+			{
+				ssl_socket_->async_handshake(boost::asio::ssl::stream_base::server,
+					[this, self = this->shared_from_this()](const boost::system::error_code& error) {
+					if (error) {
+						std::cout << error.message() << std::endl;
+						return;
+					}
+
+					async_read_some();
+				});
+			}
+			else
+#endif
 			async_read_some();
-#endif
-		}
-
-		void async_handshake() {
-#ifdef CINATRA_ENABLE_SSL
-			socket_.async_handshake(boost::asio::ssl::stream_base::server,
-				[this, self = this->shared_from_this()](const boost::system::error_code& error) {
-				if (error) {
-					std::cout << error.message() << std::endl;
-					return;
-				}
-
-				async_read_some();
-			});
-#endif
 		}
 
 		void async_read_some() {
-			socket_.async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
-				[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+
+			async_read_some_(boost::asio::buffer(req_.buffer(), req_.left_size()), 
+			[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
 				self->handle_read(e, bytes_transferred);
 			});
 		}
@@ -248,8 +283,8 @@ namespace cinatra {
 							{
 								buffers.emplace_back(boost::asio::buffer(iter.data(),iter.size()));
 							}
-							boost::asio::async_write(socket_, buffers,
-								[self = this->shared_from_this(), resp_vec = std::move(resp_vec)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+
+							async_write_(buffers, [self = this->shared_from_this(), resp_vec = std::move(resp_vec)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 								self->handle_write(ec);
 							});
 							return;
@@ -291,8 +326,8 @@ namespace cinatra {
 		void do_read_head() {
 			reset_timer();
 
-			socket_.async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
-				[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+			async_read_some_(boost::asio::buffer(req_.buffer(), req_.left_size()),
+			[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
 				self->handle_read(e, bytes_transferred);
 			});
 		}
@@ -301,7 +336,7 @@ namespace cinatra {
 			reset_timer();
 
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
+			async_read_(boost::asio::buffer(req_.buffer(), req_.left_body_len()),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					LOG_WARN << ec.message();
@@ -337,8 +372,7 @@ namespace cinatra {
 				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
 
-			boost::asio::async_write(socket_, buffers,
-				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+			async_write_(buffers, [self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 				self->handle_write(ec);
 			});
 		}
@@ -436,7 +470,7 @@ namespace cinatra {
 
 		void do_read_octet_stream_body() {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
+			async_read_(boost::asio::buffer(req_.buffer(), req_.left_body_len()),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					req_.set_state(data_proc_state::data_error);
@@ -501,7 +535,7 @@ namespace cinatra {
 			reset_timer();
 
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
+			async_read_(boost::asio::buffer(req_.buffer(), req_.left_body_len()), 
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					LOG_WARN << ec.message();
@@ -628,7 +662,7 @@ namespace cinatra {
 
 			req_.fit_size();
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
+			async_read_(boost::asio::buffer(req_.buffer(), req_.left_body_len()), 
 				[self, this](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					req_.set_state(data_proc_state::data_error);
@@ -658,7 +692,7 @@ namespace cinatra {
 
 		void do_read_part_data() {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_size()),
+			async_read_(boost::asio::buffer(req_.buffer(), req_.left_body_size()),
 				[self, this](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					req_.set_state(data_proc_state::data_error);
@@ -721,7 +755,7 @@ namespace cinatra {
 			}
 
 			auto self = this->shared_from_this();
-			boost::asio::async_write(socket_, buffers, [this, self](const boost::system::error_code& ec, std::size_t length) {
+			async_write_(buffers, [this, self](const boost::system::error_code& ec, std::size_t length) {
 				if (ec) {
 					close();
 					return;
@@ -737,7 +771,7 @@ namespace cinatra {
 
 		void do_read_websocket_head(size_t length) {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), length),
+			async_read_(boost::asio::buffer(req_.buffer(), length),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					timer_.cancel();
@@ -778,7 +812,7 @@ namespace cinatra {
 
 		void do_read_websocket_data(size_t length) {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), length),
+			async_read_(boost::asio::buffer(req_.buffer(), length),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
 					req_.call_event(data_proc_state::data_error);
@@ -941,16 +975,9 @@ namespace cinatra {
 		void check_keep_alive() {
 			auto req_conn_hdr = req_.get_header_value("connection");
 			if (req_.is_http11()) {
-				// HTTP1.1
-				//ͷ����û�а���connection�ֶ�
-				//����ͷ���а�����connection�ֶε���ֵ��Ϊclose
-				//��������ǳ�����
 				keep_alive_ = req_conn_hdr.empty() || !iequal(req_conn_hdr.data(), req_conn_hdr.size(), "close");
 			}
 			else {
-				//HTTP1.0������(0.9 or ?)
-				//ͷ������connection,����connection�ֶ�ֵΪkeep-alive
-				//����������ǳ�����
 				keep_alive_ = !req_conn_hdr.empty() && iequal(req_conn_hdr.data(), req_conn_hdr.size(), "keep-alive");
 			}
 
@@ -982,19 +1009,21 @@ namespace cinatra {
 		void shutdown_send() {
 			boost::system::error_code ignored_ec;
 #ifdef CINATRA_ENABLE_SSL
-			socket_.shutdown(ignored_ec);
-#else
-			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ignored_ec);
+			if (ssl_socket_)
+				ssl_socket_->shutdown(ignored_ec);
+			else
 #endif
+				tcp_socket_->shutdown(boost::asio::ip::tcp::socket::shutdown_send, ignored_ec);
 		}
 
 		void shutdown() {
 			boost::system::error_code ignored_ec;
 #ifdef CINATRA_ENABLE_SSL
-			socket_.shutdown(ignored_ec);
-#else
-			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
+			if (ssl_socket_)
+				ssl_socket_->shutdown(ignored_ec);
+			else
 #endif
+				tcp_socket_->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
 		}
 
 		//-----------------send message----------------//
@@ -1019,7 +1048,8 @@ namespace cinatra {
 				buffer_seq_.push_back(boost::asio::buffer(data));
 			}
 
-			boost::asio::async_write(socket_, buffer_seq_, [this, self = this->shared_from_this()](const boost::system::error_code& ec, size_t bytes_transferred) {
+			async_write_(buffer_seq_,
+				[this, self = this->shared_from_this()](const boost::system::error_code& ec, size_t bytes_transferred) {
 				std::lock_guard<std::mutex> lock(buffers_mtx_);
 				buffers_[active_buffer_].clear();
 				buffer_seq_.clear();
@@ -1049,7 +1079,11 @@ namespace cinatra {
 		}
 
 		//-----------------send message----------------//
-		socket_type socket_;
+#ifdef CINATRA_ENABLE_SSL
+		std::shared_ptr<ssl_socket> ssl_socket_;
+#endif
+		std::shared_ptr<tcp_socket> tcp_socket_;
+
 		boost::asio::steady_timer timer_;
 		response res_;
 		request req_;
