@@ -131,10 +131,9 @@ namespace cinatra {
 				boost::asio::ip::tcp::endpoint endpoint = *endpoints;
 
 				auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(io_service_pool_.get_io_service());
-				acceptor->open(endpoint.protocol());
-				acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
-
 				try {
+					acceptor->open(endpoint.protocol());
+					acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 					acceptor->bind(endpoint);
 					acceptor->listen();
 					start_accept(acceptor, ctx_);

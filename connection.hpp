@@ -37,6 +37,7 @@ namespace cinatra {
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
 			timer_(io_service), http_handler_(handler), req_(this, res_), static_dir_(static_dir)
 		{
+			//SSL_set_mode(ssl_socket_->native_handle(), SSL_MODE_AUTO_RETRY);
 			init_multipart_parser();
 		}
 #endif
@@ -48,7 +49,7 @@ namespace cinatra {
 				return ssl_socket_->next_layer();
 			else
 #endif
-			return *tcp_socket_;
+				return *tcp_socket_;
 		}
 
 		std::string local_address() {
@@ -214,7 +215,7 @@ namespace cinatra {
 			reset_timer();
 
 #ifdef CINATRA_ENABLE_SSL
-			if (ssl_socket_)
+			if (ssl_socket_ && !has_shake_)
 			{
 				ssl_socket_->async_handshake(boost::asio::ssl::stream_base::server,
 					[this, self = this->shared_from_this()](const boost::system::error_code& error) {
@@ -223,19 +224,28 @@ namespace cinatra {
 						return;
 					}
 
+					has_shake_ = true;
 					async_read_some();
 				});
 			}
 			else
 #endif
-			async_read_some();
+				async_read_some();
 		}
 
 		void async_read_some() {
 
 			async_read_some_(boost::asio::buffer(req_.buffer(), req_.left_size()), 
-			[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
-				self->handle_read(e, bytes_transferred);
+			[this, self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+				if (e) {
+					if (e == boost::asio::error::eof) {
+						shutdown_send();
+					}
+					has_shake_ = false;
+					return;
+				}
+
+				handle_read(e, bytes_transferred);
 			});
 		}
 
@@ -407,6 +417,7 @@ namespace cinatra {
 		void close() {
 			boost::system::error_code ec;
 			socket().close(ec);
+			has_shake_ = false;
 		}
 
 		void set_response_attr() {
@@ -1093,6 +1104,7 @@ namespace cinatra {
 		const std::size_t MAX_REQ_SIZE_;
 		const long KEEP_ALIVE_TIMEOUT_;
 		const std::string& static_dir_;
+		bool has_shake_ = false;
 
 		//for writing message
 		std::mutex buffers_mtx_;
