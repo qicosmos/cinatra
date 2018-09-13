@@ -177,7 +177,12 @@ namespace cinatra {
 			reset_timer();
 
 #ifdef CINATRA_ENABLE_SSL
-			async_handshake();
+			if (!has_shake_) {
+				async_handshake();
+			}
+			else {
+				async_read_some();
+			}
 #else
 			async_read_some();
 #endif
@@ -192,6 +197,7 @@ namespace cinatra {
 					return;
 				}
 
+				has_shake_ = true;
 				async_read_some();
 			});
 #endif
@@ -199,7 +205,15 @@ namespace cinatra {
 
 		void async_read_some() {
 			socket_.async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
-				[self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+				[this, self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
+				if (e) {
+					if (e == boost::asio::error::eof) {
+						shutdown_send();
+					}
+					has_shake_ = false;
+					return;
+				}
+
 				self->handle_read(e, bytes_transferred);
 			});
 		}
@@ -373,6 +387,7 @@ namespace cinatra {
 		void close() {
 			boost::system::error_code ec;
 			socket().close(ec);
+			has_shake_ = false;
 		}
 
 		void set_response_attr() {
@@ -1059,6 +1074,7 @@ namespace cinatra {
 		const std::size_t MAX_REQ_SIZE_;
 		const long KEEP_ALIVE_TIMEOUT_;
 		const std::string& static_dir_;
+		bool has_shake_ = false;
 
 		//for writing message
 		std::mutex buffers_mtx_;
