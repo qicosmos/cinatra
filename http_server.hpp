@@ -313,9 +313,9 @@ namespace cinatra {
 				res.add_header("Cache-Control", max_age.data());
 			}
 #ifdef CINATRA_ENABLE_GZIP
-			res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip);
+			res.set_status_and_content(status_type::ok, file_buffer.str(), res_content_type::none, content_encoding::gzip,false);
 #else
-			res.set_status_and_content(status_type::ok, file_buffer.str());
+			res.set_status_and_content(status_type::ok, file_buffer.str(),res_content_type::none,content_encoding::none,false);
 #endif
 		}
 
