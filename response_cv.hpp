@@ -30,6 +30,11 @@ namespace cinatra {
 		none
 	};
 
+	enum class transfer_encoding_type{
+	    content_length,
+        chunked
+	};
+
 	inline std::string_view ok = "OK";
 	inline std::string_view created = "<html>"
 		"<head><title>Created</title></head>"

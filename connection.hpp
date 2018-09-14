@@ -254,18 +254,14 @@ namespace cinatra {
 				if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url())&&!http_cache::not_cache(req_.get_url())) {
 					auto raw_url = req_.raw_url();
 					if (!http_cache::empty()) {
-						auto resp_vec = http_cache::get(std::string(raw_url.data(), raw_url.length()));
+						auto response_tuple = http_cache::get(std::string(raw_url.data(), raw_url.length()));
 						//write back cache
-						if (!resp_vec.empty()) {
-							std::vector<boost::asio::const_buffer> buffers;
-							for(auto &iter:resp_vec)
-							{
-								buffers.emplace_back(boost::asio::buffer(iter.data(),iter.size()));
+						if (!std::get<2>(response_tuple).empty()) {
+							if(std::get<0>(response_tuple)==transfer_encoding_type::content_length){
+                               do_cache_write_no_chunked(response_tuple);
+							}else{
+								do_cache_write(response_tuple);
 							}
-							boost::asio::async_write(socket_, buffers,
-								[self = this->shared_from_this(), resp_vec = std::move(resp_vec)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-								self->handle_write(ec);
-							});
 							return;
 						}
 					}
@@ -337,23 +333,111 @@ namespace cinatra {
 
 		void do_write() {
 			reset_timer();
-			//auto content_length = res_.get_header_value("content-length");
-			//assert(!content_length.empty());
-			std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
+			auto type = res_.get_transfer_encoding_type();
+			if(type == transfer_encoding_type::chunked){
+				do_write_chunked();
+			}else if(type == transfer_encoding_type::content_length){
+				do_write_no_chunked();
+			}
+		}
+
+		void do_write_chunked()
+		{
+			reset_timer();
+			//cache
+			if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url()) && !http_cache::not_cache(req_.get_url())) {
+				auto raw_url = req_.raw_url();
+				auto tuple_context = std::make_tuple(transfer_encoding_type::chunked,res_.get_status(),res_.get_response_header(),res_.get_response_content());
+				http_cache::add(std::string(raw_url.data(), raw_url.length()),tuple_context);
+			}
+			res_.prepare_to_buffers();
+			write_response_chunked_header();
+		}
+
+
+		void do_cache_write(const cache_context_type& tuple_context)
+		{
+			reset_timer();
+			res_.set_transfer_encoding_type(std::get<0>(tuple_context));
+			res_.set_status(std::get<1>(tuple_context));
+			res_.set_response_header(std::get<2>(tuple_context));
+			res_.set_response_content(std::get<3>(tuple_context));
+			res_.prepare_to_buffers();
+			write_response_chunked_header();
+		}
+
+        void do_write_no_chunked() {
+            reset_timer();
+			//cache
+			if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url()) && !http_cache::not_cache(req_.get_url())) {
+				auto raw_url = req_.raw_url();
+				auto tuple_context = std::make_tuple(transfer_encoding_type::content_length,res_.get_status(),res_.get_response_header(),res_.get_response_content());
+				http_cache::add(std::string(raw_url.data(), raw_url.length()),tuple_context);
+			}
+
+            std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
+            if (buffers.empty()) {
+                handle_write(boost::system::error_code{});
+                return;
+            }
+
+            boost::asio::async_write(socket_, buffers,
+                                     [self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                                         self->handle_write(ec);
+                                     });
+        }
+
+        void do_cache_write_no_chunked(const cache_context_type& tuple_context)
+        {
+            reset_timer();
+			res_.set_transfer_encoding_type(std::get<0>(tuple_context));
+			res_.set_status(std::get<1>(tuple_context));
+			res_.set_response_header(std::get<2>(tuple_context));
+			res_.set_response_content(std::get<3>(tuple_context));
+            std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
+            boost::asio::async_write(socket_, buffers,
+                                     [self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                                         self->handle_write(ec);
+                                     });
+        }
+
+		void write_response_chunked_header() {
+//            req_.set_http_type(content_type::chunked);
+            reset_timer();
+            boost::asio::async_write(socket_,
+                                     res_.headers_to_buffers(),
+                                     [self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                                         self->handle_response_chunked_header(ec);
+                                     });
+        }
+
+        void handle_response_chunked_header(const boost::system::error_code& ec) {
+            if (ec) {
+                return;
+            }
+			write_response_chunked_data();
+        }
+
+		void write_response_chunked_data() {
+			reset_timer();
+            bool eof = false ;
+			std::vector<boost::asio::const_buffer> buffers = res_.get_part_content_buffers(eof);
 			if (buffers.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
 			}
 
-			//cache
-			if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url()) && !http_cache::not_cache(req_.get_url())) {
-				auto raw_url = req_.raw_url();
-				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
-			}
+			auto self = this->shared_from_this();
+			boost::asio::async_write(socket_, buffers, [this, self, eof](const boost::system::error_code& ec, size_t) {
+				if (ec) {
+					return;
+				}
 
-			boost::asio::async_write(socket_, buffers,
-				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-				self->handle_write(ec);
+				if (!eof) {
+					self->write_response_chunked_data();
+				}else{
+					self->on_close();
+				}
 			});
 		}
 
