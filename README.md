@@ -46,7 +46,7 @@ cinatra是header-only的，直接引用头文件既可。
 		int max_thread_num = std::thread::hardware_concurrency();
 		http_server server(max_thread_num);
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
+		server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		});
 
@@ -64,7 +64,7 @@ cinatra是header-only的，直接引用头文件既可。
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/test", [](const request& req, response& res) {
+		server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
 			auto name = req.get_header_value("name");
 			if (name.empty()) {
 				res.set_status_and_content(status_type::bad_request, "no name");
@@ -92,12 +92,12 @@ cinatra是header-only的，直接引用头文件既可。
 	//日志切面
 	struct log_t
 	{
-		bool before(const request& req, response& res) {
+		bool before(request& req, response& res) {
 			std::cout << "before log" << std::endl;
 			return true;
 		}
 	
-		bool after(const request& req, response& res) {
+		bool after(request& req, response& res) {
 			std::cout << "after log" << std::endl;
 			return true;
 		}
@@ -105,7 +105,7 @@ cinatra是header-only的，直接引用头文件既可。
 	
 	//校验的切面
 	struct check {
-		bool before(const request& req, response& res) {
+		bool before(request& req, response& res) {
 			std::cout << "before check" << std::endl;
 			if (req.get_header_value("name").empty()) {
 				res.set_status_and_content(status_type::bad_request);
@@ -115,7 +115,7 @@ cinatra是header-only的，直接引用头文件既可。
 			return true;
 		}
 	
-		bool after(const request& req, response& res) {
+		bool after(request& req, response& res) {
 			std::cout << "after check" << std::endl;
 			return true;
 		}
@@ -124,7 +124,7 @@ cinatra是header-only的，直接引用头文件既可。
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/aspect", [](const request& req, response& res) {
+		server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		}, check{}, log_t{});
 
@@ -246,11 +246,11 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		http_server_<io_service_inplace> server;
 		server.listen("8080");
 	
-		server.set_http_handler<GET, POST>("/", [](const request& req, response& res) {
+		server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		});
 
-		server.set_http_handler<GET, POST>("/close", [&](const request& req, response& res) {
+		server.set_http_handler<GET, POST>("/close", [&](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "will close");
 
 			is_running = false;
