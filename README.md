@@ -299,6 +299,8 @@ cinatra目前刚开始在生产环境中使用, 还处于开发完善阶段，�
 
 purecpp@163.com
 
+qq群：340713904
+
 [http://purecpp.org/](http://purecpp.org/ "purecpp")
 
 [https://github.com/qicosmos/cinatra](https://github.com/qicosmos/cinatra "cinatra")
