@@ -155,6 +155,7 @@ namespace cinatra {
 
 			body_type_ = content_type::string;
 			content_ = std::move(content);
+			counter_++;
 		}
 
 		void set_chunked() {
@@ -318,6 +319,18 @@ namespace cinatra {
 			}
 		}
 
+		int get_counter() const {
+			return counter_;
+		}
+
+		void increase_counter() {
+			counter_++;
+		}
+
+		void reset_counter() {
+			counter_ = 0;
+		}
+
 	private:
 		
 		//std::map<std::string, std::string, ci_less> headers_;
@@ -336,6 +349,7 @@ namespace cinatra {
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 		nlohmann::json tmpl_json_data_;
+		std::atomic_int counter_ = { 0 };
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
