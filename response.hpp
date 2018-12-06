@@ -319,15 +319,15 @@ namespace cinatra {
 			}
 		}
 
-		int get_counter() const {
+		static int get_counter() {
 			return counter_;
 		}
 
-		void increase_counter() {
+		static void increase_counter() {
 			counter_++;
 		}
 
-		void reset_counter() {
+		static void reset_counter() {
 			counter_ = 0;
 		}
 
@@ -349,7 +349,9 @@ namespace cinatra {
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 		nlohmann::json tmpl_json_data_;
-		std::atomic_int counter_ = { 0 };
+		static std::atomic_int counter_;
 	};
+
+	std::atomic_int response::counter_ = 0;
 }
 #endif //CINATRA_RESPONSE_HPP
