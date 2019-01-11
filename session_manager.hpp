@@ -67,13 +67,10 @@ namespace cinatra {
 			max_age_ = seconds;
 		}
 
-	private:	
-		static std::map<std::string, std::shared_ptr<session>> map_;
-		static std::mutex mtx_;
-		static int max_age_;
+	private:
+		inline static std::map<std::string, std::shared_ptr<session>> map_;
+		inline static std::mutex mtx_;
+		inline static int max_age_ = 0;
 	};
-	std::map<std::string, std::shared_ptr<session>> session_manager::map_;
-	std::mutex session_manager::mtx_;
-	int session_manager::max_age_ = 0;
 }
 #endif //CINATRA_SESSION_UTILS_HPP

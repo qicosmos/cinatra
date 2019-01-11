@@ -349,9 +349,7 @@ namespace cinatra {
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 		nlohmann::json tmpl_json_data_;
-		static std::atomic_int counter_;
+		inline static std::atomic_int counter_ = 0;
 	};
-
-	std::atomic_int response::counter_ = 0;
 }
 #endif //CINATRA_RESPONSE_HPP

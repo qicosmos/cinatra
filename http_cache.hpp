@@ -84,22 +84,13 @@ namespace cinatra {
 		}
 
 	private:
-		static std::mutex mtx_;
-		static bool need_cache_;
-		static std::unordered_map<std::string, std::vector<std::string>> cache_;
-		static std::unordered_map<std::string, std::vector<std::string>>::iterator cur_it_;
-		static std::unordered_set<std::string_view> skip_cache_;
-		static std::unordered_set<std::string_view> need_single_cache_;
-		static std::time_t max_cache_age_;
-		static std::unordered_map<std::string, std::time_t > cache_time_;
+		inline static std::mutex mtx_;
+		inline static bool need_cache_ = false;
+		inline static std::unordered_map<std::string, std::vector<std::string>> cache_;
+		inline static std::unordered_map<std::string, std::vector<std::string>>::iterator cur_it_ = http_cache::cache_.begin();
+		inline static std::unordered_set<std::string_view> skip_cache_;
+		inline static std::unordered_set<std::string_view> need_single_cache_;
+		inline static std::time_t max_cache_age_ = 0;
+		inline static std::unordered_map<std::string, std::time_t > cache_time_;
 	};
-
-	std::unordered_map<std::string, std::vector<std::string>> http_cache::cache_;
-	std::unordered_map<std::string, std::vector<std::string>>::iterator http_cache::cur_it_= http_cache::cache_.begin();
-	bool http_cache::need_cache_ = false;
-	std::mutex http_cache::mtx_;
-	std::unordered_set<std::string_view> http_cache::skip_cache_;
-	std::time_t http_cache::max_cache_age_ = 0;
-	std::unordered_map<std::string, std::time_t > http_cache::cache_time_;
-	std::unordered_set<std::string_view> http_cache::need_single_cache_;
 }
