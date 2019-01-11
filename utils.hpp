@@ -182,6 +182,17 @@ namespace cinatra {
 		return true;
 	}
 
+	template<typename T>
+	inline bool find_strIC(const T & src, const T & dest)
+	{
+		auto it = std::search(
+			src.begin(), src.end(),
+			dest.begin(), dest.end(),
+			[](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+		);
+		return (it != src.end());
+	}
+
 	inline std::vector<std::string_view> split(std::string_view s, std::string_view delimiter) {
 		size_t start = 0;
 		size_t end = s.find_first_of(delimiter);

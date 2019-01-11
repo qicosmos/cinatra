@@ -20,7 +20,7 @@ namespace cinatra {
 			if (u.empty())
 				return false;
 
-			if (!iequal(h.data(), h.length(), UPGRADE.data()))
+			if (!find_strIC(h, UPGRADE))
 				return false;
 
 			if (!iequal(u.data(), u.length(), WEBSOCKET.data()))
