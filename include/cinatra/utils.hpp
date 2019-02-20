@@ -508,7 +508,7 @@ namespace cinatra {
 		return get_time_str(std::time(nullptr));
 	}
 
-	const std::map<std::string_view, std::string_view> get_cookies_map(std::string_view cookies_str)
+	inline const std::map<std::string_view, std::string_view> get_cookies_map(std::string_view cookies_str)
 	{
 		std::map<std::string_view, std::string_view> cookies;
 		auto cookies_vec = split(cookies_str,"; ");

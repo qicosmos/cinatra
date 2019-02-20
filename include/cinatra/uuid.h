@@ -772,14 +772,14 @@ namespace uuids
          << std::setw(2) << (int)id.data[15];
    }
 
-   std::string to_string(uuid const & id)
+   inline std::string to_string(uuid const & id)
    {
       std::stringstream sstr;
       sstr << id;
       return sstr.str();
    }
 
-   std::wstring to_wstring(uuid const & id)
+   inline std::wstring to_wstring(uuid const & id)
    {
       std::wstringstream sstr;
       sstr << id;
