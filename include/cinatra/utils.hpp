@@ -263,7 +263,7 @@ namespace cinatra {
         return strval;
     }
 
-	std::string form_urldecode(const std::string &src) {
+	inline std::string form_urldecode(const std::string &src) {
 		std::string ret;
 		char ch;
 		int i, ii;
