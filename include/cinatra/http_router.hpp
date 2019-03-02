@@ -73,7 +73,7 @@ namespace cinatra {
 				return get_wildcard_function(key, req, res);
 			}
 			if(is_static_res_flag==false)
-				session_manager::check_expire();
+				session_manager::get().check_expire();
 			it->second(req, res);
 			return true;
 		}

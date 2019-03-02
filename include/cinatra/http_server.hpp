@@ -40,12 +40,12 @@ namespace cinatra {
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
 		{
-			http_cache::set_cache_max_age(86400);
+			http_cache::get().set_cache_max_age(86400);
 			init_conn_callback();
 		}
 
 		void enable_http_cache(bool b) {
-			http_cache::enable_cache(b);
+			http_cache::get().enable_cache(b);
 		}
 
 		template<typename F>
@@ -171,9 +171,9 @@ namespace cinatra {
 				bool b = true;
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
 				if (!b) {
-					http_cache::add_skip(name);
+					http_cache::get().add_skip(name);
 				}else{
-					http_cache::add_single_cache(name);
+					http_cache::get().add_single_cache(name);
 				}
 				auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
 				auto lm = [this, name, f = std::move(f)](auto... ap) {
@@ -204,12 +204,12 @@ namespace cinatra {
 
         void set_cache_max_age(std::time_t seconds)
 		{
-			http_cache::set_cache_max_age(seconds);
+			http_cache::get().set_cache_max_age(seconds);
 		}
 
 		std::time_t get_cache_max_age()
 		{
-			return http_cache::get_cache_max_age();
+			return http_cache::get().get_cache_max_age();
 		}
 
 

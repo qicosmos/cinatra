@@ -607,7 +607,7 @@ namespace cinatra {
 			std::weak_ptr<session> ref;
 			if(iter!=cookies.end())
 			{
-				ref = session_manager::get_session(std::string(iter->second.data(), iter->second.length()));
+				ref = session_manager::get().get_session(std::string(iter->second.data(), iter->second.length()));
 			}
 			res_.set_session(ref);
 			return ref;

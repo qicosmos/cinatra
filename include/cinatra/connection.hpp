@@ -251,10 +251,10 @@ namespace cinatra {
 				do_read_head();
 			}
 			else {
-				if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url())&&!http_cache::not_cache(req_.get_url())) {
+				if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url())) {
 					auto raw_url = req_.raw_url();
-					if (!http_cache::empty()) {
-						auto resp_vec = http_cache::get(std::string(raw_url.data(), raw_url.length()));
+					if (!http_cache::get().empty()) {
+						auto resp_vec = http_cache::get().get(std::string(raw_url.data(), raw_url.length()));
 						//write back cache
 						if (!resp_vec.empty()) {
 							std::vector<boost::asio::const_buffer> buffers;
@@ -346,9 +346,9 @@ namespace cinatra {
 			}
 
 			//cache
-			if (req_.get_method() == "GET"&&http_cache::need_cache(req_.get_url()) && !http_cache::not_cache(req_.get_url())) {
+			if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url()) && !http_cache::get().not_cache(req_.get_url())) {
 				auto raw_url = req_.raw_url();
-				http_cache::add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
+				http_cache::get().add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
 
 			boost::asio::async_write(socket_, buffers,

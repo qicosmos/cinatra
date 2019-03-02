@@ -3,7 +3,7 @@
 #include <map>
 
 namespace cinatra {
-	inline std::map<std::string_view, std::string_view, ci_less> mime_map ={
+	static const std::map<std::string_view, std::string_view, ci_less> mime_map ={
 	{ ".323", "text/h323" },
 	{ ".3gp", "video/3gpp" },
 	{ ".aab", "application/x-authoware-bin" },

@@ -11,7 +11,12 @@ namespace cinatra {
 
 	class http_cache {
 	public:
-		static void add(const std::string& key, const std::vector<std::string>& content) {
+		static http_cache& get(){
+			static http_cache instance;
+			return instance;
+		}
+
+		void add(const std::string& key, const std::vector<std::string>& content) {
 			std::unique_lock<std::mutex> lock(mtx_);
 			
 			if (std::distance(cur_it_, cache_.end()) > MAX_CACHE_SIZE) {
@@ -22,7 +27,7 @@ namespace cinatra {
 			cache_time_[key] = std::time(nullptr) + max_cache_age_;
 		}
 
-		static std::vector<std::string> get(const std::string& key) {
+		std::vector<std::string> get(const std::string& key) {
 			std::unique_lock<std::mutex> lock(mtx_);
 			auto time_it = cache_time_.find(key);
 			auto it = cache_.find(key);
@@ -37,31 +42,31 @@ namespace cinatra {
 			}
 		}
 
-		static bool empty() {
+		bool empty() {
 			return cache_.empty();
 		}
 
-		static void update(const std::string& key) {
+		void update(const std::string& key) {
 			std::unique_lock<std::mutex> lock(mtx_);
 			auto it = cache_.find(key);
 			if (it != cache_.end())
 				cache_.erase(it);
 		}
 
-		static void add_skip(std::string_view key) {
+		void add_skip(std::string_view key) {
 			skip_cache_.emplace(key);
 		}
 
-		static void add_single_cache(std::string_view key)
+		void add_single_cache(std::string_view key)
 		{
 			need_single_cache_.emplace(key);
 		}
 
-		static void enable_cache(bool b) {
+		void enable_cache(bool b) {
 			need_cache_ = b;
 		}
 
-		static bool need_cache(std::string_view key) {
+		bool need_cache(std::string_view key) {
 			if(need_cache_){
 				return need_cache_;
 			}else{
@@ -69,28 +74,32 @@ namespace cinatra {
 			}
 		}
 
-		static bool not_cache(std::string_view key) {
+		bool not_cache(std::string_view key) {
 			return skip_cache_.find(key) != skip_cache_.end();
 		}
 
-		static void set_cache_max_age(std::time_t seconds)
+		void set_cache_max_age(std::time_t seconds)
 		{
 			max_cache_age_ = seconds;
 		}
 
-		static std::time_t get_cache_max_age()
+		std::time_t get_cache_max_age()
 		{
 			return max_cache_age_;
 		}
 
 	private:
-		inline static std::mutex mtx_;
-		inline static bool need_cache_ = false;
-		inline static std::unordered_map<std::string, std::vector<std::string>> cache_;
-		inline static std::unordered_map<std::string, std::vector<std::string>>::iterator cur_it_ = http_cache::cache_.begin();
-		inline static std::unordered_set<std::string_view> skip_cache_;
-		inline static std::unordered_set<std::string_view> need_single_cache_;
-		inline static std::time_t max_cache_age_ = 0;
-		inline static std::unordered_map<std::string, std::time_t > cache_time_;
+		http_cache() {};
+		http_cache(const http_cache&) = delete;
+		http_cache(http_cache&&) = delete;
+
+		std::mutex mtx_;
+		bool need_cache_ = false;
+		std::unordered_map<std::string, std::vector<std::string>> cache_;
+		std::unordered_map<std::string, std::vector<std::string>>::iterator cur_it_ = http_cache::cache_.begin();
+		std::unordered_set<std::string_view> skip_cache_;
+		std::unordered_set<std::string_view> need_single_cache_;
+		std::time_t max_cache_age_ = 0;
+		std::unordered_map<std::string, std::time_t > cache_time_;
 	};
 }
