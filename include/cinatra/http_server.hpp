@@ -166,7 +166,7 @@ namespace cinatra {
 
 		//set http handlers
 		template<http_method... Is, typename Function, typename... AP>
-		void set_http_handler(std::string_view name, Function&& f, AP&&... ap) {
+		void route(std::string_view name, Function&& f, AP&&... ap) {
 			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
 				bool b = true;
 				((b&&(b = need_cache(std::forward<AP>(ap))), false),...);
@@ -248,7 +248,7 @@ namespace cinatra {
 
 		void set_static_res_handler()
 		{
-			set_http_handler<POST,GET>(STAIC_RES, [this](request& req, response& res){
+			route<POST,GET>(STAIC_RES, [this](request& req, response& res){
 				auto state = req.get_state();
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
@@ -258,13 +258,13 @@ namespace cinatra {
 						if(relatice_file_name.find(public_root_path_) !=0){
 							relatice_file_name.clear();
 						}
-						
+
 						auto in = std::make_shared<std::ifstream>(relatice_file_name,std::ios_base::binary);
 						if (!in->is_open()) {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
-                        
+
 						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
 							return;

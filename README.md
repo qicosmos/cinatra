@@ -46,7 +46,7 @@ cinatra是header-only的，直接引用头文件既可。
 		int max_thread_num = std::thread::hardware_concurrency();
 		http_server server(max_thread_num);
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
+		server.route<GET, POST>("/", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		});
 
@@ -64,7 +64,7 @@ cinatra是header-only的，直接引用头文件既可。
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
+		server.route<GET, POST>("/test", [](request& req, response& res) {
 			auto name = req.get_header_value("name");
 			if (name.empty()) {
 				res.set_status_and_content(status_type::bad_request, "no name");
@@ -124,7 +124,7 @@ cinatra是header-only的，直接引用头文件既可。
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
-		server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
+		server.route<GET, POST>("/aspect", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		}, check{}, log_t{});
 
@@ -147,7 +147,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		server.listen("0.0.0.0", "8080");
 
 		//http upload(multipart)
-		server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
+		server.route<GET, POST>("/upload_multipart", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::multipart);
 			
 			auto& files = req.get_upload_files();
@@ -175,7 +175,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		server.listen("0.0.0.0", "8080");
 
 		//http upload(octet-stream)
-		server.set_http_handler<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
+		server.route<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::octet_stream);
 			auto& files = req.get_upload_files();
 			for (auto& file : files) {
@@ -205,7 +205,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		server.listen("0.0.0.0", "8080");
 
 		//web socket
-		server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
+		server.route<GET, POST>("/ws", [](request& req, response& res) {
 			assert(req.get_content_type() == content_type::websocket);
 	
 			req.on(ws_open, [](request& req){
@@ -246,11 +246,11 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		http_server_<io_service_inplace> server;
 		server.listen("8080");
 	
-		server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
+		server.route<GET, POST>("/", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		});
 
-		server.set_http_handler<GET, POST>("/close", [&](request& req, response& res) {
+		server.route<GET, POST>("/close", [&](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "will close");
 
 			is_running = false;

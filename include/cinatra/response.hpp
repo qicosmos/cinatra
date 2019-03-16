@@ -254,12 +254,12 @@ namespace cinatra {
 			handle_render_view(tpl_file_path,tmpl_json_data_);
         }
 
-        void render_view(const std::string& tpl_file_path)
+        void render(const std::string &tpl_file_path)
         {
 			handle_render_view(tpl_file_path,tmpl_json_data_);
         }
 
-        void render_json(const nlohmann::json& json_data)
+        void json(const nlohmann::json &json_data)
         {
 #ifdef  CINATRA_ENABLE_GZIP
             set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
@@ -268,7 +268,7 @@ namespace cinatra {
 #endif
         }
 
-        void render_string(std::string&& content)
+        void string(std::string &&content)
 		{
 #ifdef  CINATRA_ENABLE_GZIP
 			set_status_and_content(status_type::ok,std::move(content),res_content_type::string,content_encoding::gzip);
@@ -277,7 +277,7 @@ namespace cinatra {
 #endif
 		}
 
-        void render_404(const std::string& tpl_file_path = "")
+        void not_found(const std::string& tpl_file_path = "")
         {
         	if(!tpl_file_path.empty())
 			{
@@ -287,7 +287,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
             set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::gzip);
 #else
-            set_status_and_content(status_type::not_found,std::string(not_found.data(),not_found.size()),res_content_type::html,content_encoding::none);
+            set_status_and_content(status_type::not_found,std::string(cinatra::not_found.data(), cinatra::not_found.size()),res_content_type::html,content_encoding::none);
 #endif
         }
 
