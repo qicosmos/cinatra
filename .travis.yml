@@ -1,0 +1,39 @@
+sudo: required
+language: cpp
+dist: trusty
+
+git:
+  depth: 5
+
+os:
+  - linux
+
+compiler:
+  - g++
+  - clang++
+
+arch:
+  packages:
+    - cmake
+    - gcc
+    - clang
+
+  script:
+    - cd example
+    - mkdir build && cd build
+    - cmake .. -DCMAKE_BUILD_TYPE=Debug
+    - make -j4
+    - ./cinatra_example
+
+script:
+  - "curl -s https://raw.githubusercontent.com/Jackarain/arch-travis/master/arch-travis.sh | bash"
+
+branches:
+  only:
+    - master
+
+notifications:
+  recipients: []
+  email:
+    on_success: change
+    on_failure: always
