@@ -84,7 +84,7 @@ namespace cinatra {
 
             size_t pos = raw_url_.find('?');
             if(pos!=std::string_view::npos){
-                queries_ = parse_query(raw_url_.substr(pos+1, url_len_-pos-1));
+                queries_ = parse_query(std::string_view{raw_url_}.substr(pos+1, url_len_-pos-1));
 				url_len_ = pos;
             }
 
