@@ -20,7 +20,7 @@ namespace cinatra {
 	template <typename socket_type>
 	class connection :public std::enable_shared_from_this<connection<socket_type>>, private noncopyable {
 	public:
-		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
+		explicit connection(boost::asio::io_context& io_context, std::size_t max_req_size, long keep_alive_timeout,
 			http_handler& handler, std::string& static_dir
 #ifdef CINATRA_ENABLE_SSL
 			, boost::asio::ssl::context& ctx
@@ -28,12 +28,12 @@ namespace cinatra {
 		)
 			:
 #ifdef CINATRA_ENABLE_SSL
-			socket_(io_service, ctx),
+			socket_(io_context, ctx),
 #else
-			socket_(io_service),
+			socket_(io_context),
 #endif
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
+			timer_(io_context), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
 		{
 			init_multipart_parser();
 		}

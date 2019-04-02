@@ -11,7 +11,7 @@ namespace fs = std::filesystem;
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 #endif
-#include "io_service_pool.hpp"
+#include "io_context_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
 #include "router.hpp"
@@ -31,11 +31,11 @@ namespace cinatra {
 		T value;
 	};
 
-	template<class service_pool_policy = io_service_pool>
+	template<class context_pool_policy = io_context_pool>
 	class http_server_ : private noncopyable {
 	public:
 		template<class... Args>
-		explicit http_server_(Args&&... args) : io_service_pool_(std::forward<Args>(args)...)
+		explicit http_server_(Args&&... args) : io_context_pool_(std::forward<Args>(args)...)
 #ifdef CINATRA_ENABLE_SSL
 			, ctx_(boost::asio::ssl::context::sslv23)
 #endif
@@ -83,7 +83,7 @@ namespace cinatra {
 		}
 
 		bool listen(const boost::asio::ip::tcp::resolver::query & query) {
-			boost::asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
+			boost::asio::ip::tcp::resolver resolver(io_context_pool_.get_io_context());
 			boost::asio::ip::tcp::resolver::iterator endpoints = resolver.resolve(query);
 
 			bool r = false;
@@ -91,7 +91,7 @@ namespace cinatra {
 			for (; endpoints != boost::asio::ip::tcp::resolver::iterator(); ++endpoints) {
 				boost::asio::ip::tcp::endpoint endpoint = *endpoints;
 
-				auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(io_service_pool_.get_io_service());
+				auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(io_context_pool_.get_io_context());
 				acceptor->open(endpoint.protocol());
 				acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 
@@ -110,7 +110,7 @@ namespace cinatra {
 		}
 
 		void stop() {
-			io_service_pool_.stop();
+			io_context_pool_.stop();
 		}
 
 		void run() {
@@ -122,19 +122,19 @@ namespace cinatra {
 				fs::create_directory(static_dir_.data());
 			}
 
-			io_service_pool_.run();
+			io_context_pool_.run();
 		}
 
 		intptr_t run_one() {
-			return io_service_pool_.run_one();
+			return io_context_pool_.run_one();
 		}
 
 		intptr_t poll() {
-			return io_service_pool_.poll();
+			return io_context_pool_.poll();
 		}
 
 		intptr_t poll_one() {
-			return io_service_pool_.poll_one();
+			return io_context_pool_.poll_one();
 		}
 
 		void set_static_dir(std::string&& path) {
@@ -228,7 +228,7 @@ namespace cinatra {
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_
+				io_context_pool_.get_io_context(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_
 #ifdef CINATRA_ENABLE_SSL
 				, ctx_
 #endif
@@ -371,7 +371,7 @@ namespace cinatra {
 			};
 		}
 
-		service_pool_policy io_service_pool_;
+		context_pool_policy io_context_pool_;
 
 		std::size_t max_req_buf_size_ = 3 * 1024 * 1024; //max request buffer size 3M
 		long keep_alive_timeout_ = 60; //max request timeout 60s
@@ -389,5 +389,5 @@ namespace cinatra {
 		http_handler http_handler_ = nullptr;
 	};
 
-	using http_server = http_server_<io_service_pool>;
+	using http_server = http_server_<io_context_pool>;
 }
