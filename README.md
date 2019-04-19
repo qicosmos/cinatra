@@ -39,7 +39,7 @@ cinatra是header-only的，直接引用头文件既可。
 
 ## 示例1：一个简单的hello world
 
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 	
 	int main() {
@@ -58,7 +58,7 @@ cinatra是header-only的，直接引用头文件既可。
 
 ## 示例2：展示如何取header和query以及错误返回
 
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 	
 	int main() {
@@ -86,7 +86,7 @@ cinatra是header-only的，直接引用头文件既可。
 
 ## 示例3：面向切面的http服务器
 
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 
 	//日志切面
@@ -139,7 +139,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 ### multipart文件上传
 
 	#include <atomic>
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 	
 	int main() {
@@ -167,7 +167,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 ### octet-stream文件上传
 
 	#include <atomic>
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 	
 	int main() {
@@ -197,7 +197,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ## 示例6：websocket
 
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 	
 	int main() {
@@ -237,7 +237,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 本代码演示如何使用io_service_inplace，然后自己控制http server的运行线程以及循环。
 使用 [http://[::1]:8080/close] （IPv6） 或者 [http://127.0.0.1:8080/close] (IPv4) 来关闭http server。
 
-	#include "http_server.hpp"
+	#include "cinatra.hpp"
 	using namespace cinatra;
 
 	int main() {
