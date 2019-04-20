@@ -64,7 +64,7 @@ namespace cinatra {
 					key += std::string(url.data(), url.length());
 			}
 			else {
-				key += std::string(STAIC_RES.data(), STAIC_RES.length());
+				key += std::string(STATIC_RESOURCE.data(), STATIC_RESOURCE.length());
 				is_static_res_flag = true;
 			}
 
