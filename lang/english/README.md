@@ -4,10 +4,10 @@
 * [Introduction](#introduction)
 * [Usage](#usage)
 * [Examples](#examples)
-* Performance
-* Caveats
-* Roadmap
-* Contact Information
+* [Performance](#performance)
+* [Caveats](#caveats)
+* [Roadmap](#roadmap)
+* [Contact](#contact)
 
 ## Introduction
 Cinatra is a high-performance, easy-to-use http framework developed in Modern C++ (C++17) with the goal of making it easy and quick to develop web applications using the C++ programming language. Its main features are as follows:
@@ -131,6 +131,10 @@ int main() {
 	return 0;
 }
 ```
+
+In this example, there are two aspects: one is to check the validity of the http request, and the other is the logging aspect. You can add pass as many aspects as needed to the `set_http_handler` method.
+
+The order of execution of the aspects depends on the order that they are passed to the `set_http_handler` method. In this example, the aspect to check the validity of the http request is called first. If the request is not valid, it will return a Bad Request error. If it is valid, the next aspect (that is, the log aspect) will be called. The log aspect, through the `before` method, will print a log indicating the processing before entering the business logic. After the business logic is completed, the log aspect's `after` method will  print to indicate the processing after the end of the business logic.
 
 ### Example 4: File upload
 
@@ -270,3 +274,44 @@ int main() {
 	return 0;
 }
 ```
+
+## Performance
+
+We conducted a simple performance test using the [Apache HTTP benchmarking tool, ab](http://httpd.apache.org/docs/2.2/programs/ab.html).
+
+```bash
+ab -c100 -n5000 127.0.0.1:8080/
+```
+
+The server simply returns a hello.  It was tested on an 8-core 16G cloud host with 9000 and 13000 qps (queries per second).
+
+In comparison with Boost.Beast with a similar code, the qps values are quite similar, probably because both cinatra and Boost.Beast are based on Boost.Asio. We have not yet done any special performance optimization with cinatra and there is room for improvement.
+
+## Caveats
+
+File upload and download, WebSocket business functions will enter multiple times, so you need to pay attention when writing business logic, it is recommended to do it in the same manner as the example.
+
+Cinatra is currently in use in the production environment, and is still in the stage of development and improvement. There may be some bugs. Therefore, it is not recommended to use it directly in the production environment at this stage. It is recommended to try it first in the test environment (which is what you normally do for any new code) prior to using it in a production environment.
+
+If you find any problems during the trial, please feel free to contact us or email me.
+
+After testing and stable use, cinatra will release the official version.
+
+## Roadmap
+
+1. Add a basic client for communication between servers
+
+I hope that more and more people will use cinatra and like it. I also hope that cinatra will become more and more perfect in the process of use. It will become a powerful and easy-to-use http framework. We welcome everyone to actively participate in the cinatra project. You can send an email to suggest, or you can do a pull request, the form is not limited.
+
+In the recent refactoring of Cinatra, it was almost rewritten, the code is more than 30% less than the previous one, the interface is unified, http and business are separated, with better scalability and maintainability.
+
+## Contact
+
+purecpp@163.com
+
+qq：340713904
+
+[http://purecpp.org/](http://purecpp.org/ "purecpp")
+
+[https://github.com/qicosmos/cinatra](https://github.com/qicosmos/cinatra "cinatra")
+
