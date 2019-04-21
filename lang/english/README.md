@@ -289,7 +289,7 @@ In comparison with Boost.Beast with a similar code, the qps values are quite sim
 
 ## Caveats
 
-File upload and download, WebSocket business functions will enter multiple times, so you need to pay attention when writing business logic, it is recommended to do it in the same manner as the example.
+When using WebSocket, the `request.on` method will be called multiple times, so you need to pay attention when writing your business logic. It is recommended to do it in the same manner as the example.
 
 Cinatra is currently in use in the production environment, and is still in the stage of development and improvement. There may be some bugs. Therefore, it is not recommended to use it directly in the production environment at this stage. It is recommended to try it first in the test environment (which is what you normally do for any new code) prior to using it in a production environment.
 
