@@ -17,6 +17,6 @@ namespace cinatra {
         none
 	};
 
-	inline const std::string_view STAIC_RES = "cinatra_staic_resource";
+	inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
 	inline const std::string CSESSIONID = "CSESSIONID";
 }
