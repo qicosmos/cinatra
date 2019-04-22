@@ -1,5 +1,9 @@
 # Cinatra - an efficient and easy-to-use C++ HTTP framework
 
+<p align="center">
+  <span>English</span> | <a href="https://github.com/alvarotrigo/fullPage.js/tree/master">中文</a>
+</p>
+
 ## Table of Contents
 * [Introduction](#introduction)
 * [Usage](#usage)
