@@ -1,7 +1,7 @@
 # cinatra--一个高效易用的c++ http框架
 
 <p align="center">
-  <a href="https://github.com/alvarotrigo/fullPage.js/tree/master/lang/english">English</a> | <span>中文</span>
+  <a href="https://github.com/qicosmos/cinatra/tree/master/lang/english">English</a> | <span>中文</span>
 </p>
 
 # 目录
