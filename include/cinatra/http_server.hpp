@@ -169,7 +169,7 @@ namespace cinatra {
 		void set_http_handler(std::string_view name, Function&& f, AP&&... ap) {
 			if constexpr(has_type<enable_cache<bool>, std::tuple<std::decay_t<AP>...>>::value) {//for cache
 				bool b = false;
-				((!b&&(b = need_cache(std::forward<AP>(ap))), false),...);
+				((!b&&(b = need_cache(std::forward<AP>(ap)))),...);
 				if (!b) {
 					http_cache::get().add_skip(name);
 				}else{
