@@ -113,13 +113,15 @@ namespace cinatra {
 			io_service_pool_.stop();
 		}
 
-		void run(bool _create_static_dir = true) {
-			if (!fs::exists(public_root_path_.data())) {
-				fs::create_directory(public_root_path_.data());
-			}
+		void run(bool make_sure_dir_exists = true) {
+			if(make_sure_dir_exists) {
+				if(!fs::exists(public_root_path_.data())) {
+					fs::create_directory(public_root_path_.data());
+				}
 
-			if (_create_static_dir && !fs::exists(static_dir_.data())) {
-				fs::create_directory(static_dir_.data());
+				if(!fs::exists(static_dir_.data())) {
+					fs::create_directory(static_dir_.data());
+				}
 			}
 
 			io_service_pool_.run();
