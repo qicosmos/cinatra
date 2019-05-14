@@ -318,7 +318,7 @@ namespace cinatra {
 			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
-					LOG_WARN << ec.message();
+					nanolog::is_logged(nanolog::LogLevel::WARN) && NANO_LOG(nanolog::LogLevel::WARN) << ec.message();
 					close();
 					return;
 				}
@@ -519,7 +519,7 @@ namespace cinatra {
 			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), req_.left_body_len()),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
-					LOG_WARN << ec.message();
+					nanolog::is_logged(nanolog::LogLevel::WARN) && NANO_LOG(nanolog::LogLevel::WARN) << ec.message();
 					close();
 					return;
 				}
@@ -611,7 +611,7 @@ namespace cinatra {
 			} while (fed < bufsize && !multipart_parser_.stopped());
 
 			if (multipart_parser_.has_error()) {
-				LOG_WARN << multipart_parser_.get_error_message();
+				nanolog::is_logged(nanolog::LogLevel::WARN) && NANO_LOG(nanolog::LogLevel::WARN) << multipart_parser_.get_error_message();
 				req_.set_state(data_proc_state::data_error);
 				return true;
 			}

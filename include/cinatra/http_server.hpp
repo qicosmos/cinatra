@@ -102,7 +102,7 @@ namespace cinatra {
 					r = true;
 				}
 				catch (const std::exception& e) {
-					LOG_INFO << e.what();
+					nanolog::is_logged(nanolog::LogLevel::INFO) && NANO_LOG(nanolog::LogLevel::INFO) << e.what();
 				}
 			}
 
@@ -239,7 +239,7 @@ namespace cinatra {
 					new_conn->start();
 				}
 				else {
-					LOG_INFO << "server::handle_accept: " << e.message();
+					nanolog::is_logged(nanolog::LogLevel::INFO) && NANO_LOG(nanolog::LogLevel::INFO) << "server::handle_accept: " << e.message();
 				}
 
 				start_accept(acceptor);

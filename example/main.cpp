@@ -63,7 +63,7 @@ int main() {
 	bool r = server.listen("0.0.0.0", "8080");
 #endif
 	if (!r) {
-		LOG_INFO << "listen failed";
+		nanolog::is_logged(nanolog::LogLevel::INFO) && NANO_LOG(nanolog::LogLevel::INFO) << "listen failed";
 		return -1;
 	}
 
