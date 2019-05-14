@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by xmh on 18-5-7.
 //
 #pragma once
@@ -65,7 +65,7 @@ namespace cinatra {
 		{
 			std::unique_lock<std::mutex> lock(mtx_);
 			is_update_ = true;
-			expire_ = seconds == -1 ? 86400 : seconds;
+			expire_ = seconds == -1 ? 86400 : (size_t) seconds;
 			std::time_t now = std::time(nullptr);
 			time_stamp_ = now + expire_;
 			cookie_.set_max_age(seconds == -1 ? -1 : time_stamp_);

@@ -266,8 +266,8 @@ namespace cinatra {
 	inline std::string form_urldecode(const std::string &src) {
 		std::string ret;
 		char ch;
-		int i, ii;
-		for (i = 0; i<src.length(); i++) {
+		int ii;
+		for (size_t i = 0; i<src.length(); i++) {
 			if (int(src[i]) == 37) {
 				sscanf(src.substr(i + 1, 2).c_str(), "%x", &ii);
 				ch = static_cast<char>(ii);

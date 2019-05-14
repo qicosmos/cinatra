@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by xmh on 18-5-7.
 //
 
@@ -35,7 +35,7 @@ namespace cinatra {
 				host = host.substr(0, pos);
 			}
 
-			return create_session(name, expire, path, std::string(host.data(), host.length()));
+			return create_session(name, (size_t) expire, path, std::string(host.data(), host.length()));
 		}
 
 		std::weak_ptr<session> get_session(const std::string& id) {
