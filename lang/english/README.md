@@ -209,7 +209,7 @@ Make sure the files are in your resource dictionary(which you could set in the s
 
 Here is the example:
 
-Assume the file "show.jpg" is in the "./purecpp/static/" of the server, you just need typing the address of the image, and you could download the image immediately
+Assume the file "show.jpg" is in the "./purecpp/static/" of the server, you just need to typing the address of the image, and you could download the image immediately.
 ```
 //chunked download
 http://127.0.0.1:8080/purecpp/static/show.jpg
