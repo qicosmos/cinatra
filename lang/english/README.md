@@ -203,8 +203,17 @@ int main() {
 
 ### Example 5: File download
 
+cinatra support chunked download files.
+
+Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the fiels directly.
+
+Here is the example:
+
+Assume the file "show.jpg" is in the "./purecpp/static/" of the server, you just need to typing the address of the image, and you could download the image immediately.
 ```
-TO BE DONE
+//chunked download
+http://127.0.0.1:8080/purecpp/static/show.jpg
+//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 ```
 
 ### Example 6: WebSocket
