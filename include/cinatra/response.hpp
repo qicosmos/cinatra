@@ -224,17 +224,20 @@ namespace cinatra {
 			return raw_url_;
 		}
 
+		std::string get_res_content_type_str(const std::string& file_path) {
+			std::string res_content_type_str = "text/html; charset=utf8";
+			auto extension = get_extension(file_path.data());
+			auto mime = get_mime_type(extension);
+			if (mime != "application/octet-stream") {
+				res_content_type_str = std::string(mime.data(), mime.size()) + "; charset=utf8";
+			}
+
+			return res_content_type_str;
+		}
+
 		void  handle_render_view(const std::string& tpl_file_path,const nlohmann::json& tmp_data,status_type server_type =status_type::ok )
 		{
-			//inja::Environment env = inja::Environment("./");
-			//env.set_element_notation(inja::ElementNotation::Dot);
-			//inja::Template tmpl = env.parse_template(tpl_file_path);
-			std::string res_content_type_str = "text/html; charset=utf8";
-			auto extension = get_extension(tpl_file_path.data());
-			auto mime = get_mime_type(extension);
-			if(mime!="application/octet-stream"){
-				res_content_type_str = std::string(mime.data(),mime.size())+"; charset=utf8";
-			}
+			std::string res_content_type_str = get_res_content_type_str(tpl_file_path);
 #ifdef  CINATRA_ENABLE_GZIP
 			set_status_and_content(server_type, env.render_template(tmpl, tmp_data),std::move(res_content_type_str),content_encoding::gzip);
 #else
@@ -258,6 +261,15 @@ namespace cinatra {
         {
 			handle_render_view(tpl_file_path,tmpl_json_data_);
         }
+
+		void render_raw_view(const std::string& file_path, status_type server_type = status_type::ok) {
+			std::string res_content_type_str = get_res_content_type_str(file_path);
+#ifdef  CINATRA_ENABLE_GZIP
+			set_status_and_content(server_type, env.render_template(file_path), std::move(res_content_type_str), content_encoding::gzip);
+#else
+			set_status_and_content(server_type, render::render_file(file_path), std::move(res_content_type_str), content_encoding::none);
+#endif
+		}
 
         void render_json(const nlohmann::json& json_data)
         {

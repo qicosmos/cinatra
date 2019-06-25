@@ -827,6 +827,16 @@ static std::string render_file(const std::string& tpl_filepath, const nlohmann::
 	return result.str();
 }
 
+static std::string render_file(const std::string& tpl_filepath) {
+	std::stringstream buff;
+	std::ifstream file(tpl_filepath);
+	if (!file.is_open()) {
+		throw std::runtime_error("html file can not open");
+	}
+	buff << file.rdbuf();
+	return buff.str();
+}
+
 static std::string render_string(const std::string& tpl_str, const nlohmann::json& data)
 {
 	std::stringstream result;

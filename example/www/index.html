@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+	<link rel="stylesheet" type="text/css" href="http://unpkg.com/iview/dist/styles/iview.css">
+	<script type="text/javascript" src="http://vuejs.org/js/vue.min.js"></script>
+	<script type="text/javascript" src="http://unpkg.com/iview/dist/iview.min.js"></script>
+	<title>New iView client</title>
+</head>
+<body>
+
+<h2>vue + iView test</h2>
+
+<div id="el_test" width="400">
+<template>
+	<i-progress  :percent="progres1"></i-progress>
+	<i-progress  :percent="progres2" status="active"></i-progress>
+	<i-progress  :percent="progres3" status="success"></i-progress>
+	<i-progress  :percent="progres4" status="wrong"></i-progress>
+
+	<i-switch v-model="switch_on" @on-change="handlButtonClick" >
+        <span slot="open">开</span>
+        <span slot="close">关</span>
+	</i-switch>
+
+	<Upload 
+		action="//127.0.0.1:8080/upload_multipart"
+		:on-success="handleUploadSuccess"
+		:on-error="handleUploadError" >
+        <Button icon="ios-cloud-upload-outline">Upload files</Button>
+	</Upload>
+	<div v-if="file !== null">
+		Upload file: {{ file.name }} 
+		<Button type="text" @click="upload" :loading="loadingStatus">{{ loadingStatus ? 'Uploading' : 'Click to upload' }}</Button>
+	</div>
+</template>
+</div>
+<script type="text/javascript" src="main.js" ></script>
+<script type="text/javascript" src="test.js" ></script>
+</body>
+</html>
