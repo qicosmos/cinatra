@@ -67,7 +67,7 @@ int main() {
 		return -1;
 	}
 
-	server.set_public_root_directory("www");
+	server.set_public_root_directory("");
     server.set_base_path("base_path","/feather");
 	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
@@ -216,6 +216,10 @@ int main() {
 
 	server.set_http_handler<GET, POST>("/vue_html", [](request& req, response& res) {
 		res.render_raw_view("./www/index.html");
+	});
+
+	server.set_http_handler<GET, POST>("/vue_demo", [](request& req, response& res) {
+		res.render_raw_view("./www/dist/index.html");
 	});
 
 	//http upload(multipart)

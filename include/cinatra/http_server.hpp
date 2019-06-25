@@ -217,7 +217,10 @@ namespace cinatra {
         {
         	if(!name.empty()){
 				public_root_path_ = "./"+name+"/";
-        	}
+			}
+			else {
+				public_root_path_ = "./";
+			}
         }
 
         std::string get_public_root_directory()
