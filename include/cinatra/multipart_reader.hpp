@@ -3,11 +3,11 @@
 
 #include <map>
 #include <utility>
-#include <string_view>
+#include <string>
 #include "multipart_parser.hpp"
 
 namespace cinatra{
-using multipart_headers = std::multimap<std::string_view, std::string_view>;
+using multipart_headers = std::multimap<std::string, std::string>;
 
 class multipart_reader {
 public:
@@ -130,7 +130,7 @@ private:
 private:
 	multipart_parser parser;
 	multipart_headers currentHeaders;
-	std::string_view currentHeaderName, currentHeaderValue;
+	std::string currentHeaderName, currentHeaderValue;
 	void *userData;
 };
 }
