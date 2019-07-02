@@ -15,7 +15,7 @@ namespace cinatra {
 	class http_router {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
-		std::enable_if_t<!std::is_member_function_pointer_v<Function>> register_handler(std::string_view name, Function&& f, Ap&&... ap) {
+		std::enable_if_t<!std::is_member_function_pointer_v<Function>> register_handler(std::string_view name, Function&& f, const Ap&... ap) {
 			if (name == "/*"sv) {
 				assert("register error");
 				return;
@@ -29,22 +29,22 @@ namespace cinatra {
 				auto arr = get_arr<Is...>(name);
 
 				for (auto& s : arr) {
-					register_nonmember_func(name, s, std::forward<Function>(f), std::forward<Ap>(ap)...);
+					register_nonmember_func(name, s, std::forward<Function>(f), ap...);
 				}
 			}
 			else {
-				register_nonmember_func(name, std::string(name.data(), name.length()), std::forward<Function>(f), std::forward<Ap>(ap)...);
+				register_nonmember_func(name, std::string(name.data(), name.length()), std::forward<Function>(f), ap...);
 			}
 		}
 
 		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		std::enable_if_t<std::is_same_v<T*, T1>> register_handler(std::string_view name, Type (T::* f)(request&, response&), T1 t, Ap&&... ap) {
-			register_handler_impl<Is...>(name, f, t, std::forward<Ap>(ap)...);
+		std::enable_if_t<std::is_same_v<T*, T1>> register_handler(std::string_view name, Type (T::* f)(request&, response&), T1 t, const Ap&... ap) {
+			register_handler_impl<Is...>(name, f, t, ap...);
 		}
 
 		template <http_method... Is, class T, class Type, typename... Ap>
-		void register_handler(std::string_view name, Type(T::* f)(request&, response&), Ap&&... ap) {
-			register_handler_impl<Is...>(name, f, (T*)nullptr, std::forward<Ap>(ap)...);
+		void register_handler(std::string_view name, Type(T::* f)(request&, response&), const Ap&... ap) {
+			register_handler_impl<Is...>(name, f, (T*)nullptr, ap...);
 		}
 
 		void remove_handler(std::string name) {
@@ -90,28 +90,28 @@ namespace cinatra {
 		}
 
 		template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-		void register_handler_impl(std::string_view name, Type T::* f, T1 t, Ap&&... ap) {
+		void register_handler_impl(std::string_view name, Type T::* f, T1 t, const Ap&... ap) {
 			if constexpr(sizeof...(Is) > 0) {
 				auto arr = get_arr<Is...>(name);
 
 				for (auto& s : arr) {
-					register_member_func(name, s, f, t, std::forward<Ap>(ap)...);
+					register_member_func(name, s, f, t, ap...);
 				}
 			}
 			else {
-				register_member_func(name, std::string(name.data(), name.length()), f, t, std::forward<Ap>(ap)...);
+				register_member_func(name, std::string(name.data(), name.length()), f, t, ap...);
 			}
 		}
 
 		template<typename Function, typename... AP>
-		void register_nonmember_func(std::string_view raw_name, const std::string& name, Function f, AP&&... ap) {
+		void register_nonmember_func(std::string_view raw_name, const std::string& name, Function f, const AP&... ap) {
 			if (raw_name.back()=='*') {
 				this->wildcard_invokers_[name.substr(0, name.size() - 2)] = std::bind(&http_router::invoke<Function, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, std::move(f), std::move(ap)...);
+					std::placeholders::_1, std::placeholders::_2, std::move(f), ap...);
 			}
 			else {
 				this->map_invokers_[name] = std::bind(&http_router::invoke<Function, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, std::move(f), std::move(ap)...);
+					std::placeholders::_1, std::placeholders::_2, std::move(f), ap...);
 			}
 		}
 
@@ -139,14 +139,14 @@ namespace cinatra {
 		}
 
 		template<typename Function, typename Self, typename... AP>
-		void register_member_func(std::string_view raw_name, const std::string& name, Function f, Self self, AP&&... ap) {
+		void register_member_func(std::string_view raw_name, const std::string& name, Function f, Self self, const AP&... ap) {
 			if (raw_name.back() == '*') {
 				this->wildcard_invokers_[name.substr(0, name.size() - 2)] = std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, f, self, std::move(ap)...);
+					std::placeholders::_1, std::placeholders::_2, f, self, ap...);
 			}
 			else {
 				this->map_invokers_[name] = std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
-					std::placeholders::_1, std::placeholders::_2, f, self, std::move(ap)...);
+					std::placeholders::_1, std::placeholders::_2, f, self, ap...);
 			}
 		}
 

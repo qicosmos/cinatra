@@ -376,6 +376,10 @@ namespace cinatra {
 				val = trim(val);
 				query.emplace(key, val);
 			}
+			else if((length - pos) == 0) {
+				query.emplace(key, "");
+			}
+
 			return query;
 		}
 
