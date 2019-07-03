@@ -68,7 +68,7 @@ namespace cinatra {
 				body_len_ = 0;
 			}
 			else {
-				set_body_len(atoi(header_value.data()));
+				set_body_len(atoll(header_value.data()));
 			}
 
 			auto cookie = get_header_value("cookie");
