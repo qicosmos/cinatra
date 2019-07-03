@@ -3,11 +3,11 @@
 
 #include <map>
 #include <utility>
-#include <string_view>
+#include <string>
 #include "multipart_parser.hpp"
 
 namespace cinatra{
-using multipart_headers = std::multimap<std::string_view, std::string_view>;
+using multipart_headers = std::multimap<std::string, std::string>;
 
 class multipart_reader {
 public:
@@ -83,17 +83,19 @@ private:
 
 	static void cbHeaderField(const char *buffer, size_t start, size_t end, void *userData) {
 		multipart_reader *self = (multipart_reader *)userData;
-		self->currentHeaderName = { buffer + start, end - start };
+		self->currentHeaderName += { buffer + start, end - start };
 	}
 
 	static void cbHeaderValue(const char *buffer, size_t start, size_t end, void *userData) {
 		multipart_reader *self = (multipart_reader *)userData;
-		self->currentHeaderValue = { buffer + start, end - start };
+		self->currentHeaderValue += { buffer + start, end - start };
 	}
 
 	static void cbHeaderEnd(const char *buffer, size_t start, size_t end, void *userData) {
 		multipart_reader *self = (multipart_reader *)userData;
 		self->currentHeaders.emplace(self->currentHeaderName, self->currentHeaderValue);
+		self->currentHeaderName.clear();
+		self->currentHeaderValue.clear();
 		//self->currentHeaders.emplace(std::string{ self->currentHeaderName.data(), self->currentHeaderName.length() },
 		//	std::string{ self->currentHeaderValue.data(), self->currentHeaderValue.length() });
 	}
@@ -130,7 +132,7 @@ private:
 private:
 	multipart_parser parser;
 	multipart_headers currentHeaders;
-	std::string_view currentHeaderName, currentHeaderValue;
+	std::string currentHeaderName, currentHeaderValue;
 	void *userData;
 };
 }
