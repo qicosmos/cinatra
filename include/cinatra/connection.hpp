@@ -601,7 +601,7 @@ namespace cinatra {
 					if (req_.get_state() == data_proc_state::data_error)
 						return;
                     req_.handle_multipart_key_value();
-					call_back(); 
+					//call_back(); 
 				};		
 		}
 
