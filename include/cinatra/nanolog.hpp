@@ -327,14 +327,12 @@ namespace nanolog
 	public:
 		struct alignas(64) Item
 		{
-			Item()
-				: flag{ ATOMIC_FLAG_INIT }
-				, written(0)
+			Item() : written(0)
 				, logline(LogLevel::INFO, nullptr, nullptr, 0)
 			{
 			}
 
-			std::atomic_flag flag;
+			std::atomic_flag flag{ ATOMIC_FLAG_INIT };
 			char written;
 			char padding[256 - sizeof(std::atomic_flag) - sizeof(char) - sizeof(NanoLogLine)];
 			NanoLogLine logline;
@@ -463,7 +461,6 @@ namespace nanolog
 
 		QueueBuffer() : m_current_read_buffer{ nullptr }
 			, m_write_index(0)
-			, m_flag{ ATOMIC_FLAG_INIT }
 			, m_read_index(0)
 		{
 			setup_next_write_buffer();
@@ -533,7 +530,7 @@ namespace nanolog
 		std::atomic < Buffer * > m_current_write_buffer;
 		Buffer * m_current_read_buffer;
 		std::atomic < unsigned int > m_write_index;
-		std::atomic_flag m_flag;
+		std::atomic_flag m_flag{ ATOMIC_FLAG_INIT };
 		unsigned int m_read_index;
 	};
 
