@@ -332,7 +332,7 @@ namespace nanolog
 			{
 			}
 
-			std::atomic_flag flag{ ATOMIC_FLAG_INIT };
+			std::atomic_flag flag = ATOMIC_FLAG_INIT;
 			char written;
 			char padding[256 - sizeof(std::atomic_flag) - sizeof(char) - sizeof(NanoLogLine)];
 			NanoLogLine logline;
@@ -530,7 +530,7 @@ namespace nanolog
 		std::atomic < Buffer * > m_current_write_buffer;
 		Buffer * m_current_read_buffer;
 		std::atomic < unsigned int > m_write_index;
-		std::atomic_flag m_flag{ ATOMIC_FLAG_INIT };
+		std::atomic_flag m_flag = ATOMIC_FLAG_INIT;
 		unsigned int m_read_index;
 	};
 
