@@ -12,7 +12,7 @@ namespace cinatra {
 			socket_(io_context), resolver_(io_context), addr_(std::move(addr)), port_(std::move(port)) {
 		}
 
-		template<size_t TIMEOUT=3000, http_method METHOD = POST, res_content_type CONTENT_TYPE = res_content_type::json>
+		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT=3000, http_method METHOD = POST>
 		std::string send_msg(std::string api, std::string msg) {
 			build_message<METHOD, CONTENT_TYPE>(std::move(api), std::move(msg));
 
@@ -51,18 +51,23 @@ namespace cinatra {
 		}
 
 		void add_header(std::string key, std::string value) {
-			headers_.emplace(std::move(key), std::move(value));
+			headers_.emplace_back(std::move(key), std::move(value));
 		}
 
 		void set_url_preifx(std::string prefix) {
 			prefix_ = std::move(prefix);
 		}
 
+		//set http version to 1.0, default 1.1
+		void set_version() {
+			version_ = " HTTP/1.0\r\n";
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
 			std::string method = get_method_str<METHOD>();
-			std::string prefix = method.append(" ").append(std::move(prefix_)).append(std::move(api)).append(" HTTP/1.1\r\n");
+			std::string prefix = method.append(" ").append(std::move(prefix_)).append(std::move(api)).append(std::move(version_));
 
 			build_content_type<CONTENT_TYPE>();
 			build_content_length(msg.size());
@@ -201,9 +206,10 @@ namespace cinatra {
 		boost::asio::ip::tcp::socket socket_;
 		std::string write_message_;
 		response_parser parser_;
-		std::unordered_map<std::string, std::string> headers_;
+		std::vector<std::pair<std::string, std::string>> headers_;
 
 		std::string prefix_;
 		std::promise<std::string> promis_;
+		std::string version_ = " HTTP/1.1\r\n";
 	};
 }
