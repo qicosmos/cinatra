@@ -3,6 +3,10 @@
 #include <unordered_map>
 #include "use_asio.hpp"
 #include "response_parser.hpp"
+#include "define.h"
+#include "response_cv.hpp"
+#include "utils.hpp"
+#include "mime_types.hpp"
 
 namespace cinatra {
 	//short connection
