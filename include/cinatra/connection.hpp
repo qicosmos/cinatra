@@ -377,6 +377,9 @@ namespace cinatra {
 				else if (content_type.find("multipart/form-data") != std::string_view::npos) {
 					auto size = content_type.find("=");
 					auto bd = content_type.substr(size + 1, content_type.length() - size);
+					if (bd[0] == '"'&& bd[bd.length()-1] == '"') {
+						bd = bd.substr(1, bd.length() - 2);
+					}
 					std::string boundary(bd.data(), bd.length());
 					multipart_parser_.set_boundary("\r\n--" + std::move(boundary));
 					return content_type::multipart;
