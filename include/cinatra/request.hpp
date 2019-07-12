@@ -523,12 +523,14 @@ namespace cinatra {
 
 		template<typename T>
 		T get_query_value(std::string_view key) {
+			static_assert(std::is_arithmetic_v<T>);
 			auto val = get_query_value(key);
 			if (val.empty()) {
 				throw std::logic_error("empty value");
 			}
 
-			if constexpr (std::is_same_v<T, int>|| std::is_same_v<bool, int>) {
+			if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
+				std::is_same_v<T, bool> || std::is_same_v<T, char> || std::is_same_v<T, short>) {
 				int r = std::atoi(val.data());
 				if (val[0] != '0' && r == 0) {
 					throw std::invalid_argument(std::string(val) +": is not an integer");
