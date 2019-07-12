@@ -521,6 +521,40 @@ namespace cinatra {
 			return {};
 		}
 
+		template<typename T>
+		T get_query_value(std::string_view key) {
+			auto val = get_query_value(key);
+			if (val.empty()) {
+				throw std::logic_error("empty value");
+			}
+
+			if constexpr (std::is_same_v<T, int>|| std::is_same_v<bool, int>) {
+				int r = std::atoi(val.data());
+				if (val[0] != '0' && r == 0) {
+					throw std::invalid_argument(std::string(val) +": is not an integer");
+				}
+				return r;
+			}
+			else if constexpr (std::is_same_v<T, int64_t>|| std::is_same_v<T, uint64_t>) {
+				auto r = std::atoll(val.data());
+				if (val[0] != '0' && r == 0) {
+					throw std::invalid_argument(std::string(val) + ": is not an integer");
+				}
+				return r;
+			}
+			else if constexpr (std::is_floating_point_v<T>) {
+				char* end;
+				auto f = strtof(val.data(), &end);
+				if (val.back() != *(end-1)) {
+					throw std::invalid_argument(std::string(val) + ": is not a float");
+				}
+				return f;
+			}
+			else {
+				throw std::invalid_argument("not support the value type");
+			}
+		}
+
 		std::string_view get_query_value(std::string_view key){
             auto url = get_url();
             url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
