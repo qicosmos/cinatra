@@ -41,4 +41,10 @@ namespace cinatra {
 		boost::asio::io_service::work work_;
 		std::shared_ptr<std::thread> thd_;
 	};
+
+	template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
+	inline std::string send_msg(std::string ip, std::string api, std::string msg) {
+		auto client = client_factory::instance().new_client(std::move(ip), "http");
+		return client->send_msg<CONTENT_TYPE>(std::move(api), std::move(msg));
+	}
 }
