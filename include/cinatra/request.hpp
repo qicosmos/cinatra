@@ -337,7 +337,7 @@ namespace cinatra {
 			return multipart_headers_.find("Content-Type") != multipart_headers_.end();
         }
 
-		void set_multipart_headers(const std::multimap<std::string_view, std::string_view>& headers) {
+		void set_multipart_headers(const multipart_headers& headers) {
 			for (auto pair : headers) {
 				multipart_headers_[std::string(pair.first.data(), pair.first.size())] = std::string(pair.second.data(), pair.second.size());
 			}
