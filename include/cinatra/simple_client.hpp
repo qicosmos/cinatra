@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <future>
 #include "use_asio.hpp"
 #include "response_parser.hpp"
 #include "define.h"
