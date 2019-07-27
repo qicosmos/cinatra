@@ -53,7 +53,6 @@ struct person
 };
 
 int main() {
-	nanolog::initialize(nanolog::GuaranteedLogger(), "/tmp/", "nanolog", 1);
 	const int max_thread_num = 4;
 	http_server server(max_thread_num);
 #ifdef CINATRA_ENABLE_SSL
@@ -63,7 +62,7 @@ int main() {
 	bool r = server.listen("0.0.0.0", "8080");
 #endif
 	if (!r) {
-		LOG_INFO << "listen failed";
+		//LOG_INFO << "listen failed";
 		return -1;
 	}
 

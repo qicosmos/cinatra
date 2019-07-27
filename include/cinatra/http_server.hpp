@@ -15,7 +15,6 @@ namespace fs = std::experimental::filesystem;
 #include "connection.hpp"
 #include "http_router.hpp"
 #include "router.hpp"
-#include "nanolog.hpp"
 #include "function_traits.hpp"
 #include "url_encode_decode.hpp"
 #include "http_cache.hpp"
@@ -102,7 +101,7 @@ namespace cinatra {
 					r = true;
 				}
 				catch (const std::exception& e) {
-					LOG_INFO << e.what();
+					//LOG_INFO << e.what();
 				}
 			}
 
@@ -242,7 +241,7 @@ namespace cinatra {
 					new_conn->start();
 				}
 				else {
-					LOG_INFO << "server::handle_accept: " << e.message();
+					//LOG_INFO << "server::handle_accept: " << e.message();
 				}
 
 				start_accept(acceptor);
