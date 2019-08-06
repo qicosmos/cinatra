@@ -334,7 +334,9 @@ namespace cinatra {
                 return false;
             }
 
-			return multipart_headers_.find("Content-Type") != multipart_headers_.end();
+			bool has_content_type = (multipart_headers_.find("Content-Type") != multipart_headers_.end());
+			bool has_content_disposition = (multipart_headers_.find("Content-Disposition") != multipart_headers_.end());
+			return has_content_type|| has_content_disposition;
         }
 
 		void set_multipart_headers(const multipart_headers& headers) {
