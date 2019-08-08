@@ -366,10 +366,18 @@ namespace cinatra {
 			http_handler_ = [this](request& req, response& res) {
                 res.set_base_path(this->base_path_[0],this->base_path_[1]);
                 res.set_url(req.get_url());
-				bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
-				if (!success) {
-					res.set_status_and_content(status_type::bad_request, "the url is not right");
+				try {
+					bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
+					if (!success) {
+						res.set_status_and_content(status_type::bad_request, "the url is not right");
+					}
 				}
+				catch (const std::exception& ex) {
+					res.set_status_and_content(status_type::internal_server_error, ex.what()+std::string(" exception in business function"));
+				}
+				catch (...) {
+					res.set_status_and_content(status_type::internal_server_error, "unknown exception in business function");
+				}				
 			};
 		}
 

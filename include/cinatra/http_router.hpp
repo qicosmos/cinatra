@@ -68,24 +68,14 @@ namespace cinatra {
 				is_static_res_flag = true;
 			}
 
-			try {
-				auto it = map_invokers_.find(key);
-				if (it == map_invokers_.end()) {
-					return get_wildcard_function(key, req, res);
-				}
-				if (is_static_res_flag == false)
-					session_manager::get().check_expire();
-				it->second(req, res);
-				return true;
+			auto it = map_invokers_.find(key);
+			if (it == map_invokers_.end()) {
+				return get_wildcard_function(key, req, res);
 			}
-			catch (const std::exception& ex) {
-				std::cout << ex.what() << " exception in route\n";
-				return false;
-			}
-			catch (...) {
-				std::cout << "unknow exception in route" << "\n";
-				return false;
-			}
+			if(is_static_res_flag==false)
+				session_manager::get().check_expire();
+			it->second(req, res);
+			return true;
 		}
 
 	private:
