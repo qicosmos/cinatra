@@ -104,7 +104,7 @@ namespace cinatra {
 				return false;
 
 			for (size_t i = 0; i < l; i++) {
-				if (std::tolower(s[i]) != t[i])
+				if (std::tolower(s[i]) != std::tolower(t[i]))
 					return false;
 			}
 
