@@ -274,6 +274,10 @@ namespace cinatra {
 			return {};
 		}
 
+		std::pair<phr_header*, size_t> get_headers() {
+			return { headers_ , num_headers_ };
+		}
+
         std::string get_multipart_field_name(const std::string& field_name) const {
             if (multipart_headers_.empty())
                 return {};
