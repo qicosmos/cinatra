@@ -68,6 +68,10 @@ namespace cinatra {
 			version_ = " HTTP/1.0\r\n";
 		}
 
+		std::string_view get_header_value(std::string_view key) {
+			return parser_.get_header_value(key);
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {

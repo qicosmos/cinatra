@@ -9,13 +9,12 @@ namespace cinatra {
 		int parse(int last_len) {
 			int minor_version;
 
-			struct phr_header headers[100];
-			size_t num_headers = sizeof(headers) / sizeof(headers[0]);
+			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
 			const char* msg;
 			size_t msg_len;
-			header_len_ = phr_parse_response(buf_.data(), cur_size_, &minor_version, &status_, &msg, &msg_len, headers, &num_headers, last_len);
+			header_len_ = phr_parse_response(buf_.data(), cur_size_, &minor_version, &status_, &msg, &msg_len, headers_, &num_headers_, last_len);
 			msg_ = { msg, msg_len };
-			auto header_value = get_header_value(headers, num_headers, "content-length");
+			auto header_value = get_header_value(headers_, num_headers_, "content-length");
 			if (header_value.empty()) {
 				body_len_ = 0;
 			}
@@ -81,6 +80,15 @@ namespace cinatra {
 			return status_;
 		}
 
+		std::string_view get_header_value(std::string_view key) {
+			for (size_t i = 0; i < num_headers_; i++) {
+				if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
+					return std::string_view(headers_[i].value, headers_[i].value_len);
+			}
+
+			return {};
+		}
+
 	private:
 		std::string_view get_header_value(phr_header* headers, size_t num_headers, std::string_view key) {
 			for (size_t i = 0; i < num_headers; i++) {
@@ -109,6 +117,9 @@ namespace cinatra {
 		std::string_view msg_;
 		size_t msg_len_;
 		int status_ = 0;
+
+		size_t num_headers_ = 0;
+		struct phr_header headers_[100];
 
 		constexpr const static size_t MaxSize = 8192;
 		std::array<char, MaxSize> buf_;
