@@ -15,6 +15,7 @@ namespace cinatra {
 		moved_permanently = 301,
 		moved_temporarily = 302,
 		not_modified = 304,
+		temporary_redirect = 307,
 		bad_request = 400,
 		unauthorized = 401,
 		forbidden = 403,
@@ -58,6 +59,12 @@ namespace cinatra {
 		"<html>"
 		"<head><title>Moved Permanently</title></head>"
 		"<body><h1>301 Moved Permanently</h1></body>"
+		"</html>";
+
+	inline std::string_view temporary_redirect =
+		"<html>"
+		"<head><title>Temporary Redirect</title></head>"
+		"<body><h1>307 Temporary Redirect</h1></body>"
 		"</html>";
 
 	inline std::string_view moved_temporarily =
@@ -128,6 +135,7 @@ namespace cinatra {
 	inline std::string_view rep_partial_content = "HTTP/1.1 206 Partial Content\r\n";
 	inline std::string_view rep_multiple_choices = "HTTP/1.1 300 Multiple Choices\r\n";
 	inline std::string_view rep_moved_permanently =	"HTTP/1.1 301 Moved Permanently\r\n";
+	inline std::string_view rep_temporary_redirect =	"HTTP/1.1 307 Temporary Redirect\r\n";
 	inline std::string_view rep_moved_temporarily =	"HTTP/1.1 302 Moved Temporarily\r\n";
 	inline std::string_view rep_not_modified = "HTTP/1.1 304 Not Modified\r\n";
 	inline std::string_view rep_bad_request = "HTTP/1.1 400 Bad Request\r\n";
@@ -174,6 +182,8 @@ namespace cinatra {
 			return boost::asio::buffer(rep_multiple_choices.data(), rep_multiple_choices.length());
 		case status_type::moved_permanently:
 			return boost::asio::buffer(rep_moved_permanently.data(), rep_moved_permanently.length());
+		case status_type::temporary_redirect:
+			return boost::asio::buffer(rep_temporary_redirect.data(), rep_temporary_redirect.length());
 		case status_type::moved_temporarily:
 			return boost::asio::buffer(rep_moved_temporarily.data(), rep_moved_temporarily.length());
 		case status_type::not_modified:
@@ -215,6 +225,8 @@ namespace cinatra {
 			return moved_permanently;
 		case status_type::moved_temporarily:
 			return moved_temporarily;
+		case status_type::temporary_redirect:
+			return temporary_redirect;
 		case status_type::not_modified:
 			return not_modified;
 		case status_type::bad_request:

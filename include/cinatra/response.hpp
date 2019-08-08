@@ -313,6 +313,11 @@ namespace cinatra {
 			is_forever==false?set_status_and_content(status_type::moved_temporarily):set_status_and_content(status_type::moved_permanently);
 		}
 
+		void redirect_post(const std::string& url) {
+			add_header("Location", url.c_str());
+			set_status_and_content(status_type::temporary_redirect);
+		}
+
         void set_base_path(const std::string&key,const std::string& path)
         {
             tmpl_json_data_[key] = path;
