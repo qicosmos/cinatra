@@ -227,6 +227,10 @@ namespace cinatra {
             return public_root_path_;
         }
 
+		void set_download_check(std::function<bool(request& req, response& res)> checker) {
+			download_check_ = std::move(checker);
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -251,6 +255,12 @@ namespace cinatra {
 		void set_static_res_handler()
 		{
 			set_http_handler<POST,GET>(STATIC_RESOURCE, [this](request& req, response& res){
+				if (download_check_) {
+					bool r = download_check_(req, res);
+					if (!r)
+						return;
+				}
+
 				auto state = req.get_state();
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
@@ -397,6 +407,7 @@ namespace cinatra {
 #endif
 
 		http_handler http_handler_ = nullptr;
+		std::function<bool(request& req, response& res)> download_check_;
 	};
 
 	using http_server = http_server_<io_service_pool>;
