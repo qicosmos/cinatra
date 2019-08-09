@@ -426,7 +426,7 @@ namespace cinatra {
 			}
 			else {
 				req_.expand_size();
-				size_t part_size = bytes_transferred - req_.header_len();
+				size_t part_size = req_.current_size() - req_.header_len();
 				req_.reduce_left_body_size(part_size);
 				do_read_body();
 			}

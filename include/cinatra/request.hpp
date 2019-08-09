@@ -191,6 +191,7 @@ namespace cinatra {
 			is_range_resource_ = false;
 			range_start_pos_ = 0;
 			static_resource_file_size_ = 0;
+			copy_headers_.clear();
 		}
 
 		void fit_size() {
@@ -261,20 +262,44 @@ namespace cinatra {
 		void set_current_size(size_t size) {
 			cur_size_ = size;
 			if (size == 0) {
-				copy_method_url();
+				copy_method_url_headers();
 			}
 		}
 
 		std::string_view get_header_value(std::string_view key) const {
-			for (size_t i = 0; i < num_headers_; i++) {
-				if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
-					return std::string_view(headers_[i].value, headers_[i].value_len);
+			if (copy_headers_.empty()) {
+				for (size_t i = 0; i < num_headers_; i++) {
+					if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
+						return std::string_view(headers_[i].value, headers_[i].value_len);
+				}
+
+				return {};
+			}
+
+			auto it = std::find_if(copy_headers_.begin(), copy_headers_.end(), [key] (auto& pair){
+				if (iequal(pair.first.data(), pair.first.size(), key.data())) {
+					return true;
+				}
+			});
+
+			if (it != copy_headers_.end()) {
+				return (*it).second;
 			}
 
 			return {};
 		}
 
 		std::pair<phr_header*, size_t> get_headers() {
+			if(copy_headers_.empty())
+				return { headers_ , num_headers_ };
+
+			num_headers_ = copy_headers_.size();
+			for (size_t i = 0; i < num_headers_; i++) {
+				headers_[i].name = copy_headers_[i].first.data();
+				headers_[i].name_len = copy_headers_[i].first.size();
+				headers_[i].value = copy_headers_[i].second.data();
+				headers_[i].value_len = copy_headers_[i].second.size();
+			}
 			return { headers_ , num_headers_ };
 		}
 
@@ -733,11 +758,11 @@ namespace cinatra {
 		}
 
 		void resize(size_t size) {
-			copy_method_url();
+			copy_method_url_headers();
 			buf_.resize(size);
 		}
 
-		void copy_method_url() {
+		void copy_method_url_headers() {
 			if (method_len_ == 0)
 				return;
 
@@ -746,6 +771,14 @@ namespace cinatra {
 			method_len_ = 0;
 			url_len_ = 0;
 			multipart_headers_.clear();
+
+			if (header_len_ < 0)
+				return;
+
+			for (size_t i = 0; i < num_headers_; i++) {
+				copy_headers_.emplace_back(std::string(headers_[i].name, headers_[i].name_len), 
+					std::string(headers_[i].value, headers_[i].value_len));
+			}
 		}
 
 		void check_gzip() {
@@ -778,6 +811,7 @@ namespace cinatra {
 		std::string method_str_;
 		std::string url_str_;
 		std::string cookie_str_;
+		std::vector<std::pair<std::string, std::string>> copy_headers_;
 
 		size_t cur_size_ = 0;
 		size_t left_body_len_ = 0;
