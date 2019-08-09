@@ -211,7 +211,7 @@ namespace cinatra {
 			return http_cache::get().get_cache_max_age();
 		}
 
-
+		//don't begin with "./" or "/", not absolutely path
 		void set_public_root_directory(const std::string& name)
         {
         	if(!name.empty()){
@@ -229,6 +229,10 @@ namespace cinatra {
 
 		void set_download_check(std::function<bool(request& req, response& res)> checker) {
 			download_check_ = std::move(checker);
+		}
+
+		void mapping_to_root_path(std::string relate_path) {
+			relate_paths_.emplace_back("."+std::move(relate_path));
 		}
 
 	private:
@@ -267,8 +271,21 @@ namespace cinatra {
 					{
 						std::string relatice_file_name = req.get_relative_filename();
 						auto mime = req.get_mime({ relatice_file_name.data(), relatice_file_name.length()});
-						if(relatice_file_name.find(public_root_path_) !=0){
-							relatice_file_name.clear();
+						std::wstring source_path = fs::absolute(relatice_file_name).c_str();
+						std::wstring root_path = fs::absolute(public_root_path_).c_str();
+						if(source_path.find(fs::absolute(root_path)) ==std::string::npos){
+							auto it = std::find_if(relate_paths_.begin(), relate_paths_.end(), [this, &relatice_file_name](auto& str) {
+								auto pos = relatice_file_name.find(str);
+								if (pos != std::string::npos) {
+									relatice_file_name = relatice_file_name.replace(0, str.size(), 
+										public_root_path_.substr(0, public_root_path_.size() - 1));
+								}
+								return pos !=std::string::npos;
+							});
+							if (it == relate_paths_.end()) {
+								res.set_status_and_content(status_type::forbidden);
+								return;
+							}
 						}
 						
 						auto in = std::make_shared<std::ifstream>(relatice_file_name,std::ios_base::binary);
@@ -400,7 +417,7 @@ namespace cinatra {
 		std::string static_dir_ = "./public/static/"; //default
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
-        std::string public_root_path_ = "./public/";
+        std::string public_root_path_ = "./";
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;
@@ -408,6 +425,7 @@ namespace cinatra {
 
 		http_handler http_handler_ = nullptr;
 		std::function<bool(request& req, response& res)> download_check_;
+		std::vector<std::string> relate_paths_;
 	};
 
 	using http_server = http_server_<io_service_pool>;
