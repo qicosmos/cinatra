@@ -640,7 +640,7 @@ namespace cinatra {
 			if (upload_check_) {
 				bool r = (*upload_check_)(req_, res_);
 				if (!r) {
-					do_write();
+					close();
 					return;
 				}					
 			}
