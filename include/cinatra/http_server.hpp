@@ -242,7 +242,8 @@ namespace cinatra {
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_, &upload_check_
+				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_, 
+				upload_check_?&upload_check_ : nullptr
 #ifdef CINATRA_ENABLE_SSL
 				, ctx_
 #endif
