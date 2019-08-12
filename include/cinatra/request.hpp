@@ -280,6 +280,8 @@ namespace cinatra {
 				if (iequal(pair.first.data(), pair.first.size(), key.data())) {
 					return true;
 				}
+
+				return false;
 			});
 
 			if (it != copy_headers_.end()) {

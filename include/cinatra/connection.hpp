@@ -20,7 +20,7 @@ namespace cinatra {
 	class connection :public std::enable_shared_from_this<connection<socket_type>>, private noncopyable {
 	public:
 		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
-			http_handler& handler, std::string& static_dir
+			http_handler& handler, std::string& static_dir, std::function<bool(request& req, response& res)>* upload_check=nullptr
 #ifdef CINATRA_ENABLE_SSL
 			, boost::asio::ssl::context& ctx
 #endif
@@ -32,7 +32,7 @@ namespace cinatra {
 			socket_(io_service),
 #endif
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir)
+			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir), upload_check_(upload_check)
 		{
 			init_multipart_parser();
 		}
@@ -637,6 +637,14 @@ namespace cinatra {
 		}
 
 		void handle_multipart() {
+			if (upload_check_) {
+				bool r = (*upload_check_)(req_, res_);
+				if (!r) {
+					do_write();
+					return;
+				}					
+			}
+
 			bool has_error = parse_multipart(req_.header_len(), req_.current_size() - req_.header_len());
 
 			if (has_error) {
@@ -1108,6 +1116,7 @@ namespace cinatra {
 		bool is_multi_part_file_;
 		//callback handler to application layer
 		const http_handler& http_handler_;
+		std::function<bool(request& req, response& res)>* upload_check_;
 		std::any tag_;
 	};
 

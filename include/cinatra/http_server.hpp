@@ -231,6 +231,10 @@ namespace cinatra {
 			download_check_ = std::move(checker);
 		}
 
+		void set_upload_check(std::function<bool(request& req, response& res)> checker) {
+			upload_check_ = std::move(checker);
+		}
+
 		void mapping_to_root_path(std::string relate_path) {
 			relate_paths_.emplace_back("."+std::move(relate_path));
 		}
@@ -238,7 +242,7 @@ namespace cinatra {
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_
+				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_, &upload_check_
 #ifdef CINATRA_ENABLE_SSL
 				, ctx_
 #endif
@@ -426,6 +430,7 @@ namespace cinatra {
 		http_handler http_handler_ = nullptr;
 		std::function<bool(request& req, response& res)> download_check_;
 		std::vector<std::string> relate_paths_;
+		std::function<bool(request& req, response& res)> upload_check_ = nullptr;
 	};
 
 	using http_server = http_server_<io_service_pool>;
