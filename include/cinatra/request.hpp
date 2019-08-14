@@ -49,6 +49,7 @@ namespace cinatra {
 
 		int parse_header(std::size_t last_len) {
 			using namespace std::string_view_literals;
+			copy_headers_.clear();
 			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
 			header_len_ = phr_parse_request(buf_.data(), cur_size_, &method_,
 				&method_len_, &url_, &url_len_,
