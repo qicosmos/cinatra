@@ -231,6 +231,7 @@ namespace cinatra {
 			download_check_ = std::move(checker);
 		}
 
+		//should be called before listen
 		void set_upload_check(std::function<bool(request& req, response& res)> checker) {
 			upload_check_ = std::move(checker);
 		}
