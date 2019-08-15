@@ -4,8 +4,13 @@
 #include "picohttpparser.h"
 
 namespace cinatra {
+	constexpr const static size_t MAX_RESPONSE_SIZE = 1024*1024*10;
 	class response_parser {
 	public:
+		response_parser() {
+			buf_.resize(MAX_RESPONSE_SIZE);
+		}
+
 		int parse(int last_len) {
 			int minor_version;
 
@@ -26,7 +31,7 @@ namespace cinatra {
 		}
 
 		bool at_capacity() {
-			return (header_len_ + body_len_) > MaxSize;
+			return (header_len_ + body_len_) > MAX_RESPONSE_SIZE;
 		}
 
 		bool has_body() const {
@@ -51,7 +56,7 @@ namespace cinatra {
 
 		bool update_size(size_t size) {
 			cur_size_ += size;
-			if (cur_size_ > MaxSize)
+			if (cur_size_ > MAX_RESPONSE_SIZE)
 				return true;
 
 			return false;
@@ -120,8 +125,6 @@ namespace cinatra {
 
 		size_t num_headers_ = 0;
 		struct phr_header headers_[100];
-
-		constexpr const static size_t MaxSize = 8192;
-		std::array<char, MaxSize> buf_;
+		std::vector<char> buf_;
 	};
 }

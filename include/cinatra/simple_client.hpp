@@ -135,7 +135,9 @@ namespace cinatra {
 		void close() {
 			auto self = this->shared_from_this();
 			ios_.dispatch([this, self] {
+#ifdef _DEBUG
 				std::cout << "close" << std::endl;
+#endif				
 				boost::system::error_code ec;
 				socket_.close(ec);
 			});
@@ -149,20 +151,25 @@ namespace cinatra {
 					auto last_len = parser_.current_size();
 					bool at_capacity = parser_.update_size(bytes_transferred);
 					if (at_capacity) {
-						std::cout << "out of range" << std::endl;
-						close();
+						set_response_msg("out of range from local server");
 						return;
 					}
 
-					int ret = parser_.parse(last_len);
+					int ret = parser_.parse((int)last_len);
 					if (ret == -2) {
 						do_read();
 					}
 					else if (ret == -1) {//error
-						close();
+						set_response_msg("parse response error from local server");
 					}
 					else {
+						if (parser_.total_len() > MAX_RESPONSE_SIZE) {
+							set_response_msg("response message too long, more than " + std::to_string(MAX_RESPONSE_SIZE)+" from local server");
+							return;
+						}
+
 						if (parser_.has_body()) {
+							//if total>maxsize return
 							if (parser_.has_recieved_all())
 								handle_response();
 							else
@@ -182,11 +189,18 @@ namespace cinatra {
 		void handle_response() {
 			if (parser_.status() != 200) {
 				//send sms faild
+#ifdef _DEBUG
 				std::cout << parser_.message() << " " << parser_.body() << std::endl;
+#endif
 			}
 
 			promis_.set_value(std::string(parser_.body()));
 
+			close();
+		}
+
+		void set_response_msg(std::string msg) {
+			promis_.set_value(std::move(msg));
 			close();
 		}
 
@@ -204,7 +218,9 @@ namespace cinatra {
 		}
 
 		void handle_body() {
+#ifdef _DEBUG
 			std::cout << parser_.body().length() << std::endl;
+#endif
 			close();
 		}
 
