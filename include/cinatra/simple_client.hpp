@@ -213,15 +213,8 @@ namespace cinatra {
 					return;
 				}
 
-				handle_body();
+				handle_response();
 			});
-		}
-
-		void handle_body() {
-#ifdef _DEBUG
-			std::cout << parser_.body().length() << std::endl;
-#endif
-			close();
 		}
 
 		boost::asio::io_service& ios_;
