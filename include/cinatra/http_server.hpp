@@ -100,7 +100,8 @@ namespace cinatra {
 					start_accept(acceptor);
 					r = true;
 				}
-				catch (const std::exception& e) {
+				catch (const std::exception& ex) {
+					std::cout << ex.what() << "\n";
 					//LOG_INFO << e.what();
 				}
 			}

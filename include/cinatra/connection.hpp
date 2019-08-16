@@ -440,8 +440,14 @@ namespace cinatra {
 		//-------------octet-stream----------------//
 		void handle_octet_stream(size_t bytes_transferred) {
 			//call_back();
-			std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str();
-			req_.open_upload_file(name);
+			try {
+				std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str();
+				req_.open_upload_file(name);
+			}
+			catch (const std::exception& ex) {
+				response_back(status_type::internal_server_error, ex.what());
+				return;
+			}
 
 			req_.set_state(data_proc_state::data_continue);//data
 			size_t part_size = bytes_transferred - req_.header_len();
@@ -577,9 +583,16 @@ namespace cinatra {
 					if(is_multi_part_file_)
 					{
 						auto ext = get_extension(filename);
-						std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str()
-							+ std::string(ext.data(), ext.length());
-						req_.open_upload_file(name);
+						try {
+							std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str()
+								+ std::string(ext.data(), ext.length());
+							req_.open_upload_file(name);
+						}
+						catch (const std::exception& ex) {
+							req_.set_state(data_proc_state::data_error);
+							res_.set_status_and_content(status_type::internal_server_error, ex.what());
+							return;
+						}						
 					}else{
 						auto key = req_.get_multipart_field_name("name");
 						req_.save_multipart_key_value(std::string(key.data(),key.size()),"");
