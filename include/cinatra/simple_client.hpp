@@ -82,11 +82,14 @@ namespace cinatra {
 				add_header("Host", addr_);
 			}
 
-			build_content_type<CONTENT_TYPE>();
-
 			auto content_type = get_inner_header_value("content-type");
+			if (content_type.empty())
+				build_content_type<CONTENT_TYPE>();
+
 			if (content_type.find("application/x-www-form-urlencoded") == std::string_view::npos) {
-				build_content_length(msg.size());
+				auto conent_length = get_inner_header_value("content-length");
+				if (conent_length.empty())
+					build_content_length(msg.size());
 			}
 
 			//add_header("Host", addr_);
