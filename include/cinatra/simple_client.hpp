@@ -77,14 +77,14 @@ namespace cinatra {
 		void build_message(std::string api, std::string msg) {
 			std::string method = get_method_str<METHOD>();
 			std::string prefix = method.append(" ").append(std::move(prefix_)).append(std::move(api)).append(std::move(version_));
-			auto host = get_header_value("Host");
+			auto host = get_inner_header_value("Host");
 			if (host.empty()) {
 				add_header("Host", addr_);
 			}
 
 			build_content_type<CONTENT_TYPE>();
 
-			auto content_type = get_header_value("content-type");
+			auto content_type = get_inner_header_value("content-type");
 			if (content_type.find("application/x-www-form-urlencoded") == std::string_view::npos) {
 				build_content_length(msg.size());
 			}
@@ -95,6 +95,15 @@ namespace cinatra {
 			prefix.append(build_headers());
 			prefix.append("\r\n").append(std::move(msg));
 			write_message_ = std::move(prefix);
+		}
+
+		std::string_view get_inner_header_value(std::string_view key) {
+			for (auto& head : headers_) {
+				if (iequal(head.first.data(), head.first.size(), key.data()))
+					return std::string_view(head.second);
+			}
+
+			return {};
 		}
 
 		template<http_method METHOD>
