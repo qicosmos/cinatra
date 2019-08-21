@@ -278,9 +278,9 @@ namespace cinatra {
 					{
 						std::string relatice_file_name = req.get_relative_filename();
 						auto mime = req.get_mime({ relatice_file_name.data(), relatice_file_name.length()});
-						std::wstring source_path = fs::absolute(relatice_file_name).c_str();
-						std::wstring root_path = fs::absolute(public_root_path_).c_str();
-						if(source_path.find(fs::absolute(root_path)) ==std::string::npos){
+						std::wstring source_path = fs::absolute(relatice_file_name).filename().wstring();
+						std::wstring root_path = fs::absolute(public_root_path_).filename().wstring();
+						if(source_path.find(fs::absolute(root_path).filename().wstring()) ==std::string::npos){
 							auto it = std::find_if(relate_paths_.begin(), relate_paths_.end(), [this, &relatice_file_name](auto& str) {
 								auto pos = relatice_file_name.find(str);
 								if (pos != std::string::npos) {
