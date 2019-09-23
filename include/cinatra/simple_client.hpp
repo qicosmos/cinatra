@@ -55,6 +55,34 @@ namespace cinatra {
 			return future.get();
 		}
 
+		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
+		void async_send_msg(std::string api, std::string msg, std::function<void()> error_callback = [] {}) {
+			boost::asio::ip::tcp::resolver::query query(addr_, port_);
+			auto self = this->shared_from_this();
+			resolver_.async_resolve(query, [this, self, callback = std::move(error_callback)](boost::system::error_code ec, 
+				const boost::asio::ip::tcp::resolver::iterator& it) {
+				if (ec) {
+					std::cout << ec.message() << std::endl;
+					callback();
+					return;
+				}
+
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+					const boost::asio::ip::tcp::resolver::iterator&) {
+					if (!ec) {
+						do_read();
+
+						do_write(std::move(callback));
+					}
+					else {
+						std::cout << ec.message() << std::endl;
+						callback();
+						close();
+					}
+				});
+			});
+		}
+
 		void add_header(std::string key, std::string value) {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
@@ -142,15 +170,16 @@ namespace cinatra {
 			add_header("Content-Length", temp);
 		}
 
-		void do_write() {
+		void do_write(std::function<void()> error_callback = nullptr) {
 			auto self = this->shared_from_this();
 			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
-				[this, self](boost::system::error_code ec, std::size_t length) {
+				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
 					std::cout << "send ok " << std::endl;
 				}
 				else {
 					std::cout << "send failed " << ec.message() << std::endl;
+					error_callback();
 					close();
 				}
 			});
