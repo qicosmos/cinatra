@@ -170,7 +170,7 @@ namespace cinatra {
 			add_header("Content-Length", temp);
 		}
 
-		void do_write(std::function<void()> error_callback = nullptr) {
+		void do_write(std::function<void()> error_callback = []{}) {
 			auto self = this->shared_from_this();
 			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
