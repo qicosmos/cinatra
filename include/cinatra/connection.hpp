@@ -697,6 +697,7 @@ namespace cinatra {
 					return;
 				}
 
+				reset_timer();
 				if (req_.body_finished()) {
 					call_back();
 					do_write();
@@ -725,6 +726,7 @@ namespace cinatra {
 					return;
 				}
 
+				reset_timer();
 				if (!req_.body_finished()) {
 					do_read_part_data();
 				}
