@@ -16,7 +16,7 @@ namespace cinatra {
 
 		std::shared_ptr<session> create_session(const std::string& name, std::size_t expire, 
 			const std::string& path = "/", const std::string& domain = ""){
-			std::string uuid_str = "";
+			std::string uuid_str = get_cur_time_str();
 			try {
 				uuids::uuid_random_generator uid{};
 				uuid_str = uid().to_short_str();
