@@ -367,7 +367,16 @@ namespace cinatra {
             }
 
 			bool has_content_type = (multipart_headers_.find("Content-Type") != multipart_headers_.end());
-			bool has_content_disposition = (multipart_headers_.find("Content-Disposition") != multipart_headers_.end());
+			auto it = multipart_headers_.find("Content-Disposition");
+			bool has_content_disposition = (it != multipart_headers_.end());
+			if (has_content_disposition) {
+				if (it->second.find("filename") != std::string::npos) {
+					return true;
+				}
+
+				return false;
+			}
+
 			return has_content_type|| has_content_disposition;
         }
 
