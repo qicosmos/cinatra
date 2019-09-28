@@ -16,8 +16,15 @@ namespace cinatra {
 
 		std::shared_ptr<session> create_session(const std::string& name, std::size_t expire, 
 			const std::string& path = "/", const std::string& domain = ""){
-			uuids::uuid_random_generator uid{};
-			std::string uuid_str = uid().to_short_str();
+			std::string uuid_str = "";
+			try {
+				uuids::uuid_random_generator uid{};
+				uuid_str = uid().to_short_str();
+			}
+			catch (const std::exception& ex) {
+				std::cout << ex.what() << std::endl;
+			}
+
 			auto s = std::make_shared<session>(name, uuid_str, expire, path, domain);
 
 			{
