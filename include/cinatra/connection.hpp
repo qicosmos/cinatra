@@ -876,7 +876,8 @@ namespace cinatra {
 			case cinatra::ws_frame_type::WS_TEXT_FRAME:
 			case cinatra::ws_frame_type::WS_BINARY_FRAME:
 			{
-				req_.set_part_data({ payload.data(), payload.length() });				
+				reset_timer();
+				req_.set_part_data({ payload.data(), payload.length() });
 				req_.call_event(data_proc_state::data_continue);
 			}
 			//on message
