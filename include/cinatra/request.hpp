@@ -334,7 +334,14 @@ namespace cinatra {
             multipart_form_map_.emplace(key,value);
         }
 
-		void update_multipart_value(const std::string& key, const char* buf, size_t size) {
+		void update_multipart_value(std::string key, const char* buf, size_t size) {
+			if (!key.empty()) {
+				last_multpart_key_ = key;
+			}
+			else {
+				key = last_multpart_key_;
+			}
+
 			auto it = multipart_form_map_.find(key);
 			if (it != multipart_form_map_.end()) {
 				multipart_form_map_[key] += std::string(buf, size);
@@ -841,6 +848,7 @@ namespace cinatra {
 		content_type http_type_ = content_type::unknown;
 
 		std::map<std::string, std::string> multipart_headers_;
+		std::string last_multpart_key_;
 		std::vector<upload_file> files_;
 		std::map<std::string,std::string> utf8_character_params_;
 		std::map<std::string,std::string> utf8_character_pathinfo_params_;

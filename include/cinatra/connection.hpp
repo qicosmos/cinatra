@@ -606,7 +606,7 @@ namespace cinatra {
 						req_.write_upload_data(buf, size);
 					}else{
 						auto key = req_.get_multipart_field_name("name");
-						req_.update_multipart_value(key, buf, size);
+						req_.update_multipart_value(std::move(key), buf, size);
 					}
 				};
 				multipart_parser_.on_part_end = [this] {
