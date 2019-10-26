@@ -14,6 +14,7 @@ namespace cinatra {
 		html,
 		json,
 		string,
+		multipart,
         none
 	};
 

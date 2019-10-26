@@ -20,7 +20,7 @@ namespace cinatra {
 	class connection :public std::enable_shared_from_this<connection<socket_type>>, private noncopyable {
 	public:
 		explicit connection(boost::asio::io_service& io_service, std::size_t max_req_size, long keep_alive_timeout,
-			http_handler& handler, std::string& static_dir, std::function<bool(request& req, response& res)>* upload_check=nullptr
+			http_handler& handler, std::string& static_dir, std::function<bool(request& req, response& res)>* upload_check
 #ifdef CINATRA_ENABLE_SSL
 			, boost::asio::ssl::context& ctx
 #endif
@@ -1132,7 +1132,7 @@ namespace cinatra {
 		bool is_multi_part_file_;
 		//callback handler to application layer
 		const http_handler& http_handler_;
-		std::function<bool(request& req, response& res)>* upload_check_;
+		std::function<bool(request& req, response& res)>* upload_check_ = nullptr;
 		std::any tag_;
 	};
 
