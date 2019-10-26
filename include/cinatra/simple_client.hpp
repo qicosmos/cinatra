@@ -116,6 +116,8 @@ namespace cinatra {
 				return;
 			}
 
+			file_size_ = size;
+
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, size + 148+ file_extension_.size());
 			api_ = std::move(api);
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
@@ -143,6 +145,9 @@ namespace cinatra {
 			});
 		}
 
+		void on_progress(std::function<void(std::string)> progress) {
+			progress_cb_ = std::move(progress);
+		}
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
@@ -304,7 +309,9 @@ namespace cinatra {
 			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
-					std::cout << "send ok " << std::endl;
+					writed_size_ += length;
+					double persent = (double)writed_size_ / file_size_;
+					progress_cb_(std::to_string(persent));
 					do_write_file(error_callback);
 				}
 				else {
@@ -419,5 +426,8 @@ namespace cinatra {
 		std::string api_;
 		std::ifstream file_;
 		std::string file_extension_;
+		size_t file_size_ = 0;
+		size_t writed_size_ = 0;
+		std::function<void(std::string)> progress_cb_;
 	};
 }
