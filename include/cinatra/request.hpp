@@ -188,7 +188,6 @@ namespace cinatra {
             utf8_character_pathinfo_params_.clear();
             queries_.clear();
 			cookie_str_.clear();
-			form_url_map_.clear();
             multipart_form_map_.clear();
 			is_range_resource_ = false;
 			range_start_pos_ = 0;
