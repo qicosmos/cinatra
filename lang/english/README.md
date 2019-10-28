@@ -288,6 +288,60 @@ int main() {
 }
 ```
 
+### Example 8: cinatra client usage
+
+#### send get/post message
+
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+client->send_msg("/string", "hello"); //post json, default timeout is 3000ms
+client->send_msg<TEXT>("/string", "hello"); //post string, default timeout is 3000ms
+
+client->send_msg<TEXT, 2000>("/string", "hello"); //post string, timeout is 2000ms
+
+client->send_msg<TEXT, 3000, GET>("/string", "hello"); //get string, timeout is 3000ms
+```
+
+#### upload file
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+client->on_progress([](std::string progress) {
+	std::cout << progress << "\n";
+});
+
+client->upload_file("/upload_multipart", filename, [](auto ec) {
+	if (ec) {
+		std::cout << "upload failed, reason: "<<ec.message();
+	}
+	else {
+		std::cout << "upload successful\n";
+	}
+});
+```
+
+***upload multiple files***
+
+```
+	for (auto& filename : v) {
+
+		auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+		client->on_progress([](std::string progress) {
+			std::cout << progress << "\n";
+		});
+
+		client->upload_file("/upload_multipart", filename, [](auto ec) {
+			if (ec) {
+				std::cout << "upload failed, reason: "<<ec.message();
+			}
+			else {
+				std::cout << "upload successful\n";
+			}
+		});
+
+	}
+```
+
+
 ## Performance
 
 We conducted a simple performance test using the [Apache HTTP benchmarking tool, ab](http://httpd.apache.org/docs/2.2/programs/ab.html).

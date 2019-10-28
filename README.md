@@ -267,6 +267,60 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		return 0;
 	}
 
+## cinatra客户端使用
+
+### 发get/post消息
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+client->send_msg("/string", "hello"); //post json, default timeout is 3000ms
+client->send_msg<TEXT>("/string", "hello"); //post string, default timeout is 3000ms
+
+client->send_msg<TEXT, 2000>("/string", "hello"); //post string, timeout is 2000ms
+
+client->send_msg<TEXT, 3000, GET>("/string", "hello"); //get string, timeout is 3000ms
+```
+
+### 文件上传
+
+异步文件上传接口，只需要提供文件名即可。目前的接口只支持单个文件的上传，后续会支持多文件的上传。
+注意：在client文件上传结束之前不要重新上传文件。
+
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+client->on_progress([](std::string progress) {
+	std::cout << progress << "\n";
+});
+
+client->upload_file("/upload_multipart", filename, [](auto ec) {
+	if (ec) {
+		std::cout << "upload failed, reason: "<<ec.message();
+	}
+	else {
+		std::cout << "upload successful\n";
+	}
+});
+```
+
+如果要支持多文件上传，可以通过遍历方式上传：
+```
+	for (auto& filename : v) {
+
+		auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+		client->on_progress([](std::string progress) {
+			std::cout << progress << "\n";
+		});
+
+		client->upload_file("/upload_multipart", filename, [](auto ec) {
+			if (ec) {
+				std::cout << "upload failed, reason: "<<ec.message();
+			}
+			else {
+				std::cout << "upload successful\n";
+			}
+		});
+
+	}
+```
 
 # 性能测试
 ## 测试用例：
