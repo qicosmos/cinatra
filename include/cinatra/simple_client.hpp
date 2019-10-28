@@ -108,6 +108,11 @@ namespace cinatra {
 		}
 
 		void upload_file(std::string api, std::string filename, size_t start, std::function<void(boost::system::error_code ec)> error_callback) {
+			if (file_.is_open()) {
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::in_progress));
+				return;
+			}
+
 			file_.open(filename, std::ios::binary);
 			if (!file_) {
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
