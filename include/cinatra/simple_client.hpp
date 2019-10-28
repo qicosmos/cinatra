@@ -102,23 +102,33 @@ namespace cinatra {
 		}
 
 		void upload_file(std::string api, std::string filename, std::function<void(boost::system::error_code ec)> error_callback) {
+			upload_file(std::move(api), std::move(filename), 0, std::move(error_callback));
+		}
+
+		void upload_file(std::string api, std::string filename, size_t start, std::function<void(boost::system::error_code ec)> error_callback) {
 			file_.open(filename, std::ios::binary);
 			if (!file_) {
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
 				return;
 			}
 
-			file_extension_ = std::filesystem::path(filename).extension().string();
 			std::error_code ec;
 			size_t size = std::filesystem::file_size(filename, ec);
-			if (ec || size == 0) {
+			if (ec || size == 0 || start == -1) {
+				file_.close();
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
 				return;
 			}
 
-			file_size_ = size;
+			file_extension_ = std::filesystem::path(filename).extension().string();
+			if (start > 0) {
+				file_.seekg(start);
+			}			
 
-			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, size + 148+ file_extension_.size());
+			multipart_start();
+			file_size_ = size - start;
+
+			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
 			api_ = std::move(api);
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
 			auto self = this->shared_from_this();
@@ -176,6 +186,7 @@ namespace cinatra {
 			}
 
 			prefix.append(build_headers()).append("\r\n");
+			total_write_size_ = prefix.size() + total_multipart_size();
 			return prefix;
 		}
 
@@ -184,19 +195,21 @@ namespace cinatra {
 				return content;
 			}
 
-			std::string body;
-			body.append("--" + boundary_ + CRLF);
-			body.append("Content-Disposition: form-data; name=\"" + std::string("test") + "\"; filename=\"" + std::string("filename") + file_extension_ + "\"" + CRLF);
-			body.append(CRLF);
-			body.append(std::move(content));
-			
-			return body;
+			return multipart_start_ + std::move(content);			
+		}
+
+		void multipart_start() {
+			multipart_start_.append("--" + boundary_ + CRLF);
+			multipart_start_.append("Content-Disposition: form-data; name=\"" + std::string("test") + "\"; filename=\"" + std::string("filename") + file_extension_ + "\"" + CRLF);
+			multipart_start_.append(CRLF);
 		}
 
 		void multipart_end(std::string& body) {
-			body.append(CRLF);
-			body.append("--" + boundary_ + "--" + CRLF);
-			body.append(CRLF);
+			body.append(multipart_end_);
+		}
+
+		size_t total_multipart_size() {
+			return file_size_ + multipart_start_.size() + multipart_end_.size();
 		}
 
 		std::string_view get_inner_header_value(std::string_view key) {
@@ -310,9 +323,11 @@ namespace cinatra {
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
 					writed_size_ += length;
-					double persent = (double)writed_size_ / file_size_;
-					progress_cb_(std::to_string(persent));
-					do_write_file(error_callback);
+					assert(writed_size_ <= total_write_size_);
+					double persent = (double)writed_size_ / total_write_size_;
+					progress_callback(persent);
+					
+					do_write_file(std::move(error_callback));
 				}
 				else {
 					std::cout << "send failed " << ec.message() << std::endl;
@@ -407,6 +422,15 @@ namespace cinatra {
 			});
 		}
 
+		void progress_callback(double persent) {
+			if (progress_cb_) {
+				char buff[20];
+				snprintf(buff, sizeof(buff), "%0.2f", persent*100);
+				std::string str = buff;
+				progress_cb_(std::move(str));
+			}			
+		}
+
 		boost::asio::io_service& ios_;
 		std::string addr_;
 		std::string port_;
@@ -422,12 +446,14 @@ namespace cinatra {
 
 		std::string boundary_ = "--CinatraBoundary2B8FAF4A80EDB307";
 		std::string CRLF = "\r\n";
-		std::string multipart_str_;
+		std::string multipart_start_;
+		std::string multipart_end_ = CRLF + "--" + boundary_ + "--" + CRLF + CRLF;
 		std::string api_;
 		std::ifstream file_;
 		std::string file_extension_;
 		size_t file_size_ = 0;
 		size_t writed_size_ = 0;
+		size_t total_write_size_ = 0;
 		std::function<void(std::string)> progress_cb_;
 	};
 }
