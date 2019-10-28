@@ -59,7 +59,7 @@ namespace cinatra {
 
 		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
 		void async_send_msg(std::string api, std::string msg, std::function<void()> error_callback = [] {}) {
-			build_message<METHOD, CONTENT_TYPE>(std::move(api), std::move(msg));
+			build_message<METHOD, CONTENT_TYPE>(std::move(api), msg);
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
 			auto self = this->shared_from_this();
 			resolver_.async_resolve(query, [this, self, callback = std::move(error_callback)](boost::system::error_code ec, 
@@ -163,7 +163,7 @@ namespace cinatra {
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
-			std::string prefix = build_head<METHOD, CONTENT_TYPE>(std::move(api), std::move(msg));
+			std::string prefix = build_head<METHOD, CONTENT_TYPE>(std::move(api), msg.size());
 			prefix.append(std::move(msg));
 			write_message_ = std::move(prefix);
 		}
