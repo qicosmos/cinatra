@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <filesystem>
+#include <fstream>
 #include <unordered_map>
 #include <future>
 #include "use_asio.hpp"
