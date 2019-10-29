@@ -241,6 +241,10 @@ namespace cinatra {
 			relate_paths_.emplace_back("."+std::move(relate_path));
 		}
 
+		void set_not_found_handler(std::function<void(request& req, response& res)> not_found) {
+			not_found_ = std::move(not_found);
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -403,6 +407,10 @@ namespace cinatra {
 				try {
 					bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 					if (!success) {
+						if (not_found_) {
+							not_found_(req, res);
+							return;
+						}
 						res.set_status_and_content(status_type::bad_request, "the url is not right");
 					}
 				}
@@ -434,6 +442,8 @@ namespace cinatra {
 		std::function<bool(request& req, response& res)> download_check_;
 		std::vector<std::string> relate_paths_;
 		std::function<bool(request& req, response& res)> upload_check_ = nullptr;
+
+		std::function<void(request& req, response& res)> not_found_ = nullptr;
 	};
 
 	using http_server = http_server_<io_service_pool>;
