@@ -103,6 +103,40 @@ namespace cinatra {
 			return parser_.get_header_value(key);
 		}
 
+		void send_form_data(std::string api, std::vector<std::pair<std::string, std::string>> v, 
+			std::function<void()> error_callback) {
+			build_form_data(std::move(v));
+
+			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
+			write_message_ = std::move(prefix_) + std::move(multipart_start_) + std::move(multipart_end_);
+
+			api_ = std::move(api);
+			boost::asio::ip::tcp::resolver::query query(addr_, port_);
+			auto self = this->shared_from_this();
+			resolver_.async_resolve(query, [this, self, callback = std::move(error_callback)](boost::system::error_code ec,
+				const boost::asio::ip::tcp::resolver::iterator& it) {
+				if (ec) {
+					std::cout << ec.message() << std::endl;
+					callback();
+					return;
+				}
+
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+					const boost::asio::ip::tcp::resolver::iterator&) {
+					if (!ec) {
+						do_read();
+
+						do_write(std::move(callback));
+					}
+					else {
+						std::cout << ec.message() << std::endl;
+						callback();
+						close();
+					}
+				});
+			});
+		}
+
 		void upload_file(std::string api, std::string filename, std::function<void(boost::system::error_code ec)> error_callback) {
 			upload_file(std::move(api), std::move(filename), 0, std::move(error_callback));
 		}
@@ -132,7 +166,7 @@ namespace cinatra {
 				file_.seekg(start);
 			}			
 
-			multipart_start();
+			multipart_file_start();
 			file_size_ = size - start;
 
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
@@ -205,10 +239,23 @@ namespace cinatra {
 			return multipart_start_ + std::move(content);			
 		}
 
-		void multipart_start() {
+		void multipart_file_start() {
 			multipart_start_.append("--" + boundary_ + CRLF);
 			multipart_start_.append("Content-Disposition: form-data; name=\"" + std::string("test") + "\"; filename=\"" + std::string("filename") + file_extension_ + "\"" + CRLF);
 			multipart_start_.append(CRLF);
+		}
+
+		void build_form_data(std::vector<std::pair<std::string, std::string>> v) {
+			size_t size = v.size();
+			for (size_t i = 0; i < v.size(); i++) {
+				multipart_start_.append("--" + boundary_ + CRLF);
+				multipart_start_.append("Content-Disposition: form-data; name=\"" + std::move(v[i].first) + "\"" + CRLF);
+				multipart_start_.append(CRLF);
+				multipart_start_.append(std::move(v[i].second));
+				if (i < size - 1) {
+					multipart_start_.append(CRLF);
+				}				
+			}			
 		}
 
 		void multipart_end(std::string& body) {
