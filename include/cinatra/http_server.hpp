@@ -301,6 +301,10 @@ namespace cinatra {
 						
 						auto in = std::make_shared<std::ifstream>(relatice_file_name,std::ios_base::binary);
 						if (!in->is_open()) {
+							if (not_found_) {
+								not_found_(req, res);
+								return;
+							}
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
