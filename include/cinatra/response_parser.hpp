@@ -65,6 +65,10 @@ namespace cinatra {
 			return std::string_view(buf_.data() + header_len_, body_len_);
 		}
 
+		int body_len() const {
+			return body_len_;
+		}
+
 		char* buffer() {
 			return &buf_[cur_size_];
 		}
@@ -114,15 +118,21 @@ namespace cinatra {
 		}
 
 		bool is_chunked() {
-			auto header_value = get_header_value("content-length");
-			if (header_value.empty()) {
-				auto transfer_encoding = get_header_value("transfer-encoding");
-				if (transfer_encoding == "chunked"sv) {
-					return true;
-				}
+			if (has_length()) {
+				return false;
+			}
+
+			auto transfer_encoding = get_header_value("transfer-encoding");
+			if (transfer_encoding == "chunked"sv) {
+				return true;
 			}
 
 			return false;
+		}
+
+		bool has_length() {
+			auto header_value = get_header_value("content-length");
+			return !header_value.empty();
 		}
 
 	private:

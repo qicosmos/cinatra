@@ -577,11 +577,36 @@ namespace cinatra {
 					callback(boost::asio::error::make_error_code(boost::asio::error::not_found));
 					return;
 				}
+
+				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				
+				if (parser_.has_length()) {
+					left_chunk_len_ = parser_.body_len();
+					if (!part_body.empty()) {
+						left_chunk_len_ -= part_body.size();
+						write_chunked_data(part_body);						
+					}
+
+					if (left_chunk_len_ >= chunk_buf_len) {
+						read_stream_body(chunk_buf_len, std::move(callback));
+					}
+					else {
+						read_stream_body(left_chunk_len_, std::move(callback));
+					}
+					return;
+				}
+
 				if (!parser_.is_chunked()) {
 					chunked_file_.close();
 					callback(boost::asio::error::make_error_code(boost::asio::error::operation_not_supported));
 					return;
 				}
+
+				if (!part_body.empty()) {
+					//todo fix for chunked
+					std::cout << std::string(part_body) << std::endl;
+				}
+
 				chunk_head_.consume(chunk_head_.size() + 1);
 				read_chunk_head(std::move(callback));
 			});			
@@ -685,6 +710,35 @@ namespace cinatra {
 				}
 				else {
 					read_chunk_body(left_chunk_len_+2, false, std::move(callback));
+				}
+			});
+		}
+
+		void read_stream_body(int64_t read_len, std::function<void(boost::system::error_code ec)> error_callback) {
+			reset_timer();
+			auto self = this->shared_from_this();
+			boost::asio::async_read(socket_, boost::asio::buffer(chunk_body_.data(), read_len),
+				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
+				if (ec) {
+					chunked_file_.close();
+					return;
+				}
+
+				cancel_timer();
+
+				left_chunk_len_ -= length;
+				assert(left_chunk_len_ >= 0);
+				if (left_chunk_len_ == 0) {
+					write_chunked_data({ chunk_body_.data(), length });
+					chunked_file_.close();
+					return;
+				}
+
+				if (left_chunk_len_ >= chunk_buf_len) {
+					read_stream_body(chunk_buf_len, std::move(callback));
+				}
+				else {
+					read_stream_body(left_chunk_len_, std::move(callback));
 				}
 			});
 		}
