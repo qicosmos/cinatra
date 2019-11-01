@@ -577,6 +577,11 @@ namespace cinatra {
 					callback(boost::asio::error::make_error_code(boost::asio::error::not_found));
 					return;
 				}
+				if (!parser_.is_chunked()) {
+					chunked_file_.close();
+					callback(boost::asio::error::make_error_code(boost::asio::error::operation_not_supported));
+					return;
+				}
 				chunk_head_.consume(chunk_head_.size() + 1);
 				read_chunk_head(std::move(callback));
 			});			
@@ -795,8 +800,8 @@ namespace cinatra {
 
 		boost::asio::streambuf chunk_head_;
 		std::ofstream chunked_file_;
-		std::function<void(size_t)> on_chunked_length_;
-		std::function<void(std::string_view)> on_chunked_data_;
+		std::function<void(size_t)> on_chunked_length_ = nullptr;
+		std::function<void(std::string_view)> on_chunked_data_ = nullptr;
 
 		boost::asio::steady_timer timer_;
 		std::size_t timeout_seconds_;

@@ -113,6 +113,18 @@ namespace cinatra {
 			return {};
 		}
 
+		bool is_chunked() {
+			auto header_value = get_header_value("content-length");
+			if (header_value.empty()) {
+				auto transfer_encoding = get_header_value("transfer-encoding");
+				if (transfer_encoding == "chunked"sv) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 	private:
 		std::string_view get_header_value(phr_header* headers, size_t num_headers, std::string_view key) {
 			for (size_t i = 0; i < num_headers; i++) {
