@@ -15,16 +15,22 @@ namespace cinatra {
 	//short connection
 	class simple_client : public std::enable_shared_from_this<simple_client> {
 	public:
-		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port) : ios_(io_context),
-			socket_(io_context), resolver_(io_context), addr_(std::move(addr)), port_(std::move(port)) {
+		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 30) : ios_(io_context),
+			socket_(io_context), resolver_(io_context), addr_(std::move(addr)), 
+			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout) {
+			chunk_body_.resize(chunk_buf_len + 4);
+		}
+
+		~simple_client() {
+			close();
 		}
 
 		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT=3000, http_method METHOD = POST>
 		std::string send_msg(std::string api, std::string msg) {
 			build_message<METHOD, CONTENT_TYPE>(std::move(api), std::move(msg));
 
-			promis_ = std::promise<std::string>();
-			std::future<std::string> future = promis_.get_future();
+			promis_ = std::make_unique<std::promise<std::string>>();
+			std::future<std::string> future = promis_->get_future();
 
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
 			auto self = this->shared_from_this();
@@ -199,6 +205,46 @@ namespace cinatra {
 		void on_progress(std::function<void(std::string)> progress) {
 			progress_cb_ = std::move(progress);
 		}
+
+		template<typename http_method METHOD = GET>
+		void download_file(std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
+			download_file<METHOD>("", std::move(filename), std::move(resoure_path), std::move(error_callback));
+		}
+
+		template<typename http_method METHOD = GET>
+		void download_file(std::string dir, std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
+			if (!check_file(std::move(dir), std::move(filename))) {
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				return;
+			}
+
+			build_download_request<METHOD>(std::move(resoure_path));
+
+			boost::asio::ip::tcp::resolver::query query(addr_, port_);
+			auto self = this->shared_from_this();
+			resolver_.async_resolve(query, [this, self, callback = std::move(error_callback)](boost::system::error_code ec,
+				const boost::asio::ip::tcp::resolver::iterator& it) {
+				if (ec) {
+					std::cout << ec.message() << std::endl;
+					callback(ec);
+					return;
+				}
+
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+					const boost::asio::ip::tcp::resolver::iterator&) {
+					if (!ec) {
+						read_chunk(callback);
+						do_write(callback);
+					}
+					else {
+						std::cout << ec.message() << std::endl;
+						callback(ec);
+						close();
+					}
+				});
+			});
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
@@ -330,6 +376,21 @@ namespace cinatra {
 			});
 		}
 
+		void do_write(std::function<void(boost::system::error_code)> error_callback) {
+			auto self = this->shared_from_this();
+			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
+				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
+				if (!ec) {
+					std::cout << "send ok " << std::endl;
+				}
+				else {
+					std::cout << "send failed " << ec.message() << std::endl;
+					error_callback(ec);
+					close();
+				}
+			});
+		}
+
 		//true:file end, false:not file end, should be continue
 		bool make_file_data(std::function<void(boost::system::error_code ec)>& error_callback) {
 			bool eof = file_.peek() == EOF;
@@ -372,10 +433,12 @@ namespace cinatra {
 				return;
 			}
 			
+			reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
+					cancel_timer();
 					writed_size_ += length;
 					assert(writed_size_ <= total_write_size_);
 					double persent = (double)writed_size_ / total_write_size_;
@@ -392,14 +455,20 @@ namespace cinatra {
 		}
 
 		void close() {
+			if (has_close_) {
+				return;
+			}
+
 			auto self = this->shared_from_this();
 			ios_.dispatch([this, self] {
 #ifdef _DEBUG
 				std::cout << "close" << std::endl;
 #endif				
 				boost::system::error_code ec;
+				socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 				socket_.close(ec);
 			});
+			has_close_ = true;
 		}
 
 		void do_read() {
@@ -453,13 +522,18 @@ namespace cinatra {
 #endif
 			}
 
-			promis_.set_value(std::string(parser_.body()));
+			if (promis_) {
+				promis_->set_value(std::string(parser_.body()));
+			}			
 
 			close();
 		}
 
 		void set_response_msg(std::string msg) {
-			promis_.set_value(std::move(msg));
+			if (promis_) {
+				promis_->set_value(std::move(msg));
+			}
+			
 			close();
 		}
 
@@ -476,6 +550,160 @@ namespace cinatra {
 			});
 		}
 
+		void read_chunk(std::function<void(boost::system::error_code ec)> error_callback) {
+			reset_timer();
+			auto self = this->shared_from_this();
+			boost::asio::async_read_until(socket_, chunk_head_, "\r\n\r\n",
+				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
+				if (ec) {
+					chunked_file_.close();
+					return;
+				}
+
+				cancel_timer();
+				boost::asio::streambuf::const_buffers_type bufs = chunk_head_.data();
+				std::string_view line((const char*)bufs.data(), bytes_transferred);
+				int ret = parser_.parse(line.data(), line.size(), 0);
+				if (ret < 0|| parser_.status() != 200) {//error
+					chunked_file_.close();
+					callback(boost::asio::error::make_error_code(boost::asio::error::not_found));
+					return;
+				}
+				chunk_head_.consume(chunk_head_.size() + 1);
+				read_chunk_head(std::move(callback));
+			});			
+		}
+
+		int64_t hex_to_int(std::string_view s) {
+			char* p;
+			int64_t n = strtoll(s.data(), &p, 16);
+			if (*p != 0) {
+				return -1;
+			}
+			
+			return n;
+		}
+
+		void read_chunk_head(std::function<void(boost::system::error_code ec)> error_callback) {
+			reset_timer();
+			auto self = this->shared_from_this();
+			boost::asio::async_read_until(socket_, chunk_head_, "\r\n",
+				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
+				if (ec) {
+					chunked_file_.close();
+					return;
+				}
+
+				cancel_timer();
+				boost::asio::streambuf::const_buffers_type bufs = chunk_head_.data();
+				std::string line((const char*)bufs.data(), bytes_transferred - 2);
+				left_chunk_len_ = hex_to_int(line);
+				if (left_chunk_len_ == 0) {
+					chunked_file_.close();
+					callback({});
+					return;
+				}
+
+				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				if (part_body.size() > left_chunk_len_) {
+					std::string_view chunk_data(part_body.data(), left_chunk_len_);
+					chunked_file_.write(chunk_data.data(), chunk_data.size());
+					std::string_view left_data(part_body.data() + left_chunk_len_ + 2, part_body.length() - left_chunk_len_ - 2);
+					if (left_data.size() == 5) { //"\r\n0\r\n"
+						chunked_file_.close();
+						callback({});
+						return;
+					}
+
+					read_chunk_body(5-left_data.size(), true, std::move(callback));
+					return;
+				}
+
+				chunked_file_.write(part_body.data(), part_body.size());
+				left_chunk_len_ -= part_body.size();
+				chunk_head_.consume(chunk_head_.size()+1);
+
+				if (left_chunk_len_ < 0) {
+					chunked_file_.close();
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					return;
+				}
+
+				if (left_chunk_len_ >= chunk_buf_len) {					
+					read_chunk_body(chunk_buf_len+2, false, std::move(callback));
+				}
+				else {
+					read_chunk_body(left_chunk_len_+2, false, std::move(callback));
+				}				
+			});
+		}
+
+		void read_chunk_body(int64_t read_len, bool eof, std::function<void(boost::system::error_code ec)> error_callback) {
+			reset_timer();
+			auto self = this->shared_from_this();
+			boost::asio::async_read(socket_, boost::asio::buffer(chunk_body_.data(), read_len),
+				[this, eof, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
+				if (ec) {
+					chunked_file_.close();
+					return;
+				}
+
+				cancel_timer();
+				if (eof) {
+					chunked_file_.close();
+					callback({});
+					return;
+				}
+
+				size_t cur_chunk_len = length - 2;
+				left_chunk_len_ -= cur_chunk_len;
+				assert(left_chunk_len_ >= 0);
+				if (left_chunk_len_ == 0) {
+					if (cur_chunk_len > 0) {
+						chunked_file_.write(chunk_body_.data(), cur_chunk_len);
+					}
+					
+					read_chunk_head(std::move(callback));
+					return;
+				}
+
+				if (left_chunk_len_ >= chunk_buf_len) {
+					read_chunk_body(chunk_buf_len+2, false, std::move(callback));
+				}
+				else {
+					read_chunk_body(left_chunk_len_+2, false, std::move(callback));
+				}
+			});
+		}
+
+		bool check_file(std::string dir, std::string filename) {
+			std::string prefix;
+			if(!dir.empty()){
+				std::error_code code;
+				std::filesystem::create_directories(dir, code);
+				if (code) {
+					return false;
+				}
+
+				prefix = dir + "/";
+			}
+
+			chunked_file_.open(prefix + filename, std::ios::binary);
+			return chunked_file_.is_open();
+		}
+
+		template<typename http_method METHOD>
+		void build_download_request(std::string resoure_path) {
+			std::string method = get_method_str<METHOD>();
+			std::string prefix = method.append(" ").append(std::move(resoure_path)).append(std::move(version_));
+			auto host = get_inner_header_value("Host");
+			if (host.empty()) {
+				add_header("Host", addr_);
+			}
+			prefix.append(build_headers()).append("\r\n");
+			write_message_ = std::move(prefix);
+		}
+
 		void progress_callback(double persent) {
 			if (progress_cb_) {
 				char buff[20];
@@ -483,6 +711,35 @@ namespace cinatra {
 				std::string str = buff;
 				progress_cb_(std::move(str));
 			}			
+		}
+
+
+		void reset_timer() {
+			if (timeout_seconds_ == 0) { 
+				return; 
+			}
+
+			auto self(this->shared_from_this());
+			timer_.expires_from_now(std::chrono::seconds(timeout_seconds_));
+			timer_.async_wait([this, self](const boost::system::error_code& ec) {
+				if (ec) {
+					return;
+				}
+
+				//LOG(INFO) << "rpc connection timeout";
+				close();
+				if (chunked_file_.is_open()) {
+					chunked_file_.close();
+				}
+			});
+		}
+
+		void cancel_timer() {
+			if (timeout_seconds_ == 0) { 
+				return; 
+			}
+
+			timer_.cancel();
 		}
 
 		boost::asio::io_service& ios_;
@@ -495,7 +752,7 @@ namespace cinatra {
 		std::vector<std::pair<std::string, std::string>> headers_;
 
 		std::string prefix_;
-		std::promise<std::string> promis_;
+		std::unique_ptr<std::promise<std::string>> promis_ = nullptr;
 		std::string version_ = " HTTP/1.1\r\n";
 
 		std::string boundary_ = "--CinatraBoundary2B8FAF4A80EDB307";
@@ -509,5 +766,18 @@ namespace cinatra {
 		size_t writed_size_ = 0;
 		size_t total_write_size_ = 0;
 		std::function<void(std::string)> progress_cb_;
+
+		//char chunk_head_[4*1024];
+		const int chunk_buf_len = 3 * 1024 * 1024;
+		std::string chunk_body_;
+		int64_t left_chunk_len_;
+
+		boost::asio::streambuf chunk_head_;
+		std::ofstream chunked_file_;
+
+		boost::asio::steady_timer timer_;
+		std::size_t timeout_seconds_;
+
+		bool has_close_ = false;
 	};
 }
