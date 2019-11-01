@@ -245,6 +245,14 @@ namespace cinatra {
 			});
 		}
 
+		void on_chunked_length(std::function<void(size_t)> on_chunked_length) {
+			on_chunked_length_ = std::move(on_chunked_length);
+		}
+
+		void on_chunked_data(std::function<void(std::string_view)> on_chunked_data) {
+			on_chunked_data_ = std::move(on_chunked_data);
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
@@ -607,7 +615,7 @@ namespace cinatra {
 				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
 				if (part_body.size() > left_chunk_len_) {
 					std::string_view chunk_data(part_body.data(), left_chunk_len_);
-					chunked_file_.write(chunk_data.data(), chunk_data.size());
+					write_chunked_data({ chunk_data.data(), chunk_data.size() });
 					std::string_view left_data(part_body.data() + left_chunk_len_ + 2, part_body.length() - left_chunk_len_ - 2);
 					if (left_data.size() == 5) { //"\r\n0\r\n"
 						chunked_file_.close();
@@ -619,7 +627,7 @@ namespace cinatra {
 					return;
 				}
 
-				chunked_file_.write(part_body.data(), part_body.size());
+				write_chunked_data({ part_body.data(), part_body.size() });
 				left_chunk_len_ -= part_body.size();
 				chunk_head_.consume(chunk_head_.size()+1);
 
@@ -660,7 +668,7 @@ namespace cinatra {
 				assert(left_chunk_len_ >= 0);
 				if (left_chunk_len_ == 0) {
 					if (cur_chunk_len > 0) {
-						chunked_file_.write(chunk_body_.data(), cur_chunk_len);
+						write_chunked_data({ chunk_body_.data(), cur_chunk_len });
 					}
 					
 					read_chunk_head(std::move(callback));
@@ -674,6 +682,19 @@ namespace cinatra {
 					read_chunk_body(left_chunk_len_+2, false, std::move(callback));
 				}
 			});
+		}
+
+		void write_chunked_data(std::string_view chunked_data) {
+			if (on_chunked_length_) {
+				on_chunked_length_(chunked_data.size());
+			}
+
+			if (on_chunked_data_) {
+				on_chunked_data_(chunked_data);
+			}
+			else {
+				chunked_file_.write(chunked_data.data(), chunked_data.length());
+			}			
 		}
 
 		bool check_file(std::string dir, std::string filename) {
@@ -774,6 +795,8 @@ namespace cinatra {
 
 		boost::asio::streambuf chunk_head_;
 		std::ofstream chunked_file_;
+		std::function<void(size_t)> on_chunked_length_;
+		std::function<void(std::string_view)> on_chunked_data_;
 
 		boost::asio::steady_timer timer_;
 		std::size_t timeout_seconds_;
