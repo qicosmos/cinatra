@@ -322,6 +322,40 @@ client->upload_file("/upload_multipart", filename, [](auto ec) {
 	}
 ```
 
+### 文件下载
+
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+auto s = "/public/static/test1.png";
+auto filename = std::filesystem::path(s).filename().string();
+client->download_file("temp", filename, s, [](auto ec) {
+	if (ec) {
+		std::cout << ec.message() << "\n";
+	}
+	else {
+		std::cout << "ok\n";
+	}
+});
+```
+先建立连接，输入ip("127.0.0.1", "8080")或域名("purecpp.org", "http")；
+downlad_file接口第一个参数是下载目录，这个参数可以不填，如果不填则下载到当前目录；
+第二个参数是需要保存的文件名；
+第三个参数是静态资源的路径，注意要带上斜杠；
+第四个参数是下载的回调，如果没有错误就表示下载完成，否则为下载出错；
+
+#### 设置下载的用户回调
+
+client->on_length([](size_t length){
+	std::cout<<"recieved data length: "<<length<<"\n";
+});
+
+client->on_data([](std::string_view data){
+	std::cout<<"recieved data: "<<data<<"\n";
+});
+
+on_length回调下载的数据的长度；
+on_data回调下下载的数据，注意，如果设置了on_data，cinatra将不会去将下载的数据存到文件中，而是完全交给用户去处理；如果没有设置该回调则会默认存文件。
+
 # 性能测试
 ## 测试用例：
 

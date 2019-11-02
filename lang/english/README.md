@@ -341,6 +341,31 @@ client->upload_file("/upload_multipart", filename, [](auto ec) {
 	}
 ```
 
+#### download file
+
+```
+auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+auto s = "/public/static/test1.png";
+auto filename = std::filesystem::path(s).filename().string();
+client->download_file("temp", filename, s, [](auto ec) {
+	if (ec) {
+		std::cout << ec.message() << "\n";
+	}
+	else {
+		std::cout << "ok\n";
+	}
+});
+```
+
+```
+client->on_length([](size_t length){
+	std::cout<<"recieved data length: "<<length<<"\n";
+});
+
+client->on_data([](std::string_view data){
+	std::cout<<"recieved data: "<<data<<"\n";
+});
+```
 
 ## Performance
 
