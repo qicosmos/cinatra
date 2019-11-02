@@ -245,12 +245,12 @@ namespace cinatra {
 			});
 		}
 
-		void on_chunked_length(std::function<void(size_t)> on_chunked_length) {
-			on_chunked_length_ = std::move(on_chunked_length);
+		void on_chunked_length(std::function<void(size_t)> on_length) {
+			on_length_ = std::move(on_length);
 		}
 
-		void on_chunked_data(std::function<void(std::string_view)> on_chunked_data) {
-			on_chunked_data_ = std::move(on_chunked_data);
+		void on_chunked_data(std::function<void(std::string_view)> on_data) {
+			on_data_ = std::move(on_data);
 		}
 
 	private:
@@ -744,12 +744,12 @@ namespace cinatra {
 		}
 
 		void write_chunked_data(std::string_view chunked_data) {
-			if (on_chunked_length_) {
-				on_chunked_length_(chunked_data.size());
+			if (on_length_) {
+				on_length_(chunked_data.size());
 			}
 
-			if (on_chunked_data_) {
-				on_chunked_data_(chunked_data);
+			if (on_data_) {
+				on_data_(chunked_data);
 			}
 			else {
 				chunked_file_.write(chunked_data.data(), chunked_data.length());
@@ -854,8 +854,8 @@ namespace cinatra {
 
 		boost::asio::streambuf chunk_head_;
 		std::ofstream chunked_file_;
-		std::function<void(size_t)> on_chunked_length_ = nullptr;
-		std::function<void(std::string_view)> on_chunked_data_ = nullptr;
+		std::function<void(size_t)> on_length_ = nullptr;
+		std::function<void(std::string_view)> on_data_ = nullptr;
 
 		boost::asio::steady_timer timer_;
 		std::size_t timeout_seconds_;
