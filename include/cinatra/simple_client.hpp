@@ -245,11 +245,11 @@ namespace cinatra {
 			});
 		}
 
-		void on_chunked_length(std::function<void(size_t)> on_length) {
+		void on_length(std::function<void(size_t)> on_length) {
 			on_length_ = std::move(on_length);
 		}
 
-		void on_chunked_data(std::function<void(std::string_view)> on_data) {
+		void on_data(std::function<void(std::string_view)> on_data) {
 			on_data_ = std::move(on_data);
 		}
 
