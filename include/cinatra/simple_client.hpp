@@ -690,7 +690,7 @@ namespace cinatra {
 							break;
 						}
 						else {
-							content = { content.data()+ left_chunk_len_+2, content.size() - left_chunk_len_ - 2 };
+							content = { content.data()+ left_chunk_len_+2, (size_t)(content.size() - left_chunk_len_ - 2) };
 						}
 					}
 				}
