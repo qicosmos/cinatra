@@ -864,6 +864,7 @@ namespace cinatra {
 				if (left_chunk_len_ == 0) {
 					write_chunked_data({ chunk_body_.data(), length });
 					chunked_file_.close();
+					callback({});
 					return;
 				}
 
