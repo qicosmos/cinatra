@@ -854,6 +854,7 @@ namespace cinatra {
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					chunked_file_.close();
+					callback(ec);
 					return;
 				}
 
