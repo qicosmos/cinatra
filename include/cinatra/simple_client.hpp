@@ -467,15 +467,13 @@ namespace cinatra {
 				return;
 			}
 
-			auto self = this->shared_from_this();
-			ios_.dispatch([this, self] {
 #ifdef _DEBUG
-				std::cout << "close" << std::endl;
+			std::cout << "close" << std::endl;
 #endif				
-				boost::system::error_code ec;
-				socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-				socket_.close(ec);
-			});
+			boost::system::error_code ec;
+			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			socket_.close(ec);
+
 			has_close_ = true;
 		}
 
