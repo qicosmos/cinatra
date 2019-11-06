@@ -862,8 +862,13 @@ namespace cinatra {
 
 				left_chunk_len_ -= length;
 				assert(left_chunk_len_ >= 0);
-				if (left_chunk_len_ == 0) {
-					write_chunked_data({ chunk_body_.data(), length });
+				if (left_chunk_len_ < 0) {
+					chunked_file_.close();
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					return;
+				}
+				write_chunked_data({ chunk_body_.data(), length });
+				if (left_chunk_len_ == 0) {					
 					chunked_file_.close();
 					callback({});
 					return;
