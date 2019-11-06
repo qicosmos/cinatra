@@ -17,14 +17,14 @@ namespace cinatra {
 	public:
 		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 30) : ios_(io_context),
 			socket_(io_context), resolver_(io_context), addr_(std::move(addr)), 
-			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout) {
+			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout) , chunked_size_buf_(10){
 			chunk_body_.resize(chunk_buf_len + 4);
 		}
 
 		~simple_client() {
 			close();
 		}
-
+		
 		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT=3000, http_method METHOD = POST>
 		std::string send_msg(std::string api, std::string msg) {
 			build_message<METHOD, CONTENT_TYPE>(std::move(api), std::move(msg));
@@ -561,7 +561,7 @@ namespace cinatra {
 		void read_chunk(std::function<void(boost::system::error_code ec)> error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read_until(socket_, chunk_head_, "\r\n\r\n",
+			boost::asio::async_read_until(socket_, read_head_, "\r\n\r\n",
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (ec) {
 					chunked_file_.close();
@@ -569,7 +569,7 @@ namespace cinatra {
 				}
 
 				cancel_timer();
-				boost::asio::streambuf::const_buffers_type bufs = chunk_head_.data();
+				boost::asio::streambuf::const_buffers_type bufs = read_head_.data();
 				std::string_view line((const char*)bufs.data(), bytes_transferred);
 				int ret = parser_.parse(line.data(), line.size(), 0);
 				if (ret < 0|| parser_.status() != 200) {//error
@@ -602,40 +602,175 @@ namespace cinatra {
 					return;
 				}
 
-				if (!part_body.empty()) {
-					//todo fix for chunked
-					std::cout << std::string(part_body) << std::endl;
-				}
-
-				chunk_head_.consume(chunk_head_.size() + 1);
-				read_chunk_head(std::move(callback));
+				handle_chunked(part_body, std::move(callback));
 			});			
 		}
 
-		int64_t hex_to_int(std::string_view s) {
-			char* p;
-			int64_t n = strtoll(s.data(), &p, 16);
-			if (*p != 0) {
-				return -1;
+		void handle_chunked(std::string_view content, std::function<void(boost::system::error_code ec)> error_callback) {
+			if (content.empty()) {
+				read_chunk_head(std::move(error_callback));
+				return;
 			}
-			
-			return n;
+
+			struct phr_chunked_decoder dec = { 0 };
+			size_t size = content.size();
+			std::string body(content);
+			auto ret = phr_decode_chunked(&dec, body.data(), &size);
+			if (ret == -1) {
+				chunked_file_.close();
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				return;
+			}
+
+			if (ret == 0) { //read all chunked data				
+				bool r = write_chunked_data0(content);
+				chunked_file_.close();
+				if (!r) {
+					error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					return;
+				}
+				error_callback({});
+				return;
+			}
+
+			if (dec._state == 0) {
+				if (dec.bytes_left_in_chunk == 0) {
+					read_chunk_head(std::move(error_callback));
+				}
+				else {
+					part_chunked_size_ = to_hex_string(dec.bytes_left_in_chunk);
+					read_chunk_head(std::move(error_callback));
+				}
+			}
+			else if (dec._state == 2) {
+				while (true) {
+					auto pos = content.find("\r\n");
+					if (pos == std::string_view::npos) {
+						chunked_file_.close();
+						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+						return;
+					}
+
+					std::string len_sv(content.data(), pos);
+					left_chunk_len_ = hex_to_int(len_sv);
+					if (left_chunk_len_ < 0) {
+						chunked_file_.close();
+						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+						return;
+					}
+
+					auto left = content.size() - pos - 2;
+					if (left_chunk_len_ == left) {
+						write_chunked_data({ content.data() + pos + 2, left });
+						left_chunk_len_ = 0;
+						//read_clcf()-->read_head()
+						read_crcf(2, std::move(error_callback));
+						break;
+					}
+					else if (left_chunk_len_ > left) {
+						write_chunked_data({ content.data() + pos + 2, left });
+						left_chunk_len_ -= left;
+						if (left_chunk_len_ >= chunk_buf_len) {
+							read_chunk_body(chunk_buf_len + 2, false, std::move(error_callback));
+						}
+						else {
+							read_chunk_body(left_chunk_len_ + 2, false, std::move(error_callback));
+						}
+						break;
+					}
+					else if (left_chunk_len_ < left) {
+						write_chunked_data({ content.data() + pos + 2, (size_t)left_chunk_len_ });
+						auto len = left - left_chunk_len_;
+						if (len == 1) {
+							read_crcf(1, std::move(error_callback));
+							break;
+						}
+						else if (len == 2) {
+							read_chunk_head(std::move(error_callback));
+							break;
+						}
+						else {
+							content = { content.data()+ left_chunk_len_+2, content.size() - left_chunk_len_ - 2 };
+						}
+					}
+				}
+			}
+			else if (dec._state == 3) {
+				if (content.back() == '\r') {
+					write_chunked_data0({ content.data(), content.size() - 1 });
+					read_crcf(1, std::move(error_callback));
+				}
+				else {
+					write_chunked_data0(content);
+					read_crcf(2, std::move(error_callback));
+				}
+			}
+			else {
+				std::cout <<"not support now! " << content<< "\n";
+				chunked_file_.close();
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				return;
+			}
+		}
+
+		void read_crcf(size_t count, std::function<void(boost::system::error_code ec)> error_callback) {
+			auto self = this->shared_from_this();
+			boost::asio::async_read(socket_, boost::asio::buffer(crcf_, count), [this, self, callback = std::move(error_callback)]
+			(boost::system::error_code ec, std::size_t length) {
+				read_chunk_head(std::move(callback));
+			});
+		}
+
+		bool write_chunked_data0(std::string_view content) {
+			while (true) {
+				size_t pos = content.find("\r\n");
+				if (pos == std::string_view::npos) {
+					break;
+				}
+
+				std::string len_sv(content.data(), pos);
+				auto chunk_len = hex_to_int(len_sv);
+				if (chunk_len < 0) {
+					return false;
+				}
+
+				if (chunk_len == 0) {
+					break;
+				}
+
+				std::string_view body = { content.data() + pos + 2, (size_t)chunk_len };
+				write_chunked_data(body);
+				size_t offset = pos + 2 + chunk_len + 2;
+				content = { content.data() + offset, content.size() - offset };				
+			}
+			return true;
 		}
 
 		void read_chunk_head(std::function<void(boost::system::error_code ec)> error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read_until(socket_, chunk_head_, "\r\n",
+			boost::asio::async_read_until(socket_, chunked_size_buf_, "\r\n",
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (ec) {
 					chunked_file_.close();
+					callback(ec);
 					return;
 				}
 
 				cancel_timer();
-				boost::asio::streambuf::const_buffers_type bufs = chunk_head_.data();
+				boost::asio::streambuf::const_buffers_type bufs = chunked_size_buf_.data();
 				std::string line((const char*)bufs.data(), bytes_transferred - 2);
+				if (!part_chunked_size_.empty()) {
+					line = std::move(part_chunked_size_) + std::move(line);
+				}
+
 				left_chunk_len_ = hex_to_int(line);
+				if (left_chunk_len_ < 0) {
+					chunked_file_.close();
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					return;
+				}
+
 				if (left_chunk_len_ == 0) {
 					chunked_file_.close();
 					callback({});
@@ -659,7 +794,7 @@ namespace cinatra {
 
 				write_chunked_data({ part_body.data(), part_body.size() });
 				left_chunk_len_ -= part_body.size();
-				chunk_head_.consume(chunk_head_.size()+1);
+				chunked_size_buf_.consume(chunked_size_buf_.size()+1);
 
 				if (left_chunk_len_ < 0) {
 					chunked_file_.close();
@@ -772,6 +907,16 @@ namespace cinatra {
 			return chunked_file_.is_open();
 		}
 
+		int64_t hex_to_int(std::string_view s) {
+			char* p;
+			int64_t n = strtoll(s.data(), &p, 16);
+			if (*p != 0) {
+				return -1;
+			}
+
+			return n;
+		}
+
 		template<typename http_method METHOD>
 		void build_download_request(std::string resoure_path) {
 			std::string method = get_method_str<METHOD>();
@@ -847,12 +992,14 @@ namespace cinatra {
 		size_t total_write_size_ = 0;
 		std::function<void(std::string)> progress_cb_;
 
-		//char chunk_head_[4*1024];
 		const int chunk_buf_len = 3 * 1024 * 1024;
 		std::string chunk_body_;
 		int64_t left_chunk_len_;
 
-		boost::asio::streambuf chunk_head_;
+		std::string part_chunked_size_;
+		boost::asio::streambuf read_head_;
+		boost::asio::streambuf chunked_size_buf_;
+		char crcf_[2];
 		std::ofstream chunked_file_;
 		std::function<void(size_t)> on_length_ = nullptr;
 		std::function<void(std::string_view)> on_data_ = nullptr;
