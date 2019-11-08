@@ -356,17 +356,15 @@ client->on_data([](std::string_view data){
 on_length回调下载的数据的长度；
 on_data回调下下载的数据，注意，如果设置了on_data，cinatra将不会去将下载的数据存到文件中，而是完全交给用户去处理；如果没有设置该回调则会默认存文件。
 
-### simple_client https
-
 ```
 	boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
 	ctx.set_default_verify_paths();
 
-	auto client = cinatra::client_factory::instance().new_client("testcdn.9mitao.com", "https", ctx);
+	auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "https", ctx);
 	client->on_length([](size_t _length) {
 		std::cout << "download file: on_length: " << _length << std::endl;
 	});
-	client->download_file("test_9shows_setup_v1.0.1.1.exe", "/apk/win/test_9shows_setup_v1.0.1.1.exe", [](boost::system::error_code ec) {
+	client->download_file("test.jpg", "/public/static/test.jpg", [](boost::system::error_code ec) {
 		std::cout << "download file: on_complete: " << (!ec ? "true - " : "false - ") << (ec ? ec.message() : "") << std::endl;
 	});
 
