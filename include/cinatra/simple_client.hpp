@@ -11,15 +11,30 @@
 #include "utils.hpp"
 #include "mime_types.hpp"
 
+#ifdef CINATRA_ENABLE_SSL
+#include <boost/asio/ssl.hpp>
+#endif
+
 namespace cinatra {
 	//short connection
 	class simple_client : public std::enable_shared_from_this<simple_client> {
 	public:
-		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 30) : ios_(io_context),
-			socket_(io_context), resolver_(io_context), addr_(std::move(addr)), 
-			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout) , chunked_size_buf_(10){
+#ifdef CINATRA_ENABLE_SSL
+		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, boost::asio::ssl::context& context,
+			size_t timeout = 30) : ios_(io_context),
+			socket_(io_context, context), resolver_(io_context), addr_(std::move(addr)),
+			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout), chunked_size_buf_(10) {
+			socket_.set_verify_mode(boost::asio::ssl::verify_peer);
+			socket_.set_verify_callback([this](auto b, auto& ctx) { return verify_certificate(b, ctx); });
 			chunk_body_.resize(chunk_buf_len + 4);
 		}
+#else
+		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 30) : ios_(io_context),
+			socket_(io_context), resolver_(io_context), addr_(std::move(addr)),
+			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout), chunked_size_buf_(10) {
+			chunk_body_.resize(chunk_buf_len + 4);
+		}
+#endif
 
 		~simple_client() {
 			close();
@@ -40,7 +55,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket_, it, [this, self](boost::system::error_code ec, const boost::asio::ip::tcp::resolver::iterator&) {
+				boost::asio::async_connect(socket(), it, [this, self](boost::system::error_code ec, const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
 						do_read();
 
@@ -76,7 +91,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
 						do_read();
@@ -127,7 +142,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
 						do_read();
@@ -187,7 +202,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
 						do_read();
@@ -230,11 +245,16 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
+#ifdef CINATRA_ENABLE_SSL
+						handshake(std::move(callback));
+#else
 						read_chunk(callback);
 						do_write(callback);
+#endif
+						
 					}
 					else {
 						std::cout << ec.message() << std::endl;
@@ -471,10 +491,57 @@ namespace cinatra {
 			std::cout << "close" << std::endl;
 #endif				
 			boost::system::error_code ec;
+#ifdef CINATRA_ENABLE_SSL
+			socket_.shutdown(ec);
+#else
 			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			socket_.close(ec);
+#endif
+			socket().close(ec);
 
 			has_close_ = true;
+		}
+
+#ifdef CINATRA_ENABLE_SSL
+		bool verify_certificate(bool preverified,
+			boost::asio::ssl::verify_context& ctx) {
+			// The verify callback can be used to check whether the certificate that is
+			// being presented is valid for the peer. For example, RFC 2818 describes
+			// the steps involved in doing this for HTTPS. Consult the OpenSSL
+			// documentation for more details. Note that the callback is called once
+			// for each certificate in the certificate chain, starting from the root
+			// certificate authority.
+
+			// In this example we will simply print the certificate's subject name.
+			char subject_name[256];
+			X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+			X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
+			std::cout << "Verifying " << subject_name << "\n";
+
+			return true || preverified;
+		}
+
+		void handshake(std::function<void(boost::system::error_code)> callback) {
+			socket_.async_handshake(boost::asio::ssl::stream_base::client,
+				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
+				if (!ec) {
+					read_chunk(callback);
+					do_write(callback);
+				}
+				else {
+					std::cout << ec.message() << std::endl;
+					callback(ec);
+					close();
+				}
+			});
+		}
+#endif
+
+		tcp_socket& socket() {
+#ifdef CINATRA_ENABLE_SSL
+			return socket_.next_layer();
+#else
+			return socket_;
+#endif
 		}
 
 		void do_read() {
@@ -976,7 +1043,7 @@ namespace cinatra {
 		std::string addr_;
 		std::string port_;
 		boost::asio::ip::tcp::resolver resolver_;
-		boost::asio::ip::tcp::socket socket_;
+		Socket socket_;
 		std::string write_message_;
 		response_parser parser_;
 		std::vector<std::pair<std::string, std::string>> headers_;
