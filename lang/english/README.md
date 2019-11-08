@@ -367,6 +367,24 @@ client->on_data([](std::string_view data){
 });
 ```
 
+### simple_client https
+
+```
+	boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
+	ctx.set_default_verify_paths();
+
+	auto client = cinatra::client_factory::instance().new_client("testcdn.9mitao.com", "https", ctx);
+	client->on_length([](size_t _length) {
+		std::cout << "download file: on_length: " << _length << std::endl;
+	});
+	client->download_file("test_9shows_setup_v1.0.1.1.exe", "/apk/win/test_9shows_setup_v1.0.1.1.exe", [](boost::system::error_code ec) {
+		std::cout << "download file: on_complete: " << (!ec ? "true - " : "false - ") << (ec ? ec.message() : "") << std::endl;
+	});
+
+	std::string ss;
+	std::cin >> ss;
+```
+
 ## Performance
 
 We conducted a simple performance test using the [Apache HTTP benchmarking tool, ab](http://httpd.apache.org/docs/2.2/programs/ab.html).

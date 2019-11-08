@@ -344,7 +344,7 @@ downlad_file接口第一个参数是下载目录，这个参数可以不填，�
 第四个参数是下载的回调，如果没有错误就表示下载完成，否则为下载出错；
 
 #### 设置下载的用户回调
-
+```
 client->on_length([](size_t length){
 	std::cout<<"recieved data length: "<<length<<"\n";
 });
@@ -352,9 +352,27 @@ client->on_length([](size_t length){
 client->on_data([](std::string_view data){
 	std::cout<<"recieved data: "<<data<<"\n";
 });
-
+```
 on_length回调下载的数据的长度；
 on_data回调下下载的数据，注意，如果设置了on_data，cinatra将不会去将下载的数据存到文件中，而是完全交给用户去处理；如果没有设置该回调则会默认存文件。
+
+### simple_client https
+
+```
+	boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
+	ctx.set_default_verify_paths();
+
+	auto client = cinatra::client_factory::instance().new_client("testcdn.9mitao.com", "https", ctx);
+	client->on_length([](size_t _length) {
+		std::cout << "download file: on_length: " << _length << std::endl;
+	});
+	client->download_file("test_9shows_setup_v1.0.1.1.exe", "/apk/win/test_9shows_setup_v1.0.1.1.exe", [](boost::system::error_code ec) {
+		std::cout << "download file: on_complete: " << (!ec ? "true - " : "false - ") << (ec ? ec.message() : "") << std::endl;
+	});
+
+	std::string ss;
+	std::cin >> ss;
+```
 
 # 性能测试
 ## 测试用例：
