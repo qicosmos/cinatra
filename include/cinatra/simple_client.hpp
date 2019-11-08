@@ -635,7 +635,7 @@ namespace cinatra {
 
 				cancel_timer();
 				boost::asio::streambuf::const_buffers_type bufs = read_head_.data();
-				std::string_view line((const char*)bufs.data(), bytes_transferred);
+				std::string_view line(boost::asio::buffer_cast<const char*>(bufs), bytes_transferred);
 				int ret = parser_.parse(line.data(), line.size(), 0);
 				if (ret < 0|| parser_.status() != 200) {//error
 					chunked_file_.close();
@@ -643,7 +643,7 @@ namespace cinatra {
 					return;
 				}
 
-				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
 				
 				if (parser_.has_length()) {
 					left_chunk_len_ = parser_.body_len();
@@ -824,7 +824,7 @@ namespace cinatra {
 
 				cancel_timer();
 				boost::asio::streambuf::const_buffers_type bufs = chunked_size_buf_.data();
-				std::string line((const char*)bufs.data(), bytes_transferred - 2);
+				std::string line(boost::asio::buffer_cast<const char*>(bufs), bytes_transferred - 2);
 				if (!part_chunked_size_.empty()) {
 					line = std::move(part_chunked_size_) + std::move(line);
 				}
@@ -842,7 +842,7 @@ namespace cinatra {
 					return;
 				}
 
-				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
 				if (part_body.size() > left_chunk_len_) {
 					std::string_view chunk_data(part_body.data(), left_chunk_len_);
 					write_chunked_data({ chunk_data.data(), chunk_data.size() });
