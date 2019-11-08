@@ -221,12 +221,12 @@ namespace cinatra {
 			progress_cb_ = std::move(progress);
 		}
 
-		template<typename http_method METHOD = GET>
+		template<http_method METHOD = GET>
 		void download_file(std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
 			download_file<METHOD>("", std::move(filename), std::move(resoure_path), std::move(error_callback));
 		}
 
-		template<typename http_method METHOD = GET>
+		template<http_method METHOD = GET>
 		void download_file(std::string dir, std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
 			if (!check_file(std::move(dir), std::move(filename))) {
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
@@ -989,7 +989,7 @@ namespace cinatra {
 			return n;
 		}
 
-		template<typename http_method METHOD>
+		template<http_method METHOD>
 		void build_download_request(std::string resoure_path) {
 			std::string method = get_method_str<METHOD>();
 			std::string prefix = method.append(" ").append(std::move(resoure_path)).append(std::move(version_));
