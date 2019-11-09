@@ -1,6 +1,6 @@
 #pragma once
-#include <vector>
 #include <string_view>
+#include <vector>
 namespace cinatra::memento {
-	inline static std::vector<std::string_view> pathinfo_mem;
+inline static std::vector<std::string_view> pathinfo_mem;
 }
