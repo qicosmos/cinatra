@@ -233,12 +233,12 @@ namespace cinatra {
 			progress_cb_ = std::move(progress);
 		}
 
-		template<typename http_method METHOD = GET>
+		template<http_method METHOD = GET>
 		void download_file(std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
 			download_file<METHOD>("", std::move(filename), std::move(resoure_path), std::move(error_callback));
 		}
 
-		template<typename http_method METHOD = GET>
+		template<http_method METHOD = GET>
 		void download_file(std::string dir, std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
 			if (!check_file(std::move(dir), std::move(filename))) {
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
@@ -664,7 +664,7 @@ namespace cinatra {
 
 				cancel_timer();
 				boost::asio::streambuf::const_buffers_type bufs = read_head_.data();
-				std::string_view line((const char*)bufs.data(), bytes_transferred);
+				std::string_view line(boost::asio::buffer_cast<const char*>(bufs), bytes_transferred);
 				int ret = parser_.parse(line.data(), line.size(), 0);
 				if (ret < 0|| parser_.status() != 200) {//error
 					chunked_file_.close();
@@ -672,7 +672,7 @@ namespace cinatra {
 					return;
 				}
 
-				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
 				
 				if (parser_.has_length()) {
 					left_chunk_len_ = parser_.body_len();
@@ -853,7 +853,7 @@ namespace cinatra {
 
 				cancel_timer();
 				boost::asio::streambuf::const_buffers_type bufs = chunked_size_buf_.data();
-				std::string line((const char*)bufs.data(), bytes_transferred - 2);
+				std::string line(boost::asio::buffer_cast<const char*>(bufs), bytes_transferred - 2);
 				if (!part_chunked_size_.empty()) {
 					line = std::move(part_chunked_size_) + std::move(line);
 				}
@@ -871,7 +871,7 @@ namespace cinatra {
 					return;
 				}
 
-				std::string_view part_body((const char*)bufs.data() + bytes_transferred, bufs.size() - bytes_transferred);
+				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
 				if (part_body.size() > left_chunk_len_) {
 					std::string_view chunk_data(part_body.data(), left_chunk_len_);
 					write_chunked_data({ chunk_data.data(), chunk_data.size() });
@@ -1018,7 +1018,7 @@ namespace cinatra {
 			return n;
 		}
 
-		template<typename http_method METHOD>
+		template<http_method METHOD>
 		void build_download_request(std::string resoure_path) {
 			std::string method = get_method_str<METHOD>();
 			std::string prefix = method.append(" ").append(std::move(resoure_path)).append(std::move(version_));
