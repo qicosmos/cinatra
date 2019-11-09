@@ -30,14 +30,13 @@ namespace cinatra {
 		T value;
 	};
 
-	template<class service_pool_policy = io_service_pool>
-	class http_server_ : private noncopyable {
+	template<template<typename> typename derived_http_server, typename service_pool_policy>
+	class http_server_base : private noncopyable {
+	private:
+		using derived_t = derived_http_server<service_pool_policy>;
 	public:
 		template<class... Args>
-		explicit http_server_(Args&&... args) : io_service_pool_(std::forward<Args>(args)...)
-#ifdef CINATRA_ENABLE_SSL
-			, ctx_(boost::asio::ssl::context::sslv23)
-#endif
+		explicit http_server_base(Args&&... args) : io_service_pool_(std::forward<Args>(args)...)
 		{
 			http_cache::get().set_cache_max_age(86400);
 			init_conn_callback();
@@ -45,25 +44,6 @@ namespace cinatra {
 
 		void enable_http_cache(bool b) {
 			http_cache::get().enable_cache(b);
-		}
-
-		template<typename F>
-		void init_ssl_context(bool ssl_enable_v3, F&& f, std::string certificate_chain_file,
-			std::string private_key_file, std::string tmp_dh_file) {
-#ifdef CINATRA_ENABLE_SSL
-			unsigned long ssl_options = boost::asio::ssl::context::default_workarounds
-				| boost::asio::ssl::context::no_sslv2
-				| boost::asio::ssl::context::single_dh_use;
-
-			if (!ssl_enable_v3)
-				ssl_options |= boost::asio::ssl::context::no_sslv3;
-
-			ctx_.set_options(ssl_options);
-			ctx_.set_password_callback(std::forward<F>(f));
-			ctx_.use_certificate_chain_file(std::move(certificate_chain_file));
-			ctx_.use_private_key_file(std::move(private_key_file), boost::asio::ssl::context::pem);
-			ctx_.use_tmp_dh_file(std::move(tmp_dh_file));
-#endif
 		}
 
 		//address :
@@ -97,7 +77,7 @@ namespace cinatra {
 				try {
 					acceptor->bind(endpoint);
 					acceptor->listen();
-					start_accept(acceptor);
+					static_cast<derived_t*>(this)->start_accept(acceptor);
 					r = true;
 				}
 				catch (const std::exception& ex) {
@@ -246,27 +226,6 @@ namespace cinatra {
 		}
 
 	private:
-		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
-			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_, 
-				upload_check_?&upload_check_ : nullptr
-#ifdef CINATRA_ENABLE_SSL
-				, ctx_
-#endif
-				);
-			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
-				if (!e) {
-					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
-					new_conn->start();
-				}
-				else {
-					//LOG_INFO << "server::handle_accept: " << e.message();
-				}
-
-				start_accept(acceptor);
-			});
-		}
-
 		void set_static_res_handler()
 		{
 			set_http_handler<POST,GET>(STATIC_RESOURCE, [this](request& req, response& res){
@@ -426,7 +385,7 @@ namespace cinatra {
 				}				
 			};
 		}
-
+	protected:
 		service_pool_policy io_service_pool_;
 
 		std::size_t max_req_buf_size_ = 3 * 1024 * 1024; //max request buffer size 3M
@@ -437,10 +396,6 @@ namespace cinatra {
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
         std::string public_root_path_ = "./";
-//		https_config ssl_cfg_;
-#ifdef CINATRA_ENABLE_SSL
-		boost::asio::ssl::context ctx_;
-#endif
 
 		http_handler http_handler_ = nullptr;
 		std::function<bool(request& req, response& res)> download_check_;
@@ -450,5 +405,87 @@ namespace cinatra {
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
 	};
 
-	using http_server = http_server_<io_service_pool>;
+	template<class service_pool_policy = io_service_pool>
+	class http_server : public http_server_base<http_server, service_pool_policy> {
+	private:
+		using base_t = http_server_base<http_server, service_pool_policy>;
+	public:
+		template<class... Args>
+		explicit http_server(Args&&... args) : base_t(std::forward<Args>(args)...) {}
+
+		template<typename F>
+		void init_ssl_context(bool ssl_enable_v3, F&& f, std::string certificate_chain_file,
+			std::string private_key_file, std::string tmp_dh_file) {}
+
+		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
+			auto new_conn = std::make_shared<connection<Socket>>(
+				this->io_service_pool_.get_io_service(), this->max_req_buf_size_, this->keep_alive_timeout_, this->http_handler_, this->static_dir_, 
+				this->upload_check_?&this->upload_check_ : nullptr
+				);
+			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
+				if (!e) {
+					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
+					new_conn->start();
+				}
+				else {
+					//LOG_INFO << "server::handle_accept: " << e.message();
+				}
+
+				start_accept(acceptor);
+			});
+		}
+	};
+
+	template<class service_pool_policy = io_service_pool>
+	class https_server : public http_server_base<https_server, service_pool_policy> {
+	private:
+		using base_t = http_server_base<https_server, service_pool_policy>;
+	public:
+		template<class... Args>
+		explicit https_server(Args&&... args) : base_t(std::forward<Args>(args)...), ctx_(boost::asio::ssl::context::sslv23) {}
+
+		template<typename F>
+		void init_ssl_context(bool ssl_enable_v3, F&& f, std::string certificate_chain_file,
+			std::string private_key_file, std::string tmp_dh_file) {
+			unsigned long ssl_options = boost::asio::ssl::context::default_workarounds
+				| boost::asio::ssl::context::no_sslv2
+				| boost::asio::ssl::context::single_dh_use;
+
+			if (!ssl_enable_v3)
+				ssl_options |= boost::asio::ssl::context::no_sslv3;
+
+			ctx_.set_options(ssl_options);
+			ctx_.set_password_callback(std::forward<F>(f));
+			ctx_.use_certificate_chain_file(std::move(certificate_chain_file));
+			ctx_.use_private_key_file(std::move(private_key_file), boost::asio::ssl::context::pem);
+			ctx_.use_tmp_dh_file(std::move(tmp_dh_file));
+		}
+
+		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
+			auto new_conn = std::make_shared<connection<Socket>>(
+				this->io_service_pool_.get_io_service(), this->max_req_buf_size_, this->keep_alive_timeout_, this->http_handler_, this->static_dir_, 
+				this->upload_check_?&this->upload_check_ : nullptr,
+				ctx_
+				);
+			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
+				if (!e) {
+					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
+					new_conn->start();
+				}
+				else {
+					//LOG_INFO << "server::handle_accept: " << e.message();
+				}
+
+				start_accept(acceptor);
+			});
+		}
+
+		boost::asio::ssl::context ctx_;
+	};
+
+#ifdef CINATRA_ENABLE_SSL
+	using http_server_t = https_server<io_service_pool>;
+#else
+	using http_server_t = http_server<io_service_pool>;
+#endif
 }

@@ -34,12 +34,7 @@ else()
 	find_package(Boost 1.60 REQUIRED COMPONENTS system)
 endif()
 
-if (ENABLE_SSL)
 find_package(OpenSSL REQUIRED)
-endif()
-if (ENABLE_CLIENT_SSL)
-	find_package(OpenSSL REQUIRED)
-endif()
 
 if (ENABLE_GZIP)
 	find_package(ZLIB REQUIRED)

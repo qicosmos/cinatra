@@ -1,18 +1,16 @@
 #pragma once
-#include "use_asio.hpp"
 #include <vector>
 #include <memory>
 #include <thread>
+
+#include "use_asio.hpp"
 #include "utils.hpp"
 
 namespace cinatra
 {
 	class io_service_pool : private noncopyable{
 	public:
-		explicit io_service_pool(std::size_t pool_size) : next_io_service_(0) {
-			if (pool_size == 0)
-				pool_size = 1; //set default value as 1
-
+		explicit io_service_pool(const std::size_t pool_size = 1) : next_io_service_(0) {
 			for (std::size_t i = 0; i < pool_size; ++i)
 			{
 				io_service_ptr io_service(new boost::asio::io_service);
@@ -23,16 +21,16 @@ namespace cinatra
 		}
 
 		void run() {
-			std::vector<std::shared_ptr<std::thread> > threads;
-			for (std::size_t i = 0; i < io_services_.size(); ++i){
+			std::vector<std::shared_ptr<std::thread>> threads;
+			for (auto& io_service : io_services_){
 				threads.emplace_back(std::make_shared<std::thread>(
 					[](io_service_ptr svr) {
 						svr->run();
-					}, io_services_[i]));
+					}, io_service));
 			}
 
-			for (std::size_t i = 0; i < threads.size(); ++i)
-				threads[i]->join();
+			for (auto& thread : threads)
+				thread->join();
 		}
 
 		intptr_t run_one() {
@@ -69,47 +67,5 @@ namespace cinatra
 		std::vector<io_service_ptr> io_services_;
 		std::vector<work_ptr> work_;
 		std::size_t next_io_service_;
-	};
-
-	class io_service_inplace : private noncopyable{
-	public:
-		explicit io_service_inplace() {
-			io_services_ = std::make_shared<boost::asio::io_service>();
-			work_ = std::make_shared<boost::asio::io_service::work>(*io_services_);
-		}
-
-		void run() {
-			io_services_->run();
-		}
-
-		intptr_t run_one() {
-			return io_services_->run_one();
-		}
-
-		intptr_t poll() {
-			return io_services_->poll();
-		}
-
-		intptr_t poll_one() {
-			return io_services_->poll_one();
-		}
-
-		void stop() {
-			work_ = nullptr;
-
-			if (io_services_)
-				io_services_->stop();
-		}
-
-		boost::asio::io_service& get_io_service() {
-			return *io_services_;
-		}
-
-	private:
-		using io_service_ptr = std::shared_ptr<boost::asio::io_service>;
-		using work_ptr = std::shared_ptr<boost::asio::io_service::work>;
-
-		io_service_ptr io_services_;
-		work_ptr work_;
 	};
 }
