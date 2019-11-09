@@ -45,7 +45,7 @@ using namespace cinatra;
 
 int main() {
 	int max_thread_num = std::thread::hardware_concurrency();
-	http_server server(max_thread_num);
+	http_server_t server(max_thread_num);
 	server.listen("0.0.0.0", "8080");
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
@@ -63,7 +63,7 @@ int main() {
 using namespace cinatra;
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
+	http_server_t server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 	server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
 		auto name = req.get_header_value("name");
@@ -125,7 +125,7 @@ struct check {
 };
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
+	http_server_t server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
@@ -152,7 +152,7 @@ Cinatra currently supports uploading of multipart and octet-stream formats.
 using namespace cinatra;
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
+	http_server_t server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 
 	//http upload(multipart)
@@ -182,7 +182,7 @@ As you can see, a few lines of code can be used to implement a http file upload 
 using namespace cinatra;
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
+	http_server_t server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 
 	//http upload(octet-stream)
@@ -223,7 +223,7 @@ http://127.0.0.1:8080/purecpp/static/show.jpg
 using namespace cinatra;
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
+	http_server_t server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 
 	//web socket
