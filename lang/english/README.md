@@ -256,39 +256,7 @@ int main() {
 }
 ```
 
-### Example 7: io_service_inplace
-
-This code demonstrates how to use io_service_inplace and then control the running thread and loop of the http server itself. Use http://[::1]:8080/close (IPv6) or http://127.0.0.1:8080/close (IPv4) to shut down the http server.
-
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-
-	bool is_running = true;
-	http_server_<io_service_inplace> server;
-	server.listen("8080");
-
-	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
-	});
-
-	server.set_http_handler<GET, POST>("/close", [&](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "will close");
-
-		is_running = false;
-		server.stop();
-	});
-
-	while(is_running)
-		server.poll_one();
-
-	return 0;
-}
-```
-
-### Example 8: cinatra client usage
+### Example 7: cinatra client usage
 
 #### send get/post message
 
