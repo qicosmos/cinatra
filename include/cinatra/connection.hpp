@@ -174,6 +174,10 @@ namespace cinatra {
 			do_write();
 		}
 
+		void set_multipart_begin(std::function<void(request&)> begin) {
+			multipart_begin_ = std::move(begin);
+		}
+
 		//~connection() {
 		//	close();
 		//}
@@ -584,9 +588,14 @@ namespace cinatra {
 					{
 						auto ext = get_extension(filename);
 						try {
-							std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str()
-								+ std::string(ext.data(), ext.length());
-							req_.open_upload_file(name);
+							auto tp = std::chrono::high_resolution_clock::now();
+							auto nano = tp.time_since_epoch().count();
+							std::string name = static_dir_ + std::to_string(nano)
+								+ std::string(ext.data(), ext.length())+"_ing";
+							bool ret = req_.open_upload_file(name);
+							if (ret&& multipart_begin_) {
+								multipart_begin_(req_);
+							}
 						}
 						catch (const std::exception& ex) {
 							req_.set_state(data_proc_state::data_error);
@@ -615,6 +624,14 @@ namespace cinatra {
 					if(is_multi_part_file_)
 					{
 						req_.close_upload_file();
+						auto pfile = req_.get_file();
+						if (pfile) {
+							auto old_name = pfile->get_file_path();
+							auto pos = old_name.rfind("_ing");
+							if (pos != std::string::npos) {
+								pfile->rename_file(old_name.substr(0, old_name.length() - 4));
+							}							
+						}
 					}
 				};
 				multipart_parser_.on_end = [this] {
@@ -1134,6 +1151,7 @@ namespace cinatra {
 		const http_handler& http_handler_;
 		std::function<bool(request& req, response& res)>* upload_check_ = nullptr;
 		std::any tag_;
+		std::function<void(request&)> multipart_begin_ = nullptr;
 	};
 
 	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;

@@ -684,6 +684,13 @@ namespace cinatra {
 			return files_;
 		}
 
+		upload_file* get_file() {
+			if(!files_.empty())
+				return &files_.back();
+
+			return nullptr;
+		}
+
 		std::map<std::string_view, std::string_view> get_cookies() const
 		{
 			//auto cookies_str = get_header_value("cookie");

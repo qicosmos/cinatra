@@ -18,7 +18,7 @@ namespace cinatra {
 		}
 
 		bool open(const std::string& file_name) {
-			file_.open(file_name, std::ios::binary);
+			file_.open(file_name, std::ios::binary| std::ios::app);
 			bool r = file_.is_open();
 			if(r)
 				file_path_ = std::string(&file_name[0], file_name.length());
@@ -64,10 +64,13 @@ namespace cinatra {
 
 		void rename_file(const std::string& new_file_name)
 		{
-			auto directory_path = file_path_.substr(0,file_path_.rfind("/"));
-			auto new_file_path = directory_path+"/"+new_file_name;
-			fs::rename(file_path_.data(),(new_file_path).data());
-			file_path_ = new_file_path;
+			//auto directory_path = file_path_.substr(0,file_path_.rfind("/"));
+			//auto new_file_path = directory_path+"/"+new_file_name;
+			std::error_code code;
+			fs::rename(file_path_, new_file_name, code);
+			if (!code) {
+				file_path_ = new_file_name;
+			}			
 		}
 
 

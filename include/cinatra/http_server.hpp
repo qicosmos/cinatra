@@ -245,6 +245,10 @@ namespace cinatra {
 			not_found_ = std::move(not_found);
 		}
 
+		void set_multipart_begin(std::function<void(request&)> begin) {
+			multipart_begin_ = std::move(begin);
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -257,6 +261,7 @@ namespace cinatra {
 			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
 				if (!e) {
 					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
+					new_conn->set_multipart_begin(multipart_begin_);
 					new_conn->start();
 				}
 				else {
@@ -448,6 +453,7 @@ namespace cinatra {
 		std::function<bool(request& req, response& res)> upload_check_ = nullptr;
 
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
+		std::function<void(request&)> multipart_begin_ = nullptr;
 	};
 
 	using http_server = http_server_<io_service_pool>;
