@@ -174,7 +174,7 @@ namespace cinatra {
 			do_write();
 		}
 
-		void set_multipart_begin(std::function<void(request&)> begin) {
+		void set_multipart_begin(std::function<void(request&, std::string&)> begin) {
 			multipart_begin_ = std::move(begin);
 		}
 
@@ -592,10 +592,11 @@ namespace cinatra {
 							auto nano = tp.time_since_epoch().count();
 							std::string name = static_dir_ + std::to_string(nano)
 								+ std::string(ext.data(), ext.length())+"_ing";
-							bool ret = req_.open_upload_file(name);
-							if (ret&& multipart_begin_) {
-								multipart_begin_(req_);
+							if (multipart_begin_) {
+								multipart_begin_(req_, name);
 							}
+							
+							req_.open_upload_file(name);
 						}
 						catch (const std::exception& ex) {
 							req_.set_state(data_proc_state::data_error);
@@ -1151,7 +1152,7 @@ namespace cinatra {
 		const http_handler& http_handler_;
 		std::function<bool(request& req, response& res)>* upload_check_ = nullptr;
 		std::any tag_;
-		std::function<void(request&)> multipart_begin_ = nullptr;
+		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
 	};
 
 	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;

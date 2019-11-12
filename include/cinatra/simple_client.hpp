@@ -285,6 +285,25 @@ namespace cinatra {
 			on_data_ = std::move(on_data);
 		}
 
+		void close() {
+			if (has_close_) {
+				return;
+			}
+
+#ifdef _DEBUG
+			std::cout << "close" << std::endl;
+#endif				
+			boost::system::error_code ec;
+#ifdef CINATRA_ENABLE_SSL
+			socket_.shutdown(ec);
+#else
+			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+#endif
+			socket().close(ec);
+
+			has_close_ = true;
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
@@ -480,25 +499,6 @@ namespace cinatra {
 					close();
 				}
 			});
-		}
-
-		void close() {
-			if (has_close_) {
-				return;
-			}
-
-#ifdef _DEBUG
-			std::cout << "close" << std::endl;
-#endif				
-			boost::system::error_code ec;
-#ifdef CINATRA_ENABLE_SSL
-			socket_.shutdown(ec);
-#else
-			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-#endif
-			socket().close(ec);
-
-			has_close_ = true;
 		}
 
 #ifdef CINATRA_ENABLE_SSL

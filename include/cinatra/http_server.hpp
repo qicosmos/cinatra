@@ -245,7 +245,7 @@ namespace cinatra {
 			not_found_ = std::move(not_found);
 		}
 
-		void set_multipart_begin(std::function<void(request&)> begin) {
+		void set_multipart_begin(std::function<void(request&, std::string&)> begin) {
 			multipart_begin_ = std::move(begin);
 		}
 
@@ -453,7 +453,7 @@ namespace cinatra {
 		std::function<bool(request& req, response& res)> upload_check_ = nullptr;
 
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
-		std::function<void(request&)> multipart_begin_ = nullptr;
+		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
 	};
 
 	using http_server = http_server_<io_service_pool>;
