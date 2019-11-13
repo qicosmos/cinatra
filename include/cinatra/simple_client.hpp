@@ -16,6 +16,7 @@
 #endif
 
 namespace cinatra {
+	using client_callback_t = std::function<void(boost::system::error_code, std::string_view)>;
 	//short connection
 	class simple_client : public std::enable_shared_from_this<simple_client> {
 	public:
@@ -82,7 +83,7 @@ namespace cinatra {
 		}
 
 		template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-		void async_send_msg(std::string api, std::string msg, std::function<void(boost::system::error_code ec)> error_callback = [] {}) {
+		void async_send_msg(std::string api, std::string msg, client_callback_t error_callback) {
 			build_message<METHOD, CONTENT_TYPE>(std::move(api), msg);
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
 			auto self = this->shared_from_this();
@@ -131,7 +132,7 @@ namespace cinatra {
 		}
 
 		void send_form_data(std::string api, std::vector<std::pair<std::string, std::string>> v, 
-			std::function<void(boost::system::error_code)> error_callback) {
+			client_callback_t error_callback) {
 			build_form_data(std::move(v));
 
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
@@ -144,7 +145,7 @@ namespace cinatra {
 				const boost::asio::ip::tcp::resolver::iterator& it) {
 				if (ec) {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -160,26 +161,26 @@ namespace cinatra {
 					}
 					else {
 						std::cout << ec.message() << std::endl;
-						callback({});
+						callback({}, "");
 						close();
 					}
 				});
 			});
 		}
 
-		void upload_file(std::string api, std::string filename, std::function<void(boost::system::error_code ec)> error_callback) {
+		void upload_file(std::string api, std::string filename, client_callback_t error_callback) {
 			upload_file(std::move(api), std::move(filename), 0, std::move(error_callback));
 		}
 
-		void upload_file(std::string api, std::string filename, size_t start, std::function<void(boost::system::error_code ec)> error_callback) {
+		void upload_file(std::string api, std::string filename, size_t start, client_callback_t error_callback) {
 			if (file_.is_open()) {
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::in_progress));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::in_progress), "");
 				return;
 			}
 
 			file_.open(filename, std::ios::binary);
 			if (!file_) {
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 
@@ -187,7 +188,7 @@ namespace cinatra {
 			size_t size = std::filesystem::file_size(filename, ec);
 			if (ec || size == 0 || start == -1) {
 				file_.close();
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 
@@ -202,12 +203,13 @@ namespace cinatra {
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
 			api_ = std::move(api);
 			boost::asio::ip::tcp::resolver::query query(addr_, port_);
+			client_callback_ = error_callback;
 			auto self = this->shared_from_this();
 			resolver_.async_resolve(query, [this, self, callback = std::move(error_callback)](boost::system::error_code ec,
 				const boost::asio::ip::tcp::resolver::iterator& it) {
 				if (ec) {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -222,7 +224,7 @@ namespace cinatra {
 #endif
 					}
 					else {
-						callback(ec);
+						callback(ec, "");
 						close();
 					}
 				});
@@ -234,14 +236,14 @@ namespace cinatra {
 		}
 
 		template<http_method METHOD = GET>
-		void download_file(std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
+		void download_file(std::string filename, std::string resoure_path, client_callback_t error_callback) {
 			download_file<METHOD>("", std::move(filename), std::move(resoure_path), std::move(error_callback));
 		}
 
 		template<http_method METHOD = GET>
-		void download_file(std::string dir, std::string filename, std::string resoure_path, std::function<void(boost::system::error_code ec)> error_callback) {
+		void download_file(std::string dir, std::string filename, std::string resoure_path, client_callback_t error_callback) {
 			if (!check_file(std::move(dir), std::move(filename))) {
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 
@@ -253,7 +255,7 @@ namespace cinatra {
 				const boost::asio::ip::tcp::resolver::iterator& it) {
 				if (ec) {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -270,7 +272,7 @@ namespace cinatra {
 					}
 					else {
 						std::cout << ec.message() << std::endl;
-						callback(ec);
+						callback(ec, "");
 						close();
 					}
 				});
@@ -424,7 +426,7 @@ namespace cinatra {
 			add_header("Content-Length", temp);
 		}
 		
-		void do_write(std::function<void(boost::system::error_code)> error_callback = [](auto ec) {}) {
+		void do_write(client_callback_t error_callback = [](auto ec, auto msg) {}) {
 			auto self = this->shared_from_this();
 			boost::asio::async_write(socket(), boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
@@ -434,7 +436,7 @@ namespace cinatra {
 				else {
 					std::cout << "send failed " << ec.message() << std::endl;
 					if (error_callback) {
-						error_callback(ec);
+						error_callback(ec, "");
 					}
 					
 					close();
@@ -443,11 +445,10 @@ namespace cinatra {
 		}
 
 		//true:file end, false:not file end, should be continue
-		bool make_file_data(std::function<void(boost::system::error_code ec)>& error_callback) {
+		bool make_file_data(client_callback_t& error_callback) {
 			bool eof = file_.peek() == EOF;
 			if (eof) {
 				file_.close();
-				error_callback({});
 				return true;
 			}
 
@@ -479,7 +480,7 @@ namespace cinatra {
 			return false;
 		}
 
-		void do_write_file(std::function<void(boost::system::error_code ec)> error_callback) {
+		void do_write_file(client_callback_t error_callback) {
 			if (make_file_data(error_callback)) {
 				return;
 			}
@@ -499,7 +500,7 @@ namespace cinatra {
 				}
 				else {
 					std::cout << "send failed " << ec.message() << std::endl;
-					error_callback(ec);
+					error_callback(ec, "");
 					close();
 				}
 			});
@@ -524,7 +525,7 @@ namespace cinatra {
 			return true || preverified;
 		}
 
-		void handshake(std::function<void(boost::system::error_code)> callback) {
+		void handshake(client_callback_t callback) {
 			socket_.async_handshake(boost::asio::ssl::stream_base::client,
 				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
@@ -533,13 +534,13 @@ namespace cinatra {
 				}
 				else {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					close();
 				}
 			});
 		}
 
-		void handshake1(std::function<void(boost::system::error_code)> callback = nullptr) {
+		void handshake1(client_callback_t callback = nullptr) {
 			socket_.async_handshake(boost::asio::ssl::stream_base::client,
 				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
@@ -553,7 +554,7 @@ namespace cinatra {
 			});
 		}
 
-		void handshake2(std::function<void(boost::system::error_code)> callback) {
+		void handshake2(client_callback_t callback) {
 			socket_.async_handshake(boost::asio::ssl::stream_base::client,
 				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
@@ -562,7 +563,7 @@ namespace cinatra {
 				}
 				else {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					close();
 				}
 			});
@@ -630,7 +631,11 @@ namespace cinatra {
 
 			if (promis_) {
 				promis_->set_value(std::string(parser_.body()));
-			}			
+			}
+
+			if (client_callback_) {
+				client_callback_({}, parser_.body());
+			}
 
 			close();
 		}
@@ -656,7 +661,7 @@ namespace cinatra {
 			});
 		}
 
-		void read_chunk(std::function<void(boost::system::error_code ec)> error_callback) {
+		void read_chunk(client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_read_until(socket(), read_head_, "\r\n\r\n",
@@ -672,7 +677,7 @@ namespace cinatra {
 				int ret = parser_.parse(line.data(), line.size(), 0);
 				if (ret < 0|| parser_.status() != 200) {//error
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::not_found));
+					callback(boost::asio::error::make_error_code(boost::asio::error::not_found), "");
 					return;
 				}
 
@@ -696,7 +701,7 @@ namespace cinatra {
 
 				if (!parser_.is_chunked()) {
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::operation_not_supported));
+					callback(boost::asio::error::make_error_code(boost::asio::error::operation_not_supported), "");
 					return;
 				}
 
@@ -704,7 +709,7 @@ namespace cinatra {
 			});			
 		}
 
-		void handle_chunked(std::string_view content, std::function<void(boost::system::error_code ec)> error_callback) {
+		void handle_chunked(std::string_view content, client_callback_t error_callback) {
 			if (content.empty()) {
 				read_chunk_head(std::move(error_callback));
 				return;
@@ -716,7 +721,7 @@ namespace cinatra {
 			auto ret = phr_decode_chunked(&dec, body.data(), &size);
 			if (ret == -1) {
 				chunked_file_.close();
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 
@@ -724,10 +729,10 @@ namespace cinatra {
 				bool r = write_chunked_data0(content);
 				chunked_file_.close();
 				if (!r) {
-					error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 					return;
 				}
-				error_callback({});
+				error_callback({}, "");
 				return;
 			}
 
@@ -745,7 +750,7 @@ namespace cinatra {
 					auto pos = content.find("\r\n");
 					if (pos == std::string_view::npos) {
 						chunked_file_.close();
-						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 						return;
 					}
 
@@ -753,7 +758,7 @@ namespace cinatra {
 					left_chunk_len_ = hex_to_int(len_sv);
 					if (left_chunk_len_ < 0) {
 						chunked_file_.close();
-						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+						error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 						return;
 					}
 
@@ -806,12 +811,12 @@ namespace cinatra {
 			else {
 				std::cout <<"not support now! " << content<< "\n";
 				chunked_file_.close();
-				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 		}
 
-		void read_crcf(size_t count, std::function<void(boost::system::error_code ec)> error_callback) {
+		void read_crcf(size_t count, client_callback_t error_callback) {
 			auto self = this->shared_from_this();
 			boost::asio::async_read(socket(), boost::asio::buffer(crcf_, count), [this, self, callback = std::move(error_callback)]
 			(boost::system::error_code ec, std::size_t length) {
@@ -844,14 +849,14 @@ namespace cinatra {
 			return true;
 		}
 
-		void read_chunk_head(std::function<void(boost::system::error_code ec)> error_callback) {
+		void read_chunk_head(client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_read_until(socket(), chunked_size_buf_, "\r\n",
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (ec) {
 					chunked_file_.close();
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -865,13 +870,13 @@ namespace cinatra {
 				left_chunk_len_ = hex_to_int(line);
 				if (left_chunk_len_ < 0) {
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 					return;
 				}
 
 				if (left_chunk_len_ == 0) {
 					chunked_file_.close();
-					callback({});
+					callback({}, "");
 					return;
 				}
 
@@ -882,7 +887,7 @@ namespace cinatra {
 					std::string_view left_data(part_body.data() + left_chunk_len_ + 2, part_body.length() - left_chunk_len_ - 2);
 					if (left_data.size() == 5) { //"\r\n0\r\n"
 						chunked_file_.close();
-						callback({});
+						callback({}, "");
 						return;
 					}
 
@@ -896,7 +901,7 @@ namespace cinatra {
 
 				if (left_chunk_len_ < 0) {
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 					return;
 				}
 
@@ -909,7 +914,7 @@ namespace cinatra {
 			});
 		}
 
-		void read_chunk_body(int64_t read_len, bool eof, std::function<void(boost::system::error_code ec)> error_callback) {
+		void read_chunk_body(int64_t read_len, bool eof, client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_read(socket(), boost::asio::buffer(chunk_body_.data(), read_len),
@@ -922,7 +927,7 @@ namespace cinatra {
 				cancel_timer();
 				if (eof) {
 					chunked_file_.close();
-					callback({});
+					callback({}, "");
 					return;
 				}
 
@@ -947,14 +952,14 @@ namespace cinatra {
 			});
 		}
 
-		void read_stream_body(int64_t read_len, std::function<void(boost::system::error_code ec)> error_callback) {
+		void read_stream_body(int64_t read_len, client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_read(socket(), boost::asio::buffer(chunk_body_.data(), read_len),
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					chunked_file_.close();
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -964,13 +969,13 @@ namespace cinatra {
 				assert(left_chunk_len_ >= 0);
 				if (left_chunk_len_ < 0) {
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument));
+					callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 					return;
 				}
 				write_chunked_data({ chunk_body_.data(), length });
 				if (left_chunk_len_ == 0) {					
 					chunked_file_.close();
-					callback({});
+					callback({}, "");
 					return;
 				}
 
@@ -1116,6 +1121,8 @@ namespace cinatra {
 
 		boost::asio::steady_timer timer_;
 		std::size_t timeout_seconds_;
+
+		client_callback_t client_callback_ = nullptr;
 
 		bool has_close_ = false;
 	};
