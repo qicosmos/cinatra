@@ -304,6 +304,10 @@ namespace cinatra {
 			has_close_ = true;
 		}
 
+		bool has_close() const {
+			return has_close_;
+		}
+
 	private:
 		template<http_method METHOD, res_content_type CONTENT_TYPE>
 		void build_message(std::string api, std::string msg) {
