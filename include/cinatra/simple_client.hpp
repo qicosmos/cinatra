@@ -303,6 +303,14 @@ namespace cinatra {
 #endif
 			socket().close(ec);
 
+			if (file_.is_open()) {
+				file_.close();
+			}
+
+			if (chunked_file_.is_open()) {
+				chunked_file_.close();
+			}
+
 			has_close_ = true;
 		}
 
