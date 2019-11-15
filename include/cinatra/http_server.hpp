@@ -219,7 +219,7 @@ namespace cinatra {
 				public_root_path_ = "./"+name+"/";
 			}
 			else {
-				public_root_path_ = "./";
+				public_root_path_ = "";
 			}
         }
 

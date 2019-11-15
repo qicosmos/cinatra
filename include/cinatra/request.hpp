@@ -180,6 +180,9 @@ namespace cinatra {
 
 		void reset() {
 			cur_size_ = 0;
+			for (auto& file : files_) {
+				file.close();
+			}
 			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
