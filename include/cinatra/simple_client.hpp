@@ -196,9 +196,9 @@ namespace cinatra {
 			if (start > 0) {
 				file_.seekg(start);
 			}			
-
+			start_pos_ = start;
 			multipart_file_start();
-			file_size_ = size - start;
+			left_file_size_ = size - start;
 
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
 			api_ = std::move(api);
@@ -346,7 +346,7 @@ namespace cinatra {
 			}
 
 			prefix.append(build_headers()).append("\r\n");
-			total_write_size_ = prefix.size() + total_multipart_size();
+			total_write_size_ = start_pos_ + prefix.size() + total_multipart_size();
 			return prefix;
 		}
 
@@ -382,7 +382,7 @@ namespace cinatra {
 		}
 
 		size_t total_multipart_size() {
-			return file_size_ + multipart_start_.size() + multipart_end_.size();
+			return left_file_size_ + multipart_start_.size() + multipart_end_.size();
 		}
 
 		std::string_view get_inner_header_value(std::string_view key) {
@@ -501,7 +501,7 @@ namespace cinatra {
 					cancel_timer();
 					writed_size_ += length;
 					assert(writed_size_ <= total_write_size_);
-					double persent = (double)writed_size_ / total_write_size_;
+					double persent = (double)(writed_size_+start_pos_) / total_write_size_;
 					progress_callback(persent);
 					
 					do_write_file(std::move(error_callback));
@@ -1110,7 +1110,8 @@ namespace cinatra {
 		std::string api_;
 		std::ifstream file_;
 		std::string file_extension_;
-		size_t file_size_ = 0;
+		size_t start_pos_ = 0;
+		size_t left_file_size_ = 0;
 		size_t writed_size_ = 0;
 		size_t total_write_size_ = 0;
 		std::function<void(std::string)> progress_cb_;
