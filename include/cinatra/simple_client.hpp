@@ -1,6 +1,5 @@
 #pragma once
 #include <string>
-#include <filesystem>
 #include <fstream>
 #include <unordered_map>
 #include <future>
@@ -91,7 +90,7 @@ namespace cinatra {
 				const boost::asio::ip::tcp::resolver::iterator& it) {
 				if (ec) {
 					std::cout << ec.message() << std::endl;
-					callback(ec);
+					callback(ec, "");
 					return;
 				}
 
@@ -107,7 +106,7 @@ namespace cinatra {
 					}
 					else {
 						std::cout << ec.message() << std::endl;
-						callback();
+						callback(ec, "");
 						close();
 					}
 				});
@@ -185,14 +184,14 @@ namespace cinatra {
 			}
 
 			std::error_code ec;
-			size_t size = std::filesystem::file_size(filename, ec);
+			size_t size = fs::file_size(filename, ec);
 			if (ec || size == 0 || start == -1) {
 				file_.close();
 				error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 				return;
 			}
 
-			file_extension_ = std::filesystem::path(filename).extension().string();
+			file_extension_ = fs::path(filename).extension().string();
 			if (start > 0) {
 				file_.seekg(start);
 			}			
@@ -1013,7 +1012,7 @@ namespace cinatra {
 			std::string prefix;
 			if(!dir.empty()){
 				std::error_code code;
-				std::filesystem::create_directories(dir, code);
+				fs::create_directories(dir, code);
 				if (code) {
 					return false;
 				}

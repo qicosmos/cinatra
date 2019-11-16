@@ -114,7 +114,7 @@ namespace cinatra {
 		}
 
 		void run() {
-			if (!fs::exists(public_root_path_.data())) {
+			if (!public_root_path_.empty() && !fs::exists(public_root_path_.data())) {
 				fs::create_directories(public_root_path_.data());
 			}
 
