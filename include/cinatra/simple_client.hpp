@@ -21,7 +21,7 @@ namespace cinatra {
 	public:
 #ifdef CINATRA_ENABLE_SSL
 		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, boost::asio::ssl::context& context,
-			size_t timeout = 30) : ios_(io_context),
+			size_t timeout = 60) : ios_(io_context),
 			socket_(io_context, context), resolver_(io_context), addr_(std::move(addr)),
 			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout), chunked_size_buf_(10) {
 			socket_.set_verify_mode(boost::asio::ssl::verify_peer);
@@ -29,7 +29,7 @@ namespace cinatra {
 			chunk_body_.resize(chunk_buf_len + 4);
 		}
 #else
-		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 30) : ios_(io_context),
+		simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 60) : ios_(io_context),
 			socket_(io_context), resolver_(io_context), addr_(std::move(addr)),
 			port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout), chunked_size_buf_(10) {
 			chunk_body_.resize(chunk_buf_len + 4);
@@ -492,12 +492,12 @@ namespace cinatra {
 				return;
 			}
 			
-			reset_timer();
+			//reset_timer();
 			auto self = this->shared_from_this();
 			boost::asio::async_write(socket(), boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
-					cancel_timer();
+					//cancel_timer();
 					writed_size_ += length;
 					assert(writed_size_ <= total_write_size_);
 					double persent = (double)(writed_size_+start_pos_) / total_write_size_;
