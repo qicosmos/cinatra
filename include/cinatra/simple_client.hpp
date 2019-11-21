@@ -14,6 +14,14 @@
 #include <boost/asio/ssl.hpp>
 #endif
 
+#ifdef _MSC_VER
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif
+
 namespace cinatra {
 	using client_callback_t = std::function<void(boost::system::error_code, std::string_view)>;
 	//short connection
