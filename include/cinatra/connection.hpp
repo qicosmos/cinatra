@@ -668,6 +668,7 @@ namespace cinatra {
 		}
 
 		void handle_multipart() {
+			timer_.cancel();
 			if (upload_check_) {
 				bool r = (*upload_check_)(req_, res_);
 				if (!r) {
