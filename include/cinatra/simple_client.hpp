@@ -601,6 +601,9 @@ namespace cinatra {
 					auto last_len = parser_.current_size();
 					bool at_capacity = parser_.update_size(bytes_transferred);
 					if (at_capacity) {
+						if (client_callback_) {
+							client_callback_(boost::asio::error::make_error_code(boost::asio::error::no_buffer_space), "");
+						}
 						set_response_msg("out of range from local server");
 						return;
 					}
@@ -610,10 +613,16 @@ namespace cinatra {
 						do_read();
 					}
 					else if (ret == -1) {//error
+						if (client_callback_) {
+							client_callback_(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
+						}
 						set_response_msg("parse response error from local server");
 					}
 					else {
 						if (parser_.total_len() > MAX_RESPONSE_SIZE) {
+							if (client_callback_) {
+								client_callback_(boost::asio::error::make_error_code(boost::asio::error::no_buffer_space), "");
+							}
 							set_response_msg("response message too long, more than " + std::to_string(MAX_RESPONSE_SIZE)+" from local server");
 							return;
 						}
@@ -631,6 +640,9 @@ namespace cinatra {
 					}
 				}
 				else {
+					if (client_callback_) {
+						client_callback_(ec, "");
+					}
 					close();
 				}
 			});
