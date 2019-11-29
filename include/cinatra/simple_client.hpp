@@ -204,7 +204,7 @@ namespace cinatra {
 				file_.seekg(start);
 			}			
 			start_pos_ = start;
-			multipart_file_start();
+			multipart_file_start(fs::path(filename).filename().string());
 			left_file_size_ = size - start;
 
 			prefix_ = build_head<http_method::POST, res_content_type::multipart>(api, total_multipart_size());
@@ -365,9 +365,9 @@ namespace cinatra {
 			return multipart_start_ + std::move(content);			
 		}
 
-		void multipart_file_start() {
+		void multipart_file_start(std::string filename) {
 			multipart_start_.append("--" + boundary_ + CRLF);
-			multipart_start_.append("Content-Disposition: form-data; name=\"" + std::string("test") + "\"; filename=\"" + std::string("filename") + file_extension_ + "\"" + CRLF);
+			multipart_start_.append("Content-Disposition: form-data; name=\"" + std::string("test") + "\"; filename=\"" + std::move(filename) + "\"" + CRLF);
 			multipart_start_.append(CRLF);
 		}
 

@@ -800,7 +800,12 @@ namespace cinatra {
 			url_str_ = std::string(url_, url_len_);
 			method_len_ = 0;
 			url_len_ = 0;
+
+			auto filename = get_multipart_field_name("filename");
 			multipart_headers_.clear();
+			if (!filename.empty()) {
+				copy_headers_.emplace_back("filename", std::move(filename));
+			}			
 
 			if (header_len_ < 0)
 				return;
