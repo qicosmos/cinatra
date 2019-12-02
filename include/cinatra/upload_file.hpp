@@ -86,6 +86,10 @@ namespace cinatra {
 			return file_path_;
 		}
 
+		bool is_open() const {
+			return file_.is_open();
+		}
+
     private:
         void check_and_create_directory(const std::string& direcotry_path) const
         {

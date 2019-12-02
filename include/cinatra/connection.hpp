@@ -399,6 +399,7 @@ namespace cinatra {
 		}
 
 		void close() {
+			req_.close_upload_file();
 			boost::system::error_code ec;
 			socket().close(ec);
 			has_shake_ = false;
