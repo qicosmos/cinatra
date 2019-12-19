@@ -664,6 +664,9 @@ namespace cinatra {
 				client_callback_({}, parser_.body());
 			}
 
+			if (file_.is_open()) {
+				return;
+			}
 			close();
 		}
 
@@ -1137,7 +1140,7 @@ namespace cinatra {
 
 		const int chunk_buf_len = 3 * 1024 * 1024;
 		std::string chunk_body_;
-		int64_t left_chunk_len_;
+		size_t left_chunk_len_;
 
 		std::string part_chunked_size_;
 		boost::asio::streambuf read_head_;
