@@ -209,6 +209,71 @@ namespace cinatra {
 		}
 	}
 
+	inline std::string_view to_rep_string(status_type status) {
+		switch (status) {
+		case cinatra::status_type::switching_protocols:
+			return switching_protocols;
+			break;
+		case cinatra::status_type::ok:
+			return rep_ok;
+			break;
+		case cinatra::status_type::created:
+			return rep_created;
+			break;
+		case cinatra::status_type::accepted:
+			return rep_accepted;
+			break;
+		case cinatra::status_type::no_content:
+			return rep_no_content;
+			break;
+		case cinatra::status_type::partial_content:
+			return rep_partial_content;
+			break;
+		case cinatra::status_type::multiple_choices:
+			return rep_multiple_choices;
+			break;
+		case cinatra::status_type::moved_permanently:
+			return rep_moved_permanently;
+			break;
+		case cinatra::status_type::moved_temporarily:
+			return rep_moved_temporarily;
+			break;
+		case cinatra::status_type::not_modified:
+			return rep_not_modified;
+			break;
+		case cinatra::status_type::temporary_redirect:
+			return rep_temporary_redirect;
+			break;
+		case cinatra::status_type::bad_request:
+			return rep_bad_request;
+			break;
+		case cinatra::status_type::unauthorized:
+			return rep_unauthorized;
+			break;
+		case cinatra::status_type::forbidden:
+			return rep_forbidden;
+			break;
+		case cinatra::status_type::not_found:
+			return rep_not_found;
+			break;
+		case cinatra::status_type::internal_server_error:
+			return rep_internal_server_error;
+			break;
+		case cinatra::status_type::not_implemented:
+			return rep_not_implemented;
+			break;
+		case cinatra::status_type::bad_gateway:
+			return rep_bad_gateway;
+			break;
+		case cinatra::status_type::service_unavailable:
+			return rep_service_unavailable;
+			break;
+		default:
+			return rep_not_implemented;
+			break;
+		}
+	}
+
 	inline std::string_view to_string(status_type status) {
 		switch (status) {
 		case status_type::ok:

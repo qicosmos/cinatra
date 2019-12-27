@@ -26,6 +26,31 @@ namespace cinatra {
 			return buffers;
 		}
 
+		std::string& response_string(bool keep_alive) {
+			rep_str_ = to_rep_string(status_);
+
+			if (keep_alive) {
+				rep_str_.append("Connection: keep-alive\r\n");
+			}
+			else {
+				rep_str_.append("Connection: close\r\n");
+			}
+
+			if (!headers_.empty()) {
+				for (auto header : headers_) {
+					rep_str_.append(header.first).append(":").append(header.second).append("\r\n");
+				}
+			}
+
+			char temp[20] = {};
+			itoa_fwd((int)content_.size(), temp);
+			rep_str_.append("Content-Length: ").append(temp).append("\r\n");
+			rep_str_.append("Host: cinatra\r\n\r\n");
+			rep_str_.append(std::move(content_));
+
+			return rep_str_;
+		}
+
 		std::vector<boost::asio::const_buffer> to_buffers() {
 			std::vector<boost::asio::const_buffer> buffers;
 			add_header("Host", "cinatra");
@@ -131,6 +156,7 @@ namespace cinatra {
 		}
 
 		void reset() {
+			rep_str_.clear();
 			status_ = status_type::init;
 			proc_continue_ = true;
 			headers_.clear();
@@ -149,9 +175,9 @@ namespace cinatra {
 		}
 
 		void set_content(std::string&& content) {
-			char temp[20] = {};
-			itoa_fwd((int)content.size(), temp);
-			add_header("Content-Length", temp);
+			//char temp[20] = {};
+			//itoa_fwd((int)content.size(), temp);
+			//add_header("Content-Length", temp);
 
 			body_type_ = content_type::string;
 			content_ = std::move(content);
@@ -367,6 +393,7 @@ namespace cinatra {
 		std::shared_ptr<cinatra::session> session_ = nullptr;
 		nlohmann::json tmpl_json_data_;
 		inline static std::atomic_int counter_ = 0;
+		std::string rep_str_;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP

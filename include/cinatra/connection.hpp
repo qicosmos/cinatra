@@ -238,26 +238,22 @@ namespace cinatra {
 				return;
 			}
 
-			//1. read some
-			//2. check request length
 			auto last_len = req_.current_size();
 			bool at_capacity = req_.update_and_expand_size(bytes_transferred);
-			if (at_capacity) { //the request is too long
+			if (at_capacity) { 
 				response_back(status_type::bad_request, "The request is too long, limitation is 3M");
 				return;
 			}
 
-			//3. parse request
 			int ret = req_.parse_header(last_len);
 
-			//4. check parse result
-			if (ret == parse_status::has_error) { //4.1 parse request error, response bad request
+			if (ret == parse_status::has_error) { 
 				response_back(status_type::bad_request);
 				return;
 			}
 
 			check_keep_alive();
-			if (ret == parse_status::not_complete) { //4.2 not completed, continue read
+			if (ret == parse_status::not_complete) { 
 				//do_read();
 				do_read_head();
 			}
@@ -282,10 +278,8 @@ namespace cinatra {
 					}
 				}
 
-				//4.3 complete request
-				//5. check if has body
 				set_response_attr();
-				if (req_.has_body()) { //5.1 has body
+				if (req_.has_body()) { 
 					auto type = get_content_type();
 					req_.set_http_type(type);
 					switch (type) {
@@ -307,8 +301,8 @@ namespace cinatra {
 						break;
 					}
 				}
-				else { //5.2 just head, no body; because websocket just 'GET' head, no body, so need deal with websocket
-					handle_header_request(); //do business, deal with the complete request
+				else { 
+					handle_header_request(); 
 				}
 			}
 		}
@@ -348,10 +342,9 @@ namespace cinatra {
 
 		void do_write() {
 			reset_timer();
-			//auto content_length = res_.get_header_value("content-length");
-			//assert(!content_length.empty());
-			std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
-			if (buffers.empty()) {
+			
+			std::string& rep_str = res_.response_string(keep_alive_&&!is_upgrade_);
+			if (rep_str.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
 			}
@@ -361,8 +354,8 @@ namespace cinatra {
 				auto raw_url = req_.raw_url();
 				http_cache::get().add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
 			}
-
-			boost::asio::async_write(socket_, buffers,
+			
+			boost::asio::async_write(socket_, boost::asio::buffer(rep_str.data(), rep_str.size()),
 				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 				self->handle_write(ec);
 			});
@@ -1017,26 +1010,14 @@ namespace cinatra {
 		void check_keep_alive() {
 			auto req_conn_hdr = req_.get_header_value("connection");
 			if (req_.is_http11()) {
-				// HTTP1.1
-				//ͷ����û�а���connection�ֶ�
-				//����ͷ���а�����connection�ֶε���ֵ��Ϊclose
-				//��������ǳ�����
 				keep_alive_ = req_conn_hdr.empty() || !iequal(req_conn_hdr.data(), req_conn_hdr.size(), "close");
 			}
 			else {
-				//HTTP1.0������(0.9 or ?)
-				//ͷ������connection,����connection�ֶ�ֵΪkeep-alive
-				//����������ǳ�����
 				keep_alive_ = !req_conn_hdr.empty() && iequal(req_conn_hdr.data(), req_conn_hdr.size(), "keep-alive");
 			}
 
 			if (keep_alive_) {
 				is_upgrade_ = ws_.is_upgrade(req_);
-				if (!is_upgrade_)
-					res_.add_header("Connection", "keep-alive");
-			}
-			else {
-				res_.add_header("Connection", "close");
 			}
 		}
 
