@@ -26,7 +26,7 @@ namespace cinatra {
 			return buffers;
 		}
 
-		std::string& response_string(bool keep_alive) {
+		std::string& build_response_str(bool keep_alive) {
 			rep_str_.append(to_rep_string(status_));
 
 			if (keep_alive) {

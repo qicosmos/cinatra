@@ -270,7 +270,7 @@ namespace cinatra {
 							len_ += ret;
 						res_.set_delay(true);
 						handle_header_request();
-						auto& rep_str = res_.response_string(keep_alive_&&!is_upgrade_);
+						auto& rep_str = res_.build_response_str(keep_alive_&&!is_upgrade_);
 						int result = 0;
 						int left = ret;
 						int index = 0;
@@ -289,7 +289,7 @@ namespace cinatra {
 							else {
 								index++;
 								handle_header_request();
-								res_.response_string(keep_alive_ && !is_upgrade_);
+								res_.build_response_str(keep_alive_ && !is_upgrade_);
 								len_ += result;
 								
 								if (len_ == last_transfer_) {
@@ -397,7 +397,7 @@ namespace cinatra {
 		void do_write() {
 			reset_timer();
 			
-			std::string& rep_str = res_.response_string(keep_alive_&&!is_upgrade_);
+			std::string& rep_str = res_.build_response_str(keep_alive_&&!is_upgrade_);
 			if (rep_str.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
