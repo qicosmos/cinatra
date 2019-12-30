@@ -47,7 +47,7 @@ namespace cinatra {
 			return con_;
 		}
 
-		int parse_header(std::size_t last_len) {
+		int parse_header(std::size_t last_len, size_t start=0) {
 			using namespace std::string_view_literals;
 			copy_headers_.clear();
 			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
@@ -159,6 +159,10 @@ namespace cinatra {
 
 		char* buffer() {
 			return &buf_[cur_size_];
+		}
+
+		const char* data() {
+			return buf_.data();
 		}
 
 		std::string_view body() const{

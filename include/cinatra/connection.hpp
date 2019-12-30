@@ -183,6 +183,8 @@ namespace cinatra {
 		//}
 	private:
 		void do_read() {
+			last_transfer_ = 0;
+			len_ = 0;
 			req_.reset();
 			res_.reset();
 			reset_timer();
@@ -245,7 +247,7 @@ namespace cinatra {
 				return;
 			}
 
-			int ret = req_.parse_header(last_len);
+			int ret = req_.parse_header(len_);
 
 			if (ret == parse_status::has_error) { 
 				response_back(status_type::bad_request);
@@ -258,6 +260,58 @@ namespace cinatra {
 				do_read_head();
 			}
 			else {
+				if (bytes_transferred > ret + 4) {
+					std::string_view str(req_.data()+ ret, 4);
+					if (str == "GET " || str == "POST") {
+						last_transfer_ += bytes_transferred;
+						if (len_ == 0)
+							len_ = ret;
+						else
+							len_ += ret;
+						res_.set_delay(true);
+						handle_header_request();
+						auto& rep_str = res_.response_string(keep_alive_&&!is_upgrade_);
+						int result = 0;
+						int left = ret;
+						int index = 0;
+						bool need_continue_ = false;
+						while (true) {
+							result = req_.parse_header(len_, len_);
+							if (result == -1) {
+								return;
+							}
+
+							if (result == -2) {
+								need_continue_ = true;
+								//do_read_head();
+								break;
+							}
+							else {
+								index++;
+								handle_header_request();
+								res_.response_string(keep_alive_ && !is_upgrade_);
+								len_ += result;
+								
+								if (len_ == last_transfer_) {
+									break;
+								}
+							}
+						}
+
+						res_.set_delay(false);
+						boost::asio::async_write(socket_, boost::asio::buffer(rep_str.data(), rep_str.size()),
+							[need_continue_, this, self = this->shared_from_this(), &rep_str](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+							rep_str.clear();
+							if (need_continue_) {
+								do_read_head();
+								return;
+							}
+							self->handle_write(ec);
+						});
+
+						return;
+					}
+				}
 				if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url())) {
 					auto raw_url = req_.raw_url();
 					if (!http_cache::get().empty()) {
@@ -1135,6 +1189,9 @@ namespace cinatra {
 		std::function<bool(request& req, response& res)>* upload_check_ = nullptr;
 		std::any tag_;
 		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
+
+		size_t len_ = 0;
+		size_t last_transfer_ = 0;
 	};
 
 	inline constexpr data_proc_state ws_open = data_proc_state::data_begin;

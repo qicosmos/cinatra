@@ -27,7 +27,7 @@ namespace cinatra {
 		}
 
 		std::string& response_string(bool keep_alive) {
-			rep_str_ = to_rep_string(status_);
+			rep_str_.append(to_rep_string(status_));
 
 			if (keep_alive) {
 				rep_str_.append("Connection: keep-alive\r\n");
@@ -159,6 +159,7 @@ namespace cinatra {
 			rep_str_.clear();
 			status_ = status_type::init;
 			proc_continue_ = true;
+			delay_ = false;
 			headers_.clear();
 			content_.clear();
             tmpl_json_data_.clear();
