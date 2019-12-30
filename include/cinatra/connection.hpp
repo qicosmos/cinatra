@@ -274,7 +274,7 @@ namespace cinatra {
 						int result = 0;
 						int left = ret;
 						int index = 0;
-						bool need_continue_ = false;
+						bool not_complete = false;
 						while (true) {
 							result = req_.parse_header(len_, len_);
 							if (result == -1) {
@@ -282,7 +282,7 @@ namespace cinatra {
 							}
 
 							if (result == -2) {
-								need_continue_ = true;
+								not_complete = true;
 								//do_read_head();
 								break;
 							}
@@ -300,9 +300,9 @@ namespace cinatra {
 
 						res_.set_delay(false);
 						boost::asio::async_write(socket_, boost::asio::buffer(rep_str.data(), rep_str.size()),
-							[need_continue_, this, self = this->shared_from_this(), &rep_str](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+							[not_complete, this, self = this->shared_from_this(), &rep_str](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 							rep_str.clear();
-							if (need_continue_) {
+							if (not_complete) {
 								do_read_head();
 								return;
 							}
