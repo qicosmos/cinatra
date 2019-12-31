@@ -108,6 +108,7 @@ namespace cinatra {
 
 		void set_status_and_content(status_type status, std::string&& content, res_content_type res_type = res_content_type::none, content_encoding encoding = content_encoding::none) {
 			status_ = status;
+			headers_.clear();
 			if(res_type!=cinatra::res_content_type::none){
 				auto iter = cinatra::res_mime_map.find(res_type);
 				if(iter!=cinatra::res_mime_map.end()){
@@ -133,6 +134,7 @@ namespace cinatra {
 
 		void set_status_and_content(status_type status, std::string&& content,std::string&& res_content_type_str, content_encoding encoding = content_encoding::none) {
 			status_ = status;
+			headers_.clear();
 			add_header("Content-type",std::move(res_content_type_str));
 #ifdef CINATRA_ENABLE_GZIP
 			if (encoding == content_encoding::gzip) {

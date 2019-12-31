@@ -40,7 +40,7 @@ namespace cinatra {
 		using event_call_back = std::function<void(request&)>;
 
 		request(conn_type* con,response& res) : con_(con),res_(res){
-			buf_.resize(1024);
+			buf_.resize(1024 * 4);
 		}
 
 		auto get_conn() const{
