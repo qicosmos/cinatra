@@ -387,15 +387,7 @@ client->on_data([](std::string_view data){
 
 ## Performance
 
-We conducted a simple performance test using the [Apache HTTP benchmarking tool, ab](http://httpd.apache.org/docs/2.2/programs/ab.html).
-
-```bash
-ab -c100 -n5000 127.0.0.1:8080/
-```
-
-The server simply returns a hello.  It was tested on an 8-core 16G cloud host with 9000 and 13000 qps (queries per second).
-
-In comparison with Boost.Beast with a similar code, the qps values are quite similar, probably because both cinatra and Boost.Beast are based on Boost.Asio. We have not yet done any special performance optimization with cinatra and there is room for improvement.
+in working
 
 ## Caveats
 
