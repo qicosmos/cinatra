@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <string_view>
+#include <chrono>
 #include "response_cv.hpp"
 #include "itoa.hpp"
 #include "utils.hpp"
@@ -19,6 +20,13 @@
 namespace cinatra {
 	class response {
 	public:
+        response(){
+            char mbstr[50];
+            std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
+            std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
+            last_date_str_ = mbstr;
+        }
+
 		std::vector<boost::asio::const_buffer> get_response_buffer(std::string&& body) {
 			set_content(std::move(body));
 
@@ -45,7 +53,23 @@ namespace cinatra {
 			char temp[20] = {};
 			itoa_fwd((int)content_.size(), temp);
 			rep_str_.append("Content-Length: ").append(temp).append("\r\n");
-			rep_str_.append("Host: cinatra\r\n\r\n");
+            rep_str_.append("Host: cinatra\r\n");
+
+            using namespace std::chrono_literals;
+
+            auto t = std::chrono::system_clock::now();
+            if(t-last_time_>1s){
+                char mbstr[50];
+                std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
+                std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
+                last_date_str_ = mbstr;
+                rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
+                last_time_ = t;
+            }else{
+                rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
+            }
+
+
 			rep_str_.append(std::move(content_));
 
 			return rep_str_;
@@ -397,6 +421,8 @@ namespace cinatra {
 		nlohmann::json tmpl_json_data_;
 		inline static std::atomic_int counter_ = 0;
 		std::string rep_str_;
+		std::chrono::system_clock::time_point last_time_ = std::chrono::system_clock::now();
+		std::string last_date_str_;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
