@@ -37,12 +37,12 @@ namespace cinatra {
 		std::string& build_response_str(bool keep_alive) {
 			rep_str_.append(to_rep_string(status_));
 
-			if (keep_alive) {
-				rep_str_.append("Connection: keep-alive\r\n");
-			}
-			else {
-				rep_str_.append("Connection: close\r\n");
-			}
+			//if (keep_alive) {
+			//	rep_str_.append("Connection: keep-alive\r\n");
+			//}
+			//else {
+			//	rep_str_.append("Connection: close\r\n");
+			//}
 
 			if (!headers_.empty()) {
 				for (auto header : headers_) {
@@ -53,7 +53,7 @@ namespace cinatra {
 			char temp[20] = {};
 			itoa_fwd((int)content_.size(), temp);
 			rep_str_.append("Content-Length: ").append(temp).append("\r\n");
-            rep_str_.append("Host: cinatra\r\n");
+            rep_str_.append("Server: cinatra\r\n");
 
             using namespace std::chrono_literals;
 
