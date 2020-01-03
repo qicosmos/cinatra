@@ -60,7 +60,7 @@ namespace cinatra {
             auto t = std::chrono::system_clock::now();
             if(t-last_time_>1s){
                 char mbstr[50];
-                std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
+                std::time_t tm = std::chrono::system_clock::to_time_t(t);
                 std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
                 last_date_str_ = mbstr;
                 rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
