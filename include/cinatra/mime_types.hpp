@@ -491,9 +491,9 @@ namespace cinatra {
 	};
 
 	static std::map<cinatra::res_content_type,std::string_view> res_mime_map = {
-			{cinatra::res_content_type::html,"text/html; charset=utf8"},
-			{cinatra::res_content_type::json,"application/json; charset=utf8"},
-			{cinatra::res_content_type::string,"text/plain; charset=utf8"},
+			{cinatra::res_content_type::html,"text/html; charset=UTF-8"},
+			{cinatra::res_content_type::json,"application/json; charset=UTF-8"},
+			{cinatra::res_content_type::string,"text/plain; charset=UTF-8"},
 			{cinatra::res_content_type::multipart,"multipart/form-data; boundary="}
 	};
 
