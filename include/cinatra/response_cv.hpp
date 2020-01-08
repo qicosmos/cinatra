@@ -147,6 +147,11 @@ namespace cinatra {
 	inline std::string_view rep_bad_gateway = "HTTP/1.1 502 Bad Gateway\r\n";
 	inline std::string_view rep_service_unavailable = "HTTP/1.1 503 Service Unavailable\r\n";
 
+	inline std::string_view rep_html = "Content-Type: text/html; charset=UTF-8\r\n";
+    inline std::string_view rep_json = "Content-Type: application/json; charset=UTF-8\r\n";
+    inline std::string_view rep_string = "Content-Type: text/plain; charset=UTF-8\r\n";
+    inline std::string_view rep_multipart = "Content-Type: multipart/form-data; boundary=";
+
 	inline const char name_value_separator[] = { ':', ' ' };
 	//inline std::string_view crlf = "\r\n";
 

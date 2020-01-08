@@ -411,7 +411,7 @@ namespace cinatra {
 		void init_conn_callback() {
             set_static_res_handler();
 			http_handler_ = [this](request& req, response& res) {
-                res.set_base_path(this->base_path_[0],this->base_path_[1]);
+//                res.set_base_path(this->base_path_[0],this->base_path_[1]);
                 res.set_url(req.get_url());
 				try {
 					bool success = http_router_.route(req.get_method(), req.get_url(), req, res);

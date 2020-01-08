@@ -12,6 +12,12 @@
 #include "memento.hpp"
 #include "session.hpp"
 namespace cinatra {
+    namespace{
+        constexpr char DOT = '.';
+        constexpr char SLASH = '/';
+        constexpr std::string_view INDEX = "index";
+    }
+
 	class http_router {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
@@ -55,9 +61,9 @@ namespace cinatra {
 		bool route(std::string_view method, std::string_view url, request& req, response& res) {
 			std::string key(method.data(), method.length());
 			bool is_static_res_flag = false;
-			if (url.rfind('.') == std::string_view::npos) {
-			        url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
-				auto pos = url.rfind("index"sv);
+			if (url.rfind(DOT) == std::string_view::npos) {
+			        url = url.length()>1 && url.back()==SLASH ? url.substr(0,url.length()-1):url;
+				auto pos = url.rfind(INDEX);
 				if (pos != std::string_view::npos)
 					key += url.substr(0, pos == 1 ? 1 : pos - 1);
 				else
@@ -72,8 +78,8 @@ namespace cinatra {
 			if (it == map_invokers_.end()) {
 				return get_wildcard_function(key, req, res);
 			}
-			if(is_static_res_flag==false)
-				session_manager::get().check_expire();
+//			if(is_static_res_flag==false)
+//				session_manager::get().check_expire();
 			it->second(req, res);
 			return true;
 		}

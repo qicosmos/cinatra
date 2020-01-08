@@ -182,6 +182,18 @@ namespace cinatra {
 		return true;
 	}
 
+    inline bool iequal(const char *s, size_t l, const char *t, size_t size) {
+        if (size != l)
+            return false;
+
+        for (size_t i = 0; i < l; i++) {
+            if (std::tolower(s[i]) != std::tolower(t[i]))
+                return false;
+        }
+
+        return true;
+    }
+
 	template<typename T>
 	inline bool find_strIC(const T & src, const T & dest)
 	{

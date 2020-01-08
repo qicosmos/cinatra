@@ -40,7 +40,7 @@ namespace cinatra {
 		using event_call_back = std::function<void(request&)>;
 
 		request(conn_type* con,response& res) : con_(con),res_(res){
-			buf_.resize(1024 * 4);
+			buf_.resize(1024);
 		}
 
 		auto get_conn() const{
@@ -278,7 +278,7 @@ namespace cinatra {
 		std::string_view get_header_value(std::string_view key) const {
 			if (copy_headers_.empty()) {
 				for (size_t i = 0; i < num_headers_; i++) {
-					if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
+					if (iequal(headers_[i].name, headers_[i].name_len, key.data(), key.length()))
 						return std::string_view(headers_[i].value, headers_[i].value_len);
 				}
 

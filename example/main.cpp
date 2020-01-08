@@ -17,24 +17,6 @@ struct log_t
 	}
 };
 
-struct check {
-	bool before(request& req, response& res) {
-		std::cout << "before check" << std::endl;
-		if (req.get_header_value("name").empty()) {
-			res.render_404();
-			return false;
-		}
-
-		return true;
-	}
-
-	bool after(request& req, response& res) {
-		std::cout << "after check" << std::endl;
-
-		return true;
-	}
-};
-
 struct person
 {
 	void foo(request& req, response& res) 
