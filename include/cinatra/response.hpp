@@ -58,20 +58,19 @@ namespace cinatra {
             }
             rep_str_.append("Server: cinatra\r\n\r\n");
 
-//            using namespace std::chrono_literals;
-//
-//            auto t = std::chrono::system_clock::now();
-//            if(t-last_time_>1s){
-//                char mbstr[50];
-//                std::time_t tm = std::chrono::system_clock::to_time_t(t);
-//                std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
-//                last_date_str_ = mbstr;
-//                rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
-//                last_time_ = t;
-//            }else{
-//                rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
-//            }
+            using namespace std::chrono_literals;
 
+            auto t = std::chrono::system_clock::now();
+            if(t-last_time_>1s){
+                char mbstr[50];
+                std::time_t tm = std::chrono::system_clock::to_time_t(t);
+                std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
+                last_date_str_ = mbstr;
+                rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
+                last_time_ = t;
+            }else{
+                rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
+            }
 
 			rep_str_.append(std::move(content_));
 
