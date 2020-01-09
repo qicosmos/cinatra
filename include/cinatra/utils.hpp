@@ -502,6 +502,15 @@ namespace cinatra {
 		return arr;
 	}
 
+	template<http_method... Is>
+	constexpr auto get_method_arr() {
+		std::array<char, 26> arr{0};
+		std::string_view s;
+		((s = type_to_name(std::integral_constant<http_method, Is>{}), arr[s[0]-65] = s[0]), ...);
+
+		return arr;
+	}
+
 	inline std::string get_time_str(std::time_t t) {
 		std::stringstream ss;
 		ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
