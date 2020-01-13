@@ -56,7 +56,7 @@ namespace cinatra {
             if(res_type_!=res_content_type::none){
                 rep_str_.append(get_content_type(res_type_));
             }
-            rep_str_.append("Server: cinatra\r\n\r\n");
+            rep_str_.append("Server: cinatra\r\n");
 
             using namespace std::chrono_literals;
 
