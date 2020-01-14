@@ -375,8 +375,9 @@ on_data回调下下载的数据，注意，如果设置了on_data，cinatra将�
 # 性能测试
 ## 测试用例：
 
+![qps](lang/qps.png "qps")
 
-
+![qps-pipeline](lang/qps-pipeline.png "qps-pipeline")
 
 # 注意事项
 
