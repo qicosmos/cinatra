@@ -48,6 +48,7 @@ namespace cinatra {
 				for (auto& header : headers_) {
 					rep_str_.append(header.first).append(":").append(header.second).append("\r\n");
 				}
+				headers_.clear();
 			}
 
 			char temp[20] = {};
