@@ -387,9 +387,9 @@ client->on_data([](std::string_view data){
 
 ## Performance
 
-![qps](qps.png "qps")
+![qps](../qps.png "qps")
 
-![qps-pipeline](qps-pipeline.png "qps-pipeline")
+![qps-pipeline](../qps-pipeline.png "qps-pipeline")
 
 ## Caveats
 
