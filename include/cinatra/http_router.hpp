@@ -102,7 +102,7 @@ namespace cinatra {
 		template<typename Function, typename... AP>
 		void register_nonmember_func(std::string_view raw_name, const std::array<char, 26>& arr, Function f, const AP&... ap) {
 			if (raw_name.back()=='*') {
-				this->wildcard_invokers_[raw_name] = { arr, std::bind(&http_router::invoke<Function, AP...>, this,
+				this->wildcard_invokers_[raw_name.substr(0, raw_name.length()-1)] = { arr, std::bind(&http_router::invoke<Function, AP...>, this,
 					std::placeholders::_1, std::placeholders::_2, std::move(f), ap...) };
 			}
 			else {
@@ -137,7 +137,7 @@ namespace cinatra {
 		template<typename Function, typename Self, typename... AP>
 		void register_member_func(std::string_view raw_name, const std::array<char, 26>& arr, Function f, Self self, const AP&... ap) {
 			if (raw_name.back() == '*') {
-				this->wildcard_invokers_[raw_name] = { arr, std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
+				this->wildcard_invokers_[raw_name.substr(0, raw_name.length() - 1)] = { arr, std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
 					std::placeholders::_1, std::placeholders::_2, f, self, ap...) };
 			}
 			else {
