@@ -707,7 +707,7 @@ namespace cinatra {
 				int ret = parser_.parse(line.data(), line.size(), 0);
 				if (ret < 0|| parser_.status() != 200) {//error
 					chunked_file_.close();
-					callback(boost::asio::error::make_error_code(boost::asio::error::not_found), "");
+					callback(boost::asio::error::make_error_code(((boost::asio::error::misc_errors)(parser_.status()))), "");
 					return;
 				}
 

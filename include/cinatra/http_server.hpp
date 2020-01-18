@@ -277,8 +277,10 @@ namespace cinatra {
 			set_http_handler<POST,GET>(STATIC_RESOURCE, [this](request& req, response& res){
 				if (download_check_) {
 					bool r = download_check_(req, res);
-					if (!r)
+					if (!r) {
+						res.set_status_and_content(status_type::bad_request);
 						return;
+					}						
 				}
 
 				auto state = req.get_state();
