@@ -249,6 +249,10 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
+		void enable_timeout(bool enable){
+			enable_timeout_ = enable;
+		}
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -262,6 +266,7 @@ namespace cinatra {
 				if (!e) {
 					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
 					new_conn->set_multipart_begin(multipart_begin_);
+					new_conn->enable_timeout(enable_timeout_);
 					new_conn->start();
 				}
 				else {
@@ -449,6 +454,7 @@ namespace cinatra {
 		boost::asio::ssl::context ctx_;
 #endif
 
+		bool enable_timeout_ = true;
 		http_handler http_handler_ = nullptr;
 		std::function<bool(request& req, response& res)> download_check_;
 		std::vector<std::string> relate_paths_;

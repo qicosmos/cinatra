@@ -87,6 +87,9 @@ namespace cinatra {
 		}
 
 		void reset_timer() {
+			if (!enable_timeout_)
+				return;
+
 			timer_.expires_from_now(std::chrono::seconds(KEEP_ALIVE_TIMEOUT_));
 			auto self = this->shared_from_this();
 
@@ -97,6 +100,18 @@ namespace cinatra {
 
 				self->close();
 			});
+		}
+
+		void cancel_timer() {
+			if (!enable_timeout_)
+				return;
+
+			boost::system::error_code ec;
+			timer_.cancel(ec);
+		}
+
+		void enable_timeout(bool enable) {
+			enable_timeout_ = enable;
 		}
 
 		void set_tag(std::any&& tag) {
@@ -867,7 +882,7 @@ namespace cinatra {
 			boost::asio::async_read(socket_, boost::asio::buffer(req_.buffer(), length),
 				[this, self](const boost::system::error_code& ec, size_t bytes_transferred) {
 				if (ec) {
-					timer_.cancel();
+					cancel_timer();
 					req_.call_event(data_proc_state::data_error);
 
 					close();
@@ -1089,7 +1104,7 @@ namespace cinatra {
 				do_read();
 			}
 			else {
-				timer_.cancel(); //avoid close two times
+				cancel_timer(); //avoid close two times
 				shutdown();
 				close();
 			}
@@ -1167,6 +1182,7 @@ namespace cinatra {
 		//-----------------send message----------------//
 		socket_type socket_;
 		boost::asio::steady_timer timer_;
+		bool enable_timeout_ = true;
 		response res_;
 		request req_;
 		websocket ws_;
