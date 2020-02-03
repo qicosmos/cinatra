@@ -127,30 +127,36 @@ namespace cinatra {
 		"<body><h1>503 Service Unavailable</h1></body>"
 		"</html>";
 
-	inline std::string_view switching_protocols = "HTTP/1.1 101 Switching Protocals\r\n";
-	inline std::string_view rep_ok = "HTTP/1.1 200 OK\r\n";
-	inline std::string_view rep_created = "HTTP/1.1 201 Created\r\n";
-	inline std::string_view rep_accepted = "HTTP/1.1 202 Accepted\r\n";
-	inline std::string_view rep_no_content = "HTTP/1.1 204 No Content\r\n";
-	inline std::string_view rep_partial_content = "HTTP/1.1 206 Partial Content\r\n";
-	inline std::string_view rep_multiple_choices = "HTTP/1.1 300 Multiple Choices\r\n";
-	inline std::string_view rep_moved_permanently =	"HTTP/1.1 301 Moved Permanently\r\n";
-	inline std::string_view rep_temporary_redirect =	"HTTP/1.1 307 Temporary Redirect\r\n";
-	inline std::string_view rep_moved_temporarily =	"HTTP/1.1 302 Moved Temporarily\r\n";
-	inline std::string_view rep_not_modified = "HTTP/1.1 304 Not Modified\r\n";
-	inline std::string_view rep_bad_request = "HTTP/1.1 400 Bad Request\r\n";
-	inline std::string_view rep_unauthorized = "HTTP/1.1 401 Unauthorized\r\n";
-	inline std::string_view rep_forbidden =	"HTTP/1.1 403 Forbidden\r\n";
-	inline std::string_view rep_not_found =	"HTTP/1.1 404 Not Found\r\n";
-	inline std::string_view rep_internal_server_error = "HTTP/1.1 500 Internal Server Error\r\n";
-	inline std::string_view rep_not_implemented = "HTTP/1.1 501 Not Implemented\r\n";
-	inline std::string_view rep_bad_gateway = "HTTP/1.1 502 Bad Gateway\r\n";
-	inline std::string_view rep_service_unavailable = "HTTP/1.1 503 Service Unavailable\r\n";
+	inline constexpr std::string_view switching_protocols = "HTTP/1.1 101 Switching Protocals\r\n";
+	inline constexpr std::string_view rep_ok = "HTTP/1.1 200 OK\r\n";
+	inline constexpr std::string_view rep_created = "HTTP/1.1 201 Created\r\n";
+	inline constexpr std::string_view rep_accepted = "HTTP/1.1 202 Accepted\r\n";
+	inline constexpr std::string_view rep_no_content = "HTTP/1.1 204 No Content\r\n";
+	inline constexpr std::string_view rep_partial_content = "HTTP/1.1 206 Partial Content\r\n";
+	inline constexpr std::string_view rep_multiple_choices = "HTTP/1.1 300 Multiple Choices\r\n";
+	inline constexpr std::string_view rep_moved_permanently =	"HTTP/1.1 301 Moved Permanently\r\n";
+	inline constexpr std::string_view rep_temporary_redirect =	"HTTP/1.1 307 Temporary Redirect\r\n";
+	inline constexpr std::string_view rep_moved_temporarily =	"HTTP/1.1 302 Moved Temporarily\r\n";
+	inline constexpr std::string_view rep_not_modified = "HTTP/1.1 304 Not Modified\r\n";
+	inline constexpr std::string_view rep_bad_request = "HTTP/1.1 400 Bad Request\r\n";
+	inline constexpr std::string_view rep_unauthorized = "HTTP/1.1 401 Unauthorized\r\n";
+	inline constexpr std::string_view rep_forbidden =	"HTTP/1.1 403 Forbidden\r\n";
+	inline constexpr std::string_view rep_not_found =	"HTTP/1.1 404 Not Found\r\n";
+	inline constexpr std::string_view rep_internal_server_error = "HTTP/1.1 500 Internal Server Error\r\n";
+	inline constexpr std::string_view rep_not_implemented = "HTTP/1.1 501 Not Implemented\r\n";
+	inline constexpr std::string_view rep_bad_gateway = "HTTP/1.1 502 Bad Gateway\r\n";
+	inline constexpr std::string_view rep_service_unavailable = "HTTP/1.1 503 Service Unavailable\r\n";
 
-	inline std::string_view rep_html = "Content-Type: text/html; charset=UTF-8\r\n";
-    inline std::string_view rep_json = "Content-Type: application/json; charset=UTF-8\r\n";
-    inline std::string_view rep_string = "Content-Type: text/plain; charset=UTF-8\r\n";
-    inline std::string_view rep_multipart = "Content-Type: multipart/form-data; boundary=";
+	inline constexpr std::string_view rep_html = "Content-Type: text/html; charset=UTF-8\r\n";
+    inline constexpr std::string_view rep_json = "Content-Type: application/json; charset=UTF-8\r\n";
+    inline constexpr std::string_view rep_string = "Content-Type: text/plain; charset=UTF-8\r\n";
+    inline constexpr std::string_view rep_multipart = "Content-Type: multipart/form-data; boundary=";
+
+    inline constexpr std::string_view rep_keep = "Connection: keep-alive\r\n";
+    inline constexpr std::string_view rep_close = "Connection: close     \r\n";
+    inline constexpr std::string_view rep_len = "Content-Length: ";
+    inline constexpr std::string_view rep_crcf = "\r\n";
+    inline constexpr std::string_view rep_server = "Server: cinatra\r\n";
 
 	inline const char name_value_separator[] = { ':', ' ' };
 	//inline std::string_view crlf = "\r\n";
@@ -168,6 +174,41 @@ namespace cinatra {
 				"Transfer-Encoding: chunked\r\n";
 				/*"Content-Type: video/mp4\r\n"
 				"\r\n";*/
+
+    inline constexpr auto to_content_type_str(res_content_type type) {
+        switch(type){
+        case res_content_type::html:
+                return rep_html;
+        case res_content_type::json:
+                return rep_json;
+        case res_content_type::string:
+                return rep_string;
+        case res_content_type::multipart:
+                return rep_multipart;
+        default:
+                return ""sv;
+        }
+    }
+
+    namespace detail {
+        template<unsigned... digits>
+        struct to_chars {
+            static constexpr std::array<char, sizeof...(digits)+18> value = { 'C','o','n','t','e','n','t','-','L','e','n','g',
+                                                                             't','h',':',' ',('0' + digits)... , '\r', '\n' };
+        };
+
+//        template<unsigned... digits>
+//        const char to_chars<digits...>::value[] = { ('0' + digits)... , '\r', '\n', 0 };
+
+        template<unsigned rem, unsigned... digits>
+        struct explode : explode<rem / 10, rem % 10, digits...> {};
+
+        template<unsigned... digits>
+        struct explode<0, digits...> : to_chars<digits...> {};
+    }
+
+    template<unsigned num>
+    struct num_to_string : detail::explode<num / 10, num % 10> {};
 
 	inline boost::asio::const_buffer to_buffer(status_type status) {
 		switch (status) {
@@ -214,7 +255,7 @@ namespace cinatra {
 		}
 	}
 
-	inline std::string_view to_rep_string(status_type status) {
+	inline constexpr std::string_view to_rep_string(status_type status) {
 		switch (status) {
 		case cinatra::status_type::switching_protocols:
 			return switching_protocols;

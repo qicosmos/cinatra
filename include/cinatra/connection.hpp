@@ -281,12 +281,11 @@ namespace cinatra {
 						return;
 					}
 				}
-				if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url())) {
-					handle_cache();
-					return;
-				}
+//				if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url())) {
+//					handle_cache();
+//					return;
+//				}
 
-				set_response_attr();
 				handle_request(bytes_transferred);
 			}
 		}
@@ -344,7 +343,7 @@ namespace cinatra {
 				len_ += ret;
 			res_.set_delay(true);
 			handle_request(bytes_transferred);
-			auto& rep_str = res_.build_response_str(keep_alive_ && !is_upgrade_);
+			auto& rep_str = res_.response_str();
 			int result = 0;
 			int left = ret;
 			bool not_complete = false;
@@ -360,7 +359,7 @@ namespace cinatra {
 				}
 				else {
 					handle_request(bytes_transferred);
-					res_.build_response_str(keep_alive_ && !is_upgrade_);
+					//res_.build_response_str(keep_alive_ && !is_upgrade_);
 					len_ += result;
 
 					if (len_ == last_transfer_) {
@@ -417,17 +416,17 @@ namespace cinatra {
 		void do_write() {
 			reset_timer();
 			
-			std::string& rep_str = res_.build_response_str(keep_alive_&&!is_upgrade_);
+			std::string& rep_str = res_.response_str();
 			if (rep_str.empty()) {
 				handle_write(boost::system::error_code{});
 				return;
 			}
 
 			//cache
-			if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url()) && !http_cache::get().not_cache(req_.get_url())) {
-				auto raw_url = req_.raw_url();
-				http_cache::get().add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
-			}
+//			if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url()) && !http_cache::get().not_cache(req_.get_url())) {
+//				auto raw_url = req_.raw_url();
+//				http_cache::get().add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
+//			}
 			
 			boost::asio::async_write(socket_, boost::asio::buffer(rep_str.data(), rep_str.size()),
 				[self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
@@ -471,18 +470,6 @@ namespace cinatra {
 			socket().close(ec);
 			has_shake_ = false;
 			has_closed_ = true;
-		}
-
-		void set_response_attr() {
-			auto host = req_.get_header_value("host");
-			if (!host.empty()) {
-				size_t pos = host.find(':');
-				if (pos != std::string_view::npos) {
-					res_.set_domain(host.substr(0, pos));
-				}
-			}
-			
-			res_.set_path(req_.get_url());
 		}
 
 		/****************** begin handle http body data *****************/
