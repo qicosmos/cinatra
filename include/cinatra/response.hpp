@@ -158,7 +158,6 @@ namespace cinatra {
 		void set_status_and_content(status_type status) {
 			status_ = status;
 			set_content(to_string(status).data());
-            build_response_str();
 		}
 
 		void set_status_and_content(status_type status, std::string&& content, res_content_type res_type = res_content_type::none, content_encoding encoding = content_encoding::none) {
@@ -180,7 +179,6 @@ namespace cinatra {
 			else 
 #endif
 				set_content(std::move(content));
-            build_response_str();
 		}
 
 		std::string_view get_content_type(res_content_type type){
