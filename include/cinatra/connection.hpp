@@ -193,6 +193,10 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
+		bool has_close() {
+			return has_closed_;
+		}
+
 		//~connection() {
 		//	close();
 		//}

@@ -57,6 +57,7 @@ int main() {
 	//},enable_cache{false});
 
 	server.set_http_handler<GET>("/plaintext", [](request& req, response& res) {
+		//res.set_status_and_content<status_type::ok, res_content_type::string>("Hello, World!");
 		res.set_status_and_content(status_type::ok, "Hello, World!", res_content_type::string);
 	}, enable_cache{ false });
 
@@ -173,31 +174,27 @@ int main() {
 //		res.render_string("hello world");
 //	}, check{}, log_t{});
 //
-//	//web socket
-//	server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
-//		assert(req.get_content_type() == content_type::websocket);
-//
-//		req.on(ws_open, [](request& req){
-//			std::cout << "websocket start" << std::endl;
-//		});
-//
-//		req.on(ws_message, [](request& req) {
-//			auto part_data = req.get_part_data();
-//			//echo
-//			std::string str = std::string(part_data.data(), part_data.length());
-//			req.get_conn()->send_ws_string(std::move(str));
-//			std::cout << part_data.data() << std::endl;
-//		});
-//
-//		req.on(ws_close, [](request& req) {
-//			std::cout << "websocket close" << std::endl;
-//		});
-//
-//		req.on(ws_error, [](request& req) {
-//			std::cout << "websocket error" << std::endl;
-//		});
-//	});
-//
+	////web socket
+	//server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
+	//	assert(req.get_content_type() == content_type::websocket);
+
+	//	req.on(ws_open, [](request& req){
+	//		std::cout << "websocket start" << std::endl;
+	//	});
+
+	//	req.on(ws_message, [](request& req) {
+	//		auto part_data = req.get_part_data();
+	//		//echo
+	//		std::string str = std::string(part_data.data(), part_data.length());
+	//		req.get_conn()->send_ws_string(std::move(str));
+	//		std::cout << part_data.data() << std::endl;
+	//	});
+
+	//	req.on(ws_error, [](request& req) {
+	//		std::cout << "websocket pack error or network error" << std::endl;
+	//	});
+	//});
+
 //	server.set_http_handler<GET, POST>("/vue_html", [](request& req, response& res) {
 //		res.render_raw_view("./www/index.html");
 //	});

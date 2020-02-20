@@ -242,12 +242,8 @@ int main() {
 			std::cout << part_data.data() << std::endl;
 		});
 
-		req.on(ws_close, [](request& req) {
-			std::cout << "websocket close" << std::endl;
-		});
-
 		req.on(ws_error, [](request& req) {
-			std::cout << "websocket error" << std::endl;
+			std::cout << "websocket pack error or network error" << std::endl;
 		});
 	});
 
