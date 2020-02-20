@@ -27,13 +27,6 @@ namespace cinatra {
 //            last_date_str_ = mbstr;
         }
 
-		std::vector<boost::asio::const_buffer> get_response_buffer(std::string&& body) {
-			set_content(std::move(body));
-
-			auto buffers = to_buffers();
-			return buffers;
-		}
-
 		std::string& response_str(){
             return rep_str_;
         }
@@ -229,7 +222,6 @@ namespace cinatra {
 		void set_content(std::string&& content) {
 			body_type_ = content_type::string;
 			content_ = std::move(content);
-            build_response_str();
 		}
 
 		void set_chunked() {
