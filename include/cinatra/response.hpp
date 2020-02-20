@@ -21,10 +21,10 @@ namespace cinatra {
 	class response {
 	public:
         response(){
-//            char mbstr[50];
-//            std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
-//            std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
-//            last_date_str_ = mbstr;
+            char mbstr[50];
+            std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
+            std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
+            last_date_str_ = mbstr;
         }
 
 		std::string& response_str(){
