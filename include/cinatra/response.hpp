@@ -260,6 +260,16 @@ namespace cinatra {
 
 		std::shared_ptr<cinatra::session> start_session()
 		{
+			if (domain_.empty()) {
+				auto host = get_header_value("host");
+				if (!host.empty()) {
+					size_t pos = host.find(':');
+					if (pos != std::string_view::npos) {
+						set_domain(host.substr(0, pos));
+					}
+				}
+			}
+
 			session_ = session_manager::get().create_session(domain_, CSESSIONID);
 			return session_;
 		}
@@ -288,6 +298,10 @@ namespace cinatra {
 		std::string_view get_url(std::string_view url)
 		{
 			return raw_url_;
+		}
+
+		void set_headers(std::pair<phr_header*, size_t> headers) {
+			req_headers_ = headers;
 		}
 
         void render_json(const nlohmann::json& json_data)
@@ -331,6 +345,16 @@ namespace cinatra {
 		}
 
 	private:
+		std::string_view get_header_value(std::string_view key) const {
+			phr_header* headers = req_headers_.first;
+			size_t num_headers = req_headers_.second;
+			for (size_t i = 0; i < num_headers; i++) {
+				if (iequal(headers[i].name, headers[i].name_len, key.data(), key.length()))
+					return std::string_view(headers[i].value, headers[i].value_len);
+			}
+
+			return {};
+		}
 
 		std::string_view raw_url_;
 		std::vector<std::pair<std::string, std::string>> headers_;
@@ -343,6 +367,7 @@ namespace cinatra {
 
 		bool delay_ = false;
 
+		std::pair<phr_header*, size_t> req_headers_;
 		std::string_view domain_;
 		std::string_view path_;
 		std::shared_ptr<cinatra::session> session_ = nullptr;

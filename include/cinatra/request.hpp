@@ -49,7 +49,8 @@ namespace cinatra {
 
 		int parse_header(std::size_t last_len, size_t start=0) {
 			using namespace std::string_view_literals;
-			copy_headers_.clear();
+			if(!copy_headers_.empty())
+				copy_headers_.clear();
 			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
 			header_len_ = phr_parse_request(buf_.data(), cur_size_, &method_,
 				&method_len_, &url_, &url_len_,
@@ -487,10 +488,10 @@ namespace cinatra {
 		std::string get_relative_filename() const {
 			auto file_name = get_url();
 			if (is_form_url_encode(file_name)){
-				return "."+code_utils::get_string_by_urldecode(file_name);
+				return code_utils::get_string_by_urldecode(file_name);
 			}
 			
-			return "."+std::string(file_name.data(), file_name.size());
+			return std::string(file_name);
 		}
 
 		std::string get_filename_from_path() const {

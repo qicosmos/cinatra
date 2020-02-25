@@ -114,12 +114,17 @@ namespace cinatra {
 		}
 
 		void run() {
-			if (!public_root_path_.empty() && !fs::exists(public_root_path_.data())) {
-				fs::create_directories(public_root_path_.data());
+			std::error_code ec;
+			bool r = fs::exists(static_dir_, ec);
+			if (ec) {
+				std::cout << ec.message();
 			}
 
-			if (!fs::exists(static_dir_.data())) {
-				fs::create_directories(static_dir_.data());
+			if (!r) {
+				fs::create_directories(static_dir_, ec);
+				if (ec) {
+					std::cout << ec.message();
+				}
 			}
 
 			io_service_pool_.run();
@@ -138,7 +143,23 @@ namespace cinatra {
 		}
 
 		void set_static_dir(std::string&& path) {
-			static_dir_ = public_root_path_+std::move(path)+"/";
+			/*
+			default: current path + "www"
+			"": current path
+			"./temp", "temp" : current path + temp
+			"/temp" : linux path; "C:/temp" : windows path
+			*/
+			if (path.empty()) {
+				static_dir_ = fs::current_path().string();
+				return;
+			}
+
+			if (path[0] == '/'|| (path.length() >= 2 && path[1] == ':')) {
+				static_dir_ = std::move(path);
+			}
+			else {
+				static_dir_ = fs::absolute(path).string();
+			}
 		}
 
 		const std::string& static_dir() const {
@@ -212,22 +233,6 @@ namespace cinatra {
 			return http_cache::get().get_cache_max_age();
 		}
 
-		//don't begin with "./" or "/", not absolutely path
-		void set_public_root_directory(const std::string& name)
-        {
-        	if(!name.empty()){
-				public_root_path_ = "./"+name+"/";
-			}
-			else {
-				public_root_path_ = "";
-			}
-        }
-
-        std::string get_public_root_directory()
-        {
-            return public_root_path_;
-        }
-
 		void set_download_check(std::function<bool(request& req, response& res)> checker) {
 			download_check_ = std::move(checker);
 		}
@@ -292,26 +297,11 @@ namespace cinatra {
 				switch (state) {
 					case cinatra::data_proc_state::data_begin:
 					{
-						std::string relatice_file_name = req.get_relative_filename();
-						auto mime = req.get_mime({ relatice_file_name.data(), relatice_file_name.length()});
-						std::wstring source_path = fs::absolute(relatice_file_name).filename().wstring();
-						std::wstring root_path = fs::absolute(public_root_path_).filename().wstring();
-						if(source_path.find(fs::absolute(root_path).filename().wstring()) ==std::string::npos){
-							auto it = std::find_if(relate_paths_.begin(), relate_paths_.end(), [this, &relatice_file_name](auto& str) {
-								auto pos = relatice_file_name.find(str);
-								if (pos != std::string::npos) {
-									relatice_file_name = relatice_file_name.replace(0, str.size(), 
-										public_root_path_.substr(0, public_root_path_.size() - 1));
-								}
-								return pos !=std::string::npos;
-							});
-							if (it == relate_paths_.end()) {
-								res.set_status_and_content(status_type::forbidden);
-								return;
-							}
-						}
-						
-						auto in = std::make_shared<std::ifstream>(relatice_file_name,std::ios_base::binary);
+						std::string relative_file_name = req.get_relative_filename();
+						std::string fullpath = static_dir_ + relative_file_name;
+
+						auto mime = req.get_mime(relative_file_name);
+						auto in = std::make_shared<std::ifstream>(fullpath, std::ios_base::binary);
 						if (!in->is_open()) {
 							if (not_found_) {
 								not_found_(req, res);
@@ -419,7 +409,7 @@ namespace cinatra {
             set_static_res_handler();
 			http_handler_ = [this](request& req, response& res) {
 //                res.set_base_path(this->base_path_[0],this->base_path_[1]);
-                res.set_url(req.get_url());
+				res.set_headers(req.get_headers());
 				try {
 					bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
 					if (!success) {
@@ -445,10 +435,9 @@ namespace cinatra {
 		long keep_alive_timeout_ = 60; //max request timeout 60s
 
 		http_router http_router_;
-		std::string static_dir_ = "./public/static/"; //default
+		std::string static_dir_ = "www"; //default
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
-        std::string public_root_path_ = "./";
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
 		boost::asio::ssl::context ctx_;

@@ -47,8 +47,6 @@ int main() {
 		return -1;
 	}
 
-	server.set_public_root_directory("");
-    server.set_base_path("base_path","/feather");
 	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
