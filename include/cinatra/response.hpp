@@ -80,6 +80,11 @@ namespace cinatra {
                 rep_str_.append(get_content_type(res_type_));
             }
             rep_str_.append("Server: cinatra\r\n");
+			if (session_ != nullptr && session_->is_need_update()) {
+				auto cookie_str = session_->get_cookie().to_string();
+				rep_str_.append("Set-Cookie: ").append(cookie_str).append("\r\n");
+				session_->set_need_update(false);
+			}
 
             using namespace std::chrono_literals;
 
