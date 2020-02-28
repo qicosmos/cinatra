@@ -435,7 +435,7 @@ namespace cinatra {
 		long keep_alive_timeout_ = 60; //max request timeout 60s
 
 		http_router http_router_;
-		std::string static_dir_ = "www"; //default
+		std::string static_dir_ = fs::absolute("www").string(); //default
         std::string base_path_[2] = {"base_path","/"};
         std::time_t static_res_cache_max_age_ = 0;
 //		https_config ssl_cfg_;
