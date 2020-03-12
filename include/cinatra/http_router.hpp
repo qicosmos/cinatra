@@ -59,6 +59,9 @@ namespace cinatra {
 			auto it = map_invokers_.find(url);
 			if (it != map_invokers_.end()) {
 				auto& pair = it->second;
+				if (method[0] < 'A' || method[0] > 'Z')
+					return false;
+
 				if (pair.first[method[0] - 65] == 0) {
 					return false;
 				}

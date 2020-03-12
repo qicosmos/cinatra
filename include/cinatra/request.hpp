@@ -115,7 +115,7 @@ namespace cinatra {
 		}
 
 		bool has_recieved_all() {
-			return (total_len() == current_size());
+			return (total_len() <= current_size());
 		}
 
 		bool has_recieved_all_part() {
@@ -164,6 +164,26 @@ namespace cinatra {
 
 		const char* data() {
 			return buf_.data();
+		}
+
+		const size_t last_len() const {
+			return last_len_;
+		}
+
+		std::string_view req_buf() {
+			return std::string_view(buf_.data() + last_len_, total_len());
+		}
+
+		std::string_view head() {
+			return std::string_view(buf_.data() + last_len_, header_len_);
+		}
+
+		std::string_view body() {
+			return std::string_view(buf_.data() + last_len_ + header_len_, body_len_);
+		}
+
+		void set_left_body_size(size_t size) {
+			left_body_len_ = size;
 		}
 
 		std::string_view body() const{
@@ -786,6 +806,10 @@ namespace cinatra {
 			return std::move(aspect_data_);
 		}
 
+		void set_last_len(size_t len) {
+			last_len_ = len;
+		}
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -855,6 +879,8 @@ namespace cinatra {
 
 		size_t cur_size_ = 0;
 		size_t left_body_len_ = 0;
+
+		size_t last_len_ = 0; //for pipeline, last request buffer position
 
         std::map<std::string_view, std::string_view> queries_;
 		std::map<std::string_view, std::string_view> form_url_map_;
