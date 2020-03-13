@@ -446,7 +446,10 @@ namespace cinatra {
 			boost::asio::async_write(socket(), boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
+                    client_callback_ = std::move(error_callback);
+#ifdef _DEBUG
 					std::cout << "send ok " << std::endl;
+#endif
 				}
 				else {
 					std::cout << "send failed " << ec.message() << std::endl;
