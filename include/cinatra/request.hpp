@@ -55,8 +55,19 @@ namespace cinatra {
 				&method_len_, &url_, &url_len_,
 				&minor_version_, headers_, &num_headers_, last_len);
 
+            if (cur_size_ > max_header_len_) {
+                return -1;
+            }
+
 			if (header_len_ <0 )
 				return header_len_;
+
+            if (check_headers_) {
+                bool r = check_headers_(headers_, num_headers_);
+                if (!r) {
+                    return -1;
+                }
+            }
 
 			check_gzip();
 			auto header_value = get_header_value("content-length");
@@ -800,6 +811,11 @@ namespace cinatra {
 			last_len_ = len;
 		}
 
+        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+            max_header_len_ = max_header_len;
+            check_headers_ = std::move(check_headers);
+        }
+
 	private:
 		void resize_double() {
 			size_t size = buf_.size();
@@ -879,6 +895,10 @@ namespace cinatra {
 		std::string gzip_str_;
 
 		bool is_chunked_ = false;
+
+        //validate
+        size_t max_header_len_;
+        std::function<bool(phr_header*, size_t)> check_headers_;
 
 		data_proc_state state_ = data_proc_state::data_begin;
 		std::string_view part_data_;

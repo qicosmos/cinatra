@@ -193,6 +193,10 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
+        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+            req_.set_validate(max_header_len, std::move(check_headers));
+        }
+
 		bool has_close() {
 			return has_closed_;
 		}

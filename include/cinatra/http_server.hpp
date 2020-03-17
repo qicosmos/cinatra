@@ -254,6 +254,11 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
+        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+            max_header_len_ = max_header_len;
+            check_headers_ = std::move(check_headers);
+        }
+
 		void enable_timeout(bool enable){
 			enable_timeout_ = enable;
 		}
@@ -270,8 +275,16 @@ namespace cinatra {
 			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
 				if (!e) {
 					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
-					new_conn->set_multipart_begin(multipart_begin_);
+                    if (multipart_begin_) {
+                        new_conn->set_multipart_begin(multipart_begin_);
+                    }
+					
 					new_conn->enable_timeout(enable_timeout_);
+
+                    if (check_headers_) {
+                        new_conn->set_validate(max_header_len_, check_headers_);
+                    }
+                    
 					new_conn->start();
 				}
 				else {
@@ -451,6 +464,9 @@ namespace cinatra {
 
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
 		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
+
+        size_t max_header_len_;
+        std::function<bool(phr_header*, size_t)> check_headers_;
 	};
 
 	using http_server = http_server_<io_service_pool>;
