@@ -8,7 +8,6 @@
 #endif
 #include "define.h"
 #include "upload_file.hpp"
-#include "memento.hpp"
 #include "session.hpp"
 #include "session_manager.hpp"
 #include "url_encode_decode.hpp"
@@ -574,30 +573,21 @@ namespace cinatra {
         }
 
 		std::string_view get_query_value(size_t n) {
-			auto url = get_url();
-			size_t tail = (url.back() == '/') ? 1 : 0;
-			for (auto item : memento::pathinfo_mem) {
-				if (url.find(item) != std::string_view::npos) {
-					if (item.length() == url.length())
-						return {};
+            auto get_val = [&n](auto& map) {
+                auto it = map.begin();
+                std::advance(it, n);
+                return it->second;
+            };
 
-					auto str = url.substr(item.length(), url.length() - item.length() - tail);
-					auto params = split(str, "/");
-					if (n >= params.size())
-						return {};
-					if(code_utils::is_url_encode(params[n]))
-					{
-                        auto map_url = url.length()>1 && url.back()=='/' ? url.substr(0,url.length()-1):url;
-                        std::string map_key = std::string(map_url.data(),map_url.size())+ std::to_string(n);
+            if (n >= queries_.size() ) {
+                if(n >= form_url_map_.size())
+                    return {};
 
-						auto ret = utf8_character_pathinfo_params_.emplace(map_key, code_utils::get_string_by_urldecode(params[n]));
-						return std::string_view(ret.first->second.data(), ret.first->second.size());
-					}
-					return params[n];
-				}
-			}
-
-			return {};
+                return get_val(form_url_map_);
+            }
+            else {
+                return get_val(queries_);
+            }
 		}
 
 		template<typename T>

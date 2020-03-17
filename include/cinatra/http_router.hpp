@@ -9,7 +9,6 @@
 #include "utils.hpp"
 #include "function_traits.hpp"
 #include "mime_types.hpp"
-#include "memento.hpp"
 #include "session.hpp"
 namespace cinatra {
     namespace{
@@ -22,15 +21,6 @@ namespace cinatra {
 	public:
 		template<http_method... Is, typename Function, typename... Ap>
 		std::enable_if_t<!std::is_member_function_pointer_v<Function>> register_handler(std::string_view name, Function&& f, const Ap&... ap) {
-			if (name == "/*"sv) {
-				assert("register error");
-				return;
-			}
-
-			if (name.back() == '*') {
-				memento::pathinfo_mem.push_back(std::string_view(name.data(), name.length()-1));
-			}
-
 			if constexpr(sizeof...(Is) > 0) {
 				auto arr = get_method_arr<Is...>();
 				register_nonmember_func(name, arr, std::forward<Function>(f), ap...);
