@@ -254,7 +254,7 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
-        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+        void set_validate(size_t max_header_len, check_header_cb check_headers) {
             max_header_len_ = max_header_len;
             check_headers_ = std::move(check_headers);
         }
@@ -466,7 +466,7 @@ namespace cinatra {
 		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
 
         size_t max_header_len_;
-        std::function<bool(phr_header*, size_t)> check_headers_;
+        check_header_cb check_headers_;
 	};
 
 	using http_server = http_server_<io_service_pool>;

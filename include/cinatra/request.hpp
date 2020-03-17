@@ -33,11 +33,13 @@ namespace cinatra {
 #endif
 
 	using conn_type = connection<Socket>;
+    class request;
+    using check_header_cb = std::function<bool(request&)>;
 
 	class request {
 	public:
 		using event_call_back = std::function<void(request&)>;
-
+        
 		request(conn_type* con,response& res) : con_(con),res_(res){
 			buf_.resize(1024);
 		}
@@ -63,7 +65,7 @@ namespace cinatra {
 				return header_len_;
 
             if (check_headers_) {
-                bool r = check_headers_(headers_, num_headers_);
+                bool r = check_headers_(*this);
                 if (!r) {
                     return -1;
                 }
@@ -272,6 +274,10 @@ namespace cinatra {
 		bool is_http11() {
 			return minor_version_ == 1;
 		}
+
+        int minor_version() {
+            return minor_version_;
+        }
 
 		size_t left_body_len() const{
 			size_t size = buf_.size();
@@ -811,7 +817,7 @@ namespace cinatra {
 			last_len_ = len;
 		}
 
-        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+        void set_validate(size_t max_header_len, check_header_cb check_headers) {
             max_header_len_ = max_header_len;
             check_headers_ = std::move(check_headers);
         }
@@ -898,7 +904,7 @@ namespace cinatra {
 
         //validate
         size_t max_header_len_;
-        std::function<bool(phr_header*, size_t)> check_headers_;
+        check_header_cb check_headers_;
 
 		data_proc_state state_ = data_proc_state::data_begin;
 		std::string_view part_data_;

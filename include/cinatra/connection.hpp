@@ -66,6 +66,14 @@ namespace cinatra {
 			return ss.str();
 		}
 
+        std::pair<std::string, std::string> remote_ip_port() {
+            std::string remote_addr = remote_address();
+            size_t pos = remote_addr.find(':');
+            std::string ip = remote_addr.substr(0, pos);
+            std::string port = remote_addr.substr(pos + 1);
+            return {std::move(ip), std::move(port)};
+        }
+
 		void start() {
 			do_read();
 		}
@@ -193,7 +201,7 @@ namespace cinatra {
 			multipart_begin_ = std::move(begin);
 		}
 
-        void set_validate(size_t max_header_len, std::function<bool(phr_header*, size_t)> check_headers) {
+        void set_validate(size_t max_header_len, check_header_cb check_headers) {
             req_.set_validate(max_header_len, std::move(check_headers));
         }
 
