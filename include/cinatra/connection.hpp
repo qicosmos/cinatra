@@ -52,7 +52,7 @@ namespace cinatra {
 			}
 
 			std::stringstream ss;
-			ss << socket_.local_endpoint();
+			ss << socket().local_endpoint();
 			return ss.str();
 		}
 
@@ -62,7 +62,7 @@ namespace cinatra {
 			}
 
 			std::stringstream ss;
-			ss << socket_.remote_endpoint();
+			ss << socket().remote_endpoint();
 			return ss.str();
 		}
 

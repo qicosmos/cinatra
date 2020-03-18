@@ -11,7 +11,13 @@
 #include "mime_types.hpp"
 
 #ifdef CINATRA_ENABLE_SSL
+
+#ifdef ASIO_STANDALONE
+#include <asio/ssl.hpp>
+#else
 #include <boost/asio/ssl.hpp>
+#endif
+
 #endif
 
 #ifdef _MSC_VER
