@@ -112,7 +112,7 @@ namespace cinatra {
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
 #ifdef CINATRA_ENABLE_SSL
-						handshake2(std::move(callback));
+                        handshake1(std::move(callback));
 #else
 						do_read();
 						do_write(std::move(callback));
@@ -1046,6 +1046,10 @@ namespace cinatra {
             if (is_chunked_resp_) {
                 if (promis_) {
                     promis_->set_value(std::move(chunked_resp_data_));
+                }
+
+                if (callback) {
+                    callback(code, std::move(chunked_resp_data_));
                 }
 
                 close();
