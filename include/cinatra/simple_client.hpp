@@ -144,6 +144,10 @@ namespace cinatra {
 			return parser_.get_header_value(key);
 		}
 
+        void set_client_callback(client_callback_t callback) {
+            client_callback_ = std::move(callback);
+        }
+
 		void send_form_data(std::string api, std::vector<std::pair<std::string, std::string>> v, 
 			client_callback_t error_callback) {
 			build_form_data(std::move(v));
@@ -174,7 +178,7 @@ namespace cinatra {
 					}
 					else {
 						std::cout << ec.message() << std::endl;
-						callback({}, "");
+                        callback0(callback, {}, "");
 						close();
 					}
 				});
@@ -628,6 +632,13 @@ namespace cinatra {
 						set_response_msg("parse response error from local server");
 					}
 					else {
+                        if (parser_.is_chunked()) {
+                            is_chunked_resp_ = true;
+                            std::string_view chunked_content = parser_.curr_content();
+                            handle_chunked(chunked_content, client_callback_);
+                            return;
+                        }
+
 						if (parser_.total_len() > MAX_RESPONSE_SIZE) {
 							if (client_callback_) {
 								client_callback_(boost::asio::error::make_error_code(boost::asio::error::no_buffer_space), "");
@@ -771,7 +782,7 @@ namespace cinatra {
 					error_callback(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
 					return;
 				}
-				error_callback({}, "");
+                callback0(error_callback, {}, "");
 				return;
 			}
 
@@ -883,6 +894,10 @@ namespace cinatra {
 				std::string_view body = { content.data() + pos + 2, (size_t)chunk_len };
 				write_chunked_data(body);
 				size_t offset = pos + 2 + chunk_len + 2;
+                if (offset > content.length()-1) {
+                    break;
+                }
+
 				content = { content.data() + offset, content.size() - offset };				
 			}
 			return true;
@@ -915,7 +930,7 @@ namespace cinatra {
 
 				if (left_chunk_len_ == 0) {
 					chunked_file_.close();
-					callback({}, "");
+                    callback0(callback, {}, "");
 					return;
 				}
 
@@ -926,7 +941,7 @@ namespace cinatra {
 					std::string_view left_data(part_body.data() + left_chunk_len_ + 2, part_body.length() - left_chunk_len_ - 2);
 					if (left_data.size() == 5) { //"\r\n0\r\n"
 						chunked_file_.close();
-						callback({}, "");
+                        callback0(callback, {}, "");
 						return;
 					}
 
@@ -966,7 +981,7 @@ namespace cinatra {
 				cancel_timer();
 				if (eof) {
 					chunked_file_.close();
-					callback({}, "");
+                    callback0(callback, {}, "");
 					return;
 				}
 
@@ -1014,7 +1029,7 @@ namespace cinatra {
 				write_chunked_data({ chunk_body_.data(), length });
 				if (left_chunk_len_ == 0) {					
 					chunked_file_.close();
-					callback({}, "");
+                    callback0(callback, {}, "");
 					return;
 				}
 
@@ -1027,10 +1042,30 @@ namespace cinatra {
 			});
 		}
 
+        void callback0(const client_callback_t& callback, boost::system::error_code code, std::string_view msg) {
+            if (is_chunked_resp_) {
+                if (promis_) {
+                    promis_->set_value(std::move(chunked_resp_data_));
+                }
+
+                close();
+                return;
+            }
+
+            if (callback) {
+                callback(code, msg);
+            }
+        }
+
 		void write_chunked_data(std::string_view chunked_data) {
 			if (on_length_) {
 				on_length_(chunked_data.size());
 			}
+
+            if (is_chunked_resp_) {
+                chunked_resp_data_.append(chunked_data);
+                return;
+            }
 
 			if (on_data_) {
 				on_data_(chunked_data);
@@ -1165,5 +1200,7 @@ namespace cinatra {
 		client_callback_t client_callback_ = nullptr;
 
 		bool has_close_ = false;
+        bool is_chunked_resp_ = false;
+        std::string chunked_resp_data_;
 	};
 }

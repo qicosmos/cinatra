@@ -65,6 +65,10 @@ namespace cinatra {
 			return std::string_view(buf_.data() + header_len_, body_len_);
 		}
 
+        std::string_view curr_content() {
+            return std::string_view(buf_.data() + header_len_, cur_size_ - header_len_);
+        }
+
 		int body_len() const {
 			return body_len_;
 		}
