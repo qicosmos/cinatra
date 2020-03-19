@@ -903,7 +903,7 @@ namespace cinatra {
 		bool is_chunked_ = false;
 
         //validate
-        size_t max_header_len_;
+        size_t max_header_len_ = 1024 * 1024;
         check_header_cb check_headers_;
 
 		data_proc_state state_ = data_proc_state::data_begin;
