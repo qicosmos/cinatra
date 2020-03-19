@@ -60,14 +60,16 @@ namespace cinatra {
 
 			ctx_.set_options(ssl_options);
 			ctx_.set_password_callback(std::forward<F>(f));
-            if (!certificate_chain_file.empty()) {
+
+            std::error_code ec;
+            if (fs::exists(certificate_chain_file, ec)) {
                 ctx_.use_certificate_chain_file(std::move(certificate_chain_file));
             }
 			
-            if(!private_key_file.empty())
+            if(fs::exists(private_key_file, ec))
 			    ctx_.use_private_key_file(std::move(private_key_file), boost::asio::ssl::context::pem);
 
-            if(!tmp_dh_file.empty())
+            if (fs::exists(tmp_dh_file, ec))
 			    ctx_.use_tmp_dh_file(std::move(tmp_dh_file));
 #endif
 		}
