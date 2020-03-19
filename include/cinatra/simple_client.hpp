@@ -449,7 +449,7 @@ namespace cinatra {
 		
 		void do_write(client_callback_t error_callback = [](auto ec, auto msg) {}) {
 			auto self = this->shared_from_this();
-			boost::asio::async_write(socket(), boost::asio::buffer(write_message_.data(), write_message_.length()),
+			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
                     client_callback_ = std::move(error_callback);
@@ -511,7 +511,7 @@ namespace cinatra {
 			
 			//reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_write(socket(), boost::asio::buffer(write_message_.data(), write_message_.length()),
+			boost::asio::async_write(socket_, boost::asio::buffer(write_message_.data(), write_message_.length()),
 				[this, self, error_callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (!ec) {
 					//cancel_timer();
@@ -604,7 +604,7 @@ namespace cinatra {
 
 		void do_read() {
 			auto self = this->shared_from_this();
-			socket().async_read_some(boost::asio::buffer(parser_.buffer(), parser_.left_size()),
+            socket_.async_read_some(boost::asio::buffer(parser_.buffer(), parser_.left_size()),
 				[this, self](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (!ec) {
 					auto last_len = parser_.current_size();
@@ -689,7 +689,7 @@ namespace cinatra {
 
 		void do_read_body() {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket(), boost::asio::buffer(parser_.buffer(), parser_.total_len() - parser_.current_size()),
+			boost::asio::async_read(socket_, boost::asio::buffer(parser_.buffer(), parser_.total_len() - parser_.current_size()),
 				[this, self](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					close();
@@ -703,7 +703,7 @@ namespace cinatra {
 		void read_chunk(client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read_until(socket(), read_head_, "\r\n\r\n",
+			boost::asio::async_read_until(socket_, read_head_, "\r\n\r\n",
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (ec) {
 					chunked_file_.close();
@@ -857,7 +857,7 @@ namespace cinatra {
 
 		void read_crcf(size_t count, client_callback_t error_callback) {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket(), boost::asio::buffer(crcf_, count), [this, self, callback = std::move(error_callback)]
+			boost::asio::async_read(socket_, boost::asio::buffer(crcf_, count), [this, self, callback = std::move(error_callback)]
 			(boost::system::error_code ec, std::size_t length) {
 				read_chunk_head(std::move(callback));
 			});
@@ -891,7 +891,7 @@ namespace cinatra {
 		void read_chunk_head(client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read_until(socket(), chunked_size_buf_, "\r\n",
+			boost::asio::async_read_until(socket_, chunked_size_buf_, "\r\n",
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t bytes_transferred) {
 				if (ec) {
 					chunked_file_.close();
@@ -956,7 +956,7 @@ namespace cinatra {
 		void read_chunk_body(int64_t read_len, bool eof, client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket(), boost::asio::buffer(chunk_body_.data(), read_len),
+			boost::asio::async_read(socket_, boost::asio::buffer(chunk_body_.data(), read_len),
 				[this, eof, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					chunked_file_.close();
@@ -994,7 +994,7 @@ namespace cinatra {
 		void read_stream_body(int64_t read_len, client_callback_t error_callback) {
 			reset_timer();
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket(), boost::asio::buffer(chunk_body_.data(), read_len),
+			boost::asio::async_read(socket_, boost::asio::buffer(chunk_body_.data(), read_len),
 				[this, self, callback = std::move(error_callback)](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					chunked_file_.close();
