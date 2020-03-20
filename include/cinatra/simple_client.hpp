@@ -438,9 +438,9 @@ namespace cinatra {
 			std::string str;
 			for (auto& h : headers_) {
 				str.append(h.first);
-				str.append(name_value_separator);
+				str.append(":");
 				str.append(h.second);
-				str.append(crlf);
+				str.append("\r\n");
 			}
 
 			return str;
