@@ -9,6 +9,7 @@
 #include "response_cv.hpp"
 #include "utils.hpp"
 #include "mime_types.hpp"
+#include "client_factory.hpp"
 
 #ifdef CINATRA_ENABLE_SSL
 
@@ -631,7 +632,23 @@ namespace cinatra {
 						}
 						set_response_msg("parse response error from local server");
 					}
-					else {
+					else {                        
+                        if (parser_.status() >= 302 && parser_.status()<=307&& parser_.status()!=306) {
+                            auto val = parser_.get_header_value("Location");
+                            if (val.empty()) {
+                                promis_->set_value("");
+                            }
+                            else {
+                                if(val[0]!='/')
+                                    promis_->set_value("Location:/" + std::string(val));
+                                else
+                                    promis_->set_value("Location:" + std::string(val));
+                            }
+                            
+                            close();
+                            return;
+                        }
+
                         if (parser_.is_chunked()) {
                             is_chunked_resp_ = true;
                             std::string_view chunked_content = parser_.curr_content();
