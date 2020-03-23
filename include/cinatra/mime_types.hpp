@@ -488,6 +488,7 @@ namespace cinatra {
 	{ ".zac", "application/x-zaurus-zac" },
 	{ ".zip", "application/zip" },
 	{ ".json", "application/json" },
+    { ".7z", "application/x-7z-compressed" },
 	};
 
 	static std::map<cinatra::res_content_type,std::string_view> res_mime_map = {

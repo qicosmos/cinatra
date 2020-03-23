@@ -271,6 +271,10 @@ namespace cinatra {
 			enable_timeout_ = enable;
 		}
 
+        void set_transfer_type(transfer_type type) {
+            transfer_type_ = type;
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
@@ -331,18 +335,26 @@ namespace cinatra {
 							res.set_status_and_content(status_type::not_found,"");
 							return;
 						}
+
+                        req.get_conn()->set_tag(in);
                         
 						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
 							return;
 						}
 
-						write_chunked_header(req, in, mime);
+                        if(transfer_type_== transfer_type::CHUNKED)
+						    write_chunked_header(req, in, mime);
+                        else
+                            write_ranges_header(req, mime, fs::path(relative_file_name).filename().string(), std::to_string(fs::file_size(fullpath)));
 					}
 						break;
 					case cinatra::data_proc_state::data_continue:
 					{
-						write_chunked_body(req);
+                        if (transfer_type_ == transfer_type::CHUNKED)
+                            write_chunked_body(req);
+                        else
+                            write_ranges_data(req);
 					}
 						break;
 					case cinatra::data_proc_state::data_end:
@@ -399,8 +411,7 @@ namespace cinatra {
 				std::string max_age = std::string("max-age=") + std::to_string(static_res_cache_max_age_);
 				res_content_header += std::string("\r\n") + std::string("Cache-Control: ") + max_age;
 			}
-			auto conn = req.get_conn();
-			conn->set_tag(in);
+			
 			if(req.is_range())
 			{
 				std::int64_t file_pos  = req.get_range_start_pos();
@@ -408,23 +419,49 @@ namespace cinatra {
 				auto end_str = std::to_string(req.get_request_static_file_size());
 				res_content_header += std::string("\r\n") +std::string("Content-Range: bytes ")+std::to_string(file_pos)+std::string("-")+std::to_string(req.get_request_static_file_size()-1)+std::string("/")+end_str;
 			}
-			conn->write_chunked_header(std::string_view(res_content_header.data(), res_content_header.size()),req.is_range());
+            req.get_conn()->write_chunked_header(std::string_view(res_content_header),req.is_range());
 		}
 
 		void write_chunked_body(request& req) {
-			auto conn = req.get_conn();
-			auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
-			std::string str;
-			const size_t len = 3 * 1024 * 1024;
-			str.resize(len);
-			in->read(&str[0], len);
-			size_t read_len = (size_t)in->gcount();
-			if (read_len != len) {
-				str.resize(read_len);
-			}
-			bool eof = (read_len == 0 || read_len != len);
-			conn->write_chunked_data(std::move(str), eof);
+            const size_t len = 3 * 1024 * 1024;
+            auto str = get_send_data(req, len);
+            auto read_len = str.size();
+            bool eof = (read_len == 0 || read_len != len);
+            req.get_conn()->write_chunked_data(std::move(str), eof);
 		}
+
+        void write_ranges_header(request& req, std::string_view mime, std::string filename, std::string file_size) {
+            std::string header_str = "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\n";
+            header_str.append("Content-Disposition: attachment;filename=");
+            header_str.append(std::move(filename)).append("\r\n");
+            header_str.append("Connection: keep-alive\r\n");
+            header_str.append("Content-Type: ").append(mime).append("\r\n");
+            header_str.append("Content-Length: ");
+            header_str.append(file_size).append("\r\n\r\n");
+            req.get_conn()->write_ranges_header(std::move(header_str));
+        }
+
+        void write_ranges_data(request& req) {
+            const size_t len = 3 * 1024 * 1024;
+            auto str = get_send_data(req, len);
+            auto read_len = str.size();
+            bool eof = (read_len == 0 || read_len != len);
+            req.get_conn()->write_ranges_data(std::move(str), eof);
+        }
+
+        std::string get_send_data(request& req, const size_t len) {
+            auto conn = req.get_conn();
+            auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
+            std::string str;
+            str.resize(len);
+            in->read(&str[0], len);
+            size_t read_len = (size_t)in->gcount();
+            if (read_len != len) {
+                str.resize(read_len);
+            }
+
+            return str;
+        }
 
 		void init_conn_callback() {
             set_static_res_handler();
@@ -475,6 +512,8 @@ namespace cinatra {
 
         size_t max_header_len_;
         check_header_cb check_headers_;
+
+        transfer_type transfer_type_ = transfer_type::CHUNKED;
 	};
 
 	using http_server = http_server_<io_service_pool>;

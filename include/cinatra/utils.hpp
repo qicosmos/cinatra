@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by qiyu on 12/19/17.
 //
 
@@ -125,6 +125,11 @@ namespace cinatra {
 	constexpr inline auto CONNECT = http_method::CONNECT;
 	constexpr inline auto TRACE = http_method::TRACE;
 	constexpr inline auto OPTIONS = http_method::OPTIONS;
+
+    enum class transfer_type {
+        CHUNKED,
+        ACCEPT_RANGES
+    };
 
 	inline constexpr std::string_view method_name(http_method mthd) {
 		switch (mthd)

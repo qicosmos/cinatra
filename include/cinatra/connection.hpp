@@ -167,6 +167,16 @@ namespace cinatra {
 			});
 		}
 
+        void write_ranges_header(std::string header_str) {
+            reset_timer();
+            chunked_header_ = std::move(header_str); //reuse the variable
+            boost::asio::async_write(socket_,
+				boost::asio::buffer(chunked_header_),
+				[this, self = this->shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+				handle_chunked_header(ec);
+			});
+        }
+
 		void write_chunked_data(std::string&& buf, bool eof) {
 			reset_timer();
 
@@ -192,6 +202,27 @@ namespace cinatra {
 				call_back();
 			});
 		}
+
+        void write_ranges_data(std::string&& buf, bool eof) {
+            reset_timer();
+
+            chunked_header_ = std::move(buf); //reuse the variable
+            auto self = this->shared_from_this();
+            boost::asio::async_write(socket_, boost::asio::buffer(chunked_header_), [this, self, eof](const boost::system::error_code& ec, size_t) {
+                if (ec) {
+                    return;
+                }
+
+                if (eof) {
+                    req_.set_state(data_proc_state::data_end);
+                }
+                else {
+                    req_.set_state(data_proc_state::data_continue);
+                }
+
+                call_back();
+            });
+        }
 
 		void response_now() {
 			do_write();
@@ -532,6 +563,7 @@ namespace cinatra {
 
 		void close() {
 			req_.close_upload_file();
+            shutdown();
 			boost::system::error_code ec;
 			socket().close(ec);
 			has_shake_ = false;
