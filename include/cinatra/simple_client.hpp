@@ -639,10 +639,7 @@ namespace cinatra {
                                 promis_->set_value("");
                             }
                             else {
-                                if(val[0]!='/')
-                                    promis_->set_value("Location:/" + std::string(val));
-                                else
-                                    promis_->set_value("Location:" + std::string(val));
+                                promis_->set_value("Location:" + std::string(val));
                             }
                             
                             close();
@@ -656,7 +653,8 @@ namespace cinatra {
                             return;
                         }
 
-						if (parser_.total_len() > MAX_RESPONSE_SIZE) {
+                        //auto ranges_val = parser_.get_header_value("Accept-Ranges");//TODO
+						if (parser_.total_len() > MAX_RESPONSE_SIZE /*&&(ranges_val.empty() || ranges_val == "none")*/) {
 							if (client_callback_) {
 								client_callback_(boost::asio::error::make_error_code(boost::asio::error::no_buffer_space), "");
 							}
@@ -717,7 +715,7 @@ namespace cinatra {
 
 		void do_read_body() {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(parser_.buffer(), parser_.total_len() - parser_.current_size()),
+			boost::asio::async_read(socket_, boost::asio::buffer(parser_.buffer(), 2048),
 				[this, self](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					close();
