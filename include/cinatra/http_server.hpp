@@ -122,18 +122,8 @@ namespace cinatra {
 		}
 
 		void run() {
-			std::error_code ec;
-			bool r = fs::exists(static_dir_, ec);
-			if (ec) {
-				std::cout << ec.message();
-			}
-
-			if (!r) {
-				fs::create_directories(static_dir_, ec);
-				if (ec) {
-					std::cout << ec.message();
-				}
-			}
+            init_dir(static_dir_);
+            init_dir(upload_dir_);
 
 			io_service_pool_.run();
 		}
@@ -150,25 +140,13 @@ namespace cinatra {
 			return io_service_pool_.poll_one();
 		}
 
-		void set_static_dir(std::string&& path) {
-			/*
-			default: current path + "www"
-			"": current path
-			"./temp", "temp" : current path + temp
-			"/temp" : linux path; "C:/temp" : windows path
-			*/
-			if (path.empty()) {
-				static_dir_ = fs::current_path().string();
-				return;
-			}
-
-			if (path[0] == '/'|| (path.length() >= 2 && path[1] == ':')) {
-				static_dir_ = std::move(path);
-			}
-			else {
-				static_dir_ = fs::absolute(path).string();
-			}
+		void set_static_dir(std::string path) {
+            set_file_dir(std::move(path), static_dir_);
 		}
+
+        void set_upload_dir(std::string path) {
+            set_file_dir(std::move(path), upload_dir_);
+        }
 
 		const std::string& static_dir() const {
 			return static_dir_;
@@ -214,12 +192,6 @@ namespace cinatra {
 				http_router_.register_handler<Is...>(name, std::forward<Function>(f), std::forward<AP>(ap)...);
 			}
 		}
-
-        void set_base_path(const std::string& key,const std::string& path)
-        {
-            base_path_[0] = std::move(key);
-            base_path_[1] = std::move(path);
-        }
 
         void set_res_cache_max_age(std::time_t seconds)
         {
@@ -278,7 +250,7 @@ namespace cinatra {
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, static_dir_, 
+				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, upload_dir_, 
 				upload_check_?&upload_check_ : nullptr
 #ifdef CINATRA_ENABLE_SSL
 				, ctx_
@@ -431,7 +403,7 @@ namespace cinatra {
 		}
 
         void write_ranges_header(request& req, std::string_view mime, std::string filename, std::string file_size) {
-            std::string header_str = "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\n";
+            std::string header_str = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: *\r\nAccept-Ranges: bytes\r\n";
             header_str.append("Content-Disposition: attachment;filename=");
             header_str.append(std::move(filename)).append("\r\n");
             header_str.append("Connection: keep-alive\r\n");
@@ -466,7 +438,6 @@ namespace cinatra {
 		void init_conn_callback() {
             set_static_res_handler();
 			http_handler_ = [this](request& req, response& res) {
-//                res.set_base_path(this->base_path_[0],this->base_path_[1]);
 				res.set_headers(req.get_headers());
 				try {
 					bool success = http_router_.route(req.get_method(), req.get_url(), req, res);
@@ -487,6 +458,41 @@ namespace cinatra {
 			};
 		}
 
+        void set_file_dir(std::string&& path, std::string& dir) {
+            /*
+            default: current path + "www"/"upload"
+            "": current path
+            "./temp", "temp" : current path + temp
+            "/temp" : linux path; "C:/temp" : windows path
+            */
+            if (path.empty()) {
+                dir = fs::current_path().string();
+                return;
+            }
+
+            if (path[0] == '/' || (path.length() >= 2 && path[1] == ':')) {
+                dir = std::move(path);
+            }
+            else {
+                dir = fs::absolute(path).string();
+            }
+        }
+
+        void init_dir(const std::string& dir) {
+            std::error_code ec;
+            bool r = fs::exists(dir, ec);
+            if (ec) {
+                std::cout << ec.message();
+            }
+
+            if (!r) {
+                fs::create_directories(dir, ec);
+                if (ec) {
+                    std::cout << ec.message();
+                }
+            }
+        }
+
 		service_pool_policy io_service_pool_;
 
 		std::size_t max_req_buf_size_ = 3 * 1024 * 1024; //max request buffer size 3M
@@ -494,7 +500,7 @@ namespace cinatra {
 
 		http_router http_router_;
 		std::string static_dir_ = fs::absolute("www").string(); //default
-        std::string base_path_[2] = {"base_path","/"};
+        std::string upload_dir_ = fs::absolute("www").string(); //default
         std::time_t static_res_cache_max_age_ = 0;
 //		https_config ssl_cfg_;
 #ifdef CINATRA_ENABLE_SSL
