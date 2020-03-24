@@ -55,7 +55,6 @@ namespace cinatra {
             boost::system::error_code ec;
             ss << socket().local_endpoint(ec);
             if (ec) {
-                std::cout << ec.message() << "\n";
                 return "";
             }
             return ss.str();
@@ -70,7 +69,6 @@ namespace cinatra {
             boost::system::error_code ec;
             ss << socket().remote_endpoint(ec);
             if (ec) {
-                std::cout << ec.message() << "\n";
                 return "";
             }
             return ss.str();
