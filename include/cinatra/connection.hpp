@@ -76,6 +76,9 @@ namespace cinatra {
 
         std::pair<std::string, std::string> remote_ip_port() {
             std::string remote_addr = remote_address();
+            if (remote_addr.empty())
+                return {};
+
             size_t pos = remote_addr.find(':');
             std::string ip = remote_addr.substr(0, pos);
             std::string port = remote_addr.substr(pos + 1);
