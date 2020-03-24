@@ -46,25 +46,35 @@ namespace cinatra {
 #endif
 		}
 
-		std::string local_address() {
-			if (has_closed_) {
-				return "";
-			}
+        std::string local_address() {
+            if (has_closed_) {
+                return "";
+            }
 
-			std::stringstream ss;
-			ss << socket().local_endpoint();
-			return ss.str();
-		}
+            std::stringstream ss;
+            boost::system::error_code ec;
+            ss << socket().local_endpoint(ec);
+            if (ec) {
+                std::cout << ec.message() << "\n";
+                return "";
+            }
+            return ss.str();
+        }
 
-		std::string remote_address() {
-			if (has_closed_) {
-				return "";
-			}
+        std::string remote_address() {
+            if (has_closed_) {
+                return "";
+            }
 
-			std::stringstream ss;
-			ss << socket().remote_endpoint();
-			return ss.str();
-		}
+            std::stringstream ss;
+            boost::system::error_code ec;
+            ss << socket().remote_endpoint(ec);
+            if (ec) {
+                std::cout << ec.message() << "\n";
+                return "";
+            }
+            return ss.str();
+        }
 
         std::pair<std::string, std::string> remote_ip_port() {
             std::string remote_addr = remote_address();
