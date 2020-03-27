@@ -34,10 +34,29 @@ struct person
 	int i=0;
 };
 
+void test_ssl_server(){
+    //you should open macro CINATRA_ENABLE_SSL at first
+    http_ssl_server server(2);
+
+    server.set_ssl_conf({ "server.crt", "server.key" });
+    int r = server.listen("0.0.0.0", "9001");
+    if (r < 0) {
+        return;
+    }
+
+    server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
+        auto str = req.get_conn<cinatra::SSL>()->remote_address();
+        res.set_status_and_content(status_type::ok, "hello world from 9001");
+    });
+
+    server.run();
+}
+
 int main() {
+    test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
 #ifdef CINATRA_ENABLE_SSL
-	server.init_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
+//	server.init_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
 	bool r = server.listen("0.0.0.0", "https");
 #else
 	bool r = server.listen("0.0.0.0", "8090");

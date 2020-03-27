@@ -31,6 +31,7 @@ namespace fs = std::experimental::filesystem;
 
 namespace cinatra {
 	using client_callback_t = std::function<void(boost::system::error_code, std::string_view)>;
+    using tcp_socket = boost::asio::ip::tcp::socket;
 	//short connection
 	class simple_client : public std::enable_shared_from_this<simple_client> {
 	public:
