@@ -23,9 +23,6 @@ namespace cinatra {
 		data_error
 	};
 
-    struct NonSSL {};
-    struct SSL {};
-
     class base_connection;
 	template <typename T>
 	class connection;

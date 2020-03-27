@@ -25,4 +25,7 @@ namespace cinatra {
 
 	inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
 	inline const std::string CSESSIONID = "CSESSIONID";
+
+    struct NonSSL {};
+    struct SSL {};
 }
