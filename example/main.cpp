@@ -35,6 +35,7 @@ struct person
 };
 
 void test_ssl_server(){
+#ifdef CINATRA_ENABLE_SSL
     //you should open macro CINATRA_ENABLE_SSL at first
     http_ssl_server server(2);
 
@@ -50,17 +51,13 @@ void test_ssl_server(){
     });
 
     server.run();
+#endif
 }
 
 int main() {
     test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
-#ifdef CINATRA_ENABLE_SSL
-//	server.init_ssl_context(true, [](auto, auto) { return "123456"; }, "server.crt", "server.key", "dh1024.pem");
-	bool r = server.listen("0.0.0.0", "https");
-#else
 	bool r = server.listen("0.0.0.0", "8090");
-#endif
 	if (!r) {
 		//LOG_INFO << "listen failed";
 		return -1;
