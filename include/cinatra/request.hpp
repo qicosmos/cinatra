@@ -23,16 +23,14 @@ namespace cinatra {
 		data_error
 	};
 
-	using tcp_socket = boost::asio::ip::tcp::socket;
-	template <typename socket_type>
-	class connection;
-#ifdef CINATRA_ENABLE_SSL
-	using Socket = boost::asio::ssl::stream<tcp_socket>;
-#else
-	using Socket = tcp_socket;
-#endif
+    struct NonSSL {};
+    struct SSL {};
 
-	using conn_type = connection<Socket>;
+    class base_connection;
+	template <typename T>
+	class connection;
+
+    using conn_type = base_connection;
     class request;
     using check_header_cb = std::function<bool(request&)>;
 
@@ -44,8 +42,9 @@ namespace cinatra {
 			buf_.resize(1024);
 		}
 
-		auto get_conn() const{
-			return con_;
+        template<typename T>
+		auto get_conn() {
+            return (connection<T>*)con_;
 		}
 
 		int parse_header(std::size_t last_len, size_t start=0) {

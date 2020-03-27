@@ -30,14 +30,12 @@ namespace cinatra {
 		T value;
 	};
 
-	template<class service_pool_policy = io_service_pool>
+	template<typename ScoketType, class service_pool_policy = io_service_pool>
 	class http_server_ : private noncopyable {
 	public:
+        using type = ScoketType;
 		template<class... Args>
 		explicit http_server_(Args&&... args) : io_service_pool_(std::forward<Args>(args)...)
-#ifdef CINATRA_ENABLE_SSL
-			, ctx_(boost::asio::ssl::context::sslv23)
-#endif
 		{
 			http_cache::get().set_cache_max_age(86400);
 			init_conn_callback();
@@ -47,32 +45,9 @@ namespace cinatra {
 			http_cache::get().enable_cache(b);
 		}
 
-		template<typename F>
-		void init_ssl_context(bool ssl_enable_v3, F&& f, std::string certificate_chain_file,
-			std::string private_key_file, std::string tmp_dh_file) {
-#ifdef CINATRA_ENABLE_SSL
-			unsigned long ssl_options = boost::asio::ssl::context::default_workarounds
-				| boost::asio::ssl::context::no_sslv2
-				| boost::asio::ssl::context::single_dh_use;
-
-			if (!ssl_enable_v3)
-				ssl_options |= boost::asio::ssl::context::no_sslv3;
-
-			ctx_.set_options(ssl_options);
-			ctx_.set_password_callback(std::forward<F>(f));
-
-            std::error_code ec;
-            if (fs::exists(certificate_chain_file, ec)) {
-                ctx_.use_certificate_chain_file(std::move(certificate_chain_file));
-            }
-			
-            if(fs::exists(private_key_file, ec))
-			    ctx_.use_private_key_file(std::move(private_key_file), boost::asio::ssl::context::pem);
-
-            if (fs::exists(tmp_dh_file, ec))
-			    ctx_.use_tmp_dh_file(std::move(tmp_dh_file));
-#endif
-		}
+        void set_ssl_conf(ssl_configure conf) {
+            ssl_conf_ = std::move(conf);
+        }
 
 		//address :
 		//		"0.0.0.0" : ipv4. use 'https://localhost/' to visit
@@ -249,16 +224,14 @@ namespace cinatra {
 
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
-			auto new_conn = std::make_shared<connection<Socket>>(
-				io_service_pool_.get_io_service(), max_req_buf_size_, keep_alive_timeout_, http_handler_, upload_dir_, 
+			auto new_conn = std::make_shared<connection<ScoketType>>(
+				io_service_pool_.get_io_service(), ssl_conf_, max_req_buf_size_, keep_alive_timeout_, http_handler_, upload_dir_,
 				upload_check_?&upload_check_ : nullptr
-#ifdef CINATRA_ENABLE_SSL
-				, ctx_
-#endif
-				);
-			acceptor->async_accept(new_conn->socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
+			);
+
+			acceptor->async_accept(new_conn->tcp_socket(), [this, new_conn, acceptor](const boost::system::error_code& e) {
 				if (!e) {
-					new_conn->socket().set_option(boost::asio::ip::tcp::no_delay(true));
+					new_conn->tcp_socket().set_option(boost::asio::ip::tcp::no_delay(true));
                     if (multipart_begin_) {
                         new_conn->set_multipart_begin(multipart_begin_);
                     }
@@ -308,7 +281,7 @@ namespace cinatra {
 							return;
 						}
 
-                        req.get_conn()->set_tag(in);
+                        req.get_conn<ScoketType>()->set_tag(in);
                         
 						if(is_small_file(in.get(),req)){
 							send_small_file(res, in.get(), mime);
@@ -331,7 +304,7 @@ namespace cinatra {
 						break;
 					case cinatra::data_proc_state::data_end:
 					{
-						auto conn = req.get_conn();
+						auto conn = req.get_conn<ScoketType>();
 						conn->on_close();
 					}
 						break;
@@ -391,7 +364,7 @@ namespace cinatra {
 				auto end_str = std::to_string(req.get_request_static_file_size());
 				res_content_header += std::string("\r\n") +std::string("Content-Range: bytes ")+std::to_string(file_pos)+std::string("-")+std::to_string(req.get_request_static_file_size()-1)+std::string("/")+end_str;
 			}
-            req.get_conn()->write_chunked_header(std::string_view(res_content_header),req.is_range());
+            req.get_conn<ScoketType>()->write_chunked_header(std::string_view(res_content_header),req.is_range());
 		}
 
 		void write_chunked_body(request& req) {
@@ -399,7 +372,7 @@ namespace cinatra {
             auto str = get_send_data(req, len);
             auto read_len = str.size();
             bool eof = (read_len == 0 || read_len != len);
-            req.get_conn()->write_chunked_data(std::move(str), eof);
+            req.get_conn<ScoketType>()->write_chunked_data(std::move(str), eof);
 		}
 
         void write_ranges_header(request& req, std::string_view mime, std::string filename, std::string file_size) {
@@ -410,7 +383,7 @@ namespace cinatra {
             header_str.append("Content-Type: ").append(mime).append("\r\n");
             header_str.append("Content-Length: ");
             header_str.append(file_size).append("\r\n\r\n");
-            req.get_conn()->write_ranges_header(std::move(header_str));
+            req.get_conn<ScoketType>()->write_ranges_header(std::move(header_str));
         }
 
         void write_ranges_data(request& req) {
@@ -418,11 +391,11 @@ namespace cinatra {
             auto str = get_send_data(req, len);
             auto read_len = str.size();
             bool eof = (read_len == 0 || read_len != len);
-            req.get_conn()->write_ranges_data(std::move(str), eof);
+            req.get_conn<ScoketType>()->write_ranges_data(std::move(str), eof);
         }
 
         std::string get_send_data(request& req, const size_t len) {
-            auto conn = req.get_conn();
+            auto conn = req.get_conn<ScoketType>();
             auto in = std::any_cast<std::shared_ptr<std::ifstream>>(conn->get_tag());
             std::string str;
             str.resize(len);
@@ -502,10 +475,6 @@ namespace cinatra {
 		std::string static_dir_ = fs::absolute("www").string(); //default
         std::string upload_dir_ = fs::absolute("www").string(); //default
         std::time_t static_res_cache_max_age_ = 0;
-//		https_config ssl_cfg_;
-#ifdef CINATRA_ENABLE_SSL
-		boost::asio::ssl::context ctx_;
-#endif
 
 		bool enable_timeout_ = true;
 		http_handler http_handler_ = nullptr;
@@ -520,7 +489,12 @@ namespace cinatra {
         check_header_cb check_headers_;
 
         transfer_type transfer_type_ = transfer_type::CHUNKED;
+        ssl_configure ssl_conf_;
 	};
 
-	using http_server = http_server_<io_service_pool>;
+    template<typename T>
+	using http_server_proxy = http_server_<T, io_service_pool>;
+
+    using http_server = http_server_proxy<NonSSL>;
+    using http_ssl_server = http_server_proxy<SSL>;
 }
