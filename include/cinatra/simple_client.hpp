@@ -112,7 +112,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
                         if constexpr (is_ssl_) {
@@ -171,7 +171,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
                         if constexpr (is_ssl_) {
@@ -236,7 +236,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
                         if constexpr (is_ssl_) {
@@ -283,7 +283,7 @@ namespace cinatra {
 					return;
 				}
 
-				boost::asio::async_connect(socket(), it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
+				boost::asio::async_connect(socket_, it, [this, self, callback = std::move(callback)](boost::system::error_code ec,
 					const boost::asio::ip::tcp::resolver::iterator&) {
 					if (!ec) {
                         if constexpr (is_ssl_) {
