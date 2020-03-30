@@ -54,7 +54,30 @@ void test_ssl_server(){
 #endif
 }
 
+void test_client() {
+    //http
+    auto s1 = get("baidu.com");
+    auto s2 = post("baidu.com", "your post content");
+
+    auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("baidu.com", "http");
+    auto request_str = client->send_msg<cinatra::TEXT, 30000, cinatra::GET>("/", "");
+    std::cout << request_str << "\n";
+
+    //https
+#ifdef CINATRA_ENABLE_SSL
+    auto s3 = get<cinatra::SSL>("baidu.com/");
+    auto s4 = post<cinatra::SSL>("baidu.com/hello", "your post content");
+
+    {
+        auto client = cinatra::client_factory::instance().new_client<cinatra::SSL>("baidu.com", "https");
+        auto request_str = client->send_msg<cinatra::TEXT, 30000, cinatra::POST>("/", "");
+        std::cout << request_str << "\n";
+    }
+#endif
+}
+
 int main() {
+    test_client();
     test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
 	bool r = server.listen("0.0.0.0", "8090");
