@@ -716,7 +716,7 @@ namespace cinatra {
 
 		void do_read_body() {
 			auto self = this->shared_from_this();
-			boost::asio::async_read(socket_, boost::asio::buffer(parser_.buffer(), 2048),
+			boost::asio::async_read(socket_, boost::asio::buffer(parser_.buffer(), parser_.total_len() - parser_.current_size()),
 				[this, self](boost::system::error_code ec, std::size_t length) {
 				if (ec) {
 					close();
