@@ -66,11 +66,16 @@ namespace cinatra {
         }
 
         auto& socket() {
+            if constexpr (is_ssl_) {
 #ifdef CINATRA_ENABLE_SSL
-            return *ssl_stream_;
-#else                
-            return socket_;
+                return *ssl_stream_;
+#else
+                static_assert(!is_ssl_, "please add definition CINATRA_ENABLE_SSL");//guard, not allowed coming in this branch
 #endif
+            }
+            else {
+                return socket_;
+            }
         }
 
         std::string local_address() {
