@@ -82,7 +82,7 @@ namespace cinatra {
         constexpr bool is_ssl = std::is_same_v<SocketType, SSL>;
         auto [host, api] = get_host_url(url);
         auto client = client_factory::instance().new_client<SocketType>(std::string(host), is_ssl ? "https" : "http");
-        return client->send_msg<CONTENT_TYPE, TIMEOUT, METHOD>(std::string(api), std::move(msg));
+        return client->template send_msg<CONTENT_TYPE, TIMEOUT, METHOD>(std::string(api), std::move(msg));
     }
 
     template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000>
@@ -94,34 +94,4 @@ namespace cinatra {
     inline std::string post(std::string url, std::string post_content) {
         return send_msg<SocketType, CONTENT_TYPE, TIMEOUT>(url, std::move(post_content));
     }
-
-#ifdef CINATRA_ENABLE_SSL
-	//template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-	//inline std::string send_msg(std::string ip, std::string api, std::string msg, boost::asio::ssl::context & context) {
-	//	assert(!api.empty() && api[0] == '/');
-	//	auto client = client_factory::instance().new_client<SSL>(std::move(ip), "https", context);
-	//	return client->send_msg<CONTENT_TYPE>(std::move(api), std::move(msg));
-	//}
-
-	//template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-	//inline std::string send_msg(std::string ip, std::string port, std::string api, std::string msg, boost::asio::ssl::context & context) {
-	//	assert(!api.empty() && api[0] == '/');
-	//	auto client = client_factory::instance().new_client<SSL>(std::move(ip), std::move(port), context);
-	//	return client->send_msg<CONTENT_TYPE>(std::move(api), std::move(msg));
-	//}
-#else
-	template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-	inline std::string send_msg(std::string ip, std::string api, std::string msg) {
-		assert(!api.empty() && api[0] == '/');
-		auto client = client_factory::instance().new_client(std::move(ip), "http");
-		return client->send_msg<CONTENT_TYPE>(std::move(api), std::move(msg));
-	}
-
-	template<res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-	inline std::string send_msg(std::string ip, std::string port, std::string api, std::string msg) {
-		assert(!api.empty() && api[0] == '/');
-		auto client = client_factory::instance().new_client(std::move(ip), std::move(port));
-		return client->send_msg<CONTENT_TYPE>(std::move(api), std::move(msg));
-	}
-#endif
 }
