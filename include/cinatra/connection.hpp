@@ -16,7 +16,11 @@ namespace cinatra {
 	using send_ok_handler = std::function<void()>;
 	using send_failed_handler = std::function<void(const boost::system::error_code&)>;
 
-    class base_connection{};
+    class base_connection{
+    public:
+        virtual ~base_connection() {}
+    };
+
     struct ssl_configure {
         std::string cert_file;
         std::string key_file;
@@ -29,7 +33,7 @@ namespace cinatra {
 			http_handler& handler, std::string& static_dir, std::function<bool(request& req, response& res)>* upload_check):
             socket_(io_service),
 			MAX_REQ_SIZE_(max_req_size), KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
-			timer_(io_service), http_handler_(handler), req_(this,res_), static_dir_(static_dir), upload_check_(upload_check)
+			timer_(io_service), http_handler_(handler), req_(res_), static_dir_(static_dir), upload_check_(upload_check)
 		{
             if constexpr(is_ssl_) {
                 init_ssl_context(std::move(ssl_conf));
@@ -118,6 +122,7 @@ namespace cinatra {
         }
 
 		void start() {
+            req_.set_conn(this->shared_from_this());
 			do_read();
 		}
 

@@ -77,8 +77,8 @@ void test_client() {
 }
 
 int main() {
-    test_client();
-    test_ssl_server();
+    //test_client();
+    //test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
 	bool r = server.listen("0.0.0.0", "8090");
 	if (!r) {
@@ -91,12 +91,30 @@ int main() {
 	server.set_cache_max_age(5);
 	//server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 	//	res.set_status_and_content(status_type::ok,"hello world");
-	//},enable_cache{false});
+	//});
 
 	server.set_http_handler<GET>("/plaintext", [](request& req, response& res) {
 		//res.set_status_and_content<status_type::ok, res_content_type::string>("Hello, World!");
 		res.set_status_and_content(status_type::ok, "Hello, World!", res_content_type::string);
-	}, enable_cache{ false });
+	});
+
+    //server.set_http_handler<GET, POST>("/delay", [](request& req, response& res) {
+    //    auto conn = req.get_conn<NonSSL>();
+
+    //    //monitor an async operation to test response delay
+    //    std::thread thd([conn, &res] {
+    //        std::this_thread::sleep_for(std::chrono::seconds(3));
+    //        if (!conn->has_close()) {
+    //            res.set_status_and_content(status_type::ok, "hello world");
+    //            conn->response_now();
+    //        }
+    //        else {
+    //            std::cout << "has closed\n";
+    //        }
+    //    });
+    //    thd.detach();
+    //    res.set_delay(true);
+    //});
 
 //	person p{ 2 };
 //	server.set_http_handler<GET, POST>("/a", &person::foo, enable_cache{ false }, log_t{});

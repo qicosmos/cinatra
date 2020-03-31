@@ -27,7 +27,7 @@ namespace cinatra {
 	template <typename T>
 	class connection;
 
-    using conn_type = base_connection;
+    using conn_type = std::shared_ptr<base_connection>;
     class request;
     using check_header_cb = std::function<bool(request&)>;
 
@@ -35,13 +35,18 @@ namespace cinatra {
 	public:
 		using event_call_back = std::function<void(request&)>;
         
-		request(conn_type* con,response& res) : con_(con),res_(res){
+		request(response& res) : res_(res){
 			buf_.resize(1024);
 		}
 
+        void set_conn(conn_type conn) {
+            conn_ = std::move(conn);
+        }
+
         template<typename T>
-		auto get_conn() {
-            return (connection<T>*)con_;
+        connection<T>* get_conn() {
+            connection<T>* ptr = (connection<T>*)(conn_.get());
+            return ptr;
 		}
 
 		int parse_header(std::size_t last_len, size_t start=0) {
@@ -865,7 +870,7 @@ namespace cinatra {
 		}
 
 		constexpr const static size_t MaxSize = 3 * 1024 * 1024;
-		conn_type* con_ = nullptr;
+        conn_type conn_;
         response& res_;
 		std::vector<char> buf_;
 
