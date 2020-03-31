@@ -55,13 +55,29 @@ void test_ssl_server(){
 }
 
 void test_client() {
+
     //http
     auto s1 = get("baidu.com");
     auto s2 = post("baidu.com", "your post content");
 
     auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("baidu.com", "http");
-    auto request_str = client->send_msg<cinatra::TEXT, 30000, cinatra::GET>("/", "");
+    auto request_str = client->send_msg<cinatra::TEXT, 3000, cinatra::GET>("/", "");
     std::cout << request_str << "\n";
+
+    {
+        size_t timeout_second = 5;
+        auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("192.168.96.14", "8090", timeout_second);
+        client->async_send_msg("/", "", [](auto ec, auto data) {
+            if (ec) {
+                std::cout << ec.message() << "\n";
+                return;
+            }
+
+            std::cout << data << "\n";
+        });
+
+        std::getchar();
+    }
 
     //https
 #ifdef CINATRA_ENABLE_SSL
@@ -77,7 +93,7 @@ void test_client() {
 }
 
 int main() {
-    //test_client();
+//    test_client();
     //test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
 	bool r = server.listen("0.0.0.0", "8090");
@@ -89,9 +105,9 @@ int main() {
 	server.enable_http_cache(false);//set global cache
     server.set_res_cache_max_age(86400);
 	server.set_cache_max_age(5);
-	//server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-	//	res.set_status_and_content(status_type::ok,"hello world");
-	//});
+	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
+		res.set_status_and_content(status_type::ok,"hello world");
+	});
 
 	server.set_http_handler<GET>("/plaintext", [](request& req, response& res) {
 		//res.set_status_and_content<status_type::ok, res_content_type::string>("Hello, World!");

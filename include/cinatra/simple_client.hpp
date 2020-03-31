@@ -626,9 +626,11 @@ namespace cinatra {
         }
 
 		void do_read() {
+            reset_timer();
 			auto self = this->shared_from_this();
             socket().async_read_some(boost::asio::buffer(parser_.buffer(), parser_.left_size()),
 				[this, self](boost::system::error_code ec, std::size_t bytes_transferred) {
+                timer_.cancel();
 				if (!ec) {
 					auto last_len = parser_.current_size();
 					bool at_capacity = parser_.update_size(bytes_transferred);

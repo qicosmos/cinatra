@@ -5,7 +5,7 @@ project(${project_name})
 if (MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
 else ()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -O3 -pthread -msse4.2 -std=c++17")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -msse4.2 -std=c++17")
 endif ()
 
 #option(ENABLE_SSL   "Set to switch to build use ssl"  OFF)
