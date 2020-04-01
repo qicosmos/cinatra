@@ -137,6 +137,10 @@ namespace cinatra {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
 
+        void append_header_str(std::string header_str) {
+            header_str_.append(std::move(header_str)).append("\r\n");
+        }
+
 		void set_url_preifx(std::string prefix) {
 			prefix_ = std::move(prefix);
 		}
@@ -366,7 +370,13 @@ namespace cinatra {
 					build_content_length(content_length);
 			}
 
-			prefix.append(build_headers()).append("\r\n");
+            if (header_str_.empty()) {
+                prefix.append(build_headers()).append("\r\n");
+            }
+            else {
+                prefix.append(build_headers()).append(std::move(header_str_)).append("\r\n");
+            }
+			
 			total_write_size_ = start_pos_ + prefix.size() + total_multipart_size();
 			return prefix;
 		}
@@ -1205,6 +1215,7 @@ namespace cinatra {
 		std::string write_message_;
 		response_parser parser_;
 		std::vector<std::pair<std::string, std::string>> headers_;
+        std::string header_str_;
 
 		std::string prefix_;
 		std::unique_ptr<std::promise<std::string>> promis_ = nullptr;
