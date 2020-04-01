@@ -42,46 +42,15 @@ namespace cinatra {
 		std::shared_ptr<std::thread> thd_;
 	};
 
-    inline std::pair<std::string_view, std::string_view> get_host_url(std::string_view path) {
-        size_t size = path.size();
-        size_t pos = std::string_view::npos;
-        for (size_t i = 0; i < size; i++) {
-            if (path[i] == '/') {
-                if (i == size - 1) {
-                    pos = i;
-                    break;
-                }
-
-                if (i + 1 < size - 1 && path[i + 1] == '/') {
-                    i++;
-                    continue;
-                }
-                else {
-                    pos = i;
-                    break;
-                }
-            }
-        }
-
-        if (pos == std::string_view::npos) {
-            return { path, "/" };
-        }
-
-        std::string_view host = path.substr(0, pos);
-        std::string_view url = path.substr(pos);
-        if (url.length() > 1 && url.back() == '/') {
-            url = url.substr(0, url.length() - 1);
-        }
-
-        return { host, url };
-    }
-
     template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
     inline std::string send_msg(std::string url, std::string msg) {
         assert(!url.empty());
         constexpr bool is_ssl = std::is_same_v<SocketType, SSL>;
-        auto [host, api] = get_host_url(url);
-        auto client = client_factory::instance().new_client<SocketType>(std::string(host), is_ssl ? "https" : "http");
+        auto [domain, api] = get_domain_url(url);
+
+        auto [host, port] = get_host_port(domain, is_ssl);
+
+        auto client = client_factory::instance().new_client<SocketType>(std::string(host), std::string(port));
         return client->template send_msg<CONTENT_TYPE, TIMEOUT, METHOD>(std::string(api), std::move(msg));
     }
 

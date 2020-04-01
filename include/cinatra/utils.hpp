@@ -104,6 +104,73 @@ namespace cinatra {
 		return v;
 	}
 
+    inline std::pair<std::string_view, std::string_view> get_domain_url(std::string_view path) {
+        size_t size = path.size();
+        size_t pos = std::string_view::npos;
+        for (size_t i = 0; i < size; i++) {
+            if (path[i] == '/') {
+                if (i == size - 1) {
+                    pos = i;
+                    break;
+                }
+
+                if (i + 1 < size - 1 && path[i + 1] == '/') {
+                    i++;
+                    continue;
+                }
+                else {
+                    pos = i;
+                    break;
+                }
+            }
+        }
+
+        if (pos == std::string_view::npos) {
+            return { path, "/" };
+        }
+
+        std::string_view host = path.substr(0, pos);
+        std::string_view url = path.substr(pos);
+        if (url.length() > 1 && url.back() == '/') {
+            url = url.substr(0, url.length() - 1);
+        }
+
+        return { host, url };
+    }
+
+    inline std::pair<std::string, std::string> get_host_port(std::string_view path, bool is_ssl) {
+        size_t pos = path.rfind(':');
+        if (pos == std::string_view::npos) {
+            if (path.find("https") != std::string_view::npos) {
+                return { std::string(path), "https" };
+            }
+
+            return { std::string(path), is_ssl ? "https" : "http" };
+        }
+
+        if (pos > path.length() - 1) {
+            return {};
+        }
+
+        if (path.find("http") != std::string_view::npos) {
+            size_t pos1 = path.find(':');
+            if (pos1 + 3 > path.length() - 1)
+                return {};
+
+            pos -= (pos1 + 3);
+            path = path.substr(pos1 + 3);
+        }
+
+        if (path[pos - 1] == 'p') {
+            return { std::string(path), "http" };
+        }
+        else if (path[pos - 1] == 's') {
+            return { std::string(path), "https" };
+        }
+
+        return { std::string(path.substr(0, pos)), std::string(path.substr(pos + 1)) };
+    }
+
 	template<typename T>
 	constexpr bool  is_int64_v = std::is_same_v<T, std::int64_t> || std::is_same_v<T, std::uint64_t>;
 
