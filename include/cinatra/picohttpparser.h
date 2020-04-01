@@ -160,7 +160,7 @@ static const char *token_char_map = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\
 "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
-static const char *findchar_fast(const char *buf, const char *buf_end, const char *ranges, size_t ranges_size, int *found) {
+static const char *findchar_fast(const char *buf, const char *buf_end, const char *ranges, int ranges_size, int *found) {
 	*found = 0;
 #if __SSE4_2__
 	if (likely(buf_end - buf >= 16)) {

@@ -308,7 +308,6 @@ namespace cinatra {
     // 	bools.push(contain?false:true);
     // }
     // console.log(JSON.stringify(bools))
-    // 浏览器运行 js 生成 valid_chr 数组
 
     inline const constexpr bool valid_chr[128] =
     {
