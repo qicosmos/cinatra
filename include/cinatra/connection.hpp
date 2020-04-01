@@ -437,7 +437,7 @@ namespace cinatra {
 			}
 		}
 
-		void handle_pipeline(int ret, std::size_t bytes_transferred) {
+		void handle_pipeline(size_t ret, std::size_t bytes_transferred) {
 			res_.set_delay(true);
 			req_.set_last_len(len_);
 			handle_request(bytes_transferred);
@@ -449,7 +449,7 @@ namespace cinatra {
 			
 			auto& rep_str = res_.response_str();
 			int result = 0;
-			int left = ret;
+            size_t left = ret;
 			bool head_not_complete = false;
 			bool body_not_complete = false;
 			size_t left_body_len = 0;
