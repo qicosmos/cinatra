@@ -36,6 +36,7 @@ namespace cinatra {
     template<typename SocketType>
 	class simple_client : public std::enable_shared_from_this<simple_client<SocketType>> {
 	public:
+        using type = SocketType;
         simple_client(boost::asio::io_service& io_context, std::string addr, std::string port, size_t timeout = 60) : ios_(io_context),
             socket_(io_context), resolver_(io_context), addr_(std::move(addr)),
             port_(std::move(port)), timer_(io_context), timeout_seconds_(timeout), chunked_size_buf_(10) {

@@ -49,6 +49,12 @@ namespace cinatra {
             return ptr;
 		}
 
+        template<typename T>
+        std::weak_ptr<connection<T>> get_weak_conn() {
+            connection<T>* ptr = (connection<T>*)(conn_.get());
+            return ptr->shared_from_this();
+        }
+
 		int parse_header(std::size_t last_len, size_t start=0) {
 			using namespace std::string_view_literals;
 			if(!copy_headers_.empty())
