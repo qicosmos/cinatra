@@ -53,11 +53,6 @@ namespace cinatra {
             return ptr;
 		}
 
-        template<typename T>
-        std::weak_ptr<connection<T>> get_weak_conn() {
-            return conn_;
-        }
-
 		int parse_header(std::size_t last_len, size_t start=0) {
 			using namespace std::string_view_literals;
 			if(!copy_headers_.empty())
@@ -230,7 +225,6 @@ namespace cinatra {
 			for (auto& file : files_) {
 				file.close();
 			}
-            conn_.reset();
 			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
