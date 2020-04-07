@@ -53,6 +53,10 @@ namespace cinatra {
             return ptr;
 		}
 
+        conn_type get_weak_base_conn() {
+            return conn_;
+        }
+
 		int parse_header(std::size_t last_len, size_t start=0) {
 			using namespace std::string_view_literals;
 			if(!copy_headers_.empty())
