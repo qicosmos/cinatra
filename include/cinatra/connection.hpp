@@ -47,21 +47,25 @@ namespace cinatra {
             unsigned long ssl_options = boost::asio::ssl::context::default_workarounds
                 | boost::asio::ssl::context::no_sslv2
                 | boost::asio::ssl::context::single_dh_use;
+            try {
+                boost::asio::ssl::context ssl_context(boost::asio::ssl::context::sslv23);
+                ssl_context.set_options(ssl_options);
+                ssl_context.set_password_callback([](auto, auto) {return "123456"; });
 
-            boost::asio::ssl::context ssl_context(boost::asio::ssl::context::sslv23);
-            ssl_context.set_options(ssl_options);
-            ssl_context.set_password_callback([](auto, auto) {return "123456"; });
+                std::error_code ec;
+                if (fs::exists(ssl_conf.cert_file, ec)) {
+                    ssl_context.use_certificate_chain_file(std::move(ssl_conf.cert_file));
+                }
 
-            std::error_code ec;
-            if (fs::exists(ssl_conf.cert_file, ec)) {
-                ssl_context.use_certificate_chain_file(std::move(ssl_conf.cert_file));
+                if (fs::exists(ssl_conf.key_file, ec))
+                    ssl_context.use_private_key_file(std::move(ssl_conf.key_file), boost::asio::ssl::context::pem);
+
+                //ssl_context_callback(ssl_context);
+                ssl_stream_ = std::make_unique<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>(socket_, ssl_context);
             }
-
-            if (fs::exists(ssl_conf.key_file, ec))
-                ssl_context.use_private_key_file(std::move(ssl_conf.key_file), boost::asio::ssl::context::pem);
-
-            //ssl_context_callback(ssl_context);
-            ssl_stream_ = std::make_unique<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>(socket_, ssl_context);
+            catch (const std::exception& e) {
+                std::cout << e.what() << "\n";
+            }            
 #endif
         }
 
@@ -293,11 +297,7 @@ namespace cinatra {
 		//}
 	private:
 		void do_read() {
-			last_transfer_ = 0;
-			len_ = 0;
-			req_.reset();
-			res_.reset();
-			reset_timer();
+            reset();
 
             if (is_ssl_ && !has_shake_) {
                 async_handshake();
@@ -306,6 +306,14 @@ namespace cinatra {
 				async_read_some();
 			}
 		}
+
+        void reset() {
+            last_transfer_ = 0;
+            len_ = 0;
+            req_.reset();
+            res_.reset();
+            reset_timer();
+        }
 
 		void async_handshake() {
 #ifdef CINATRA_ENABLE_SSL            
@@ -577,6 +585,7 @@ namespace cinatra {
 				do_read();
 			}
 			else {
+                reset();
 				cancel_timer(); //avoid close two times
 				shutdown();
 				close();

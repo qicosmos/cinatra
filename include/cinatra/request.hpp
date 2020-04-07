@@ -27,7 +27,7 @@ namespace cinatra {
 	template <typename T>
 	class connection;
 
-    using conn_type = std::shared_ptr<base_connection>;
+    using conn_type = std::weak_ptr<base_connection>;
     class request;
     using check_header_cb = std::function<bool(request&)>;
 
@@ -45,14 +45,17 @@ namespace cinatra {
 
         template<typename T>
         connection<T>* get_conn() {
-            connection<T>* ptr = (connection<T>*)(conn_.get());
+            auto base_conn = conn_.lock();
+            if (base_conn == nullptr)
+                return nullptr;
+
+            connection<T>* ptr = (connection<T>*)(base_conn.get());
             return ptr;
 		}
 
         template<typename T>
         std::weak_ptr<connection<T>> get_weak_conn() {
-            connection<T>* ptr = (connection<T>*)(conn_.get());
-            return ptr->shared_from_this();
+            return conn_;
         }
 
 		int parse_header(std::size_t last_len, size_t start=0) {
@@ -227,6 +230,7 @@ namespace cinatra {
 			for (auto& file : files_) {
 				file.close();
 			}
+            conn_.reset();
 			files_.clear();
 			is_chunked_ = false;
 			state_ = data_proc_state::data_begin;
