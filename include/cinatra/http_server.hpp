@@ -49,11 +49,28 @@ namespace cinatra {
             ssl_conf_ = std::move(conf);
         }
 
+        bool port_in_use(unsigned short port) {
+            using namespace boost::asio;
+            using ip::tcp;
+
+            io_service svc;
+            tcp::acceptor a(svc);
+
+            boost::system::error_code ec;
+            a.open(tcp::v4(), ec) || a.bind({ tcp::v4(), port }, ec);
+
+            return ec == error::address_in_use;
+        }
+
 		//address :
 		//		"0.0.0.0" : ipv4. use 'https://localhost/' to visit
 		//		"::1" : ipv6. use 'https://[::1]/' to visit
 		//		"" : ipv4 & ipv6.
 		bool listen(std::string_view address, std::string_view port) {
+            if (port_in_use(atoi(port.data()))) {
+                return false;
+            }
+
 			boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
 			return listen(query);
 		}
