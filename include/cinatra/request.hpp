@@ -888,9 +888,9 @@ namespace cinatra {
 		size_t method_len_ = 0;
 		const char *url_ = nullptr;
 		size_t url_len_ = 0;
-		int minor_version_;
-		int header_len_;
-		size_t body_len_;
+		int minor_version_ = 0;
+		int header_len_ = 0;
+		size_t body_len_ = 0;
 
 		std::string raw_url_;
 		std::string method_str_;
@@ -924,7 +924,7 @@ namespace cinatra {
 		std::vector<upload_file> files_;
 		std::map<std::string,std::string> utf8_character_params_;
 		std::map<std::string,std::string> utf8_character_pathinfo_params_;
-		std::int64_t range_start_pos_;
+		std::int64_t range_start_pos_ = 0;
 		bool is_range_resource_ = 0;
 		std::int64_t static_resource_file_size_ = 0;
 		std::vector<std::string> aspect_data_;
