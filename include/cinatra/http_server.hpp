@@ -77,6 +77,10 @@ namespace cinatra {
 
 		//support ipv6 & ipv4
 		bool listen(std::string_view port) {
+            if (port_in_use(atoi(port.data()))) {
+                return false;
+            }
+
 			boost::asio::ip::tcp::resolver::query query(port.data());
 			return listen(query);
 		}
