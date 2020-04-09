@@ -292,7 +292,7 @@ client->send_msg<TEXT, 3000, GET>("/string", "hello"); //get string, timeout is 
 注意：在client文件上传结束之前不要重新上传文件。
 
 ```
-auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
 client->on_progress([](std::string progress) {
 	std::cout << progress << "\n";
 });
@@ -311,7 +311,7 @@ client->upload_file("/upload_multipart", filename, [](auto ec) {
 ```
 	for (auto& filename : v) {
 
-		auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+		auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
 		client->on_progress([](std::string progress) {
 			std::cout << progress << "\n";
 		});
@@ -331,7 +331,7 @@ client->upload_file("/upload_multipart", filename, [](auto ec) {
 ### 文件下载
 
 ```
-auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
 auto s = "/public/static/test1.png";
 auto filename = std::filesystem::path(s).filename().string();
 client->download_file("temp", filename, s, [](auto ec) {
@@ -363,10 +363,7 @@ on_length回调下载的数据的长度；
 on_data回调下下载的数据，注意，如果设置了on_data，cinatra将不会去将下载的数据存到文件中，而是完全交给用户去处理；如果没有设置该回调则会默认存文件。
 
 ```
-	boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
-	ctx.set_default_verify_paths();
-
-	auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "https", ctx);
+	auto client = cinatra::client_factory::instance().new_client<cinatra::SSL>("127.0.0.1", "https");
 	client->on_length([](size_t _length) {
 		std::cout << "download file: on_length: " << _length << std::endl;
 	});
