@@ -288,6 +288,10 @@ namespace cinatra {
             req_.set_validate(max_header_len, std::move(check_headers));
         }
 
+        void enable_response_time(bool enable) {
+            res_.enable_response_time(enable);
+        }
+
 		bool has_close() {
 			return has_closed_;
 		}

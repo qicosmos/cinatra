@@ -239,6 +239,10 @@ namespace cinatra {
 			enable_timeout_ = enable;
 		}
 
+        void enable_response_time(bool enable) {
+            need_response_time_ = enable;
+        }
+
         void set_transfer_type(transfer_type type) {
             transfer_type_ = type;
         }
@@ -257,6 +261,7 @@ namespace cinatra {
                         new_conn->set_multipart_begin(multipart_begin_);
                     }
 					
+                    new_conn->enable_response_time(need_response_time_);
 					new_conn->enable_timeout(enable_timeout_);
 
                     if (check_headers_) {
@@ -511,6 +516,7 @@ namespace cinatra {
 
         transfer_type transfer_type_ = transfer_type::CHUNKED;
         ssl_configure ssl_conf_;
+        bool need_response_time_ = false;
 	};
 
     template<typename T>

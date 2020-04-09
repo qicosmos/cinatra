@@ -20,15 +20,21 @@
 namespace cinatra {
 	class response {
 	public:
-        response(){
-            char mbstr[50];
-            std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
-            std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
-            last_date_str_ = mbstr;
+        response() {
         }
 
 		std::string& response_str(){
             return rep_str_;
+        }
+
+        void enable_response_time(bool enable) {
+            need_response_time_ = enable;
+            if (need_response_time_) {
+                char mbstr[50];
+                std::time_t tm = std::chrono::system_clock::to_time_t(last_time_);
+                std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
+                last_date_str_ = mbstr;
+            }
         }
 
         template<status_type status, res_content_type content_type, size_t N>
@@ -39,21 +45,29 @@ namespace cinatra {
 
             rep_str_.append(status_str).append(len_str.data(), len_str.size()).append(type_str).append(rep_server);
 
+            if(need_response_time_)
+                append_date_time();
+            else
+                rep_str_.append("\r\n");
+
+            rep_str_.append(content);
+        }
+
+        void append_date_time() {
             using namespace std::chrono_literals;
 
             auto t = std::chrono::system_clock::now();
-            if(t-last_time_>1s){
+            if (t - last_time_ > 1s) {
                 char mbstr[50];
                 std::time_t tm = std::chrono::system_clock::to_time_t(t);
                 std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
                 last_date_str_ = mbstr;
                 rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
                 last_time_ = t;
-            }else{
+            }
+            else {
                 rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
             }
-
-            rep_str_.append(content);
         }
 
 		void build_response_str() {
@@ -86,19 +100,10 @@ namespace cinatra {
 				session_->set_need_update(false);
 			}
 
-            using namespace std::chrono_literals;
-
-            auto t = std::chrono::system_clock::now();
-            if(t-last_time_>1s){
-                char mbstr[50];
-                std::time_t tm = std::chrono::system_clock::to_time_t(t);
-                std::strftime(mbstr, sizeof(mbstr), "%a, %d %b %Y %T GMT", std::localtime(&tm));
-                last_date_str_ = mbstr;
-                rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
-                last_time_ = t;
-            }else{
-                rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
-            }
+            if (need_response_time_)
+                append_date_time();
+            else
+                rep_str_.append("\r\n");
 
 			rep_str_.append(std::move(content_));
 		}
@@ -380,6 +385,7 @@ namespace cinatra {
 		std::chrono::system_clock::time_point last_time_ = std::chrono::system_clock::now();
 		std::string last_date_str_;
         res_content_type res_type_;
+        bool need_response_time_ = false;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP
