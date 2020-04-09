@@ -274,13 +274,16 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ### 发get/post消息
 ```
-auto client = cinatra::client_factory::instance().new_client("127.0.0.1", "8080");
+auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
 client->send_msg("/string", "hello"); //post json, default timeout is 3000ms
 client->send_msg<TEXT>("/string", "hello"); //post string, default timeout is 3000ms
 
 client->send_msg<TEXT, 2000>("/string", "hello"); //post string, timeout is 2000ms
 
 client->send_msg<TEXT, 3000, GET>("/string", "hello"); //get string, timeout is 3000ms
+
+    auto s1 = cinatra::get("baidu.com");
+    auto s2 = cinatra::post("baidu.com", "your post content");
 ```
 
 ### 文件上传
