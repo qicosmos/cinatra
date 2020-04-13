@@ -150,6 +150,10 @@ namespace cinatra {
 			version_ = " HTTP/1.0\r\n";
 		}
 
+        int status() const {
+            return parser_.status();
+        }
+
 		std::string_view get_header_value(std::string_view key) {
 			return parser_.get_header_value(key);
 		}
