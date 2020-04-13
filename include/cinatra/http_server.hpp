@@ -124,6 +124,10 @@ namespace cinatra {
 			io_service_pool_.run();
 		}
 
+		void run_until(std::chrono::system_clock::time_point tp) {
+			io_service_pool_.run_until(tp);
+		}
+
 		intptr_t run_one() {
 			return io_service_pool_.run_one();
 		}

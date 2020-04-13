@@ -35,6 +35,10 @@ namespace cinatra
 				threads[i]->join();
 		}
 
+		void run_until(std::chrono::system_clock::time_point tp) {
+			io_services_[0]->run_until(tp);
+		}
+
 		intptr_t run_one() {
 			return -1;
 		}
