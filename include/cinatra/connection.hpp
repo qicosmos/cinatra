@@ -346,9 +346,7 @@ namespace cinatra {
 			socket().async_read_some(boost::asio::buffer(req_.buffer(), req_.left_size()),
 				[this, self = this->shared_from_this()](const boost::system::error_code& e, std::size_t bytes_transferred) {
 				if (e) {
-					if (e == boost::asio::error::eof) {
-						shutdown_send();
-					}
+                    close();
 					has_shake_ = false;
 					return;
 				}
@@ -359,10 +357,7 @@ namespace cinatra {
 
 		void handle_read(const boost::system::error_code& e, std::size_t bytes_transferred) {
 			if (e) {
-				if (e == boost::asio::error::eof) {
-					shutdown_send();
-				}
-
+                close();
 				return;
 			}
 
@@ -1092,6 +1087,10 @@ namespace cinatra {
 					return;
 				}
 
+                if (ret == ws_frame_type::WS_INCOMPLETE_TEXT_FRAME || ret == ws_frame_type::WS_INCOMPLETE_BINARY_FRAME) {
+                    last_ws_str_.append(std::move(payload));
+                }
+
 				if (!handle_ws_frame(ret, std::move(payload), bytes_transferred))
 					return;
 
@@ -1113,7 +1112,12 @@ namespace cinatra {
 			case cinatra::ws_frame_type::WS_BINARY_FRAME:
 			{
 				reset_timer();
-				req_.set_part_data({ payload.data(), payload.length() });
+                std::string temp;
+                if (!last_ws_str_.empty()) {
+                    temp = std::move(last_ws_str_);                    
+                }
+                temp.append(std::move(payload));
+				req_.set_part_data(temp);
 				req_.call_event(data_proc_state::data_continue);
 			}
 			//on message
@@ -1333,6 +1337,8 @@ namespace cinatra {
 		int active_buffer_ = 0;
 		std::function<void()> send_ok_cb_ = nullptr;
 		std::function<void(const boost::system::error_code&)> send_failed_cb_ = nullptr;
+
+        std::string last_ws_str_;
 
 		std::string chunked_header_;
 		multipart_reader multipart_parser_;

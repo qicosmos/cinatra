@@ -54,10 +54,14 @@ namespace cinatra {
             using ip::tcp;
 
             io_service svc;
-            tcp::acceptor a(svc);
+            tcp::acceptor acept(svc);
 
             boost::system::error_code ec;
-            a.open(tcp::v4(), ec) || a.bind({ tcp::v4(), port }, ec);
+            acept.open(tcp::v4(), ec);
+#ifdef __linux__
+            acept.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
+#endif
+            acept.bind({ tcp::v4(), port }, ec);
 
             return ec == error::address_in_use;
         }
@@ -72,8 +76,21 @@ namespace cinatra {
             }
 
 			boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
-			return listen(query);
+            auto [r, err_msg] = listen(query);
+            return r;
 		}
+
+        bool listen(std::string_view address, std::string_view port, std::string& error_msg) {
+            if (port_in_use(atoi(port.data()))) {
+                error_msg = std::string("port: ") + std::string(port) + " is in use!";
+                return false;
+            }
+
+            boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
+            auto [r, err_msg] = listen(query);
+            error_msg = std::move(err_msg);
+            return r;
+        }
 
 		//support ipv6 & ipv4
 		bool listen(std::string_view port) {
@@ -82,15 +99,16 @@ namespace cinatra {
             }
 
 			boost::asio::ip::tcp::resolver::query query(port.data());
-			return listen(query);
+			auto [r, err_msg] = listen(query);
+            return r;
 		}
 
-		bool listen(const boost::asio::ip::tcp::resolver::query & query) {
+		std::pair<bool, std::string> listen(const boost::asio::ip::tcp::resolver::query & query) {
 			boost::asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
 			boost::asio::ip::tcp::resolver::iterator endpoints = resolver.resolve(query);
 
 			bool r = false;
-
+            std::string err_msg;
 			for (; endpoints != boost::asio::ip::tcp::resolver::iterator(); ++endpoints) {
 				boost::asio::ip::tcp::endpoint endpoint = *endpoints;
 
@@ -105,12 +123,14 @@ namespace cinatra {
 					r = true;
 				}
 				catch (const std::exception& ex) {
-					std::cout << ex.what() << "\n";
-					//LOG_INFO << e.what();
+                    err_msg = ex.what();
+#ifdef DEBUG
+                    std::cout << ex.what() << "\n";
+#endif // DEBUG
 				}
 			}
 
-			return r;
+            return { r, std::move(err_msg) };
 		}
 
 		void stop() {
