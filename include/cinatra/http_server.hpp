@@ -58,7 +58,7 @@ namespace cinatra {
 
             boost::system::error_code ec;
             acept.open(tcp::v4(), ec);
-#ifdef __linux__
+#ifndef _WIN32
             acept.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
 #endif
             acept.bind({ tcp::v4(), port }, ec);
