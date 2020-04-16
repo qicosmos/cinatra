@@ -137,15 +137,22 @@ namespace cinatra {
 
         return { host, url };
     }
+    inline std::string_view remove_www(std::string_view path) {
+        if (path.find("www.") != std::string_view::npos)
+            return path.substr(4);
+
+        return path;
+    }
 
     inline std::pair<std::string, std::string> get_host_port(std::string_view path, bool is_ssl) {
+        std::string_view old_path = path;
         size_t pos = path.rfind(':');
         if (pos == std::string_view::npos) {
             if (path.find("https") != std::string_view::npos) {
-                return { std::string(path), "https" };
+                return { std::string(remove_www(path)), "https" };
             }
 
-            return { std::string(path), is_ssl ? "https" : "http" };
+            return { std::string(remove_www(path)), is_ssl ? "https" : "http" };
         }
 
         if (pos > path.length() - 1) {
@@ -157,15 +164,16 @@ namespace cinatra {
             if (pos1 + 3 > path.length() - 1)
                 return {};
 
-            pos -= (pos1 + 3);
             path = path.substr(pos1 + 3);
+            if (pos >= (pos1 + 3))
+                pos -= (pos1 + 3);
         }
 
-        if (path[pos - 1] == 'p') {
-            return { std::string(path), "http" };
+        if (old_path[pos - 1] == 'p') {
+            return { std::string(remove_www(path)), "http" };
         }
-        else if (path[pos - 1] == 's') {
-            return { std::string(path), "https" };
+        else if (old_path[pos - 1] == 's') {
+            return { std::string(remove_www(path)), "https" };
         }
 
         return { std::string(path.substr(0, pos)), std::string(path.substr(pos + 1)) };
