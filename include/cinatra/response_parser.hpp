@@ -4,7 +4,7 @@
 #include "picohttpparser.h"
 
 namespace cinatra {
-	constexpr const static size_t MAX_RESPONSE_SIZE = 1024*10;
+	constexpr const static size_t MAX_RESPONSE_SIZE = 1024*50;
 	class response_parser {
 	public:
 		response_parser() {
@@ -119,6 +119,10 @@ namespace cinatra {
 		int status() const {
 			return status_;
 		}
+
+        void set_status(status_type status) {
+            status_ = (int)status;
+        }
 
 		std::string_view get_header_value(std::string_view key) {
 			for (size_t i = 0; i < num_headers_; i++) {

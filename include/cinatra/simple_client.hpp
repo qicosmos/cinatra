@@ -695,6 +695,7 @@ namespace cinatra {
 							if (client_callback_) {
 								client_callback_(boost::asio::error::make_error_code(boost::asio::error::no_buffer_space), "");
 							}
+                            parser_.set_status(status_type::not_found);
 							set_response_msg("response message too long, more than " + std::to_string(MAX_RESPONSE_SIZE)+" from local server");
 							return;
 						}
