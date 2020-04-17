@@ -50,8 +50,6 @@ namespace cinatra {
                 static_assert(!is_ssl_, "please add definition CINATRA_ENABLE_SSL");//guard, not allowed coming in this branch
 #endif 
             }
-
-            chunk_body_.resize(chunk_buf_len + 4);
         }
 
 		~simple_client() {
@@ -136,6 +134,10 @@ namespace cinatra {
 		void add_header(std::string key, std::string value) {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
+
+        std::pair<phr_header*, size_t> get_resp_headers() {
+            return parser_.get_headers();
+        }
 
         void append_header_str(std::string header_str) {
             header_str_.append(std::move(header_str)).append("\r\n");
@@ -983,6 +985,10 @@ namespace cinatra {
                     callback0(callback, {}, "");
 					return;
 				}
+
+                if (chunk_body_.empty()) {
+                    chunk_body_.resize(chunk_buf_len + 4);
+                }
 
 				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
 				if (part_body.size() > left_chunk_len_) {
