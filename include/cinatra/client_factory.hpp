@@ -54,12 +54,12 @@ namespace cinatra {
         return client->template send_msg<CONTENT_TYPE, TIMEOUT, METHOD>(std::string(api), std::move(msg));
     }
 
-    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000>
+    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 5000>
     inline std::string get(std::string url) {
         return send_msg<SocketType, CONTENT_TYPE, TIMEOUT, GET>(url, "");
     }
 
-    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000>
+    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 5000>
     inline std::string post(std::string url, std::string post_content) {
         return send_msg<SocketType, CONTENT_TYPE, TIMEOUT>(url, std::move(post_content));
     }

@@ -385,6 +385,10 @@ namespace cinatra {
 		return name.substr(pos);
 	}
 
+    inline bool is_status_ok(int status) {
+        return (status == 200) || (status >= 301 && status <= 307 && status != 306);
+    }
+
 	inline std::string to_hex_string(std::size_t value) {
 		std::ostringstream stream;
 		stream << std::hex << value;

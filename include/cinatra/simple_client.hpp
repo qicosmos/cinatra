@@ -670,7 +670,7 @@ namespace cinatra {
 						set_response_msg("parse response error from local server");
 					}
 					else {                        
-                        if (parser_.status() >= 302 && parser_.status()<=307&& parser_.status()!=306) {
+                        if (parser_.status() >= 301 && parser_.status()<=307&& parser_.status()!=306) {
                             auto val = parser_.get_header_value("Location");
                             if (val.empty()) {
                                 promis_->set_value("");
@@ -684,6 +684,10 @@ namespace cinatra {
                         }
 
                         if (parser_.is_chunked()) {
+                            if (chunk_body_.empty()) {
+                                chunk_body_.resize(chunk_buf_len + 4);
+                            }
+
                             is_chunked_resp_ = true;
                             std::string_view chunked_content = parser_.curr_content();
                             handle_chunked(chunked_content, client_callback_);
@@ -778,7 +782,7 @@ namespace cinatra {
 				boost::asio::streambuf::const_buffers_type bufs = read_head_.data();
 				std::string_view line(boost::asio::buffer_cast<const char*>(bufs), bytes_transferred);
 				int ret = parser_.parse(line.data(), line.size(), 0);
-				if (ret < 0|| parser_.status() != 200) {//error
+				if (ret < 0|| !is_status_ok(parser_.status())) {//error
 					chunked_file_.close();
 					callback(boost::asio::error::make_error_code(((boost::asio::error::misc_errors)(parser_.status()))), "");
 					return;
@@ -843,6 +847,10 @@ namespace cinatra {
 			}
 
 			if (dec._state == 0) {
+                if (size <= content.size()) {
+                    write_chunked_data(std::move(body));
+                }
+
 				if (dec.bytes_left_in_chunk == 0) {
 					read_chunk_head(std::move(error_callback));
 				}
