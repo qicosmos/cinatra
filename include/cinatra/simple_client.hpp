@@ -785,7 +785,10 @@ namespace cinatra {
 				}
 
 				std::string_view part_body(boost::asio::buffer_cast<const char*>(bufs) + bytes_transferred, boost::asio::buffer_size(bufs) - bytes_transferred);
-				
+                if (chunk_body_.empty()) {
+                    chunk_body_.resize(chunk_buf_len + 4);
+                }
+
 				if (parser_.has_length()) {
 					left_chunk_len_ = parser_.body_len();
 					if (!part_body.empty()) {
