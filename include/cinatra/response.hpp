@@ -146,6 +146,10 @@ namespace cinatra {
 			headers_.emplace_back(std::move(key), std::move(value));
 		}
 
+        void clear_headers() {
+            headers_.clear();
+        }
+
 		void set_status(status_type status) {
 			status_ = status;
 		}
