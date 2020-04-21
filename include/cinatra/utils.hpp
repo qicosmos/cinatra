@@ -138,6 +138,9 @@ namespace cinatra {
         return { host, url };
     }
     inline std::string_view remove_www(std::string_view path) {
+        if (path.back() == '/') {
+            path = std::string_view(path.data(), path.length() - 1);
+        }
         if (path.find("www.") != std::string_view::npos)
             return path.substr(4);
 
