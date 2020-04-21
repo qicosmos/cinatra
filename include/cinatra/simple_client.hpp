@@ -576,8 +576,9 @@ namespace cinatra {
 
 		void handshake(client_callback_t callback) {
 #ifdef CINATRA_ENABLE_SSL
+            auto self = this->shared_from_this();
             socket().async_handshake(boost::asio::ssl::stream_base::client,
-				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
+				[this, self, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
 					read_chunk(callback);
 					do_write(callback);
@@ -593,8 +594,9 @@ namespace cinatra {
 
 		void handshake1(client_callback_t callback = nullptr) {
 #ifdef CINATRA_ENABLE_SSL
+            auto self = this->shared_from_this();
 			socket().async_handshake(boost::asio::ssl::stream_base::client,
-				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
+				[this, self, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
 					do_read();
 					do_write(callback);
@@ -609,8 +611,9 @@ namespace cinatra {
 
 		void handshake2(client_callback_t callback) {
 #ifdef CINATRA_ENABLE_SSL
+            auto self = this->shared_from_this();
             socket().async_handshake(boost::asio::ssl::stream_base::client,
-				[this, callback = std::move(callback)](const boost::system::error_code& ec) {
+				[this, self, callback = std::move(callback)](const boost::system::error_code& ec) {
 				if (!ec) {
 					do_read();
 					do_write_file(std::move(callback));
@@ -703,6 +706,10 @@ namespace cinatra {
 							set_response_msg("response message too long, more than " + std::to_string(MAX_RESPONSE_SIZE)+" from local server");
 							return;
 						}
+
+                        if (parser_.at_capacity()) {
+                            parser_.expand();
+                        }
 
 						if (parser_.has_body()) {
 							//if total>maxsize return

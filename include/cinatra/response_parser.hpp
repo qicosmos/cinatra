@@ -4,14 +4,17 @@
 #include "picohttpparser.h"
 
 namespace cinatra {
-	constexpr const static size_t MAX_RESPONSE_SIZE = 1024*50;
+	constexpr const static size_t MAX_RESPONSE_SIZE = 1024*1024*10;
 	class response_parser {
 	public:
 		response_parser() {
-			buf_.resize(MAX_RESPONSE_SIZE);
+			buf_.resize(10*1024);
 		}
 		
 		int parse(int last_len) {
+            if (!copy_headers_.empty())
+                copy_headers_.clear();
+
 			int minor_version;
 
 			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
@@ -31,6 +34,9 @@ namespace cinatra {
 		}
 
 		int parse(const char* buf, size_t cur_size, int last_len) {
+            if (!copy_headers_.empty())
+                copy_headers_.clear();
+
 			int minor_version;
 
 			num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
@@ -50,8 +56,17 @@ namespace cinatra {
 		}
 
 		bool at_capacity() {
-			return (header_len_ + body_len_) > MAX_RESPONSE_SIZE;
+			return (header_len_ + body_len_) > buf_.size();
 		}
+
+        void expand() {
+            for (size_t i = 0; i < num_headers_; i++) {
+                copy_headers_.emplace_back(std::string(headers_[i].name, headers_[i].name_len),
+                    std::string(headers_[i].value, headers_[i].value_len));
+            }
+
+            buf_.resize(total_len());
+        }
 
 		bool has_body() const {
 			return body_len_ != 0;
@@ -86,6 +101,16 @@ namespace cinatra {
 		}
 
         std::pair<phr_header*, size_t> get_headers() {
+            if (copy_headers_.empty())
+                return { headers_ , num_headers_ };
+
+            num_headers_ = copy_headers_.size();
+            for (size_t i = 0; i < num_headers_; i++) {
+                headers_[i].name = copy_headers_[i].first.data();
+                headers_[i].name_len = copy_headers_[i].first.size();
+                headers_[i].value = copy_headers_[i].second.data();
+                headers_[i].value_len = copy_headers_[i].second.size();
+            }
             return { headers_ , num_headers_ };
         }
 
@@ -124,14 +149,30 @@ namespace cinatra {
             status_ = (int)status;
         }
 
-		std::string_view get_header_value(std::string_view key) {
-			for (size_t i = 0; i < num_headers_; i++) {
-				if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
-					return std::string_view(headers_[i].value, headers_[i].value_len);
-			}
+        std::string_view get_header_value(std::string_view key) {
+            if (copy_headers_.empty()) {
+                for (size_t i = 0; i < num_headers_; i++) {
+                    if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
+                        return std::string_view(headers_[i].value, headers_[i].value_len);
+                }
 
-			return {};
-		}
+                return {};
+            }
+
+            auto it = std::find_if(copy_headers_.begin(), copy_headers_.end(), [this, key](auto& pair) {
+                if (iequal(pair.first.data(), pair.first.size(), key.data())) {
+                    return true;
+                }
+
+                return false;
+            });
+
+            if (it != copy_headers_.end()) {
+                return (*it).second;
+            }
+
+            return {};
+        }
 
 		bool is_chunked() {
 			if (has_length()) {
@@ -183,5 +224,6 @@ namespace cinatra {
 		size_t num_headers_ = 0;
 		struct phr_header headers_[100];
 		std::vector<char> buf_;
+        std::vector<std::pair<std::string, std::string>> copy_headers_;
 	};
 }
