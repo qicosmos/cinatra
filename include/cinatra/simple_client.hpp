@@ -686,6 +686,15 @@ namespace cinatra {
                             return;
                         }
 
+                        if (parser_.status() != 200) {
+                            if (client_callback_) {
+                                client_callback_(boost::asio::error::make_error_code(boost::asio::error::invalid_argument), "");
+                            }
+                            promis_->set_value(std::string(parser_.body()));
+                            close();
+                            return;
+                        }
+
                         if (parser_.is_chunked()) {
                             if (chunk_body_.empty()) {
                                 chunk_body_.resize(chunk_buf_len + 4);
@@ -727,6 +736,8 @@ namespace cinatra {
 					if (client_callback_) {
 						client_callback_(ec, "");
 					}
+                    parser_.set_status(status_type::not_found);
+                    promis_->set_value(ec.message());
 					close();
 				}
 			});
