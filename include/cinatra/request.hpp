@@ -53,6 +53,11 @@ namespace cinatra {
             return ptr;
 		}
 
+        bool is_conn_alive() {
+            auto base_conn = conn_.lock();
+            return base_conn != nullptr;
+        }
+
         conn_type get_weak_base_conn() {
             return conn_;
         }
