@@ -44,14 +44,30 @@ namespace cinatra {
         }
 
         template<typename T>
-        connection<T>* get_conn() {
-            auto base_conn = conn_.lock();
-            if (base_conn == nullptr)
+        connection<T>* get_raw_conn() {
+            if (conn_.expired())
                 return nullptr;
 
-            connection<T>* ptr = (connection<T>*)(base_conn.get());
-            return ptr;
-		}
+            if (auto base_conn = conn_.lock(); base_conn != nullptr) {
+                return (connection<T>*)(base_conn.get());
+            }
+            else {
+                return nullptr;
+            }
+        }
+
+        template<typename T>
+        std::shared_ptr<connection<T>> get_conn() {
+            if (conn_.expired())
+                return nullptr;
+
+            if (auto base_conn = conn_.lock(); base_conn != nullptr) {
+                return std::static_pointer_cast<connection<T>>(base_conn);
+            }
+            else {
+                return nullptr;
+            }
+        }
 
         bool is_conn_alive() {
             auto base_conn = conn_.lock();
