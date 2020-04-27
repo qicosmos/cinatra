@@ -164,7 +164,7 @@ namespace cinatra {
 
 		void set_status_and_content(status_type status) {
 			status_ = status;
-			set_content(to_string(status).data());
+			set_content(std::string(to_string(status)));
             build_response_str();
 		}
 
