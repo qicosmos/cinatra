@@ -102,9 +102,6 @@ int main() {
 		return -1;
 	}
 
-	server.enable_http_cache(false);//set global cache
-    server.set_res_cache_max_age(86400);
-	server.set_cache_max_age(5);
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok,"hello world");
 	});
