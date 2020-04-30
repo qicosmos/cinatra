@@ -45,6 +45,7 @@ namespace cinatra {
 
         template<typename T>
         connection<T>* get_raw_conn() {
+            static_assert(std::is_same_v<T, cinatra::SSL> || std::is_same_v<T, cinatra::NonSSL>, "invalid socket type, must be SSL or NonSSL");
             if (conn_.expired())
                 return nullptr;
 
@@ -58,6 +59,7 @@ namespace cinatra {
 
         template<typename T>
         std::shared_ptr<connection<T>> get_conn() {
+            static_assert(std::is_same_v<T, cinatra::SSL> || std::is_same_v<T, cinatra::NonSSL>, "invalid socket type, must be SSL or NonSSL");
             if (conn_.expired())
                 return nullptr;
 
