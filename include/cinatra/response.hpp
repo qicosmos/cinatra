@@ -358,6 +358,16 @@ namespace cinatra {
 			}
 		}
 
+		void set_static_file_abs_url(const std::string& static_file_path)
+		{
+			static_file_abs_url_ = static_file_path;
+		}
+
+		const std::string& get_static_file_abs_url()
+		{
+			return static_file_abs_url_;
+		}
+
 	private:
 		std::string_view get_header_value(std::string_view key) const {
 			phr_header* headers = req_headers_.first;
@@ -390,6 +400,7 @@ namespace cinatra {
 		std::string last_date_str_;
         res_content_type res_type_;
         bool need_response_time_ = false;
+	std::string static_file_abs_url_;
 	};
 }
 #endif //CINATRA_RESPONSE_HPP

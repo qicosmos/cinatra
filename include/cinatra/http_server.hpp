@@ -314,7 +314,12 @@ namespace cinatra {
 					case cinatra::data_proc_state::data_begin:
 					{
 						std::string relative_file_name = req.get_relative_filename();
-						std::string fullpath = static_dir_ + relative_file_name;
+						std::string fullpath = res.get_static_file_abs_url();
+						if(fullpath.length()==0) {
+							fullpath = static_dir_ + relative_file_name;
+						} else {
+							relative_file_name = fs::path(fullpath).filename().string();
+						}
 
 						auto mime = req.get_mime(relative_file_name);
 						auto in = std::make_shared<std::ifstream>(fullpath, std::ios_base::binary);
