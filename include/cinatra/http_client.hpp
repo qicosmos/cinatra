@@ -11,6 +11,7 @@
 #include <boost/asio.hpp>
 #include "uri.hpp"
 #include "http_parser.hpp"
+#include "itoa_jeaiii.hpp"
 
 #ifdef ASIO_STANDALONE
 #include <asio/ssl.hpp>
@@ -149,10 +150,9 @@ namespace cinatra {
         //don't mixed use download, make sure reset the client before reuse it
         error_code download(std::string src_file, std::string dest_file) {
             //not thread safe
-            namespace cfs = std::filesystem;
-            auto parant_path = cfs::path(dest_file).parent_path();
+            auto parant_path = fs::path(dest_file).parent_path();
             std::error_code code;
-            cfs::create_directories(parant_path, code);
+            fs::create_directories(parant_path, code);
             if (code) {
                 return error_code::filepath_error;
             }
@@ -184,14 +184,13 @@ namespace cinatra {
                 }
             }
 
-            namespace cfs = std::filesystem;
-            auto file = std::make_unique<std::ifstream>(filename, std::ios::binary);
+            auto file = std::make_shared<std::ifstream>(filename, std::ios::binary);
             if (!file) {
                 return error_code::filepath_error;
             }
 
             std::error_code ec;
-            size_t size = cfs::file_size(filename, ec);
+            size_t size = fs::file_size(filename, ec);
             if (ec || start == -1) {
                 file->close();
                 return error_code::filesize_error;
@@ -207,7 +206,7 @@ namespace cinatra {
             u.parse_from(uri.data());
             context ctx(u, http_method::POST);
             header_str_.append("Content-Type: multipart/form-data; boundary=").append(BOUNDARY);
-            auto multipart_str = multipart_file_start(cfs::path(filename).filename().string());
+            auto multipart_str = multipart_file_start(fs::path(filename).filename().string());
             auto write_str = build_write_msg(ctx, total_multipart_size(left_file_size, multipart_str.size()));
             write_str.append(multipart_str);
             multipart_str_ = std::move(write_str);
@@ -216,13 +215,6 @@ namespace cinatra {
             return error_code::success;
         }
 
-        void reset() {
-            promise_ = nullptr;
-            download_file_ = nullptr;
-            on_chunk_ = nullptr;
-            if (!chunked_result_.empty())
-                chunked_result_.clear();
-        }
 
         void add_header(std::string key, std::string val) {
             if (key.empty())
@@ -408,17 +400,17 @@ namespace cinatra {
             //add content
             if (!ctx.body.empty()) {
                 char buffer[20];
-                _itoa_s((int)ctx.body.size(), buffer, 10);
+                auto p = i32toa_jeaiii((int)ctx.body.size(), buffer);
 
-                write_msg.append("Content-Length: ").append(buffer).append("\r\n");
+                write_msg.append("Content-Length: ").append(buffer, p - buffer).append("\r\n");
             }
             else {
                 if (ctx.method == http_method::POST) {
                     if (content_len > 0) {
                         char buffer[20];
-                        _itoa_s((int)content_len, buffer, 10);
+                        auto p = i32toa_jeaiii((int)content_len, buffer);
 
-                        write_msg.append("Content-Length: ").append(buffer).append("\r\n");
+                        write_msg.append("Content-Length: ").append(buffer, p - buffer).append("\r\n");
                     }
                     else {
                         write_msg.append("Content-Length: 0").append("\r\n");
@@ -759,7 +751,7 @@ namespace cinatra {
             //verify peer TODO
         }
 
-        void send_file_data(std::unique_ptr<std::ifstream> file) {
+        void send_file_data(std::shared_ptr<std::ifstream> file) {
             auto eof = make_upload_data(*file);
             if (eof) {
                 return;

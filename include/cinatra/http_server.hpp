@@ -4,13 +4,19 @@
 #include <vector>
 #include <string_view>
 
-#ifdef _MSC_VER
-#include <filesystem>
-namespace fs = std::filesystem;
-#else
+#if defined (__GNUC__)
+#if __GNUC__ < 8
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
+#else
+#include <filesystem>
+namespace fs = std::filesystem;
 #endif
+#else
+#include <filesystem>
+namespace fs = std::filesystem;
+#endif
+
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
