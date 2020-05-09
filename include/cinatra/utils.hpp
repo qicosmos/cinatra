@@ -399,7 +399,7 @@ namespace cinatra {
 		return stream.str();
 	}
 
-    int64_t hex_to_int(std::string_view s) {
+    inline int64_t hex_to_int(std::string_view s) {
         if (s.empty())
             return -1;
 
