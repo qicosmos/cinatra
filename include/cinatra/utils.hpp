@@ -186,6 +186,7 @@ namespace cinatra {
 	constexpr bool  is_int64_v = std::is_same_v<T, std::int64_t> || std::is_same_v<T, std::uint64_t>;
 
 	enum class http_method {
+        UNKNOW,
 		DEL,
 		GET,
 		HEAD,
@@ -397,6 +398,19 @@ namespace cinatra {
 		stream << std::hex << value;
 		return stream.str();
 	}
+
+    int64_t hex_to_int(std::string_view s) {
+        if (s.empty())
+            return -1;
+
+        char* p;
+        int64_t n = strtoll(s.data(), &p, 16);
+        if (n == 0 && s.front() != '0') {
+            return -1;
+        }
+
+        return n;
+    }
 	inline const char *MAP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		"abcdefghijklmnopqrstuvwxyz"
 		"0123456789+/";
