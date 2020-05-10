@@ -328,6 +328,9 @@ namespace cinatra {
             if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
                 upgrade_to_ssl(nullptr);
+#else
+                //please open CINATRA_ENABLE_SSL before request https!
+                assert(false);
 #endif
             }
             else {

@@ -1,5 +1,5 @@
 #pragma once
-#include "simple_client.hpp"
+#include "http_client.hpp"
 
 namespace cinatra {
 	class client_factory {
@@ -9,9 +9,9 @@ namespace cinatra {
 			return instance;
 		}
 
-		template<typename T, typename...Args>
+		template<typename...Args>
 		auto new_client(Args&&... args) {
-			return std::make_shared<simple_client<T>>(ios_, std::forward<Args>(args)...);
+			return std::make_shared<http_client>(ios_, std::forward<Args>(args)...);
 		}
 
 		void run() {
@@ -42,25 +42,23 @@ namespace cinatra {
 		std::shared_ptr<std::thread> thd_;
 	};
 
-    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 3000, http_method METHOD = POST>
-    inline std::string send_msg(std::string url, std::string msg) {
-        assert(!url.empty());
-        constexpr bool is_ssl = std::is_same_v<SocketType, SSL>;
-        auto [domain, api] = get_domain_url(url);
-
-        auto [host, port] = get_host_port(domain, is_ssl);
-
-        auto client = client_factory::instance().new_client<SocketType>(std::string(host), std::string(port));
-        return client->template send_msg<CONTENT_TYPE, TIMEOUT, METHOD>(std::string(api), std::move(msg));
+    inline auto get(std::string uri, size_t timeout_seconds = 5) {
+        auto client = cinatra::client_factory::instance().new_client();
+        return client->get(std::move(uri), timeout_seconds);
     }
 
-    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 5000>
-    inline std::string get(std::string url) {
-        return send_msg<SocketType, CONTENT_TYPE, TIMEOUT, GET>(url, "");
+    inline auto post(std::string uri, std::string body, size_t timeout_seconds = 5) {
+        auto client = cinatra::client_factory::instance().new_client();
+        return client->post(std::move(uri), std::move(body), timeout_seconds);
     }
 
-    template<typename SocketType = NonSSL, res_content_type CONTENT_TYPE = res_content_type::json, size_t TIMEOUT = 5000>
-    inline std::string post(std::string url, std::string post_content) {
-        return send_msg<SocketType, CONTENT_TYPE, TIMEOUT>(url, std::move(post_content));
+    inline error_code async_get(std::string uri, callback_t cb) {
+        auto client = cinatra::client_factory::instance().new_client();
+        return client->async_get(std::move(uri), std::move(cb));
+    }
+
+    inline error_code async_post(std::string uri, std::string body, callback_t cb) {
+        auto client = cinatra::client_factory::instance().new_client();
+        return client->async_post(std::move(uri), std::move(body), std::move(cb));
     }
 }
