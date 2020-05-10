@@ -4,11 +4,10 @@
 #include <tuple>
 #include <atomic>
 #include <fstream>
-#include <filesystem>
 #include <mutex>
 #include <deque>
 #include <string_view>
-#include <boost/asio.hpp>
+#include "use_asio.hpp"
 #include "uri.hpp"
 #include "http_parser.hpp"
 #include "itoa_jeaiii.hpp"
@@ -894,7 +893,7 @@ namespace cinatra {
             socket_.close(igored_ec);
             socket_ = decltype(socket_)(ios_);
             if (!socket_.is_open()) {
-                socket_.open(boost::asio::ip::tcp::v4());
+                socket_.open(boost::asio::ip::tcp::v4(), igored_ec);
             }
         }
 

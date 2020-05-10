@@ -257,7 +257,7 @@ namespace cinatra {
             /*if (c==' ') new_str += '+';
             else */if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') new_str += c;
             else {
-                sprintf_s(buf_hex, "%X", c);
+                sprintf(buf_hex, "%X", c);
                 if (ic < 16)
                     new_str += "%0";
                 else
