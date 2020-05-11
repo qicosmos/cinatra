@@ -78,6 +78,16 @@ namespace cinatra {
             return { headers_ , num_headers_ };
         }
 
+        void set_headers(const std::vector<std::pair<std::string, std::string>>& headers) {
+            num_headers_ = headers.size();
+            for (size_t i = 0; i < num_headers_; i++) {
+                headers_[i].name = headers[i].first.data();
+                headers_[i].name_len = headers[i].first.size();
+                headers_[i].value = headers[i].second.data();
+                headers_[i].value_len = headers[i].second.size();
+            }            
+        }
+
     private:
         std::string_view get_header_value(phr_header* headers, size_t num_headers, std::string_view key) {
             for (size_t i = 0; i < num_headers; i++) {

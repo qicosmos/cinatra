@@ -131,7 +131,7 @@ namespace cinatra {
         }
 
         std::tuple<error_code, int, std::string> request(http_method method, std::string uri, std::string body = "", size_t seconds = 5) {
-            if (seconds > timeout_seconds_) {
+            if (timeout_seconds_>0&&seconds > timeout_seconds_) {
                 return { error_code::invalid_argument, 404, "" };
             }
 
@@ -273,9 +273,8 @@ namespace cinatra {
         }
 
         std::pair<phr_header*, size_t> get_resp_headers() {
-            if (!copy_headers_.empty()) {
-                return to_phr_headers();
-            }
+            if (!copy_headers_.empty())
+                parser_.set_headers(copy_headers_);
 
             return parser_.get_headers();
         }
@@ -538,6 +537,7 @@ namespace cinatra {
                     bool is_chunked = parser_.is_chunked();
                     
                     if (is_chunked) {
+                        copy_headers();
                         //read_chunk_header
                         read_chunk_head(parser_.keep_alive());
                     }
@@ -803,7 +803,8 @@ namespace cinatra {
 
             boost::asio::ssl::context ssl_context(boost::asio::ssl::context::sslv23);
             ssl_context.set_default_verify_paths();
-            ssl_context.set_options(boost::asio::ssl::context::default_workarounds);
+            boost::system::error_code ec;
+            ssl_context.set_options(boost::asio::ssl::context::default_workarounds, ec);
             if (ssl_context_callback) {
                 ssl_context_callback(ssl_context);
             }
@@ -879,16 +880,6 @@ namespace cinatra {
                 copy_headers_.emplace_back(std::string(headers[i].name, headers[i].name_len), 
                     std::string(headers[i].value, headers[i].value_len));
             }
-        }
-
-        std::pair<phr_header*, size_t> to_phr_headers() {
-            phr_header headers[100];
-            for (size_t i = 0; i < copy_headers_.size(); i++) {
-                auto&[key, val] = copy_headers_[i];
-                headers[i] = { key.data(), key.size(), val.data(), val.size() };
-            }
-
-            return { headers, copy_headers_.size() };
         }
 
         void reset_socket() {
