@@ -16,7 +16,7 @@ namespace cinatra {
             size_t msg_len;
             header_len_ = phr_parse_response(data, size, &minor_version, &status_, &msg, &msg_len, headers_, &num_headers_, last_len);
             msg_ = { msg, msg_len };
-            auto header_value = get_header_value(headers_, num_headers_, "content-length");
+            auto header_value = this->get_header_value("content-length");
             if (header_value.empty()) {
                 body_len_ = 0;
             }
@@ -37,7 +37,7 @@ namespace cinatra {
         }
 
         bool is_chunked() {
-            auto transfer_encoding = get_header_value("transfer-encoding");
+            auto transfer_encoding = this->get_header_value("transfer-encoding");
             if (transfer_encoding == "chunked"sv) {
                 return true;
             }
@@ -46,8 +46,8 @@ namespace cinatra {
         }
 
         bool keep_alive() {
-            auto val = get_header_value("connection");
-            if (val.empty()|| val=="Keep-Alive"sv) {
+            auto val = this->get_header_value("connection");
+            if (val.empty()|| iequal(val.data(), val.length(), "keep-alive")) {
                 return true;
             }
 

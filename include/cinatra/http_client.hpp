@@ -56,13 +56,14 @@ namespace cinatra {
         std::string_view resp_body;
         std::pair<phr_header*, size_t> resp_headers;
     };
+
     using callback_t = std::function<void(boost::system::error_code, callback_data)>;
     class http_client : public std::enable_shared_from_this<http_client> {
     public:
         http_client(boost::asio::io_service& ios, size_t read_timout = 60) : 
             ios_(ios), resolver_(ios), socket_(ios), timer_(ios), timeout_seconds_(read_timout) {
         }
-
+        
         ~http_client() {
             close();
         }
@@ -119,6 +120,9 @@ namespace cinatra {
                 return code;
             }
             cb_ = std::move(cb);
+            if (promise_) {
+                promise_ = nullptr;
+            }
             context ctx(u, method, std::move(body));
             if (!has_connected_) {
                 async_connect(std::move(ctx), nullptr);
@@ -293,7 +297,7 @@ namespace cinatra {
 
         void callback(const boost::system::error_code& ec, int status, std::string_view result) {
             if (cb_) {
-                cb_(ec, { status, result, parser_.get_headers() });
+                cb_(ec, { status, result, get_resp_headers() });
             }
 
             if (on_chunk_) {
@@ -421,7 +425,11 @@ namespace cinatra {
         std::string build_write_msg(const context& ctx, size_t content_len = 0) {
             std::string write_msg(method_name(ctx.method));
             //can be optimized here
-            write_msg.append(" ").append(ctx.path).append(" HTTP/1.1\r\nHost:").
+            write_msg.append(" ").append(ctx.path);
+            if (!ctx.query.empty()) {
+                write_msg.append("?").append(ctx.query);
+            }
+            write_msg.append(" HTTP/1.1\r\nHost:").
                 append(ctx.host).append("\r\n");
 
             bool has_connection = false;
@@ -761,6 +769,10 @@ namespace cinatra {
         }
 
         void reset_timer() {
+            if (!cb_) {
+                return; //just for async request
+            }
+
             if (timeout_seconds_ == 0) {
                 return;
             }
@@ -773,7 +785,7 @@ namespace cinatra {
                 }
 
                 callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::timed_out), 404, "read timeout");
-                close();
+                //close();
                 if (download_file_) {
                     download_file_->close();
                 }
@@ -781,6 +793,10 @@ namespace cinatra {
         }
 
         void cancel_timer() {
+            if (!cb_) {
+                return; //just for async request
+            }
+
             if (timeout_seconds_ == 0) {
                 return;
             }

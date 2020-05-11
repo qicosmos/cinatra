@@ -240,6 +240,10 @@ namespace cinatra {
 
             return std::string(path);
         }
+
+        std::string get_query() const {
+            return std::string(query);
+        }
     };
     
     inline std::string url_encode(const std::string& str) {
@@ -272,15 +276,16 @@ namespace cinatra {
         std::string host;
         std::string port;
         std::string path;
-        std::string body;
+        std::string query;
+        std::string body;        
         http_method method = http_method::UNKNOW;
 
         context() = default;
         context(const uri_t& u, http_method mthd) : host(u.get_host()), port(u.get_port()),
-            path(u.get_path()), method(mthd) {
+            path(u.get_path()), query(u.get_query()), method(mthd) {
         }
         context(const uri_t& u, http_method mthd, std::string b) : host(u.get_host()), port(u.get_port()),
-            path(u.get_path()), method(mthd), body(std::move(b)){
+            path(u.get_path()), query(u.get_query()), method(mthd), body(std::move(b)){
         }
     };
 }
