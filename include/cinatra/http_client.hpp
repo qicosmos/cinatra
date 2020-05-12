@@ -120,9 +120,6 @@ namespace cinatra {
                 return code;
             }
             cb_ = std::move(cb);
-            if (promise_) {
-                promise_ = nullptr;
-            }
             context ctx(u, method, std::move(body));
             if (!has_connected_) {
                 async_connect(std::move(ctx), nullptr);
@@ -757,7 +754,7 @@ namespace cinatra {
 
             has_connected_ = false;
             boost::system::error_code ec;
-            timer_.cancel(ec);
+           // timer_.cancel(ec);
             socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
             socket_.close(ec);
 #ifdef CINATRA_ENABLE_SSL
