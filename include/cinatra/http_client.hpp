@@ -564,7 +564,7 @@ namespace cinatra {
                         }
 
                         size_t size_to_read = content_len - read_buf_.size();
-                        if (parser_.total_len() > read_buf_.capacity()) {
+                        if (parser_.total_len() > read_buf_.max_size()) {
                             copy_headers();
                         }
                         do_read_body(parser_.keep_alive(), parser_.status(), size_to_read);
