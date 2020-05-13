@@ -39,6 +39,7 @@ SOFTWARE.
 // try splitting the number into chucks that can be processed independently
 // try odd digit first
 // try writing 4 chars at a time
+
 namespace cinatra {
 #if 0
     // 1 char at a time
@@ -61,29 +62,29 @@ namespace cinatra {
 #else
     // 2 chars at a time
 
-    struct mypair { char t, o; };
+    struct pair { char t, o; };
 #define CINATRAP(T) T, '0',  T, '1', T, '2', T, '3', T, '4', T, '5', T, '6', T, '7', T, '8', T, '9'
-    static const mypair s_pairs[] = { CINATRAP('0'), CINATRAP('1'), CINATRAP('2'), CINATRAP('3'), CINATRAP('4'), CINATRAP('5'), CINATRAP('6'), CINATRAP('7'), CINATRAP('8'), CINATRAP('9') };
+    static const pair s_pairs[] = { CINATRAP('0'), CINATRAP('1'), CINATRAP('2'), CINATRAP('3'), CINATRAP('4'), CINATRAP('5'), CINATRAP('6'), CINATRAP('7'), CINATRAP('8'), CINATRAP('9') };
 
-#define CINATRAW(N, I) *(mypair*)&b[N] = s_pairs[I]
+#define CINATRAW(N, I) *(pair*)&b[N] = s_pairs[I]
 #define CINATRAA(N) t = (uint64_t(1) << (32 + N / 5 * N * 53 / 16)) / uint32_t(1e##N) + 1 + N/6 - N/8, t *= u, t >>= N / 5 * N * 53 / 16, t += N / 6 * 4, CINATRAW(0, t >> 32)
 #define CINATRAS(N) b[N] = char(uint64_t(10) * uint32_t(t) >> 32) + '0'
 #define CINATRAD(N) t = uint64_t(100) * uint32_t(t), CINATRAW(N, t >> 32)
 
-#define L0 b[0] = char(u) + '0'
-#define L1 CINATRAW(0, u)
-#define L2 CINATRAA(1), CINATRAS(2)
-#define L3 CINATRAA(2), CINATRAD(2)
-#define L4 CINATRAA(3), CINATRAD(2), CINATRAS(4)
-#define L5 CINATRAA(4), CINATRAD(2), CINATRAD(4)
-#define L6 CINATRAA(5), CINATRAD(2), CINATRAD(4), CINATRAS(6)
-#define L7 CINATRAA(6), CINATRAD(2), CINATRAD(4), CINATRAD(6)
-#define L8 CINATRAA(7), CINATRAD(2), CINATRAD(4), CINATRAD(6), CINATRAS(8)
-#define L9 CINATRAA(8), CINATRAD(2), CINATRAD(4), CINATRAD(6), CINATRAD(8)
+#define CINATRAL0 b[0] = char(u) + '0'
+#define CINATRAL1 CINATRAW(0, u)
+#define CINATRAL2 CINATRAA(1), CINATRAS(2)
+#define CINATRAL3 CINATRAA(2), CINATRAD(2)
+#define CINATRAL4 CINATRAA(3), CINATRAD(2), CINATRAS(4)
+#define CINATRAL5 CINATRAA(4), CINATRAD(2), CINATRAD(4)
+#define CINATRAL6 CINATRAA(5), CINATRAD(2), CINATRAD(4), CINATRAS(6)
+#define CINATRAL7 CINATRAA(6), CINATRAD(2), CINATRAD(4), CINATRAD(6)
+#define CINATRAL8 CINATRAA(7), CINATRAD(2), CINATRAD(4), CINATRAD(6), CINATRAS(8)
+#define CINATRAL9 CINATRAA(8), CINATRAD(2), CINATRAD(4), CINATRAD(6), CINATRAD(8)
 
 #endif
 
-#define LN(N) (L##N, b += N + 1)
+#define LN(N) (CINATRAL##N, b += N + 1)
 #define LZ LN
     // if you want to '\0' terminate
     //#define LZ(N) &(L##N, b[N + 1] = '\0')
