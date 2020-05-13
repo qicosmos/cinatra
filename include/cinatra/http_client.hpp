@@ -760,21 +760,24 @@ namespace cinatra {
             }
         }
 
-        void close() {
+        void close(bool close_ssl = true) {
+            boost::system::error_code ec;
+            if (close_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+                if (ssl_stream_) {
+                    ssl_stream_->shutdown(ec);
+                    ssl_stream_ = nullptr;
+                }
+#endif
+            }
+
             if (!has_connected_)
                 return;
 
-            has_connected_ = false;
-            boost::system::error_code ec;
-           // timer_.cancel(ec);
+            has_connected_ = false;            
+            timer_.cancel(ec);
             socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
             socket_.close(ec);
-#ifdef CINATRA_ENABLE_SSL
-            if (ssl_stream_) {
-                ssl_stream_->shutdown(ec);
-                ssl_stream_ = nullptr;
-            }
-#endif
         }
 
         void reset_timer() {
@@ -794,7 +797,7 @@ namespace cinatra {
                 }
 
                 callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::timed_out), 404, "read timeout");
-                //close();
+                close(false); //don't close ssl now, close ssl when read/write error
                 if (download_file_) {
                     download_file_->close();
                 }
