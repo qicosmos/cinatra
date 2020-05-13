@@ -158,7 +158,7 @@ namespace cinatra {
 					return;
 				}
 
-				self->close();
+				self->close(false);
 			});
 		}
 
@@ -621,7 +621,18 @@ namespace cinatra {
 			return content_type::unknown;
 		}
 
-		void close() {
+		void close(bool close_ssl = true) {
+#ifdef CINATRA_ENABLE_SSL
+            if (close_ssl && ssl_stream_) {
+                boost::system::error_code ec;
+                ssl_stream_->shutdown(ec);
+                ssl_stream_ = nullptr;
+            }
+#endif
+            if (has_closed_) {
+                return;
+            }
+
 			req_.close_upload_file();
             shutdown();
 			boost::system::error_code ec;
@@ -1155,7 +1166,7 @@ namespace cinatra {
 			timer_.expires_from_now(std::chrono::seconds(60));
 			timer_.async_wait([self = this->shared_from_this()](boost::system::error_code const& ec) {
 				if (ec) {
-					self->close();
+					self->close(false);
 					return;
 				}
 
@@ -1328,7 +1339,7 @@ namespace cinatra {
 		const long KEEP_ALIVE_TIMEOUT_;
 		const std::string& static_dir_;
 		bool has_shake_ = false;
-		bool has_closed_ = false;
+		std::atomic_bool has_closed_ = false;
 
 		//for writing message
 		std::mutex buffers_mtx_;
