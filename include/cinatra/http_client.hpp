@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <tuple>
+#include <future>
 #include <atomic>
 #include <fstream>
 #include <mutex>
@@ -69,17 +70,18 @@ namespace cinatra {
         }
 
         bool connect(std::string uri, size_t seconds = 3) {
-            std::promise<bool> promis;
-            auto code = async_connect(std::move(uri), &promis);
+            auto promise = std::make_shared<std::promise<bool>>();
+            std::weak_ptr<std::promise<bool>> weak(promise);
+            auto code = async_connect(std::move(uri), weak);
             if (code != error_code::success) {
-                promis.set_value(false);
+                promise->set_value(false);
             }
 
             try {
-                auto future = promis.get_future();
+                auto future = promise->get_future();
                 auto status = future.wait_for(std::chrono::seconds(seconds));
                 if (status == std::future_status::timeout) {
-                    promis.set_value(false);
+                    promise->set_value(false);
                 }
                 return future.get();
             }
@@ -122,7 +124,7 @@ namespace cinatra {
             cb_ = std::move(cb);
             context ctx(u, method, std::move(body));
             if (!has_connected_) {
-                async_connect(std::move(ctx), nullptr);
+                async_connect(std::move(ctx), {});
             }
             else {
                 send_msg(ctx);
@@ -283,6 +285,16 @@ namespace cinatra {
         std::string_view get_header_value(std::string_view key) {
             return parser_.get_header_value(key);
         }
+
+        void send_msg(std::string write_msg) {
+            std::unique_lock lock(write_mtx_);
+            outbox_.emplace_back(std::move(write_msg));
+            if (outbox_.size() > 1) {
+                return;
+            }
+
+            write();
+        }
     private:
         void callback(const boost::system::error_code& ec) {
             callback(ec, 404, "");
@@ -347,32 +359,34 @@ namespace cinatra {
         }
 
         /**************** connect *********************/
-        error_code async_connect(std::string uri, std::promise<bool>* promis) {
+        error_code async_connect(std::string uri, std::weak_ptr<std::promise<bool>> weak) {
             const auto& [code, u] = get_uri(uri);
             if (code != error_code::success) {
                 return code;
             }
 
             context ctx(u, http_method::UNKNOW);
-            async_connect(std::move(ctx), promis);
+            async_connect(std::move(ctx), weak);
             return error_code::success;
         }
 
-        void async_connect(context ctx, std::promise<bool>* promis) {
+        void async_connect(context ctx, std::weak_ptr<std::promise<bool>> weak) {
             boost::asio::ip::tcp::resolver::query query(ctx.host, ctx.port);
-            resolver_.async_resolve(query, [this, self = this->shared_from_this(), promis, ctx = std::move(ctx)]
+            resolver_.async_resolve(query, [this, self = this->shared_from_this(), weak, ctx = std::move(ctx)]
             (boost::system::error_code ec, const boost::asio::ip::tcp::resolver::iterator& it) {
                 if (ec) {
+                    if (auto sp = weak.lock(); sp)
+                        sp->set_value(false);
                     callback(ec);
                     return;
                 }
 
-                boost::asio::async_connect(socket_, it, [this, self = shared_from_this(), promis, ctx = std::move(ctx)]
+                boost::asio::async_connect(socket_, it, [this, self = shared_from_this(), weak, ctx = std::move(ctx)]
                 (boost::system::error_code ec, const boost::asio::ip::tcp::resolver::iterator&) {
                     if (!ec) {
                         has_connected_ = true;
                         if (is_ssl()) {
-                            handshake(std::move(ctx), promis);
+                            handshake(std::move(ctx), weak);
                             return;
                         }
 
@@ -383,9 +397,8 @@ namespace cinatra {
                         close();
                     }
 
-                    if (promis) {
-                        promis->set_value(has_connected_);
-                    }
+                    if (auto sp = weak.lock(); sp)
+                        sp->set_value(has_connected_);
                 });
             });
         }
@@ -399,11 +412,11 @@ namespace cinatra {
             }
         }
 
-        void handshake(context ctx, std::promise<bool>* promis) {
+        void handshake(context ctx, std::weak_ptr<std::promise<bool>> weak) {
 #ifdef CINATRA_ENABLE_SSL
             auto self = this->shared_from_this();
             ssl_stream_->async_handshake(boost::asio::ssl::stream_base::client,
-                [this, self, promis, ctx = std::move(ctx)](const boost::system::error_code& ec) {
+                [this, self, weak, ctx = std::move(ctx)](const boost::system::error_code& ec) {
                 if (!ec) {
                     do_read(ctx);
                 }
@@ -412,9 +425,8 @@ namespace cinatra {
                     close();
                 }
 
-                if (promis) {
-                    promis->set_value(has_connected_);
-                }
+                if (auto sp = weak.lock(); sp)
+                    sp->set_value(has_connected_);
             });
 #endif
         }
