@@ -96,6 +96,10 @@ namespace cinatra {
 			if (header_len_ <0 )
 				return header_len_;
 
+            if (!check_request()) {
+                return -1;
+            }
+
 			check_gzip();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {

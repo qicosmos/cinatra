@@ -400,11 +400,6 @@ namespace cinatra {
 		}
 
 		void handle_request(std::size_t bytes_transferred) {
-            if (!req_.check_request()) {
-                response_back(status_type::bad_request, "request check error");
-                return;
-            }
-
 			if (req_.has_body()) {
 				auto type = get_content_type();
 				req_.set_http_type(type);
