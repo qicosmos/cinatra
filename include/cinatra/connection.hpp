@@ -756,7 +756,7 @@ namespace cinatra {
 				response_back(status_type::bad_request, "form urlencoded error");
 				return;
 			}
-            if (!req_.check_request()) {
+            if (req_.body_len() > 0 && !req_.check_request()) {
                 response_back(status_type::bad_request, "request check error");
                 return;
             }
@@ -1220,7 +1220,7 @@ namespace cinatra {
 				return;
 			}
 
-            if (!req_.check_request()) {
+            if (req_.body_len()>0&&!req_.check_request()) {
                 response_back(status_type::bad_request, "request check error");
                 return;
             }
