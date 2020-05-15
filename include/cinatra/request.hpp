@@ -96,13 +96,6 @@ namespace cinatra {
 			if (header_len_ <0 )
 				return header_len_;
 
-            if (check_headers_) {
-                bool r = check_headers_(*this);
-                if (!r) {
-                    return -1;
-                }
-            }
-
 			check_gzip();
 			auto header_value = get_header_value("content-length");
 			if (header_value.empty()) {
@@ -136,6 +129,14 @@ namespace cinatra {
 
 			return header_len_;
 		}
+
+        bool check_request() {
+            if (check_headers_) {
+                return check_headers_(*this);
+            }
+
+            return true;
+        }
 
 		std::string_view raw_url() {
 			return raw_url_;
