@@ -97,11 +97,13 @@ namespace cinatra {
             cb_ = std::move(cb);
         }
 
-        std::tuple<error_code, int, std::string> get(std::string uri, size_t seconds = 5) {
+        std::tuple<error_code, int, std::string> get(std::string uri, size_t seconds = 5, res_content_type type = res_content_type::json) {
+            content_type_ = type;
             return request(http_method::GET, std::move(uri), "", seconds);
         }
 
-        std::tuple<error_code, int, std::string> post(std::string uri, std::string body, size_t seconds = 5) {
+        std::tuple<error_code, int, std::string> post(std::string uri, std::string body, size_t seconds = 5, res_content_type type = res_content_type::json) {
+            content_type_ = type;
             return request(http_method::POST, std::move(uri), std::move(body), seconds);
         }
 
@@ -441,6 +443,8 @@ namespace cinatra {
             write_msg.append(" HTTP/1.1\r\nHost:").
                 append(ctx.host).append("\r\n");
 
+            build_content_type(content_type_);
+
             bool has_connection = false;
             //add user header
             if (!headers_.empty()) {
@@ -491,6 +495,19 @@ namespace cinatra {
             }
 
             return write_msg;
+        }
+
+        void build_content_type(res_content_type type) {
+            if (type != res_content_type::none) {
+                auto iter = res_mime_map.find(type);
+                if (iter != res_mime_map.end()) {
+                    if (type == res_content_type::multipart) {
+                        return;
+                    }
+                    
+                    add_header("Content-Type", std::string(iter->second));
+                }
+            }
         }
 
         void send_msg(const context& ctx) {
@@ -940,6 +957,7 @@ namespace cinatra {
 
         std::string header_str_;
         std::vector<std::pair<std::string, std::string>> headers_;
+        res_content_type content_type_ = res_content_type::json;
 
         std::mutex write_mtx_;
         std::deque<std::string> outbox_;
