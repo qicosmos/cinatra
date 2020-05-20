@@ -243,6 +243,29 @@ namespace cinatra {
 		}
 	}
 
+    inline std::string get_content_type_str(res_content_type type) {
+        std::string str;
+        switch (type) {
+        case res_content_type::html:
+            str = "text/html; charset=UTF-8";
+            break;
+        case res_content_type::json:
+            str = "application/json; charset=UTF-8";
+            break;
+        case res_content_type::string:
+            str = "text/html; charset=UTF-8";
+            break;
+        case res_content_type::multipart:
+            str = "multipart/form-data; boundary=";
+            break;
+        case res_content_type::none:
+        default:
+            break;
+        }
+
+        return str;
+    }
+
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::DEL>) noexcept { return "DELETE"sv; }
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::GET>) noexcept { return "GET"sv; }
 	constexpr auto type_to_name(std::integral_constant<http_method, http_method::HEAD>) noexcept { return "HEAD"sv; }
@@ -312,6 +335,16 @@ namespace cinatra {
 	inline void remove_char(std::string &str, const char ch) {
 		str.erase(std::remove(str.begin(), str.end(), ch), str.end());
 	}
+
+    template<typename... Args>
+    inline void print(Args... args) {
+        ((std::cout << args << ' '), ...);
+        std::cout << "\n";
+    }
+
+    inline void print(const boost::system::error_code& ec) {
+        print(ec.value(), ec.message());
+    }
 
     // var bools = [];
     // var valid_chr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-';
