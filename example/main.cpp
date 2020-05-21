@@ -137,6 +137,52 @@ void test_async_client() {
 #endif
 }
 
+void test_download() {
+    std::string uri = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->download(uri, "test.jpg", [](response_data data) {
+            if (data.ec) {
+                std::cout << data.ec.message() << "\n";
+                return;
+            }
+
+            std::cout << "finished download\n";
+        });
+    }
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->download(uri, [](auto ec, auto data) {
+            if (ec) {
+                std::cout << ec.message() << "\n";
+                return;
+            }
+
+            if (data.empty()) {
+                std::cout << "finished all \n";
+            }
+            else {
+                std::cout << data.size() << "\n";
+            }
+        });
+    }
+}
+
+void test_upload() {
+    std::string uri = "http://cn.bing.com/";
+    auto client = cinatra::client_factory::instance().new_client();
+    client->upload(uri, "boost_1_72_0.7z", [](response_data data) {
+        if (data.ec) {
+            std::cout << data.ec.message() << "\n";
+            return;
+        }
+
+        std::cout << data.resp_body << "\n"; //finished upload
+    });
+}
+
 class qps {
 public:
     void increase() {
@@ -168,6 +214,7 @@ int main() {
     //test_sync_client();
     //test_async_client();
     //test_ssl_server();
+    //test_download();
 	http_server server(std::thread::hardware_concurrency());
 	bool r = server.listen("0.0.0.0", "8090");
 	if (!r) {

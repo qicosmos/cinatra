@@ -272,108 +272,153 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ## cinatra客户端使用
 
-### 发get/post消息
+### 同步发get/post消息
+同步和异步发送接口都是返回response_data，它有4个字段分别是：网络错误码、http状态码、返回的消息、返回的header。
 ```
-auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
-client->send_msg("/string", "hello"); //post json, default timeout is 3000ms
-client->send_msg<TEXT>("/string", "hello"); //post string, default timeout is 3000ms
+void print(const response_data& result) {
+    print(result.ec, result.status, result.resp_body, result.resp_headers.second);
+}
 
-client->send_msg<TEXT, 2000>("/string", "hello"); //post string, timeout is 2000ms
+void test_sync_client() {
+    auto client = cinatra::client_factory::instance().new_client();
+    std::string uri = "http://www.baidu.com";
+    std::string uri1 = "http://cn.bing.com";
+    std::string uri2 = "https://www.baidu.com";
+    std::string uri3 = "https://cn.bing.com";
+    
+    response_data result = client->get(uri);
+    print(result);
 
-client->send_msg<TEXT, 3000, GET>("/string", "hello"); //get string, timeout is 3000ms
+    response_data result1 = client->get(uri1);
+    print(result1);
 
-    auto s1 = cinatra::get("baidu.com");
-    auto s2 = cinatra::post("baidu.com", "your post content");
+    print(client->post(uri, "hello"));
+    print(client->post(uri1, "hello"));
+
+#ifdef CINATRA_ENABLE_SSL
+    response_data result2 = client->get(uri2);
+    print(result2);
+
+    response_data result3 = client->get(uri3);
+    print(result3);
+
+    response_data result4 = client->get(uri3);
+    print(result4);
+
+    response_data result5 = client->get(uri2);
+    print(result5);
+#endif
+}
+```
+
+### 异步发get/post消息
+
+```
+void test_async_client() {
+    
+    std::string uri = "http://www.baidu.com";
+    std::string uri1 = "http://cn.bing.com";
+    std::string uri2 = "https://www.baidu.com";
+    std::string uri3 = "https://cn.bing.com";
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri, [](response_data data) {
+            print(data);
+        });
+    }
+    
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri1, [](response_data data) {
+            print(data);
+        });
+    }
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_post(uri, "hello", [](response_data data) {
+            print(data);
+        });
+    }
+
+#ifdef CINATRA_ENABLE_SSL
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri2, [](response_data data) {
+            print(data);
+        });
+    }
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri3, [](response_data data) {
+            print(data);
+        });
+    }
+#endif
+}
 ```
 
 ### 文件上传
 
-异步文件上传接口，只需要提供文件名即可。目前的接口只支持单个文件的上传，后续会支持多文件的上传。
-注意：在client文件上传结束之前不要重新上传文件。
+异步multipart文件上传。
 
 ```
-auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
-client->on_progress([](std::string progress) {
-	std::cout << progress << "\n";
-});
+void test_upload() {
+    std::string uri = "http://cn.bing.com/";
+    auto client = cinatra::client_factory::instance().new_client();
+    client->upload(uri, "boost_1_72_0.7z", [](response_data data) {
+        if (data.ec) {
+            std::cout << data.ec.message() << "\n";
+            return;
+        }
 
-client->upload_file("/upload_multipart", filename, [](auto ec) {
-	if (ec) {
-		std::cout << "upload failed, reason: "<<ec.message();
-	}
-	else {
-		std::cout << "upload successful\n";
-	}
-});
+        std::cout << data.resp_body << "\n"; //finished upload
+    });
+}
 ```
 
-如果要支持多文件上传，可以通过遍历方式上传：
-```
-	for (auto& filename : v) {
-
-		auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
-		client->on_progress([](std::string progress) {
-			std::cout << progress << "\n";
-		});
-
-		client->upload_file("/upload_multipart", filename, [](auto ec) {
-			if (ec) {
-				std::cout << "upload failed, reason: "<<ec.message();
-			}
-			else {
-				std::cout << "upload successful\n";
-			}
-		});
-
-	}
-```
 
 ### 文件下载
 
+提供了两个异步chunked下载接口，一个是直接下载到文件，一个是chunk回调给用户，由用户自己去处理下载的chunk数据
 ```
-auto client = cinatra::client_factory::instance().new_client<cinatra::NonSSL>("127.0.0.1", "8080");
-auto s = "/public/static/test1.png";
-auto filename = std::filesystem::path(s).filename().string();
-client->download_file("temp", filename, s, [](auto ec) {
-	if (ec) {
-		std::cout << ec.message() << "\n";
-	}
-	else {
-		std::cout << "ok\n";
-	}
-});
-```
-先建立连接，输入ip("127.0.0.1", "8080")或域名("purecpp.org", "http")；
-downlad_file接口第一个参数是下载目录，这个参数可以不填，如果不填则下载到当前目录；
-第二个参数是需要保存的文件名；
-第三个参数是静态资源的路径，注意要带上斜杠；
-第四个参数是下载的回调，如果没有错误就表示下载完成，否则为下载出错；
+void test_download() {
+    std::string uri = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
 
-#### 设置下载的用户回调
-```
-client->on_length([](size_t length){
-	std::cout<<"recieved data length: "<<length<<"\n";
-});
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->download(uri, "test.jpg", [](response_data data) {
+            if (data.ec) {
+                std::cout << data.ec.message() << "\n";
+                return;
+            }
 
-client->on_data([](std::string_view data){
-	std::cout<<"recieved data: "<<data<<"\n";
-});
-```
-on_length回调下载的数据的长度；
-on_data回调下下载的数据，注意，如果设置了on_data，cinatra将不会去将下载的数据存到文件中，而是完全交给用户去处理；如果没有设置该回调则会默认存文件。
+            std::cout << "finished download\n";
+        });
+    }
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->download(uri, [](auto ec, auto data) {
+            if (ec) {
+                std::cout << ec.message() << "\n";
+                return;
+            }
+
+            if (data.empty()) {
+                std::cout << "finished all \n";
+            }
+            else {
+                std::cout << data.size() << "\n";
+            }
+        });
+    }
+}
 
 ```
-	auto client = cinatra::client_factory::instance().new_client<cinatra::SSL>("127.0.0.1", "https");
-	client->on_length([](size_t _length) {
-		std::cout << "download file: on_length: " << _length << std::endl;
-	});
-	client->download_file("test.jpg", "/public/static/test.jpg", [](boost::system::error_code ec) {
-		std::cout << "download file: on_complete: " << (!ec ? "true - " : "false - ") << (ec ? ec.message() : "") << std::endl;
-	});
 
-	std::string ss;
-	std::cin >> ss;
-```
 
 # 性能测试
 ## 测试用例：
@@ -391,14 +436,6 @@ cinatra目前刚开始在生产环境中使用, 还处于开发完善阶段，�
 试用没问题了再在生产环境中使用，试用过程中发现了问题请及时提issue反馈或者邮件联系我。
 
 测试和使用稳定之后cinatra会发布正式版。
-
-# roadmap
-
-1. 增加一个基本的client用于server之间的通信
-
-我希望有越来越多的人使用cinatra并喜欢它，也希望cinatra在使用过程中越来越完善，变成一个强大易用、快速开发的http框架，欢迎大家积极参与cinatra项目，可以提issue也可以发邮件提建议，也可以提pr，形式不限。
-
-这次重构的cinatra几乎是重写了一遍，代码比之前的少了30%以上，接口统一了，http和业务分离，具备更好的扩展性和可维护性。
 
 # 联系方式
 
