@@ -54,49 +54,119 @@ void test_ssl_server(){
 #endif
 }
 
-void test_client() {
+void print(const response_data& result) {
+    print(result.ec, result.status, result.resp_body, result.resp_headers.second);
+}
+
+void test_sync_client() {
+    auto client = cinatra::client_factory::instance().new_client();
     std::string uri = "http://www.baidu.com";
-    auto client = cinatra::client_factory::instance().new_client(6);
-    auto[ec, status, result] = client->get(uri);
-    print(ec, status, result);
+    std::string uri1 = "http://cn.bing.com";
+    std::string uri2 = "https://www.baidu.com";
+    std::string uri3 = "https://cn.bing.com";
+    
+    response_data result = client->get(uri);
+    print(result);
 
-    {
-        auto[ec, status, result] = get(uri);
-        print(ec, status, result);
-    }
+    response_data result1 = client->get(uri1);
+    print(result1);
 
-    {
-        auto[ec, status, result] = post(uri, "hello");
-        print(ec, status, result);
-    }
+    print(client->post(uri, "hello"));
+    print(client->post(uri1, "hello"));
 
-    async_get(uri, [](auto ec, callback_data cb_data) {
-        print(ec, cb_data.status, cb_data.resp_body);
-    });
-
-    async_post(uri, "hello", [](auto ec, callback_data cb_data) {
-        print(ec, cb_data.status, cb_data.resp_body);
-    });
-
-    std::getchar();
-
-    //https
 #ifdef CINATRA_ENABLE_SSL
-    std::string uri1 = "https://www.baidu.com";
+    response_data result2 = client->get(uri2);
+    print(result2);
+
+    response_data result3 = client->get(uri3);
+    print(result3);
+
+    response_data result33 = client->get(uri);
+    print(result33);
+
+    response_data result4 = client->get(uri3);
+    print(result4);
+
+    response_data result5 = client->get(uri2);
+    print(result5);
+#endif
+}
+
+void test_async_client() {
+    
+    std::string uri = "http://www.baidu.com";
+    std::string uri1 = "http://cn.bing.com";
+    std::string uri2 = "https://www.baidu.com";
+    std::string uri3 = "https://cn.bing.com";
+
     {
-        auto[ec, status, result] = get(uri1);
-        print(ec, status, result);
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri, [](response_data data) {
+            print(data);
+        });
+    }
+    
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri1, [](response_data data) {
+            print(data);
+        });
     }
 
     {
-        auto[ec, status, result] = post(uri1, "hello");
-        print(ec, status, result);
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_post(uri, "hello", [](response_data data) {
+            print(data);
+        });
+    }
+
+#ifdef CINATRA_ENABLE_SSL
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri2, [](response_data data) {
+            print(data);
+        });
+    }
+
+    {
+        auto client = cinatra::client_factory::instance().new_client();
+        client->async_get(uri3, [](response_data data) {
+            print(data);
+        });
     }
 #endif
 }
 
+class qps {
+public:
+    void increase() {
+        counter_.fetch_add(1, std::memory_order_release);
+    }
+
+    qps() : counter_(0) {
+        thd_ = std::thread([this] {
+            while (!stop_) {
+                std::cout << "qps: " << counter_.load(std::memory_order_acquire) << '\n';
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                //counter_.store(0, std::memory_order_release);
+            }
+        });
+    }
+
+    ~qps() {
+        stop_ = true;
+        thd_.join();
+    }
+
+private:
+    bool stop_ = false;
+    std::thread thd_;
+    std::atomic<uint32_t> counter_;
+};
+
 int main() {
-    test_client();
+    //test_sync_client();
+    //test_async_client();
     //test_ssl_server();
 	http_server server(std::thread::hardware_concurrency());
 	bool r = server.listen("0.0.0.0", "8090");
@@ -106,7 +176,8 @@ int main() {
 	}
 
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) mutable{
-		res.set_status_and_content(status_type::ok,"hello world");
+        res.set_status_and_content(status_type::ok, "hello world");
+		//res.set_status_and_content(status_type::ok, std::move(str));
 	});
 
 	server.set_http_handler<GET>("/plaintext", [](request& req, response& res) {
@@ -275,14 +346,14 @@ int main() {
 //	});
 //
 //	//http upload(multipart)
-//	server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
-//		assert(req.get_content_type() == content_type::multipart);
-//		auto& files = req.get_upload_files();
-//		for (auto& file : files) {
-//			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
-//		}
-//		res.render_string("multipart finished");
-//	});
+	//server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
+	//	assert(req.get_content_type() == content_type::multipart);
+	//	auto& files = req.get_upload_files();
+	//	for (auto& file : files) {
+	//		std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
+	//	}
+	//	res.render_string("multipart finished");
+	//});
 //
 //	//http upload(octet-stream)
 //	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
