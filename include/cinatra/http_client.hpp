@@ -43,14 +43,14 @@ namespace cinatra {
     inline static std::string INVALID_CHUNK_SIZE = "invalid chunk size";
     inline static std::string READ_TIMEOUT = "read timeout";
 
-    class async_client : public std::enable_shared_from_this<async_client> {
+    class http_client : public std::enable_shared_from_this<http_client> {
     public:
-        async_client(boost::asio::io_service& ios) :
+        http_client(boost::asio::io_service& ios) :
             ios_(ios), resolver_(ios), socket_(ios), timer_(ios) {
             future_ = read_close_finished_.get_future();
         }
 
-        ~async_client() {
+        ~http_client() {
             close();
         }
 
