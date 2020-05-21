@@ -52,13 +52,13 @@ namespace cinatra {
         print(ec.value(), ec.message());
     }
 
-	struct callback_data {
+	struct response_data {
         int status;
         std::string_view resp_body;
         std::pair<phr_header*, size_t> resp_headers;
     };
 
-    using callback_t = std::function<void(boost::system::error_code, callback_data)>;
+    using callback_t = std::function<void(boost::system::error_code, response_data)>;
     class http_client : public std::enable_shared_from_this<http_client> {
     public:
         http_client(boost::asio::io_service& ios, size_t read_timout = 60) : 

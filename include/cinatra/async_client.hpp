@@ -24,13 +24,13 @@
 #endif
 
 namespace cinatra {
-    struct callback_data {
+    struct response_data {
         boost::system::error_code ec;
         int status;
         std::string_view resp_body;
         std::pair<phr_header*, size_t> resp_headers;
     };
-    using callback_t = std::function<void(callback_data)>;
+    using callback_t = std::function<void(response_data)>;
 
     inline static std::string INVALID_URI = "invalid_uri";
     inline static std::string REQUEST_TIMEOUT = "request timeout";
@@ -47,55 +47,55 @@ namespace cinatra {
     public:
         async_client(boost::asio::io_service& ios) :
             ios_(ios), resolver_(ios), socket_(ios), timer_(ios) {
-            future_ = read_finished_.get_future();
+            future_ = read_close_finished_.get_future();
         }
 
         ~async_client() {
             close();
         }
 
-        callback_data get(std::string uri) {
+        response_data get(std::string uri) {
             return request(http_method::GET, std::move(uri), res_content_type::json, timeout_seconds_);
         }
 
-        callback_data get(std::string uri, size_t seconds) {
+        response_data get(std::string uri, size_t seconds) {
             return request(http_method::GET, std::move(uri), res_content_type::json, seconds);
         }
 
-        callback_data get(std::string uri, res_content_type type) {
+        response_data get(std::string uri, res_content_type type) {
             return request(http_method::GET, std::move(uri), type, timeout_seconds_);
         }
 
-        callback_data get(std::string uri, size_t seconds, res_content_type type) {
+        response_data get(std::string uri, size_t seconds, res_content_type type) {
             return request(http_method::GET, std::move(uri), type, seconds);
         }
 
-        callback_data get(std::string uri, res_content_type type, size_t seconds) {
+        response_data get(std::string uri, res_content_type type, size_t seconds) {
             return request(http_method::GET, std::move(uri), type, seconds);
         }
 
-        callback_data post(std::string uri, std::string body) {
+        response_data post(std::string uri, std::string body) {
             return request(http_method::POST, std::move(uri), res_content_type::json, timeout_seconds_, std::move(body));
         }
 
-        callback_data post(std::string uri, std::string body, res_content_type type) {
+        response_data post(std::string uri, std::string body, res_content_type type) {
             return request(http_method::POST, std::move(uri), type, timeout_seconds_, std::move(body));
         }
 
-        callback_data post(std::string uri, std::string body, size_t seconds) {
+        response_data post(std::string uri, std::string body, size_t seconds) {
             return request(http_method::POST, std::move(uri), res_content_type::json, seconds, std::move(body));
         }
 
-        callback_data post(std::string uri, std::string body, res_content_type type, size_t seconds) {
+        response_data post(std::string uri, std::string body, res_content_type type, size_t seconds) {
             return request(http_method::POST, std::move(uri), type, seconds, std::move(body));
         }
 
-        callback_data post(std::string uri, std::string body, size_t seconds, res_content_type type) {
+        response_data post(std::string uri, std::string body, size_t seconds, res_content_type type) {
             return request(http_method::POST, std::move(uri), type, seconds, std::move(body));
         }
 
-        callback_data request(http_method method, std::string uri, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
-            promise_ = std::make_shared<std::promise<callback_data>>();
+        response_data request(http_method method, std::string uri, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
+            promise_ = std::make_shared<std::promise<response_data>>();
             async_request(http_method::POST, std::move(uri), nullptr, type, seconds, std::move(body));
             auto future = promise_->get_future();
             auto status = future.wait_for(std::chrono::seconds(seconds));
@@ -180,6 +180,7 @@ namespace cinatra {
         }
 
         void async_request(http_method method, std::string uri, callback_t cb, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
+            bool need_switch = false;
             if (!promise_) {//just for async request, guard continuous async request, it's not allowed; async request must be after last one finished!
                 if (in_progress_) {
                     if(cb)
@@ -189,6 +190,9 @@ namespace cinatra {
                 else {
                     in_progress_ = true;
                 }
+
+                need_switch = sync_;
+                sync_ = false;
             }            
 
             if (method != http_method::POST && !body.empty()) {
@@ -196,17 +200,17 @@ namespace cinatra {
                 return;
             }
 
-            bool init = last_uri_.empty();
-            bool need_reset = !init && (last_uri_ != uri);
+            bool init = last_domain_.empty();
+            bool need_reset = need_switch || (!init && (uri.find(last_domain_) == std::string::npos));
             
             if (need_reset) {
                 close(false);
-                //wait read finish
-                if (future_.valid()) {
-                    future_.wait();
-                }
 
-                read_finished_ = {};
+                //wait for read close finish
+                future_.wait();
+                read_close_finished_ = {};
+                future_ = read_close_finished_.get_future();
+
                 reset_socket();
             }
 
@@ -216,7 +220,7 @@ namespace cinatra {
                 return;
             }
 
-            last_uri_ = std::move(uri);
+            last_domain_ = std::string(u.schema).append("://").append(u.host);
             timeout_seconds_ = seconds;
             res_content_type_ = type;
             cb_ = std::move(cb);
@@ -358,11 +362,6 @@ namespace cinatra {
 #else
                 //please open CINATRA_ENABLE_SSL before request https!
                 assert(false);
-#endif
-            }
-            else {
-#ifdef CINATRA_ENABLE_SSL
-                close(false);
 #endif
             }
 
@@ -596,15 +595,15 @@ namespace cinatra {
                     callback(ec);
                     close();
 
-                    auto status = future_.wait_for(std::chrono::seconds(0));
-                    if (status == std::future_status::ready) {
-                        future_.wait();
-                        read_finished_ = {};
-                    }
-
-                    read_finished_.set_value(true);
+                    //read close finish
+                    if(!is_ready())
+                        read_close_finished_.set_value(true);
                 }
             });
+        }
+
+        bool is_ready() {
+            return future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
         }
 
         void do_read_body(bool keep_alive, int status, size_t size_to_read) {
@@ -806,7 +805,7 @@ namespace cinatra {
             auto self(this->shared_from_this());
             timer_.expires_from_now(std::chrono::seconds(timeout_seconds_));
             timer_.async_wait([this, self](const boost::system::error_code& ec) {
-                if (ec) {
+                if (ec || sync_) {
                     return;
                 }
 
@@ -971,11 +970,12 @@ namespace cinatra {
         std::string multipart_str_;
         size_t start_;
 
-        std::string last_uri_;
-        std::promise<bool> read_finished_;
+        std::string last_domain_;
+        std::promise<bool> read_close_finished_;
         std::future<bool> future_;
 
-        std::shared_ptr<std::promise<callback_data>> promise_ = nullptr;
-        std::weak_ptr<std::promise<callback_data>> weak_;
+        std::shared_ptr<std::promise<response_data>> promise_ = nullptr;
+        std::weak_ptr<std::promise<response_data>> weak_;
+        bool sync_ = false;
     };
 }
