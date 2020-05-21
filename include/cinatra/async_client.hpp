@@ -96,11 +96,14 @@ namespace cinatra {
 
         response_data request(http_method method, std::string uri, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
             promise_ = std::make_shared<std::promise<response_data>>();
+            sync_ = true;
             async_request(http_method::POST, std::move(uri), nullptr, type, seconds, std::move(body));
             auto future = promise_->get_future();
             auto status = future.wait_for(std::chrono::seconds(seconds));
+            in_progress_ = false;
             if (status == std::future_status::timeout) {
-                promise_->set_value({ boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404, REQUEST_TIMEOUT });
+                promise_ = nullptr;
+                return { boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404, REQUEST_TIMEOUT };
             }
             auto result = future.get();
             promise_ = nullptr;
@@ -182,18 +185,17 @@ namespace cinatra {
         void async_request(http_method method, std::string uri, callback_t cb, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
             bool need_switch = false;
             if (!promise_) {//just for async request, guard continuous async request, it's not allowed; async request must be after last one finished!
-                if (in_progress_) {
-                    if(cb)
-                        cb({ boost::asio::error::make_error_code(boost::asio::error::basic_errors::in_progress), 404, MULTIPLE_REQUEST });
-                    return;
-                }
-                else {
-                    in_progress_ = true;
-                }
-
                 need_switch = sync_;
                 sync_ = false;
-            }            
+            }
+
+            if (in_progress_) {
+                set_error_value(cb, boost::asio::error::basic_errors::in_progress, MULTIPLE_REQUEST);
+                return;
+            }
+            else {
+                in_progress_ = true;
+            }
 
             if (method != http_method::POST && !body.empty()) {
                 set_error_value(cb, boost::asio::error::basic_errors::invalid_argument, METHOD_ERROR);
@@ -469,7 +471,7 @@ namespace cinatra {
             });
 #endif
         }
-        
+
         std::string build_write_msg(const context& ctx, size_t content_len = 0) {
             std::string write_msg(method_name(ctx.method));
             //can be optimized here
@@ -938,6 +940,7 @@ namespace cinatra {
             if (cb) {
                 cb({ boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404, error_msg });
             }
+            read_close_finished_ = {};
         }
 
     private:
