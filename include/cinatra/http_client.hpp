@@ -98,7 +98,7 @@ namespace cinatra {
         response_data request(http_method method, std::string uri, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             promise_ = std::make_shared<std::promise<response_data>>();
             sync_ = true;
-            async_request(http_method::POST, std::move(uri), nullptr, type, seconds, std::move(body));
+            async_request(method, std::move(uri), nullptr, type, seconds, std::move(body));
             auto future = promise_->get_future();
             auto status = future.wait_for(std::chrono::seconds(seconds));
             in_progress_ = false;
