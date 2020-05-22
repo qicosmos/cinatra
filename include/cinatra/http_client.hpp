@@ -10,11 +10,9 @@
 #include <string_view>
 #include "use_asio.hpp"
 #include "uri.hpp"
-//#include "util.hpp"
 #include "http_parser.hpp"
 #include "itoa_jeaiii.hpp"
 #include "modern_callback.h"
-//#include "common.h"
 
 #ifdef CINATRA_ENABLE_SSL
 #ifdef ASIO_STANDALONE
@@ -98,7 +96,7 @@ namespace cinatra {
         response_data request(http_method method, std::string uri, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             promise_ = std::make_shared<std::promise<response_data>>();
             sync_ = true;
-            async_request(http_method::POST, std::move(uri), nullptr, type, seconds, std::move(body));
+            async_request(method, std::move(uri), nullptr, type, seconds, std::move(body));
             auto future = promise_->get_future();
             auto status = future.wait_for(std::chrono::seconds(seconds));
             in_progress_ = false;
@@ -202,7 +200,8 @@ namespace cinatra {
         }
 
         template<typename _Callable_t>
-        auto async_request(http_method method, std::string uri, _Callable_t&& cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
+        auto async_request(http_method method, std::string uri, _Callable_t&& cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "")
+        ->MODERN_CALLBACK_RESULT(void(response_data)){
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
             async_request_impl(method, std::move(uri), MODERN_CALLBACK_CALL(), type, seconds, std::move(body));
             MODERN_CALLBACK_RETURN();
@@ -264,7 +263,8 @@ namespace cinatra {
         }
 
         template<typename _Callable_t>
-        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) {
+        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) 
+            ->MODERN_CALLBACK_RESULT(void(response_data)) {
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
             download_impl(std::move(src_file), std::move(dest_file), MODERN_CALLBACK_CALL(), seconds);
             MODERN_CALLBACK_RETURN();
