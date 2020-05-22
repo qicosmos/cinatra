@@ -10,11 +10,10 @@
 #include <string_view>
 #include "use_asio.hpp"
 #include "uri.hpp"
-//#include "util.hpp"
 #include "http_parser.hpp"
 #include "itoa_jeaiii.hpp"
 #include "modern_callback.h"
-//#include "common.h"
+#include "function_traits.hpp"
 
 #ifdef CINATRA_ENABLE_SSL
 #ifdef ASIO_STANDALONE
@@ -202,7 +201,7 @@ namespace cinatra {
         }
 
         template<typename _Callable_t>
-        auto async_request(http_method method, std::string uri, _Callable_t&& cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
+        typename timax::function_traits<void(response_data)>::result_type async_request(http_method method, std::string uri, _Callable_t&& cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
             async_request_impl(method, std::move(uri), MODERN_CALLBACK_CALL(), type, seconds, std::move(body));
             MODERN_CALLBACK_RETURN();
