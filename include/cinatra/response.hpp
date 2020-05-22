@@ -37,7 +37,7 @@ namespace cinatra {
             }
         }
 
-        template<status_type status, res_content_type content_type, size_t N>
+        template<status_type status, req_content_type content_type, size_t N>
         constexpr auto set_status_and_content(const char(&content)[N], content_encoding encoding = content_encoding::none) {
             constexpr auto status_str = to_rep_string(status);
             constexpr auto type_str = to_content_type_str(content_type);
@@ -90,7 +90,7 @@ namespace cinatra {
 			char temp[20] = {};
 			itoa_fwd((int)content_.size(), temp);
 			rep_str_.append("Content-Length: ").append(temp).append("\r\n");
-            if(res_type_!=res_content_type::none){
+            if(res_type_!= req_content_type::none){
                 rep_str_.append(get_content_type(res_type_));
             }
             rep_str_.append("Server: cinatra\r\n");
@@ -168,7 +168,7 @@ namespace cinatra {
             build_response_str();
 		}
 
-		void set_status_and_content(status_type status, std::string&& content, res_content_type res_type = res_content_type::none, content_encoding encoding = content_encoding::none) {
+		void set_status_and_content(status_type status, std::string&& content, req_content_type res_type = req_content_type::none, content_encoding encoding = content_encoding::none) {
 			status_ = status;
             res_type_ = res_type;
 
@@ -190,17 +190,17 @@ namespace cinatra {
             build_response_str();
 		}
 
-		std::string_view get_content_type(res_content_type type){
+		std::string_view get_content_type(req_content_type type){
             switch (type) {
-                case cinatra::res_content_type::html:
+                case cinatra::req_content_type::html:
                     return rep_html;
-                case cinatra::res_content_type::json:
+                case cinatra::req_content_type::json:
                     return rep_json;
-                case cinatra::res_content_type::string:
+                case cinatra::req_content_type::string:
                     return rep_string;
-                case cinatra::res_content_type::multipart:
+                case cinatra::req_content_type::multipart:
                     return rep_multipart;
-                case cinatra::res_content_type::none:
+                case cinatra::req_content_type::none:
                 default:
                     return "";
             }
@@ -213,7 +213,7 @@ namespace cinatra {
 		void reset() {
             if(headers_.empty())
 			    rep_str_.clear();
-            res_type_ = res_content_type::none;
+            res_type_ = req_content_type::none;
 			status_ = status_type::init;
 			proc_continue_ = true;
 			delay_ = false;
@@ -323,7 +323,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
             set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
 #else
-            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::none);
+            set_status_and_content(status_type::ok,json_data.dump(),req_content_type::json,content_encoding::none);
 #endif
         }
 
@@ -332,7 +332,7 @@ namespace cinatra {
 #ifdef  CINATRA_ENABLE_GZIP
 			set_status_and_content(status_type::ok,std::move(content),res_content_type::string,content_encoding::gzip);
 #else
-			set_status_and_content(status_type::ok,std::move(content),res_content_type::string,content_encoding::none);
+			set_status_and_content(status_type::ok,std::move(content),req_content_type::string,content_encoding::none);
 #endif
 		}
 
@@ -388,7 +388,7 @@ namespace cinatra {
 		std::string rep_str_;
 		std::chrono::system_clock::time_point last_time_ = std::chrono::system_clock::now();
 		std::string last_date_str_;
-        res_content_type res_type_;
+        req_content_type res_type_;
         bool need_response_time_ = false;
 	};
 }

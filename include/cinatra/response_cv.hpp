@@ -175,15 +175,15 @@ namespace cinatra {
 				/*"Content-Type: video/mp4\r\n"
 				"\r\n";*/
 
-    inline constexpr auto to_content_type_str(res_content_type type) {
+    inline constexpr auto to_content_type_str(req_content_type type) {
         switch(type){
-        case res_content_type::html:
+        case req_content_type::html:
                 return rep_html;
-        case res_content_type::json:
+        case req_content_type::json:
                 return rep_json;
-        case res_content_type::string:
+        case req_content_type::string:
                 return rep_string;
-        case res_content_type::multipart:
+        case req_content_type::multipart:
                 return rep_multipart;
         default:
                 return ""sv;
