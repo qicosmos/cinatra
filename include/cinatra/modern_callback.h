@@ -53,10 +53,10 @@ namespace modern_callback
 		using callback_type = _Callable_t;
 		using return_type = return_void_t;
 
-		static std::tuple<callback_type, return_type> traits(_Callable_t&& token)
-		{
-			return { std::forward<_Callable_t>(token), {} };
-		}
+        template<typename _Callable2_t>
+        static std::tuple<callback_type, return_type> traits(_Callable2_t&& token) {
+            return { std::forward<_Callable2_t>(token), {} };
+        }
 	};
 }
 
