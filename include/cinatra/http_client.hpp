@@ -116,92 +116,92 @@ namespace cinatra {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, timeout_seconds_);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, req_content_type type, _Callback&& cb) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, timeout_seconds_);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, _Callback&& cb, req_content_type type) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, timeout_seconds_);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, _Callback&& cb, size_t seconds) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, _Callback&& cb, req_content_type type, size_t seconds) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, _Callback&& cb, size_t seconds, req_content_type type) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, size_t seconds, _Callback&& cb) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, req_content_type type, size_t seconds, _Callback&& cb) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_get(std::string uri, size_t seconds, req_content_type type, _Callback&& cb) {
             return async_request(http_method::GET, std::move(uri), std::forward<_Callback>(cb), type, seconds);
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, _Callback&& cb) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, timeout_seconds_, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, _Callback&& cb, req_content_type type) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, timeout_seconds_, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, _Callback&& cb, size_t seconds) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, seconds, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, _Callback&& cb, req_content_type type, size_t seconds) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, seconds, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, _Callback&& cb, size_t seconds, req_content_type type) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, seconds, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, req_content_type type, _Callback&& cb) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, timeout_seconds_, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, size_t seconds, _Callback&& cb) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), req_content_type::json, seconds, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, req_content_type type, size_t seconds, _Callback&& cb) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, seconds, std::move(body));
         }
 
-		template<typename _Callback>
+        template<typename _Callback>
         auto async_post(std::string uri, std::string body, size_t seconds, req_content_type type, _Callback&& cb) {
             return async_request(http_method::POST, std::move(uri), std::forward<_Callback>(cb), type, seconds, std::move(body));
         }
 
-		template<typename _Callable_t>
+        template<typename _Callable_t>
         auto async_request(http_method method, std::string uri, _Callable_t&& cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
             async_request_impl(method, std::move(uri), MODERN_CALLBACK_CALL(), type, seconds, std::move(body));
@@ -263,11 +263,11 @@ namespace cinatra {
             }            
         }
 
-		template<typename _Callable_t>
+        template<typename _Callable_t>
         auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) {
-			MODERN_CALLBACK_TRAITS(cb, void(response_data));
+            MODERN_CALLBACK_TRAITS(cb, void(response_data));
             download_impl(std::move(src_file), std::move(dest_file), MODERN_CALLBACK_CALL(), seconds);
-			MODERN_CALLBACK_RETURN();
+            MODERN_CALLBACK_RETURN();
         }
 
         void download_impl(std::string src_file, std::string dest_file, callback_t cb, size_t seconds = 60) {
@@ -295,12 +295,12 @@ namespace cinatra {
             async_get(std::move(src_file), nullptr, req_content_type::none, seconds);
         }
 
-		template<typename _Callable_t>
+        template<typename _Callable_t>
         auto upload(std::string uri, std::string filename, _Callable_t&& cb, size_t seconds = 60) {
             return upload(std::move(uri), std::move(filename), 0, std::forward<_Callable_t>(cb), seconds);
         }
 
-		template<typename _Callable_t>
+        template<typename _Callable_t>
         auto upload(std::string uri, std::string filename, size_t start, _Callable_t&& cb, size_t seconds = 60) {
             multipart_str_ = std::move(filename);
             start_ = start;

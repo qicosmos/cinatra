@@ -37,32 +37,32 @@
 //Prepare return_void_t and adapter_t for asynchronous functions
 namespace modern_callback
 {
-	//Solve the syntax problem of returning void through an indirect class in order to optimize the return value
-	struct return_void_t
-	{
-		void get() {}
-	};
+    //Solve the syntax problem of returning void through an indirect class in order to optimize the return value
+    struct return_void_t
+    {
+        void get() {}
+    };
 
-	//Callback adapter template class
-	//_Callable_t must conform to _Signature_t signature
-	//This class does not do any effective work except for transferring tokens
-	//Real work waits for specialized classes to do
-	template<typename _Callable_t, typename _Signature_t>
-	struct adapter_t
-	{
-		using callback_type = _Callable_t;
-		using return_type = return_void_t;
+    //Callback adapter template class
+    //_Callable_t must conform to _Signature_t signature
+    //This class does not do any effective work except for transferring tokens
+    //Real work waits for specialized classes to do
+    template<typename _Callable_t, typename _Signature_t>
+    struct adapter_t
+    {
+        using callback_type = _Callable_t;
+        using return_type = return_void_t;
 
-		static std::tuple<callback_type, return_type> traits(_Callable_t&& token)
-		{
-			return { std::forward<_Callable_t>(token), {} };
-		}
-	};
+        static std::tuple<callback_type, return_type> traits(_Callable_t&& token)
+        {
+            return { std::forward<_Callable_t>(token), {} };
+        }
+    };
 }
 
 #define MODERN_CALLBACK_TRAITS(_Token_value, _Signature_t) \
-	using _Adapter_t__ = modern_callback::adapter_t<std::remove_cv_t<std::remove_reference_t<_Callable_t>>, _Signature_t>; \
-	auto _Adapter_value__ = _Adapter_t__::traits(std::forward<_Callable_t>(_Token_value))
+    using _Adapter_t__ = modern_callback::adapter_t<std::remove_cv_t<std::remove_reference_t<_Callable_t>>, _Signature_t>; \
+    auto _Adapter_value__ = _Adapter_t__::traits(std::forward<_Callable_t>(_Token_value))
 #define MODERN_CALLBACK_CALL() std::move(std::get<0>(_Adapter_value__))
 #define MODERN_CALLBACK_RETURN() return std::move(std::get<1>(_Adapter_value__)).get()
 
@@ -74,21 +74,21 @@ namespace modern_callback
 template<typename _Input_t, typename _Callable_t>
 auto tostring_async(_Input_t&& value, _Callable_t&& token)
 {
-	//Adapter type
-	using _Adapter_t = modern_callback::adapter_t<std::remove_cv_t<std::remove_reference_t<_Callable_t>>, void(std::string)>;
-	//Get real callback compatible with _Signature_t type and return value _Return_t through adapter
-	auto adapter = _Adapter_t::traits(std::forward<_Callable_t>(token));
+    //Adapter type
+    using _Adapter_t = modern_callback::adapter_t<std::remove_cv_t<std::remove_reference_t<_Callable_t>>, void(std::string)>;
+    //Get real callback compatible with _Signature_t type and return value _Return_t through adapter
+    auto adapter = _Adapter_t::traits(std::forward<_Callable_t>(token));
 
-	//callback and token may not be the same variable, or even the same type
-	std::thread([callback = std::move(std::get<0>(adapter)), value = std::forward<_Input_t>(value)]
-		{
-			using namespace std::literals;
-			std::this_thread::sleep_for(0.1s);
-			callback(std::to_string(value));
-		}).detach();
+    //callback and token may not be the same variable, or even the same type
+    std::thread([callback = std::move(std::get<0>(adapter)), value = std::forward<_Input_t>(value)]
+        {
+            using namespace std::literals;
+            std::this_thread::sleep_for(0.1s);
+            callback(std::to_string(value));
+        }).detach();
 
-	//Return the adapter's _Return_t variable
-	return std::move(std::get<1>(adapter)).get();
+    //Return the adapter's _Return_t variable
+    return std::move(std::get<1>(adapter)).get();
 }
 #endif
 
