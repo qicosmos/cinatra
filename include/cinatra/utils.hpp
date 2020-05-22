@@ -243,22 +243,22 @@ namespace cinatra {
 		}
 	}
 
-    inline std::string get_content_type_str(res_content_type type) {
+    inline std::string get_content_type_str(req_content_type type) {
         std::string str;
         switch (type) {
-        case res_content_type::html:
+        case req_content_type::html:
             str = "text/html; charset=UTF-8";
             break;
-        case res_content_type::json:
+        case req_content_type::json:
             str = "application/json; charset=UTF-8";
             break;
-        case res_content_type::string:
+        case req_content_type::string:
             str = "text/html; charset=UTF-8";
             break;
-        case res_content_type::multipart:
+        case req_content_type::multipart:
             str = "multipart/form-data; boundary=";
             break;
-        case res_content_type::none:
+        case req_content_type::none:
         default:
             break;
         }

@@ -10,7 +10,7 @@ namespace cinatra {
 		unknown,
 	};
 
-	enum class res_content_type{
+	enum class req_content_type{
 		html,
 		json,
 		string,
@@ -18,10 +18,10 @@ namespace cinatra {
         none
 	};
 
-	constexpr inline auto HTML = res_content_type::html;
-	constexpr inline auto JSON = res_content_type::json;
-	constexpr inline auto TEXT = res_content_type::string;
-	constexpr inline auto NONE = res_content_type::none;
+	constexpr inline auto HTML = req_content_type::html;
+	constexpr inline auto JSON = req_content_type::json;
+	constexpr inline auto TEXT = req_content_type::string;
+	constexpr inline auto NONE = req_content_type::none;
 
 	inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
 	inline const std::string CSESSIONID = "CSESSIONID";

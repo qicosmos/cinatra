@@ -64,14 +64,14 @@ void test_sync_client() {
     std::string uri1 = "http://cn.bing.com";
     std::string uri2 = "https://www.baidu.com";
     std::string uri3 = "https://cn.bing.com";
-    
+
     response_data result = client->get(uri);
     print(result);
 
     response_data result1 = client->get(uri1);
     print(result1);
 
-    print(client->post(uri, "hello"));
+    print(client->post(uri, "hello", req_content_type::json));
     print(client->post(uri1, "hello"));
 
 #ifdef CINATRA_ENABLE_SSL
@@ -211,7 +211,7 @@ private:
 };
 
 int main() {
-    //test_sync_client();
+    test_sync_client();
     //test_async_client();
     //test_ssl_server();
     //test_download();
@@ -229,7 +229,7 @@ int main() {
 
 	server.set_http_handler<GET>("/plaintext", [](request& req, response& res) {
 		//res.set_status_and_content<status_type::ok, res_content_type::string>("Hello, World!");
-		res.set_status_and_content(status_type::ok, "Hello, World!", res_content_type::string);
+		res.set_status_and_content(status_type::ok, "Hello, World!", req_content_type::string);
 	});
 
     //server.set_http_handler<GET, POST>("/delay", [](request& req, response& res) {

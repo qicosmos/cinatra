@@ -55,46 +55,46 @@ namespace cinatra {
         }
 
         response_data get(std::string uri) {
-            return request(http_method::GET, std::move(uri), res_content_type::json, timeout_seconds_);
+            return request(http_method::GET, std::move(uri), req_content_type::json, timeout_seconds_);
         }
 
         response_data get(std::string uri, size_t seconds) {
-            return request(http_method::GET, std::move(uri), res_content_type::json, seconds);
+            return request(http_method::GET, std::move(uri), req_content_type::json, seconds);
         }
 
-        response_data get(std::string uri, res_content_type type) {
+        response_data get(std::string uri, req_content_type type) {
             return request(http_method::GET, std::move(uri), type, timeout_seconds_);
         }
 
-        response_data get(std::string uri, size_t seconds, res_content_type type) {
+        response_data get(std::string uri, size_t seconds, req_content_type type) {
             return request(http_method::GET, std::move(uri), type, seconds);
         }
 
-        response_data get(std::string uri, res_content_type type, size_t seconds) {
+        response_data get(std::string uri, req_content_type type, size_t seconds) {
             return request(http_method::GET, std::move(uri), type, seconds);
         }
 
         response_data post(std::string uri, std::string body) {
-            return request(http_method::POST, std::move(uri), res_content_type::json, timeout_seconds_, std::move(body));
+            return request(http_method::POST, std::move(uri), req_content_type::json, timeout_seconds_, std::move(body));
         }
 
-        response_data post(std::string uri, std::string body, res_content_type type) {
+        response_data post(std::string uri, std::string body, req_content_type type) {
             return request(http_method::POST, std::move(uri), type, timeout_seconds_, std::move(body));
         }
 
         response_data post(std::string uri, std::string body, size_t seconds) {
-            return request(http_method::POST, std::move(uri), res_content_type::json, seconds, std::move(body));
+            return request(http_method::POST, std::move(uri), req_content_type::json, seconds, std::move(body));
         }
 
-        response_data post(std::string uri, std::string body, res_content_type type, size_t seconds) {
+        response_data post(std::string uri, std::string body, req_content_type type, size_t seconds) {
             return request(http_method::POST, std::move(uri), type, seconds, std::move(body));
         }
 
-        response_data post(std::string uri, std::string body, size_t seconds, res_content_type type) {
+        response_data post(std::string uri, std::string body, size_t seconds, req_content_type type) {
             return request(http_method::POST, std::move(uri), type, seconds, std::move(body));
         }
 
-        response_data request(http_method method, std::string uri, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
+        response_data request(http_method method, std::string uri, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             promise_ = std::make_shared<std::promise<response_data>>();
             sync_ = true;
             async_request(http_method::POST, std::move(uri), nullptr, type, seconds, std::move(body));
@@ -111,78 +111,78 @@ namespace cinatra {
         }
 
         void async_get(std::string uri, callback_t cb) {
-            async_request(http_method::GET, std::move(uri), std::move(cb), res_content_type::json, timeout_seconds_);
+            async_request(http_method::GET, std::move(uri), std::move(cb), req_content_type::json, timeout_seconds_);
         }
 
-        void async_get(std::string uri, res_content_type type, callback_t cb) {
+        void async_get(std::string uri, req_content_type type, callback_t cb) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, timeout_seconds_);
         }
 
-        void async_get(std::string uri, callback_t cb, res_content_type type) {
+        void async_get(std::string uri, callback_t cb, req_content_type type) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, timeout_seconds_);
         }
 
         void async_get(std::string uri, callback_t cb, size_t seconds) {
-            async_request(http_method::GET, std::move(uri), std::move(cb), res_content_type::json, seconds);
+            async_request(http_method::GET, std::move(uri), std::move(cb), req_content_type::json, seconds);
         }
 
-        void async_get(std::string uri, callback_t cb, res_content_type type, size_t seconds) {
+        void async_get(std::string uri, callback_t cb, req_content_type type, size_t seconds) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, seconds);
         }
 
-        void async_get(std::string uri, callback_t cb, size_t seconds, res_content_type type) {
+        void async_get(std::string uri, callback_t cb, size_t seconds, req_content_type type) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, seconds);
         }
 
         void async_get(std::string uri, size_t seconds, callback_t cb) {
-            async_request(http_method::GET, std::move(uri), std::move(cb), res_content_type::json, seconds);
+            async_request(http_method::GET, std::move(uri), std::move(cb), req_content_type::json, seconds);
         }
 
-        void async_get(std::string uri, res_content_type type, size_t seconds, callback_t cb) {
+        void async_get(std::string uri, req_content_type type, size_t seconds, callback_t cb) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, seconds);
         }
 
-        void async_get(std::string uri, size_t seconds, res_content_type type, callback_t cb) {
+        void async_get(std::string uri, size_t seconds, req_content_type type, callback_t cb) {
             async_request(http_method::GET, std::move(uri), std::move(cb), type, seconds);
         }
 
         void async_post(std::string uri, std::string body, callback_t cb) {
-            async_request(http_method::POST, std::move(uri), std::move(cb), res_content_type::json, timeout_seconds_, std::move(body));
+            async_request(http_method::POST, std::move(uri), std::move(cb), req_content_type::json, timeout_seconds_, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, callback_t cb, res_content_type type) {
+        void async_post(std::string uri, std::string body, callback_t cb, req_content_type type) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, timeout_seconds_, std::move(body));
         }
 
         void async_post(std::string uri, std::string body, callback_t cb, size_t seconds) {
-            async_request(http_method::POST, std::move(uri), std::move(cb), res_content_type::json, seconds, std::move(body));
+            async_request(http_method::POST, std::move(uri), std::move(cb), req_content_type::json, seconds, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, callback_t cb, res_content_type type, size_t seconds) {
+        void async_post(std::string uri, std::string body, callback_t cb, req_content_type type, size_t seconds) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, seconds, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, callback_t cb, size_t seconds, res_content_type type) {
+        void async_post(std::string uri, std::string body, callback_t cb, size_t seconds, req_content_type type) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, seconds, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, res_content_type type, callback_t cb) {
+        void async_post(std::string uri, std::string body, req_content_type type, callback_t cb) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, timeout_seconds_, std::move(body));
         }
 
         void async_post(std::string uri, std::string body, size_t seconds, callback_t cb) {
-            async_request(http_method::POST, std::move(uri), std::move(cb), res_content_type::json, seconds, std::move(body));
+            async_request(http_method::POST, std::move(uri), std::move(cb), req_content_type::json, seconds, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, res_content_type type, size_t seconds, callback_t cb) {
+        void async_post(std::string uri, std::string body, req_content_type type, size_t seconds, callback_t cb) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, seconds, std::move(body));
         }
 
-        void async_post(std::string uri, std::string body, size_t seconds, res_content_type type, callback_t cb) {
+        void async_post(std::string uri, std::string body, size_t seconds, req_content_type type, callback_t cb) {
             async_request(http_method::POST, std::move(uri), std::move(cb), type, seconds, std::move(body));
         }
 
-        void async_request(http_method method, std::string uri, callback_t cb, res_content_type type = res_content_type::json, size_t seconds = 15, std::string body = "") {
+        void async_request(http_method method, std::string uri, callback_t cb, req_content_type type = req_content_type::json, size_t seconds = 15, std::string body = "") {
             bool need_switch = false;
             if (!promise_) {//just for async request, guard continuous async request, it's not allowed; async request must be after last one finished!
                 need_switch = sync_;
@@ -224,7 +224,7 @@ namespace cinatra {
 
             last_domain_ = std::string(u.schema).append("://").append(u.host);
             timeout_seconds_ = seconds;
-            res_content_type_ = type;
+            req_content_type_ = type;
             cb_ = std::move(cb);
             context ctx(u, method, std::move(body));
             if (promise_) {
@@ -255,12 +255,12 @@ namespace cinatra {
                 return;
             }
 
-            async_get(std::move(src_file), std::move(cb), res_content_type::none, seconds);
+            async_get(std::move(src_file), std::move(cb), req_content_type::none, seconds);
         }
 
         void download(std::string src_file, std::function<void(boost::system::error_code, std::string_view)> chunk, size_t seconds = 60) {
             on_chunk_ = std::move(chunk);
-            async_get(std::move(src_file), nullptr, res_content_type::none, seconds);
+            async_get(std::move(src_file), nullptr, req_content_type::none, seconds);
         }
 
         void upload(std::string uri, std::string filename, callback_t cb, size_t seconds = 60) {
@@ -270,7 +270,7 @@ namespace cinatra {
         void upload(std::string uri, std::string filename, size_t start, callback_t cb, size_t seconds = 60) {
             multipart_str_ = std::move(filename);
             start_ = start;
-            async_request(http_method::POST, uri, std::move(cb), res_content_type::multipart, seconds, "");
+            async_request(http_method::POST, uri, std::move(cb), req_content_type::multipart, seconds, "");
         }
 
         void add_header(std::string key, std::string val) {
@@ -408,7 +408,7 @@ namespace cinatra {
         }
 
         void do_write(const context& ctx) {
-            if (res_content_type_ == res_content_type::multipart) {
+            if (req_content_type_ == req_content_type::multipart) {
                 send_multipart_msg(ctx);
             }
             else {
@@ -482,14 +482,12 @@ namespace cinatra {
             write_msg.append(" HTTP/1.1\r\nHost:").
                 append(ctx.host).append("\r\n");
 
-            if (!header_str_.empty()) {
-                if (header_str_.find("Content-Type") == std::string::npos) {
-                    auto type_str = get_content_type_str(res_content_type_);
-                    if (!type_str.empty()) {
-                        headers_.emplace_back("Content-Type", std::move(type_str));
-                    }
+            if (header_str_.find("Content-Type") == std::string::npos) {
+                auto type_str = get_content_type_str(req_content_type_);
+                if (!type_str.empty()) {
+                    headers_.emplace_back("Content-Type", std::move(type_str));
                 }
-            }      
+            }
 
             bool has_connection = false;
             //add user header
@@ -962,7 +960,7 @@ namespace cinatra {
         std::vector<std::pair<std::string, std::string>> copy_headers_;
         std::string header_str_;
         std::vector<std::pair<std::string, std::string>> headers_;
-        res_content_type res_content_type_ = res_content_type::json;
+        req_content_type req_content_type_ = req_content_type::json;
 
         std::string write_msg_;
 
