@@ -52,6 +52,7 @@ namespace modern_callback
 	{
 		using callback_type = _Callable_t;
 		using return_type = return_void_t;
+		using result_type = void;
 
         template<typename _Callable2_t>
         static std::tuple<callback_type, return_type> traits(_Callable2_t&& token) {
@@ -65,6 +66,7 @@ namespace modern_callback
 	auto _Adapter_value__ = _Adapter_t__::traits(std::forward<_Callable_t>(_Token_value))
 #define MODERN_CALLBACK_CALL() std::move(std::get<0>(_Adapter_value__))
 #define MODERN_CALLBACK_RETURN() return std::move(std::get<1>(_Adapter_value__)).get()
+#define MODERN_CALLBACK_RESULT(_Signature_t) typename modern_callback::adapter_t<std::remove_cv_t<std::remove_reference_t<_Callable_t>>, _Signature_t>::result_type
 
 #if 0
 //tostring_async demonstrates that in other threads, the input value of _Input_t is converted to _Result_t of type std :: string.
