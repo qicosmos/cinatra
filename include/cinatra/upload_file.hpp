@@ -1,11 +1,4 @@
 #pragma once
-#ifdef _MSC_VER
-#include <filesystem>
-namespace fs = std::filesystem;
-#else
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#endif
 #include <fstream>
 #include <string>
 #include "utils.hpp"
