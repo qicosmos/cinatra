@@ -211,7 +211,7 @@ private:
 };
 
 int main() {
-    test_sync_client();
+    //test_sync_client();
     //test_async_client();
     //test_ssl_server();
     //test_download();
@@ -222,6 +222,7 @@ int main() {
 		return -1;
 	}
 
+    //server.on_connection([](auto conn) { return true; });
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) mutable{
         res.set_status_and_content(status_type::ok, "hello world");
 		//res.set_status_and_content(status_type::ok, std::move(str));

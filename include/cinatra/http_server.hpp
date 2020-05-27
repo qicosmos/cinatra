@@ -273,6 +273,10 @@ namespace cinatra {
             transfer_type_ = type;
         }
 
+        void on_connection(std::function<bool(std::shared_ptr<connection<ScoketType>>)> on_conn) {
+            on_conn_ = std::move(on_conn);
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<ScoketType>>(
@@ -293,8 +297,15 @@ namespace cinatra {
                     if (check_headers_) {
                         new_conn->set_validate(max_header_len_, check_headers_);
                     }
-                    
-					new_conn->start();
+
+                    if (!on_conn_) {
+                        new_conn->start();                        
+                    }
+                    else {
+                        if (on_conn_(new_conn)) {
+                            new_conn->start();
+                        }
+                    }
 				}
 				else {
 					//LOG_INFO << "server::handle_accept: " << e.message();
@@ -536,6 +547,7 @@ namespace cinatra {
 
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
 		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
+        std::function<bool(std::shared_ptr<connection<ScoketType>>)> on_conn_ = nullptr;
 
         size_t max_header_len_;
         check_header_cb check_headers_;
