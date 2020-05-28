@@ -364,6 +364,7 @@ namespace cinatra {
         void callback(const boost::system::error_code& ec, int status, std::string_view result) {
             if (auto sp = weak_.lock(); sp) {
                 sp->set_value({ ec, status, result, get_resp_headers() });
+                weak_.reset();
                 return;
             }
 
@@ -843,7 +844,6 @@ namespace cinatra {
                     return;
                 }
 
-                callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::timed_out), 404, READ_TIMEOUT);
                 close(false); //don't close ssl now, close ssl when read/write error
                 if (download_file_) {
                     download_file_->close();
