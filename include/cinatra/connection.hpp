@@ -296,6 +296,10 @@ namespace cinatra {
 			return has_closed_;
 		}
 
+        response& get_res() {
+            return res_;
+        }
+
 		//~connection() {
 		//	close();
 		//}
