@@ -205,7 +205,7 @@ int main() {
 
 cinatra support chunked download files.
 
-Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the fiels directly.
+Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the files directly.
 
 Here is the example:
 
