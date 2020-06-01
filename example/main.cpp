@@ -76,6 +76,21 @@ void test_sync_client() {
 
 #ifdef CINATRA_ENABLE_SSL
     response_data result2 = client->get(uri2);
+    ////if you need to verify peer
+    //client->set_ssl_context_callback([](boost::asio::ssl::context& ctx) {
+    //    ctx.set_verify_mode(boost::asio::ssl::context::verify_peer);
+    //    ctx.load_verify_file("server.crt");
+
+    //    //ctx.set_options(
+    //    //    boost::asio::ssl::context::default_workarounds
+    //    //    | boost::asio::ssl::context::no_sslv2
+    //    //    | boost::asio::ssl::context::single_dh_use);
+
+    //    //ctx.use_certificate_chain_file("server.crt");
+    //    //ctx.use_private_key_file("server.key", boost::asio::ssl::context::pem);
+    //    //ctx.use_tmp_dh_file("dh512.pem");
+    //});
+
     print(result2);
 
     response_data result3 = client->get(uri3);

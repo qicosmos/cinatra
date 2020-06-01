@@ -348,6 +348,12 @@ namespace cinatra {
             return parser_.get_header_value(key);
         }
 
+#ifdef CINATRA_ENABLE_SSL
+        void set_ssl_context_callback(std::function<void(boost::asio::ssl::context&)> ssl_context_callback) {
+            ssl_context_callback_ = std::move(ssl_context_callback);
+        }
+#endif
+
     private:
         void callback(const boost::system::error_code& ec) {
             callback(ec, 404, "");
@@ -395,7 +401,7 @@ namespace cinatra {
 
             if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
-                upgrade_to_ssl(nullptr);
+                upgrade_to_ssl();
 #else
                 //please open CINATRA_ENABLE_SSL before request https!
                 assert(false);
@@ -872,7 +878,7 @@ namespace cinatra {
         }
 
 #ifdef CINATRA_ENABLE_SSL
-        void upgrade_to_ssl(std::function<void(boost::asio::ssl::context&)> ssl_context_callback) {
+        void upgrade_to_ssl() {
             if (ssl_stream_)
                 return;
 
@@ -880,8 +886,8 @@ namespace cinatra {
             ssl_context.set_default_verify_paths();
             boost::system::error_code ec;
             ssl_context.set_options(boost::asio::ssl::context::default_workarounds, ec);
-            if (ssl_context_callback) {
-                ssl_context_callback(ssl_context);
+            if (ssl_context_callback_) {
+                ssl_context_callback_(ssl_context);
             }
             ssl_stream_ = std::make_unique<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>(socket_, ssl_context);
             //verify peer TODO
@@ -985,6 +991,7 @@ namespace cinatra {
         boost::asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
         std::unique_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>> ssl_stream_;
+        std::function<void(boost::asio::ssl::context&)> ssl_context_callback_;
 #endif
         boost::asio::steady_timer timer_;
         std::size_t timeout_seconds_ = 60;
