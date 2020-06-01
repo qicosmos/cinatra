@@ -16,14 +16,11 @@ namespace cinatra {
 
 		std::shared_ptr<session> create_session(const std::string& name, std::size_t expire, 
 			const std::string& path = "/", const std::string& domain = ""){
-			std::string uuid_str = get_cur_time_str();
-			try {
-				uuids::uuid_random_generator uid{};
-				uuid_str = uid().to_short_str();
-			}
-			catch (const std::exception& ex) {
-				std::cout << ex.what() << std::endl;
-			}
+            auto tp = std::chrono::high_resolution_clock::now();
+            auto nano = tp.time_since_epoch().count();
+            auto id = std::hash<std::thread::id>{}(std::this_thread::get_id());
+            id_++;
+            std::string uuid_str = std::to_string(nano) + std::to_string(id_);
 
 			auto s = std::make_shared<session>(name, uuid_str, expire, path, domain);
 
@@ -86,6 +83,7 @@ namespace cinatra {
 		std::map<std::string, std::shared_ptr<session>> map_;
 		std::mutex mtx_;
 		int max_age_ = 0;
+        std::atomic_int64_t id_ = 0;
 	};
 }
 #endif //CINATRA_SESSION_UTILS_HPP
