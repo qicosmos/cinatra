@@ -157,6 +157,7 @@ void test_download() {
 
     {
         auto client = cinatra::client_factory::instance().new_client();
+        //Note: if the dest file has already exist, the file will be appened.
         client->download(uri, "test.jpg", [](response_data data) {
             if (data.ec) {
                 std::cout << data.ec.message() << "\n";

@@ -280,11 +280,18 @@ namespace cinatra {
                 return;
             }
 
-            download_file_ = std::make_shared<std::ofstream>(dest_file, std::ios::binary);
+            download_file_ = std::make_shared<std::ofstream>(dest_file, std::ios::binary | std::ios::app);
             if (!download_file_->is_open()) {
                 cb_ = std::move(cb);
                 callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), OPEN_FAILED);
                 return;
+            }
+
+            int64_t file_size = fs::file_size(dest_file, code);
+            if (!code && file_size > 0) {
+                char buffer[20];
+                auto p = i64toa_jeaiii(file_size, buffer);
+                add_header("cinatra_start_pos", std::string(buffer, p - buffer));
             }
 
             async_get(std::move(src_file), std::move(cb), req_content_type::none, seconds);

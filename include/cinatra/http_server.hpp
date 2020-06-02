@@ -331,12 +331,23 @@ namespace cinatra {
 							return;
 						}
 
+                        auto start = req.get_header_value("cinatra_start_pos");
+                        if (!start.empty()) {
+                            std::string start_str(start);
+                            int64_t start = (int64_t)atoll(start_str.data());
+                            std::error_code code;
+                            int64_t file_size = fs::file_size(fullpath, code);
+                            if (start > 0 && !code && file_size >= start) {
+                                in->seekg(start);
+                            }
+                        }
+                        
                         req.get_conn<ScoketType>()->set_tag(in);
                         
-						if(is_small_file(in.get(),req)){
-							send_small_file(res, in.get(), mime);
-							return;
-						}
+						//if(is_small_file(in.get(),req)){
+						//	send_small_file(res, in.get(), mime);
+						//	return;
+						//}
 
                         if(transfer_type_== transfer_type::CHUNKED)
 						    write_chunked_header(req, in, mime);
