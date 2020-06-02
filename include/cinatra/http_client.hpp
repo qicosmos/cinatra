@@ -263,14 +263,19 @@ namespace cinatra {
         }
 
         template<typename _Callable_t>
-        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) 
+        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) {
+            return download(std::move(src_file), std::move(dest_file), 0, std::move(cb), seconds);
+        }
+
+        template<typename _Callable_t>
+        auto download(std::string src_file, std::string dest_file, int64_t size, _Callable_t&& cb, size_t seconds = 60)
             ->MODERN_CALLBACK_RESULT(void(response_data)) {
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
-            download_impl(std::move(src_file), std::move(dest_file), MODERN_CALLBACK_CALL(), seconds);
+            download_impl(std::move(src_file), std::move(dest_file), size, MODERN_CALLBACK_CALL(), seconds);
             MODERN_CALLBACK_RETURN();
         }
 
-        void download_impl(std::string src_file, std::string dest_file, callback_t cb, size_t seconds = 60) {
+        void download_impl(std::string src_file, std::string dest_file, int64_t size, callback_t cb, size_t seconds = 60) {
             auto parant_path = fs::path(dest_file).parent_path();
             std::error_code code;
             fs::create_directories(parant_path, code);
@@ -280,6 +285,20 @@ namespace cinatra {
                 return;
             }
 
+            if (size > 0) {
+                char buffer[20];
+                auto p = i64toa_jeaiii(size, buffer);
+                add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+            }
+            else {
+                int64_t file_size = fs::file_size(dest_file, code);
+                if (!code && file_size > 0) {
+                    char buffer[20];
+                    auto p = i64toa_jeaiii(file_size, buffer);
+                    add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+                }
+            }
+
             download_file_ = std::make_shared<std::ofstream>(dest_file, std::ios::binary | std::ios::app);
             if (!download_file_->is_open()) {
                 cb_ = std::move(cb);
@@ -287,11 +306,18 @@ namespace cinatra {
                 return;
             }
 
-            int64_t file_size = fs::file_size(dest_file, code);
-            if (!code && file_size > 0) {
+            if (size > 0) {
                 char buffer[20];
-                auto p = i64toa_jeaiii(file_size, buffer);
+                auto p = i64toa_jeaiii(size, buffer);
                 add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+            }
+            else {
+                int64_t file_size = fs::file_size(dest_file, code);
+                if (!code && file_size > 0) {
+                    char buffer[20];
+                    auto p = i64toa_jeaiii(file_size, buffer);
+                    add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+                }
             }
 
             async_get(std::move(src_file), std::move(cb), req_content_type::none, seconds);

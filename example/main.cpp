@@ -158,7 +158,11 @@ void test_download() {
     {
         auto client = cinatra::client_factory::instance().new_client();
         //Note: if the dest file has already exist, the file will be appened.
-        client->download(uri, "test.jpg", [](response_data data) {
+        //If you want to download a new file, make sure no such a file with the same name.
+        //You could set the start position of the download file, eg: 
+        //int64_t start_pos = 100;
+        //client->download(uri, "test1.jpg", start_pos, [](response_data data)...
+        client->download(uri, "test1.jpg", [](response_data data) {
             if (data.ec) {
                 std::cout << data.ec.message() << "\n";
                 return;
@@ -227,6 +231,7 @@ private:
 };
 
 int main() {
+    test_download();
     //test_sync_client();
     //test_async_client();
     //test_ssl_server();
