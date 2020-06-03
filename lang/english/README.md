@@ -33,7 +33,6 @@ To compile your code with Cinatra, you need the following:
 1. C++17 compiler (gcc 7.2, clang 4.0, Visual Studio 2017 update 15.5, or later versions)
 2. Boost.Asio (or standalone Asio)
 3. Boost.System
-4. A UUID library (objbase.h for Windows, uuid.h for Linux, CFUUID.h for Mac)
 
 ## Examples
 
@@ -205,7 +204,7 @@ int main() {
 
 cinatra support chunked download files.
 
-Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the fiels directly.
+Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the files directly.
 
 Here is the example:
 

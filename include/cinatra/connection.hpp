@@ -9,7 +9,6 @@
 #include "websocket.hpp"
 #include "define.h"
 #include "http_cache.hpp"
-#include "uuid.h"
 
 namespace cinatra {
 	using http_handler = std::function<void(request&, response&)>;
@@ -295,6 +294,10 @@ namespace cinatra {
 		bool has_close() {
 			return has_closed_;
 		}
+
+        response& get_res() {
+            return res_;
+        }
 
 		//~connection() {
 		//	close();
@@ -669,7 +672,9 @@ namespace cinatra {
 		void handle_octet_stream(size_t bytes_transferred) {
 			//call_back();
 			try {
-				std::string name = static_dir_ + uuids::uuid_system_generator{}().to_short_str();
+                auto tp = std::chrono::high_resolution_clock::now();
+                auto nano = tp.time_since_epoch().count();
+                std::string name = static_dir_ + "/" + std::to_string(nano);
 				req_.open_upload_file(name);
 			}
 			catch (const std::exception& ex) {

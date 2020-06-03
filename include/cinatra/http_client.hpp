@@ -263,14 +263,19 @@ namespace cinatra {
         }
 
         template<typename _Callable_t>
-        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) 
+        auto download(std::string src_file, std::string dest_file, _Callable_t&& cb, size_t seconds = 60) {
+            return download(std::move(src_file), std::move(dest_file), 0, std::move(cb), seconds);
+        }
+
+        template<typename _Callable_t>
+        auto download(std::string src_file, std::string dest_file, int64_t size, _Callable_t&& cb, size_t seconds = 60)
             ->MODERN_CALLBACK_RESULT(void(response_data)) {
             MODERN_CALLBACK_TRAITS(cb, void(response_data));
-            download_impl(std::move(src_file), std::move(dest_file), MODERN_CALLBACK_CALL(), seconds);
+            download_impl(std::move(src_file), std::move(dest_file), size, MODERN_CALLBACK_CALL(), seconds);
             MODERN_CALLBACK_RETURN();
         }
 
-        void download_impl(std::string src_file, std::string dest_file, callback_t cb, size_t seconds = 60) {
+        void download_impl(std::string src_file, std::string dest_file, int64_t size, callback_t cb, size_t seconds = 60) {
             auto parant_path = fs::path(dest_file).parent_path();
             std::error_code code;
             fs::create_directories(parant_path, code);
@@ -280,11 +285,39 @@ namespace cinatra {
                 return;
             }
 
-            download_file_ = std::make_shared<std::ofstream>(dest_file, std::ios::binary);
+            if (size > 0) {
+                char buffer[20];
+                auto p = i64toa_jeaiii(size, buffer);
+                add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+            }
+            else {
+                int64_t file_size = fs::file_size(dest_file, code);
+                if (!code && file_size > 0) {
+                    char buffer[20];
+                    auto p = i64toa_jeaiii(file_size, buffer);
+                    add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+                }
+            }
+
+            download_file_ = std::make_shared<std::ofstream>(dest_file, std::ios::binary | std::ios::app);
             if (!download_file_->is_open()) {
                 cb_ = std::move(cb);
                 callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), OPEN_FAILED);
                 return;
+            }
+
+            if (size > 0) {
+                char buffer[20];
+                auto p = i64toa_jeaiii(size, buffer);
+                add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+            }
+            else {
+                int64_t file_size = fs::file_size(dest_file, code);
+                if (!code && file_size > 0) {
+                    char buffer[20];
+                    auto p = i64toa_jeaiii(file_size, buffer);
+                    add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+                }
             }
 
             async_get(std::move(src_file), std::move(cb), req_content_type::none, seconds);
@@ -348,6 +381,12 @@ namespace cinatra {
             return parser_.get_header_value(key);
         }
 
+#ifdef CINATRA_ENABLE_SSL
+        void set_ssl_context_callback(std::function<void(boost::asio::ssl::context&)> ssl_context_callback) {
+            ssl_context_callback_ = std::move(ssl_context_callback);
+        }
+#endif
+
     private:
         void callback(const boost::system::error_code& ec) {
             callback(ec, 404, "");
@@ -364,6 +403,7 @@ namespace cinatra {
         void callback(const boost::system::error_code& ec, int status, std::string_view result) {
             if (auto sp = weak_.lock(); sp) {
                 sp->set_value({ ec, status, result, get_resp_headers() });
+                weak_.reset();
                 return;
             }
 
@@ -394,7 +434,7 @@ namespace cinatra {
 
             if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
-                upgrade_to_ssl(nullptr);
+                upgrade_to_ssl();
 #else
                 //please open CINATRA_ENABLE_SSL before request https!
                 assert(false);
@@ -843,7 +883,6 @@ namespace cinatra {
                     return;
                 }
 
-                callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::timed_out), 404, READ_TIMEOUT);
                 close(false); //don't close ssl now, close ssl when read/write error
                 if (download_file_) {
                     download_file_->close();
@@ -872,7 +911,7 @@ namespace cinatra {
         }
 
 #ifdef CINATRA_ENABLE_SSL
-        void upgrade_to_ssl(std::function<void(boost::asio::ssl::context&)> ssl_context_callback) {
+        void upgrade_to_ssl() {
             if (ssl_stream_)
                 return;
 
@@ -880,8 +919,8 @@ namespace cinatra {
             ssl_context.set_default_verify_paths();
             boost::system::error_code ec;
             ssl_context.set_options(boost::asio::ssl::context::default_workarounds, ec);
-            if (ssl_context_callback) {
-                ssl_context_callback(ssl_context);
+            if (ssl_context_callback_) {
+                ssl_context_callback_(ssl_context);
             }
             ssl_stream_ = std::make_unique<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>(socket_, ssl_context);
             //verify peer TODO
@@ -985,6 +1024,7 @@ namespace cinatra {
         boost::asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
         std::unique_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>> ssl_stream_;
+        std::function<void(boost::asio::ssl::context&)> ssl_context_callback_;
 #endif
         boost::asio::steady_timer timer_;
         std::size_t timeout_seconds_ = 60;

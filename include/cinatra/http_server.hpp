@@ -4,19 +4,6 @@
 #include <vector>
 #include <string_view>
 
-#if defined (__GNUC__)
-#if __GNUC__ < 8
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 #include "io_service_pool.hpp"
 #include "connection.hpp"
 #include "http_router.hpp"
@@ -273,6 +260,10 @@ namespace cinatra {
             transfer_type_ = type;
         }
 
+        void on_connection(std::function<bool(std::shared_ptr<connection<ScoketType>>)> on_conn) {
+            on_conn_ = std::move(on_conn);
+        }
+
 	private:
 		void start_accept(std::shared_ptr<boost::asio::ip::tcp::acceptor> const& acceptor) {
 			auto new_conn = std::make_shared<connection<ScoketType>>(
@@ -293,8 +284,15 @@ namespace cinatra {
                     if (check_headers_) {
                         new_conn->set_validate(max_header_len_, check_headers_);
                     }
-                    
-					new_conn->start();
+
+                    if (!on_conn_) {
+                        new_conn->start();                        
+                    }
+                    else {
+                        if (on_conn_(new_conn)) {
+                            new_conn->start();
+                        }
+                    }
 				}
 				else {
 					//LOG_INFO << "server::handle_accept: " << e.message();
@@ -333,12 +331,23 @@ namespace cinatra {
 							return;
 						}
 
+                        auto start = req.get_header_value("cinatra_start_pos");
+                        if (!start.empty()) {
+                            std::string start_str(start);
+                            int64_t start = (int64_t)atoll(start_str.data());
+                            std::error_code code;
+                            int64_t file_size = fs::file_size(fullpath, code);
+                            if (start > 0 && !code && file_size >= start) {
+                                in->seekg(start);
+                            }
+                        }
+                        
                         req.get_conn<ScoketType>()->set_tag(in);
                         
-						if(is_small_file(in.get(),req)){
-							send_small_file(res, in.get(), mime);
-							return;
-						}
+						//if(is_small_file(in.get(),req)){
+						//	send_small_file(res, in.get(), mime);
+						//	return;
+						//}
 
                         if(transfer_type_== transfer_type::CHUNKED)
 						    write_chunked_header(req, in, mime);
@@ -536,6 +545,7 @@ namespace cinatra {
 
 		std::function<void(request& req, response& res)> not_found_ = nullptr;
 		std::function<void(request&, std::string&)> multipart_begin_ = nullptr;
+        std::function<bool(std::shared_ptr<connection<ScoketType>>)> on_conn_ = nullptr;
 
         size_t max_header_len_;
         check_header_cb check_headers_;

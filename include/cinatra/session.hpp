@@ -10,7 +10,6 @@
 #include <ctime>
 #include <mutex>
 #include <cstring>
-#include "uuid.h"
 #include <memory>
 #include "cookie.hpp"
 namespace cinatra {

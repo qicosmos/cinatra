@@ -76,6 +76,21 @@ void test_sync_client() {
 
 #ifdef CINATRA_ENABLE_SSL
     response_data result2 = client->get(uri2);
+    ////if you need to verify peer
+    //client->set_ssl_context_callback([](boost::asio::ssl::context& ctx) {
+    //    ctx.set_verify_mode(boost::asio::ssl::context::verify_peer);
+    //    ctx.load_verify_file("server.crt");
+
+    //    //ctx.set_options(
+    //    //    boost::asio::ssl::context::default_workarounds
+    //    //    | boost::asio::ssl::context::no_sslv2
+    //    //    | boost::asio::ssl::context::single_dh_use);
+
+    //    //ctx.use_certificate_chain_file("server.crt");
+    //    //ctx.use_private_key_file("server.key", boost::asio::ssl::context::pem);
+    //    //ctx.use_tmp_dh_file("dh512.pem");
+    //});
+
     print(result2);
 
     response_data result3 = client->get(uri3);
@@ -142,7 +157,12 @@ void test_download() {
 
     {
         auto client = cinatra::client_factory::instance().new_client();
-        client->download(uri, "test.jpg", [](response_data data) {
+        //Note: if the dest file has already exist, the file will be appened.
+        //If you want to download a new file, make sure no such a file with the same name.
+        //You could set the start position of the download file, eg: 
+        //int64_t start_pos = 100;
+        //client->download(uri, "test1.jpg", start_pos, [](response_data data)...
+        client->download(uri, "test1.jpg", [](response_data data) {
             if (data.ec) {
                 std::cout << data.ec.message() << "\n";
                 return;
@@ -211,7 +231,8 @@ private:
 };
 
 int main() {
-    test_sync_client();
+    test_download();
+    //test_sync_client();
     //test_async_client();
     //test_ssl_server();
     //test_download();
@@ -222,6 +243,7 @@ int main() {
 		return -1;
 	}
 
+    //server.on_connection([](auto conn) { return true; });
 	server.set_http_handler<GET, POST>("/", [](request& req, response& res) mutable{
         res.set_status_and_content(status_type::ok, "hello world");
 		//res.set_status_and_content(status_type::ok, std::move(str));
