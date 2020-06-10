@@ -14,8 +14,6 @@
 #include "utils.hpp"
 #include "mime_types.hpp"
 #include "session_manager.hpp"
-#include "nlohmann_json.hpp"
-#include "render.h"
 #include "http_cache.hpp"
 namespace cinatra {
 	class response {
@@ -317,15 +315,6 @@ namespace cinatra {
 		void set_headers(std::pair<phr_header*, size_t> headers) {
 			req_headers_ = headers;
 		}
-
-        void render_json(const nlohmann::json& json_data)
-        {
-#ifdef  CINATRA_ENABLE_GZIP
-            set_status_and_content(status_type::ok,json_data.dump(),res_content_type::json,content_encoding::gzip);
-#else
-            set_status_and_content(status_type::ok,json_data.dump(),req_content_type::json,content_encoding::none);
-#endif
-        }
 
         void render_string(std::string&& content)
 		{
