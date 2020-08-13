@@ -226,7 +226,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 				auto part_data = req.get_part_data();
 				//echo
 				std::string str = std::string(part_data.data(), part_data.length());
-				req.get_conn()->send_ws_string(std::move(str));
+				req.get_conn<cinatra::SSL>()->send_ws_string(std::move(str));
 				std::cout << part_data.data() << std::endl;
 			});
 
@@ -430,11 +430,6 @@ void test_download() {
 
 websocket的业务函数是会多次进入的，因此写业务逻辑的时候需要注意，推荐按照示例中的方式去做。
 
-cinatra目前刚开始在生产环境中使用, 还处于开发完善阶段，可能还有一些bug，因此不建议现阶段直接用于生产环境，建议先在测试环境下试用。
-
-试用没问题了再在生产环境中使用，试用过程中发现了问题请及时提issue反馈或者邮件联系我。
-
-测试和使用稳定之后cinatra会发布正式版。
 
 # 联系方式
 
