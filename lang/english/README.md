@@ -237,7 +237,7 @@ int main() {
 			auto part_data = req.get_part_data();
 			//echo
 			std::string str = std::string(part_data.data(), part_data.length());
-			req.get_conn()->send_ws_string(std::move(str));
+			req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
 			std::cout << part_data.data() << std::endl;
 		});
 
@@ -435,13 +435,6 @@ void test_download() {
 ## Caveats
 
 When using WebSocket, the `request.on` method will be called multiple times, so you need to pay attention when writing your business logic. It is recommended to do it in the same manner as the example.
-
-Cinatra is currently in use in the production environment, and is still in the stage of development and improvement. There may be some bugs. Therefore, it is not recommended to use it directly in the production environment at this stage. It is recommended to try it first in the test environment (which is what you normally do for any new code) prior to using it in a production environment.
-
-If you find any problems during the trial, please feel free to contact us or email me.
-
-After testing and stable use, cinatra will release the official version.
-
 
 ## Contact
 
