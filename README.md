@@ -226,7 +226,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 				auto part_data = req.get_part_data();
 				//echo
 				std::string str = std::string(part_data.data(), part_data.length());
-				req.get_conn<cinatra::SSL>()->send_ws_string(std::move(str));
+				req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
 				std::cout << part_data.data() << std::endl;
 			});
 
