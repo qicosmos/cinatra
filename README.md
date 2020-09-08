@@ -201,8 +201,11 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ## 示例5：文件下载
 
+    cinatra提供下载功能非常简单，不需要编写代码，具体方法：
+    1. 启动cinatra server
+    2. 将要下载的文件放到http server同一级的www目录下即可。
+    3. 如何下载：如果你把test.txt放到www之后，那么直接通过http://127.0.0.1:8090/test.txt下载即可。
 	//chunked download
-	//http://127.0.0.1:8080/assets/show.jpg
 	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 
 ## 示例6：websocket
