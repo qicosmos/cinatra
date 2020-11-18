@@ -462,7 +462,7 @@ namespace cinatra {
                 boost::asio::async_connect(socket_, it, [this, self = shared_from_this(), ctx = std::move(ctx)]
                 (boost::system::error_code ec, const boost::asio::ip::tcp::resolver::iterator&) {
                     cancel_timer();
-                    if (!ec) {
+                    if (is_ec_ok(ec)) {
                         has_connected_ = true;
                         if (is_ssl()) {
                             handshake(std::move(ctx));
@@ -540,7 +540,7 @@ namespace cinatra {
             auto self = this->shared_from_this();
             ssl_stream_->async_handshake(boost::asio::ssl::stream_base::client,
                 [this, self, ctx = std::move(ctx)](const boost::system::error_code& ec) {
-                if (!ec) {
+                if (is_ec_ok(ec)) {
                     do_read_write(ctx);
                 }
                 else {
@@ -624,7 +624,7 @@ namespace cinatra {
             reset_timer();
             async_read_until(TWO_CRCF, [this, self = shared_from_this()](auto ec, size_t size) {
                 cancel_timer();
-                if (!ec) {
+                if (is_ec_ok(ec)) {
                     //parse header
                     const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
                     size_t buf_size = read_buf_.size();
@@ -689,7 +689,7 @@ namespace cinatra {
             reset_timer();
             async_read(size_to_read, [this, self = shared_from_this(), keep_alive, status](auto ec, size_t size) {
                 cancel_timer();
-                if (!ec) {
+                if (is_ec_ok(ec)) {
                     size_t data_size = read_buf_.size();
                     const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
 
@@ -719,11 +719,16 @@ namespace cinatra {
             reset_timer();
             async_read_until(CRCF, [this, self = shared_from_this(), keep_alive](auto ec, size_t size) {
                 cancel_timer();
-                if (!ec) {
-                    size_t buf_size = read_buf_.size();
-                    const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    std::string_view size_str(data_ptr, size - CRCF.size());
-                    auto chunk_size = hex_to_int(size_str);
+                if (is_ec_ok(ec)) {
+                    const char* chunk_head_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
+
+                    char* p = nullptr;
+                    int64_t chunk_size = std::strtoll(chunk_head_ptr, &p, 16);
+                    if (chunk_size == 0 && *chunk_head_ptr != '0') {
+                        chunk_size = -1;
+                    }
+                    size_t chunk_head_hex_len = std::distance(const_cast<char*>(chunk_head_ptr), p);
+
                     if (chunk_size < 0) {
                         callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404,
                             INVALID_CHUNK_SIZE);
@@ -731,17 +736,10 @@ namespace cinatra {
                         return;
                     }
 
-                    read_buf_.consume(size);
+                    read_buf_.consume(chunk_head_hex_len + CRCF.size());
 
                     if (chunk_size == 0) {
-                        if (read_buf_.size() < CRCF.size()) {
-                            read_buf_.consume(read_buf_.size());
-                            read_chunk_body(keep_alive, CRCF.size() - read_buf_.size());
-                        }
-                        else {
-                            read_buf_.consume(CRCF.size());
                             read_chunk_body(keep_alive, 0);
-                        }
                         return;
                     }
 
@@ -765,22 +763,21 @@ namespace cinatra {
 
         void read_chunk_body(bool keep_alive, size_t size_to_read) {
             reset_timer();
-            async_read(size_to_read, [this, self = shared_from_this(), keep_alive](auto ec, size_t size) {
+            async_read(size_to_read, [this, self = shared_from_this(), keep_alive, size_to_read](auto ec, size_t size) {
                 cancel_timer();
-                if (!ec) {
-                    if (size <= CRCF.size()) {
+                if (is_ec_ok(ec)) {
+                    if (size_to_read <= CRCF.size()) {
                         //finish all chunked
-                        read_buf_.consume(size);
+                        read_buf_.consume(size_to_read);
                         callback(ec, 200, chunked_result_);
                         clear_chunk_buffer();
                         do_read();
                         return;
                     }
 
-                    size_t buf_size = read_buf_.size();
                     const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    append_chunk({ data_ptr, size - CRCF.size() });
-                    read_buf_.consume(size);
+                    append_chunk({ data_ptr, size_to_read - CRCF.size() });
+                    read_buf_.consume(size_to_read);
                     read_chunk_head(keep_alive);
                 }
                 else {
@@ -935,7 +932,7 @@ namespace cinatra {
 
             auto self = this->shared_from_this();
             async_write(multipart_str_, [this, self, file = std::move(file)](boost::system::error_code ec, std::size_t length) mutable {
-                if (!ec) {
+                if (is_ec_ok(ec)) {
                     multipart_str_.clear();
                     send_file_data(std::move(file));
                 }
@@ -1012,6 +1009,12 @@ namespace cinatra {
                 cb({ boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404, error_msg });
             }
             read_close_finished_ = {};
+        }
+
+    protected:
+        static bool is_ec_ok(const boost::system::error_code& ec)
+        {
+            return !ec || ec == boost::asio::error::eof;
         }
 
     private:
