@@ -745,7 +745,7 @@ namespace cinatra {
                         return;
                     }
 
-                    if ((size_t)chunk_size <= read_buf_.size()) {
+                    if ((size_t)chunk_size + CRCF.size() <= read_buf_.size()) {
                         const char* data = boost::asio::buffer_cast<const char*>(read_buf_.data());
                         append_chunk(std::string_view(data, chunk_size));
                         read_buf_.consume(chunk_size + CRCF.size());
@@ -753,13 +753,8 @@ namespace cinatra {
                         return;
                     }
 
-                    size_t extra_size = read_buf_.size();
-                    size_t size_to_read = chunk_size - extra_size;
-                    const char* data = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    append_chunk({ data, extra_size });
-                    read_buf_.consume(extra_size);
 
-                    read_chunk_body(keep_alive, size_to_read + CRCF.size());
+                    read_chunk_body(keep_alive, chunk_size + CRCF.size());
                 }
                 else {
                     callback(ec);
