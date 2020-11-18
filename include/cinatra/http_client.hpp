@@ -13,6 +13,7 @@
 #include "http_parser.hpp"
 #include "itoa_jeaiii.hpp"
 #include "modern_callback.h"
+#include "utils.hpp"
 
 #ifdef CINATRA_ENABLE_SSL
 #ifdef ASIO_STANDALONE
