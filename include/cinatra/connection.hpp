@@ -827,6 +827,7 @@ namespace cinatra {
 								+ std::string(ext.data(), ext.length())+"_ing";
 							if (multipart_begin_) {
 								multipart_begin_(req_, name);
+								name = static_dir_ + "/" + name;
 							}
 							
 							req_.open_upload_file(name);
