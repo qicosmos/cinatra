@@ -46,6 +46,17 @@ namespace cinatra {
 
 		//elimate exception, resut type bool: true, success, false, failed
 		bool route(std::string_view method, std::string_view url, request& req, response& res) {
+			if(is_global_handler_) {
+				auto it = map_invokers_.find("/*");
+				auto& pair = it->second;
+                                pair.second(req, res);
+                                if(res.get_static_file_abs_url().find(DOT) != std::string::npos) {
+                                        it = map_invokers_.find(STATIC_RESOURCE);
+					it->second.second(req, res);
+                                }
+				return true;
+			}
+			
 			auto it = map_invokers_.find(url);
 			if (it != map_invokers_.end()) {
 				auto& pair = it->second;
@@ -57,6 +68,10 @@ namespace cinatra {
 				}
 
 				pair.second(req, res);
+				if(res.get_static_file_abs_url().find(DOT) != std::string::npos) {
+                                        it = map_invokers_.find(STATIC_RESOURCE);
+                                        it->second.second(req, res);
+                                }
 				return true;
 			}
 			else {
@@ -94,6 +109,12 @@ namespace cinatra {
 
 		template<typename Function, typename... AP>
 		void register_nonmember_func(std::string_view raw_name, const std::array<char, 26>& arr, Function f, const AP&... ap) {
+			if(raw_name == "/*" || (is_global_handler_ && raw_name != STATIC_RESOURCE)) {
+                                is_global_handler_ = true;
+                                this->map_invokers_["/*"] = { arr, std::bind(&http_router::invoke<Function, AP...>, this,
+                                        std::placeholders::_1, std::placeholders::_2, std::move(f), ap...) };
+                                return;
+                        }
 			if (raw_name.back()=='*') {
 				this->wildcard_invokers_[raw_name.substr(0, raw_name.length()-1)] = { arr, std::bind(&http_router::invoke<Function, AP...>, this,
 					std::placeholders::_1, std::placeholders::_2, std::move(f), ap...) };
@@ -129,6 +150,12 @@ namespace cinatra {
 
 		template<typename Function, typename Self, typename... AP>
 		void register_member_func(std::string_view raw_name, const std::array<char, 26>& arr, Function f, Self self, const AP&... ap) {
+			if(raw_name == "/*" || (is_global_handler_ && raw_name != STATIC_RESOURCE)) {
+				is_global_handler_ = true;
+				this->map_invokers_["/*"] = { arr, std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
+                                        std::placeholders::_1, std::placeholders::_2, f, self, ap...) };
+				return;
+			}
 			if (raw_name.back() == '*') {
 				this->wildcard_invokers_[raw_name.substr(0, raw_name.length() - 1)] = { arr, std::bind(&http_router::invoke_mem<Function, Self, AP...>, this,
 					std::placeholders::_1, std::placeholders::_2, f, self, ap...) };
@@ -212,5 +239,6 @@ namespace cinatra {
 		typedef std::pair<std::array<char, 26>, std::function<void(request&, response&)>> invoker_function;
 		std::map<std::string_view, invoker_function> map_invokers_;
 		std::unordered_map<std::string_view, invoker_function> wildcard_invokers_; //for url/*
+		bool is_global_handler_;
 	};
 }
