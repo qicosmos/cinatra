@@ -502,6 +502,10 @@ public:
     return {url_str_.data(), url_str_.length()};
   }
 
+  std::string_view get_full_url() const {
+    return {raw_url_};
+  }
+
   std::string_view get_res_path() const {
     auto url = get_url();
 
