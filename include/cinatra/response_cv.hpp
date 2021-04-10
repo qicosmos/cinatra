@@ -20,6 +20,7 @@ namespace cinatra {
 		unauthorized = 401,
 		forbidden = 403,
 		not_found = 404,
+		conflict = 409,
 		internal_server_error = 500,
 		not_implemented = 501,
 		bad_gateway = 502,
@@ -102,6 +103,12 @@ namespace cinatra {
 		"<head><title>Not Found</title></head>"
 		"<body><h1>404 Not Found</h1></body>"
 		"</html>";
+	
+	inline std::string_view conflict =
+		"<html>"
+		"<head><title>Conflict</title></head>"
+		"<body><h1>409 Conflict</h1></body>"
+		"</html>";
 
 	inline std::string_view internal_server_error =
 		"<html>"
@@ -142,6 +149,7 @@ namespace cinatra {
 	inline constexpr std::string_view rep_unauthorized = "HTTP/1.1 401 Unauthorized\r\n";
 	inline constexpr std::string_view rep_forbidden =	"HTTP/1.1 403 Forbidden\r\n";
 	inline constexpr std::string_view rep_not_found =	"HTTP/1.1 404 Not Found\r\n";
+	inline constexpr std::string_view rep_conflict =	"HTTP/1.1 409 Conflict\r\n";
 	inline constexpr std::string_view rep_internal_server_error = "HTTP/1.1 500 Internal Server Error\r\n";
 	inline constexpr std::string_view rep_not_implemented = "HTTP/1.1 501 Not Implemented\r\n";
 	inline constexpr std::string_view rep_bad_gateway = "HTTP/1.1 502 Bad Gateway\r\n";
@@ -242,6 +250,8 @@ namespace cinatra {
 			return boost::asio::buffer(rep_forbidden.data(), rep_forbidden.length());
 		case status_type::not_found:
 			return boost::asio::buffer(rep_not_found.data(), rep_not_found.length());
+		case status_type::conflict:
+			return boost::asio::buffer(rep_conflict.data(), rep_conflict.length());
 		case status_type::internal_server_error:
 			return boost::asio::buffer(rep_internal_server_error.data(), rep_internal_server_error.length());
 		case status_type::not_implemented:
@@ -302,6 +312,9 @@ namespace cinatra {
 		case cinatra::status_type::not_found:
 			return rep_not_found;
 			break;
+		case cinatra::status_type::conflict:
+			return rep_conflict;
+			break;
 		case cinatra::status_type::internal_server_error:
 			return rep_internal_server_error;
 			break;
@@ -348,6 +361,8 @@ namespace cinatra {
 			return forbidden;
 		case status_type::not_found:
 			return not_found;
+		case status_type::conflict:
+			return conflict;
 		case status_type::internal_server_error:
 			return internal_server_error;
 		case status_type::not_implemented:
