@@ -1,5 +1,6 @@
 #pragma once
 #include <fstream>
+#include <any>
 #include "picohttpparser.h"
 #include "utils.hpp"
 #include "multipart_reader.hpp"
@@ -768,15 +769,13 @@ public:
       event_call_backs_[(size_t)event_type](*this);
   }
 
-  template <typename... T> void set_aspect_data(T &&... data) {
-    (aspect_data_.push_back(std::forward<T>(data)), ...);
+  void set_aspect_data(const std::string&& key, const std::any &data) {
+    aspect_data_.insert({ key, data });
   }
 
-  void set_aspect_data(std::vector<std::string> &&data) {
-    aspect_data_ = std::move(data);
+  template <typename T> T get_aspect_data(const std::string&& key) {
+    return std::any_cast<T>(aspect_data_[key]);
   }
-
-  std::vector<std::string> get_aspect_data() { return std::move(aspect_data_); }
 
   void set_last_len(size_t len) { last_len_ = len; }
 
@@ -881,7 +880,7 @@ private:
   std::int64_t range_start_pos_ = 0;
   bool is_range_resource_ = 0;
   std::int64_t static_resource_file_size_ = 0;
-  std::vector<std::string> aspect_data_;
+  std::unordered_map<std::string, std::any> aspect_data_;
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
 };
