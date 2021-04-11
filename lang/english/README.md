@@ -113,7 +113,6 @@ struct check {
 			res.set_status_and_content(status_type::bad_request);
 			return false;
 		}
-		
 		return true;
 	}
 
@@ -123,12 +122,25 @@ struct check {
 	}
 };
 
+// transfer data from aspect to http handler
+struct get_data {
+	bool before(request& req, response& res) {
+		req.set_aspect_data("hello", std::string("hello world"));
+		return true;
+	}
+}
+
 int main() {
 	http_server server(std::thread::hardware_concurrency());
 	server.listen("0.0.0.0", "8080");
 	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
 		res.set_status_and_content(status_type::ok, "hello world");
 	}, check{}, log_t{});
+
+	server.set_http_handler<GET,POST>("/aspect/data", [](request& req, response& res) {
+		std::string hello = req.get_aspect_data<std::string>("hello");
+		res.set_status_and_content(status_type::ok, std::move(hello));
+	}, get_data{});
 
 	server.run();
 	return 0;
