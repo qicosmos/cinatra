@@ -715,97 +715,81 @@ namespace cinatra {
         }
 
         void read_chunk_head(bool keep_alive) {
-            reset_timer();
-            async_read_until(CRCF, [this, self = shared_from_this(), keep_alive](auto ec, size_t size) {
-                cancel_timer();
-                if (!ec) {
-                    size_t buf_size = read_buf_.size();
-                    const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    std::string_view size_str(data_ptr, size - CRCF.size());
-                    auto chunk_size = hex_to_int(size_str);
-                    if (chunk_size < 0) {
-                        callback(boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404,
-                            INVALID_CHUNK_SIZE);
-                        read_or_close(keep_alive);
-                        return;
-                    }
+          async_read_until(CRCF, [this, self = shared_from_this(),
+            keep_alive](auto ec, size_t size) {
+            if (!ec) {
+              size_t buf_size = read_buf_.size();
+              /// simplify
+              size_t additional_size = buf_size - size;
+              const char* data_ptr =
+                boost::asio::buffer_cast<const char*>(read_buf_.data());
+              std::string_view size_str(data_ptr, size - CRCF.size());
+              auto chunk_size = hex_to_int(size_str);
+              read_buf_.consume(size);
+              if (chunk_size < 0) {
+                callback(
+                  boost::asio::error::make_error_code(
+                    boost::asio::error::basic_errors::invalid_argument),
+                  404, INVALID_CHUNK_SIZE);
+                read_or_close(keep_alive);
+                return;
+              }
 
-                    read_buf_.consume(size);
-
-                    if (chunk_size == 0) {
-                        if (read_buf_.size() < CRCF.size()) {
-                            read_buf_.consume(read_buf_.size());
-                            read_chunk_body(keep_alive, CRCF.size() - read_buf_.size());
-                        }
-                        else {
-                            read_buf_.consume(CRCF.size());
-                            read_chunk_body(keep_alive, 0);
-                        }
-                        return;
-                    }
-
-                    if ((size_t)chunk_size <= read_buf_.size()) {
-                        const char* data = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                        append_chunk(std::string_view(data, chunk_size));
-                        read_buf_.consume(chunk_size + CRCF.size());
-                        read_chunk_head(keep_alive);
-                        return;
-                    }
-
-                    size_t extra_size = read_buf_.size();
-                    size_t size_to_read = chunk_size - extra_size;
-                    const char* data = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    append_chunk({ data, extra_size });
-                    read_buf_.consume(extra_size);
-
-                    read_chunk_body(keep_alive, size_to_read + CRCF.size());
-                }
-                else {
-                    callback(ec);
-                    close();
-                }
-            });
+              if (additional_size < (chunk_size + 2)) {
+                //Not a complete chunk.
+                read_chunk_body(keep_alive, chunk_size, chunk_size + 2 - additional_size);
+              }
+              else {
+                //A complete chunk.
+                read_chunk(keep_alive, chunk_size);
+              }
+            }
+            else {
+              callback(ec);
+              close();
+            }
+          });
         }
 
-        void read_chunk_body(bool keep_alive, size_t size_to_read) {
-            reset_timer();
-            async_read(size_to_read, [this, self = shared_from_this(), keep_alive](auto ec, size_t size) {
-                cancel_timer();
-                if (!ec) {
-                    if (size <= CRCF.size()) {
-                        //finish all chunked
-                        read_buf_.consume(size);
-                        callback(ec, 200, chunked_result_);
-                        clear_chunk_buffer();
-                        do_read();
-                        return;
-                    }
+        void read_chunk(bool keep_alive, size_t length) {
+          if (length > 0) {
+            const char* data =
+              boost::asio::buffer_cast<const char*>(read_buf_.data());
+            append_chunk(std::string_view(data, length));
+            read_buf_.consume(length + CRCF.size());
+            read_chunk_head(keep_alive);
+          }
+          else {
+            callback({}, 200, chunked_result_);
+            clear_chunk_buffer();
+            do_read();
+          }
+        }
 
-                    size_t buf_size = read_buf_.size();
-                    const char* data_ptr = boost::asio::buffer_cast<const char*>(read_buf_.data());
-                    append_chunk({ data_ptr, size - CRCF.size() });
-                    read_buf_.consume(size);
-                    read_chunk_head(keep_alive);
-                }
-                else {
-                    callback(ec);
-                    close();
-                }
-            });
+        void read_chunk_body(bool keep_alive, size_t chunk_size, size_t size_to_read) {
+          async_read(size_to_read, [this, self = shared_from_this(), keep_alive, chunk_size](auto ec, size_t size) {
+            if (!ec) {
+              read_chunk(keep_alive, chunk_size);
+            }
+            else {
+              callback(ec);
+              close();
+            }
+          });
         }
 
         void append_chunk(std::string_view chunk) {
-            if (on_chunk_) {
-                on_chunk_({}, chunk);
-                return;
-            }
+          if (on_chunk_) {
+            on_chunk_({}, chunk);
+            return;
+          }
 
-            if (download_file_) {
-                download_file_->write(chunk.data(), chunk.size());
-            }
-            else {
-                chunked_result_.append(chunk);
-            }
+          if (download_file_) {
+            download_file_->write(chunk.data(), chunk.size());
+          }
+          else {
+            chunked_result_.append(chunk);
+          }
         }
 
         void clear_chunk_buffer() {
