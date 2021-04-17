@@ -171,19 +171,20 @@ namespace cinatra {
             res_type_ = res_type;
 
 #ifdef CINATRA_ENABLE_GZIP
-			if (encoding == content_encoding::gzip) {
-				std::string encode_str;
-				bool r = gzip_codec::compress(std::string_view(content.data(), content.length()), encode_str, true);
-				if (!r) {
-					set_status_and_content(status_type::internal_server_error, "gzip compress error");
-				}
-				else {
-					add_header("Content-Encoding", "gzip");
-					set_content(std::move(encode_str));
-				}
-			}
-			else 
+						if (encoding == content_encoding::gzip) {
+							std::string encode_str;
+							bool r = gzip_codec::compress(std::string_view(content.data(), content.length()), encode_str, true);
+							if (!r) {
+								set_status_and_content(status_type::internal_server_error, "gzip compress error");
+							}
+							else {
+								add_header("Content-Encoding", "gzip");
+								set_content(std::move(encode_str));
+							}
+						}
+						else
 #endif
+							(void)encoding;
 				set_content(std::move(content));
             build_response_str();
 		}
@@ -307,7 +308,7 @@ namespace cinatra {
 			raw_url_ = url;
 		}
 
-		std::string_view get_url(std::string_view url)
+		std::string_view get_url()
 		{
 			return raw_url_;
 		}

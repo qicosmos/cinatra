@@ -1,6 +1,5 @@
 #pragma once
 #include "http_client.hpp"
-#include "async_client.hpp"
 
 namespace cinatra {
 	class client_factory {
@@ -14,11 +13,6 @@ namespace cinatra {
 		auto new_client(Args&&... args) {
 			return std::make_shared<http_client>(ios_, std::forward<Args>(args)...);
 		}
-
-        template<typename...Args>
-        std::shared_ptr<async_client> new_async_client(Args&& ... args) {
-            return std::make_shared<async_client>(ios_, std::forward<Args>(args)...);
-        }
 
 		void run() {
 			ios_.run();

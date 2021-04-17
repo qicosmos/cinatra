@@ -345,7 +345,7 @@ namespace cinatra {
 
         void write() {
             auto& msg = outbox_[0];
-            async_write(msg, [this, self = shared_from_this()](const boost::system::error_code& ec, const size_t length) {
+            async_write(msg, [this, self = shared_from_this()](const boost::system::error_code& ec, const size_t) {
                 if (ec) {
                     //print(ec);
                     close();

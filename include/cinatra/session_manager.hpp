@@ -18,7 +18,6 @@ namespace cinatra {
 			const std::string& path = "/", const std::string& domain = ""){
             auto tp = std::chrono::high_resolution_clock::now();
             auto nano = tp.time_since_epoch().count();
-            auto id = std::hash<std::thread::id>{}(std::this_thread::get_id());
             id_++;
             std::string uuid_str = std::to_string(nano) + std::to_string(id_);
 

@@ -97,7 +97,7 @@ namespace cinatra {
 		"<body><h1>403 Forbidden</h1></body>"
 		"</html>";
 
-	inline std::string_view not_found =
+	inline std::string_view not_found_sv =
 		"<html>"
 		"<head><title>Not Found</title></head>"
 		"<body><h1>404 Not Found</h1></body>"
@@ -347,7 +347,7 @@ namespace cinatra {
 		case status_type::forbidden:
 			return forbidden;
 		case status_type::not_found:
-			return not_found;
+			return not_found_sv;
 		case status_type::internal_server_error:
 			return internal_server_error;
 		case status_type::not_implemented:

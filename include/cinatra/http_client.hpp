@@ -496,7 +496,7 @@ namespace cinatra {
 
         void send_msg(const context& ctx) {
             write_msg_ = build_write_msg(ctx);
-            async_write(write_msg_, [this, self = shared_from_this()](const boost::system::error_code& ec, const size_t length) {
+            async_write(write_msg_, [this, self = shared_from_this()](const boost::system::error_code& ec, const size_t) {
                 if (ec) {
                     callback(ec);
                     close();
@@ -686,7 +686,7 @@ namespace cinatra {
 
         void do_read_body(bool keep_alive, int status, size_t size_to_read) {
             reset_timer();
-            async_read(size_to_read, [this, self = shared_from_this(), keep_alive, status](auto ec, size_t size) {
+            async_read(size_to_read, [this, self = shared_from_this(), keep_alive, status](auto ec, size_t) {
                 cancel_timer();
                 if (!ec) {
                     size_t data_size = read_buf_.size();
@@ -735,7 +735,7 @@ namespace cinatra {
                 return;
               }
 
-              if (additional_size < (chunk_size + 2)) {
+              if (additional_size < size_t(chunk_size + 2)) {
                 //Not a complete chunk.
                 read_chunk_body(keep_alive, chunk_size, chunk_size + 2 - additional_size);
               }
@@ -767,7 +767,7 @@ namespace cinatra {
         }
 
         void read_chunk_body(bool keep_alive, size_t chunk_size, size_t size_to_read) {
-          async_read(size_to_read, [this, self = shared_from_this(), keep_alive, chunk_size](auto ec, size_t size) {
+          async_read(size_to_read, [this, self = shared_from_this(), keep_alive, chunk_size](auto ec, size_t) {
             if (!ec) {
               read_chunk(keep_alive, chunk_size);
             }
@@ -922,7 +922,7 @@ namespace cinatra {
             }
 
             auto self = this->shared_from_this();
-            async_write(multipart_str_, [this, self, file = std::move(file)](boost::system::error_code ec, std::size_t length) mutable {
+            async_write(multipart_str_, [this, self, file = std::move(file)](boost::system::error_code ec, std::size_t) mutable {
                 if (!ec) {
                     multipart_str_.clear();
                     send_file_data(std::move(file));
@@ -992,7 +992,7 @@ namespace cinatra {
             }
         }
 
-        void set_error_value(const callback_t& cb, const boost::asio::error::basic_errors& ec, const std::string& error_msg) {
+        void set_error_value(const callback_t& cb, const boost::asio::error::basic_errors&, const std::string& error_msg) {
             if (promise_) {
                 promise_->set_value({ boost::asio::error::make_error_code(boost::asio::error::basic_errors::invalid_argument), 404, error_msg });
             }

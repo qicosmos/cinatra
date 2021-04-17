@@ -80,7 +80,7 @@ namespace cinatra {
             return conn_;
         }
 
-		int parse_header(std::size_t last_len, size_t start=0) {
+		int parse_header(std::size_t last_len) {
 			using namespace std::string_view_literals;
 			if(!copy_headers_.empty())
 				copy_headers_.clear();
