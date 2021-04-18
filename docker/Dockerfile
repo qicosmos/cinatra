@@ -13,7 +13,7 @@ RUN ./autogen.sh && ./configure
 RUN make && make install
 ENV CINATRA=/cinatra
 WORKDIR $CINATRA
-RUN git clone https://github.com.cnpmjs.org/qicosmos/cinatra.git
+RUN git clone https://github.com/qicosmos/cinatra.git
 ENV BOOST=/boost
 ENV BOOST_INTERNAL=/boost/boost
 WORKDIR $BOOST
