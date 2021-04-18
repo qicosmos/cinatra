@@ -38,41 +38,41 @@ public:
 
   void reset() {
     delete[] lookbehind;
-    state = PARSE_ERROR;
+    state_ = PARSE_ERROR;
     boundary.clear();
     boundaryData = boundary.c_str();
     boundarySize = 0;
     lookbehind = nullptr;
     lookbehindSize = 0;
-    flags = 0;
-    index = 0;
+    flags_ = 0;
+    index_ = 0;
     headerFieldMark = UNMARKED;
     headerValueMark = UNMARKED;
     partDataMark = UNMARKED;
     errorReason = "Parser uninitialized.";
   }
 
-  void set_boundary(std::string &&boundary) {
+  void set_boundary(std::string &&boundary_str) {
     reset();
-    this->boundary = std::move(boundary);
+    this->boundary = std::move(boundary_str);
     boundaryData = this->boundary.c_str();
     boundarySize = this->boundary.size();
     indexBoundary();
     lookbehind = new char[boundarySize + 8];
     lookbehindSize = boundarySize + 8;
-    state = START;
+    state_ = START;
     errorReason = "No error.";
   }
 
   size_t feed(const char *buffer, size_t len) {
-    if (state == PARSE_ERROR || len == 0) {
+    if (state_ == PARSE_ERROR || len == 0) {
       return 0;
     }
 
-    State state = this->state;
-    int flags = this->flags;
-    size_t prevIndex = this->index;
-    size_t index = this->index;
+    State state = this->state_;
+    int flags = this->flags_;
+    size_t prevIndex = this->index_;
+    size_t index = this->index_;
     size_t boundaryEnd = boundarySize - 1;
     size_t i;
     char c, cl;
@@ -194,18 +194,18 @@ public:
     dataCallback(onHeaderValue, headerValueMark, buffer, i, len, false);
     dataCallback(onPartData, partDataMark, buffer, i, len, false);
 
-    this->index = index;
-    this->state = state;
-    this->flags = flags;
+    this->index_ = index;
+    this->state_ = state;
+    this->flags_ = flags;
 
     return len;
   }
 
-  bool succeeded() const { return state == END; }
+  bool succeeded() const { return state_ == END; }
 
-  bool has_error() const { return state == PARSE_ERROR; }
+  bool has_error() const { return state_ == PARSE_ERROR; }
 
-  bool stopped() const { return state == PARSE_ERROR || state == END; }
+  bool stopped() const { return state_ == PARSE_ERROR || state_ == END; }
 
   const char *get_error_message() const { return errorReason; }
 
@@ -295,7 +295,7 @@ private:
   }
 
   void setError(const char *message) {
-    state = PARSE_ERROR;
+    state_ = PARSE_ERROR;
     errorReason = message;
   }
 
@@ -409,9 +409,9 @@ private:
   bool boundaryIndex[256];
   char *lookbehind;
   size_t lookbehindSize;
-  State state;
-  int flags;
-  size_t index;
+  State state_;
+  int flags_;
+  size_t index_;
   size_t headerFieldMark;
   size_t headerValueMark;
   size_t partDataMark;

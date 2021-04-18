@@ -214,7 +214,7 @@ public:
     boost::asio::async_write(
         socket(), boost::asio::buffer(chunked_header_),
         [self = this->shared_from_this()](const boost::system::error_code &ec,
-                                          std::size_t bytes_transferred) {
+                                          std::size_t) {
           self->handle_chunked_header(ec);
         });
   }
@@ -222,11 +222,10 @@ public:
   void write_ranges_header(std::string header_str) {
     reset_timer();
     chunked_header_ = std::move(header_str); // reuse the variable
-    boost::asio::async_write(
-        socket(), boost::asio::buffer(chunked_header_),
-        [this, self = this->shared_from_this()](
-            const boost::system::error_code &ec,
-            std::size_t bytes_transferred) { handle_chunked_header(ec); });
+    boost::asio::async_write(socket(), boost::asio::buffer(chunked_header_),
+                             [this, self = this->shared_from_this()](
+                                 const boost::system::error_code &ec,
+                                 std::size_t) { handle_chunked_header(ec); });
   }
 
   void write_chunked_data(std::string &&buf, bool eof) {
@@ -303,8 +302,9 @@ private:
   void do_read() {
     reset();
 
-    if (is_ssl_ && !has_shake_) {
-      async_handshake();
+    if constexpr (is_ssl_) {
+      if (!has_shake_)
+        async_handshake();
     } else {
       async_read_some();
     }
@@ -446,8 +446,9 @@ private:
         boost::asio::async_write(
             socket(), buffers,
             [self = this->shared_from_this(), resp_vec = std::move(resp_vec)](
-                const boost::system::error_code &ec,
-                std::size_t bytes_transferred) { self->handle_write(ec); });
+                const boost::system::error_code &ec, std::size_t) {
+              self->handle_write(ec);
+            });
       }
     }
   }
@@ -464,7 +465,6 @@ private:
 
     auto &rep_str = res_.response_str();
     int result = 0;
-    size_t left = ret;
     bool head_not_complete = false;
     bool body_not_complete = false;
     size_t left_body_len = 0;
@@ -513,8 +513,7 @@ private:
         socket(), boost::asio::buffer(rep_str.data(), rep_str.size()),
         [head_not_complete, body_not_complete, left_body_len, this,
          self = this->shared_from_this(),
-         &rep_str](const boost::system::error_code &ec,
-                   std::size_t bytes_transferred) {
+         &rep_str](const boost::system::error_code &ec, std::size_t) {
           rep_str.clear();
           if (head_not_complete) {
             do_read_head();
@@ -588,9 +587,9 @@ private:
 
     boost::asio::async_write(
         socket(), boost::asio::buffer(rep_str.data(), rep_str.size()),
-        [this, self = this->shared_from_this()](
-            const boost::system::error_code &ec,
-            std::size_t bytes_transferred) { handle_write(ec); });
+        [this,
+         self = this->shared_from_this()](const boost::system::error_code &ec,
+                                          std::size_t) { handle_write(ec); });
   }
 
   void handle_write(const boost::system::error_code &ec) {
@@ -646,6 +645,7 @@ private:
       ssl_stream_ = nullptr;
     }
 #endif
+    (void)close_ssl;
     if (has_closed_) {
       return;
     }
@@ -659,7 +659,7 @@ private:
   }
 
   /****************** begin handle http body data *****************/
-  void handle_string_body(std::size_t bytes_transferred) {
+  void handle_string_body(std::size_t) {
     // defalt add limitation for string_body and else. you can remove the
     // limitation for very big string.
     if (req_.at_capacity()) {
@@ -1045,7 +1045,7 @@ private:
     auto self = this->shared_from_this();
     boost::asio::async_write(
         socket(), buffers,
-        [this, self](const boost::system::error_code &ec, std::size_t length) {
+        [this, self](const boost::system::error_code &ec, std::size_t) {
           if (ec) {
             close();
             return;
@@ -1141,8 +1141,7 @@ private:
         });
   }
 
-  bool handle_ws_frame(ws_frame_type ret, std::string &&payload,
-                       size_t bytes_transferred) {
+  bool handle_ws_frame(ws_frame_type ret, std::string &&payload, size_t) {
     switch (ret) {
     case cinatra::ws_frame_type::WS_ERROR_FRAME:
       req_.call_event(data_proc_state::data_error);
@@ -1337,7 +1336,7 @@ private:
     boost::asio::async_write(
         socket(), buffer_seq_,
         [this, self = this->shared_from_this()](
-            const boost::system::error_code &ec, size_t bytes_transferred) {
+            const boost::system::error_code &ec, size_t) {
           std::lock_guard<std::mutex> lock(buffers_mtx_);
           buffers_[active_buffer_].clear();
           buffer_seq_.clear();

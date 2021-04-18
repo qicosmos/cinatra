@@ -187,7 +187,8 @@ public:
       }
     } else
 #endif
-      set_content(std::move(content));
+      (void)encoding;
+    set_content(std::move(content));
     build_response_str();
   }
 
@@ -295,7 +296,7 @@ public:
 
   void set_url(std::string_view url) { raw_url_ = url; }
 
-  std::string_view get_url(std::string_view url) { return raw_url_; }
+  std::string_view get_url() { return raw_url_; }
 
   void set_headers(std::pair<phr_header *, size_t> headers) {
     req_headers_ = headers;
