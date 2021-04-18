@@ -1,7 +1,7 @@
 #pragma once
+#include "utils.hpp"
 #include <cctype>
 #include <string_view>
-#include "utils.hpp"
 
 namespace cinatra {
 // most of this code is from cpprestsdk

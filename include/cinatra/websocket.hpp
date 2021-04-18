@@ -138,9 +138,10 @@ public:
     }
 
     if (msg_opcode_ == 0x0)
-      return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
-                        : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME; // continuation
-                                                                   // frame ?
+      return (msg_fin_)
+                 ? ws_frame_type::WS_TEXT_FRAME
+                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME; // continuation
+                                                            // frame ?
     if (msg_opcode_ == 0x1)
       return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
                         : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;

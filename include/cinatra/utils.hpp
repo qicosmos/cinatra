@@ -8,6 +8,7 @@
 #pragma once
 #include "define.h"
 #include <algorithm>
+#include <boost/system/error_code.hpp>
 #include <cctype>
 #include <cstddef> //std::byte
 #include <cstdlib>
@@ -18,7 +19,6 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <boost/system/error_code.hpp>
 
 namespace cinatra {
 struct ci_less {
