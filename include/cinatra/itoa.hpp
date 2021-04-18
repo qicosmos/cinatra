@@ -259,45 +259,45 @@ template <typename I> char *itoa_fwd(I i, char *p) {
   return dec_::convert<dec_::Fwd>::itoa(i, p);
 }
 
-static char *xtoa(long long sval, char *str, int radix, int signedp) {
-  unsigned long long uval;
-  unsigned int uradix = radix;
-  char *sp = str;
-  char *sp2;
-  char *sp3;
-
-  /* If signed, store sign at start of buffer for negative base-10 values */
-  if (signedp && (10 == uradix) && (0 > sval)) {
-    *sp++ = '-';
-    uval = -sval;
-  } else {
-    uval = sval;
-  }
-  sp2 = sp;
-
-  do {
-    unsigned int rem = uval % uradix;
-    uval /= uradix;
-    if (10 > rem) {
-      *sp++ = '0' + rem;
-    } else {
-      *sp++ = 'A' + rem - 10;
-    }
-  } while (0 < uval);
-
-  /* Mark end of string */
-  sp3 = sp;
-  *sp-- = 0;
-
-  /* Reverse string contents (excluding sign) in place */
-  while (sp2 < sp) {
-    char tmp = *sp2;
-    *sp2++ = *sp;
-    *sp-- = tmp;
-  }
-
-  return sp3;
-}
+// static char *xtoa(long long sval, char *str, int radix, int signedp) {
+//  unsigned long long uval;
+//  unsigned int uradix = radix;
+//  char *sp = str;
+//  char *sp2;
+//  char *sp3;
+//
+//  /* If signed, store sign at start of buffer for negative base-10 values */
+//  if (signedp && (10 == uradix) && (0 > sval)) {
+//    *sp++ = '-';
+//    uval = -sval;
+//  } else {
+//    uval = sval;
+//  }
+//  sp2 = sp;
+//
+//  do {
+//    unsigned int rem = uval % uradix;
+//    uval /= uradix;
+//    if (10 > rem) {
+//      *sp++ = '0' + rem;
+//    } else {
+//      *sp++ = 'A' + rem - 10;
+//    }
+//  } while (0 < uval);
+//
+//  /* Mark end of string */
+//  sp3 = sp;
+//  *sp-- = 0;
+//
+//  /* Reverse string contents (excluding sign) in place */
+//  while (sp2 < sp) {
+//    char tmp = *sp2;
+//    *sp2++ = *sp;
+//    *sp-- = tmp;
+//  }
+//
+//  return sp3;
+//}
 
 template <typename I> char *itoa_rev(I i, char *p) {
   return dec_::convert<dec_::Rev>::itoa(i, p);

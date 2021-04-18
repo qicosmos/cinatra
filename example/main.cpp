@@ -4,12 +4,12 @@
 using namespace cinatra;
 
 struct log_t {
-  bool before(request &req, response &res) {
+  bool before(request &, response &) {
     std::cout << "before log" << std::endl;
     return true;
   }
 
-  bool after(request &req, response &res) {
+  bool after(request &, response &res) {
     std::cout << "after log" << std::endl;
     res.add_header("aaaa", "bbcc");
     return true;
@@ -17,12 +17,12 @@ struct log_t {
 };
 
 struct person {
-  void foo(request &req, response &res) {
+  void foo(request &, response &res) {
     std::cout << i << std::endl;
     res.render_string("ok");
   }
 
-  void foo1(request &req, response &res) {
+  void foo1(request &, response &res) {
     std::cout << i << std::endl;
     res.render_string("ok");
   }
@@ -231,12 +231,12 @@ int main() {
 
   // server.on_connection([](auto conn) { return true; });
   server.set_http_handler<GET, POST>(
-      "/", [](request &req, response &res) mutable {
+      "/", [](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
         // res.set_status_and_content(status_type::ok, std::move(str));
       });
 
-  server.set_http_handler<GET>("/plaintext", [](request &req, response &res) {
+  server.set_http_handler<GET>("/plaintext", [](request &, response &res) {
     // res.set_status_and_content<status_type::ok,
     // res_content_type::string>("Hello, World!");
     res.set_status_and_content(status_type::ok, "Hello, World!",

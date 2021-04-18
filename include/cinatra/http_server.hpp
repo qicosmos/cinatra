@@ -59,7 +59,7 @@ public:
   //		"::1" : ipv6. use 'https://[::1]/' to visit
   //		"" : ipv4 & ipv6.
   bool listen(std::string_view address, std::string_view port) {
-    if (port_in_use(atoi(port.data()))) {
+    if (port_in_use((unsigned short)atoi(port.data()))) {
       return false;
     }
 
@@ -315,9 +315,9 @@ private:
               return;
             }
 
-            auto start = req.get_header_value("cinatra_start_pos");
-            if (!start.empty()) {
-              std::string start_str(start);
+            auto start_sv = req.get_header_value("cinatra_start_pos");
+            if (!start_sv.empty()) {
+              std::string start_str(start_sv);
               int64_t start = (int64_t)atoll(start_str.data());
               std::error_code code;
               int64_t file_size = fs::file_size(fullpath, code);
@@ -349,6 +349,12 @@ private:
           case cinatra::data_proc_state::data_end: {
             auto conn = req.get_conn<ScoketType>();
             conn->on_close();
+          } break;
+          case cinatra::data_proc_state::data_all_end: {
+            // network error
+          } break;
+          case cinatra::data_proc_state::data_close: {
+            // network error
           } break;
           case cinatra::data_proc_state::data_error: {
             // network error
