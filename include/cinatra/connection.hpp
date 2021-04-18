@@ -398,7 +398,7 @@ private:
       //				if (req_.get_method() ==
       //"GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url()))
       //{ 					handle_cache();
-      //return;
+      // return;
       //				}
 
       req_.set_last_len(len_);
@@ -579,9 +579,11 @@ private:
     // cache
     //			if (req_.get_method() ==
     //"GET"&&http_cache::get().need_cache(req_.get_url()) &&
-    //!http_cache::get().not_cache(req_.get_url())) { 				auto raw_url =
-    //req_.raw_url(); 				http_cache::get().add(std::string(raw_url.data(),
-    //raw_url.length()), res_.raw_content());
+    //! http_cache::get().not_cache(req_.get_url())) {
+    //! auto raw_url =
+    // req_.raw_url();
+    // http_cache::get().add(std::string(raw_url.data(), raw_url.length()),
+    // res_.raw_content());
     //			}
 
     boost::asio::async_write(
@@ -1203,7 +1205,7 @@ private:
   //-------------web socket----------------//
 
   //-------------chunked(read chunked not support yet, write chunked is
-  //ok)----------------------//
+  // ok)----------------------//
   void handle_chunked(size_t bytes_transferred) {
     int ret = req_.parse_chunked(bytes_transferred);
     if (ret == parse_status::has_error) {
@@ -1221,7 +1223,7 @@ private:
     call_back(); // app set the data
   }
   //-------------chunked(read chunked not support yet, write chunked is
-  //ok)----------------------//
+  // ok)----------------------//
 
   void handle_body() {
     if (req_.at_capacity()) {

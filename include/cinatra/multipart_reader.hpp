@@ -93,7 +93,7 @@ private:
     self->currentHeaderValue.clear();
     // self->currentHeaders.emplace(std::string{ self->currentHeaderName.data(),
     // self->currentHeaderName.length() }, 	std::string{
-    //self->currentHeaderValue.data(), self->currentHeaderValue.length() });
+    // self->currentHeaderValue.data(), self->currentHeaderValue.length() });
   }
 
   static void cbHeadersEnd(const char *buffer, size_t start, size_t end,

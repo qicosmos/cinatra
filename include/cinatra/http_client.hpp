@@ -832,7 +832,7 @@ private:
           return;
         }
 
-        if (additional_size < (chunk_size + 2)) {
+        if (additional_size < size_t(chunk_size + 2)) {
           // Not a complete chunk.
           read_chunk_body(keep_alive, chunk_size,
                           chunk_size + 2 - additional_size);

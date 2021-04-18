@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <boost/system/error_code.hpp>
 
 namespace cinatra {
 struct ci_less {

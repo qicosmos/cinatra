@@ -18,16 +18,18 @@
 //
 // An asynchronous function that uses callbacks to process results will involve
 // the following concepts: _Input_t...: Input parameters of asynchronous
-//functions; _Signature_t: The function signature of this asynchronous callback;
-//should meet the type of 'void (_Exception_t, _Result_t ...)' or 'void
+// functions; _Signature_t: The function signature of this asynchronous
+// callback; should meet the type of 'void (_Exception_t, _Result_t ...)' or
+// 'void
 //(_Result_t ...)’ _Callable_t: Callback function or mark, if it is a callback
-//function, it needs to comply with the signature type of _Signature_t. This
-//callback must be called once, and only once; _Return_t: The return value of
-//the asynchronous function; _Result_t...: The result value after the completion
-//of the asynchronous function is used as the input parameter of the callback
-//function; this parameter can have zero or more; _Exception_t: The exception of
-//the callback function, if you don't like the exception, ignore this part, but
-//you have to handle the exception properly with the asynchronous code;
+// function, it needs to comply with the signature type of _Signature_t. This
+// callback must be called once, and only once; _Return_t: The return value of
+// the asynchronous function; _Result_t...: The result value after the
+// completion of the asynchronous function is used as the input parameter of the
+// callback function; this parameter can have zero or more; _Exception_t: The
+// exception of the callback function, if you don't like the exception, ignore
+// this part, but you have to handle the exception properly with the asynchronous
+// code;
 //
 // In the callback adapter model, The
 // '_Input_t.../_Result_t/_Exception_t(Optional)' is an inherent part of the
