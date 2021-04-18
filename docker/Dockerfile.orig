@@ -1,4 +1,8 @@
 FROM ubuntu:18.04
+<<<<<<< HEAD
+LABEL maintainer="1072526820@qq.com"
+=======
+>>>>>>> f0c847e222eef8d1ae1c5af6098e6805fd1f614c
 RUN apt-get update -yqq && \
 apt-get install -yqq cmake git uuid-dev gcc g++ autoconf
 ENV ASIO=/asio
