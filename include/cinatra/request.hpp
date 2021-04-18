@@ -1,19 +1,19 @@
 #pragma once
-#include <fstream>
-#include <any>
+#include "multipart_reader.hpp"
 #include "picohttpparser.h"
 #include "utils.hpp"
-#include "multipart_reader.hpp"
+#include <any>
+#include <fstream>
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
 #include "define.h"
-#include "upload_file.hpp"
-#include "session.hpp"
-#include "session_manager.hpp"
-#include "url_encode_decode.hpp"
 #include "mime_types.hpp"
 #include "response.hpp"
+#include "session.hpp"
+#include "session_manager.hpp"
+#include "upload_file.hpp"
+#include "url_encode_decode.hpp"
 namespace cinatra {
 enum class data_proc_state : int8_t {
   data_begin,
@@ -503,9 +503,7 @@ public:
     return {url_str_.data(), url_str_.length()};
   }
 
-  std::string_view get_full_url() const {
-    return {raw_url_};
-  }
+  std::string_view get_full_url() const { return {raw_url_}; }
 
   std::string_view get_res_path() const {
     auto url = get_url();
@@ -769,11 +767,11 @@ public:
       event_call_backs_[(size_t)event_type](*this);
   }
 
-  void set_aspect_data(const std::string&& key, const std::any &data) {
-    aspect_data_.insert({ key, data });
+  void set_aspect_data(const std::string &&key, const std::any &data) {
+    aspect_data_.insert({key, data});
   }
 
-  template <typename T> T get_aspect_data(const std::string&& key) {
+  template <typename T> T get_aspect_data(const std::string &&key) {
     return std::any_cast<T>(aspect_data_[key]);
   }
 
@@ -884,4 +882,4 @@ private:
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
 };
-}
+} // namespace cinatra

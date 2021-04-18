@@ -1,14 +1,14 @@
 #pragma once
-#include "use_asio.hpp"
-#include <vector>
-#include <cassert>
-#include <mutex>
-#include <any>
-#include "request.hpp"
-#include "response.hpp"
-#include "websocket.hpp"
 #include "define.h"
 #include "http_cache.hpp"
+#include "request.hpp"
+#include "response.hpp"
+#include "use_asio.hpp"
+#include "websocket.hpp"
+#include <any>
+#include <cassert>
+#include <mutex>
+#include <vector>
 
 namespace cinatra {
 using http_handler = std::function<void(request &, response &)>;
@@ -85,7 +85,8 @@ public:
 #else
       static_assert(
           !is_ssl_,
-          "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed coming in this branch
+          "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed
+                                                       // coming in this branch
 #endif
     } else {
       return socket_;
@@ -180,16 +181,16 @@ public:
 
   auto &get_tag() { return tag_; }
 
-  template <typename... Fs> void send_ws_string(std::string msg, Fs &&... fs) {
+  template <typename... Fs> void send_ws_string(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
   }
 
-  template <typename... Fs> void send_ws_binary(std::string msg, Fs &&... fs) {
+  template <typename... Fs> void send_ws_binary(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
   }
 
   template <typename... Fs>
-  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&... fs) {
+  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&...fs) {
     constexpr const size_t size = sizeof...(Fs);
     static_assert(size != 0 || size != 2);
     if constexpr (size == 2) {
@@ -333,7 +334,8 @@ private:
 #else
     static_assert(
         !is_ssl_,
-        "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed coming in this branch
+        "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed
+                                                     // coming in this branch
 #endif
   }
 
@@ -393,7 +395,10 @@ private:
           return;
         }
       }
-      //				if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url())) { 					handle_cache(); 					return;
+      //				if (req_.get_method() ==
+      //"GET"&&http_cache::get().need_cache(req_.get_url())&&!http_cache::get().not_cache(req_.get_url()))
+      //{ 					handle_cache();
+      //return;
       //				}
 
       req_.set_last_len(len_);
@@ -465,7 +470,8 @@ private:
     size_t left_body_len = 0;
     // int index = 1;
     while (true) {
-      // std::cout << std::this_thread::get_id() << ", index: " << index << "\n";
+      // std::cout << std::this_thread::get_id() << ", index: " << index <<
+      // "\n";
       result = req_.parse_header(len_);
       if (result == -1) {
         return;
@@ -571,7 +577,11 @@ private:
     }
 
     // cache
-    //			if (req_.get_method() == "GET"&&http_cache::get().need_cache(req_.get_url()) && !http_cache::get().not_cache(req_.get_url())) { 				auto raw_url = req_.raw_url(); 				http_cache::get().add(std::string(raw_url.data(), raw_url.length()), res_.raw_content());
+    //			if (req_.get_method() ==
+    //"GET"&&http_cache::get().need_cache(req_.get_url()) &&
+    //!http_cache::get().not_cache(req_.get_url())) { 				auto raw_url =
+    //req_.raw_url(); 				http_cache::get().add(std::string(raw_url.data(),
+    //raw_url.length()), res_.raw_content());
     //			}
 
     boost::asio::async_write(
@@ -648,7 +658,8 @@ private:
 
   /****************** begin handle http body data *****************/
   void handle_string_body(std::size_t bytes_transferred) {
-    // defalt add limitation for string_body and else. you can remove the limitation for very big string.
+    // defalt add limitation for string_body and else. you can remove the
+    // limitation for very big string.
     if (req_.at_capacity()) {
       response_back(status_type::bad_request,
                     "The request is too long, limitation is 3M");
@@ -1191,7 +1202,8 @@ private:
   }
   //-------------web socket----------------//
 
-  //-------------chunked(read chunked not support yet, write chunked is ok)----------------------//
+  //-------------chunked(read chunked not support yet, write chunked is
+  //ok)----------------------//
   void handle_chunked(size_t bytes_transferred) {
     int ret = req_.parse_chunked(bytes_transferred);
     if (ret == parse_status::has_error) {
@@ -1208,7 +1220,8 @@ private:
     req_.set_state(data_proc_state::data_continue);
     call_back(); // app set the data
   }
-  //-------------chunked(read chunked not support yet, write chunked is ok)----------------------//
+  //-------------chunked(read chunked not support yet, write chunked is
+  //ok)----------------------//
 
   void handle_body() {
     if (req_.at_capacity()) {
@@ -1398,4 +1411,4 @@ inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
 inline constexpr data_proc_state ws_message = data_proc_state::data_continue;
 inline constexpr data_proc_state ws_close = data_proc_state::data_close;
 inline constexpr data_proc_state ws_error = data_proc_state::data_error;
-}
+} // namespace cinatra
