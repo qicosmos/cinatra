@@ -350,6 +350,12 @@ private:
             auto conn = req.get_conn<ScoketType>();
             conn->on_close();
           } break;
+          case cinatra::data_proc_state::data_all_end: {
+            // network error
+          } break;
+          case cinatra::data_proc_state::data_close: {
+            // network error
+          } break;
           case cinatra::data_proc_state::data_error: {
             // network error
           } break;
