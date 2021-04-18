@@ -28,8 +28,8 @@
 // completion of the asynchronous function is used as the input parameter of the
 // callback function; this parameter can have zero or more; _Exception_t: The
 // exception of the callback function, if you don't like the exception, ignore
-// this part, but you have to handle the exception properly with the asynchronous
-// code;
+// this part, but you have to handle the exception properly with the
+// asynchronous code;
 //
 // In the callback adapter model, The
 // '_Input_t.../_Result_t/_Exception_t(Optional)' is an inherent part of the

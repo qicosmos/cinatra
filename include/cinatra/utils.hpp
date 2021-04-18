@@ -8,6 +8,7 @@
 #pragma once
 #include "define.h"
 #include <algorithm>
+#include <array>
 #include <boost/system/error_code.hpp>
 #include <cctype>
 #include <cstddef> //std::byte
