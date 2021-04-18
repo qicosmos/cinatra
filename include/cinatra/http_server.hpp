@@ -1,18 +1,18 @@
 #pragma once
 #include "use_asio.hpp"
 #include <string>
-#include <vector>
 #include <string_view>
+#include <vector>
 
-#include "io_service_pool.hpp"
 #include "connection.hpp"
-#include "http_router.hpp"
-#include "router.hpp"
-#include "function_traits.hpp"
-#include "url_encode_decode.hpp"
-#include "http_cache.hpp"
-#include "session_manager.hpp"
 #include "cookie.hpp"
+#include "function_traits.hpp"
+#include "http_cache.hpp"
+#include "http_router.hpp"
+#include "io_service_pool.hpp"
+#include "router.hpp"
+#include "session_manager.hpp"
+#include "url_encode_decode.hpp"
 
 namespace cinatra {
 
@@ -27,7 +27,7 @@ class http_server_ : private noncopyable {
 public:
   using type = ScoketType;
   template <class... Args>
-  explicit http_server_(Args &&... args)
+  explicit http_server_(Args &&...args)
       : io_service_pool_(std::forward<Args>(args)...) {
     http_cache::get().set_cache_max_age(86400);
     init_conn_callback();
@@ -167,9 +167,10 @@ public:
 
   // set http handlers
   template <http_method... Is, typename Function, typename... AP>
-  void set_http_handler(std::string_view name, Function &&f, AP &&... ap) {
+  void set_http_handler(std::string_view name, Function &&f, AP &&...ap) {
     if constexpr (has_type<enable_cache<bool>,
-                           std::tuple<std::decay_t<AP>...>>::value) { // for cache
+                           std::tuple<std::decay_t<AP>...>>::value) { // for
+                                                                      // cache
       bool b = false;
       ((!b && (b = need_cache(std::forward<AP>(ap)))), ...);
       if (!b) {
@@ -429,7 +430,8 @@ private:
 
   void write_ranges_header(request &req, std::string_view mime,
                            std::string filename, std::string file_size) {
-    std::string header_str = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: *\r\nAccept-Ranges: bytes\r\n";
+    std::string header_str = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
+                             "*\r\nAccept-Ranges: bytes\r\n";
     header_str.append("Content-Disposition: attachment;filename=");
     header_str.append(std::move(filename)).append("\r\n");
     header_str.append("Connection: keep-alive\r\n");
@@ -555,4 +557,4 @@ using http_server_proxy = http_server_<T, io_service_pool>;
 
 using http_server = http_server_proxy<NonSSL>;
 using http_ssl_server = http_server_proxy<SSL>;
-}
+} // namespace cinatra
