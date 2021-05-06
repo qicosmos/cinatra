@@ -311,7 +311,7 @@ private:
                 not_found_(req, res);
                 return;
               }
-              res.set_status_and_content(status_type::not_found, "");
+              res.set_status_and_content(status_type::not_found, std::string(relative_file_name) + " not found");
               return;
             }
 

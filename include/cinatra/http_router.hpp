@@ -61,12 +61,13 @@ public:
       pair.second(req, res);
       return true;
     } else {
-      if (url.rfind(DOT) != std::string_view::npos) {
+      bool is_wild_card = get_wildcard_function(url, req, res);
+      if (!is_wild_card) {
         url = STATIC_RESOURCE;
         return route(method, url, req, res);
       }
 
-      return get_wildcard_function(url, req, res);
+      return is_wild_card;
     }
   }
 
