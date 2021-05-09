@@ -14,12 +14,5 @@ RUN make && make install
 ENV CINATRA=/cinatra
 WORKDIR $CINATRA
 RUN git clone https://github.com/qicosmos/cinatra.git
-ENV BOOST=/boost
-ENV BOOST_INTERNAL=/boost/boost
-WORKDIR $BOOST
-RUN git clone --recursive https://github.com/boostorg/boost.git
-WORKDIR $BOOST_INTERNAL
-RUN apt-get -y install build-essential python-dev autotools-dev libicu-dev libbz2-dev libboost-all-dev
-RUN ./bootstrap.sh
-RUN ./b2 install
-WORKDIR $CINATRA
+RUN cd  /cinatra/cinatra/cinatra/example && \
+    mkdir build && cd build &&  cmake -DLINUX=True ../ && make
