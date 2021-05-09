@@ -9,7 +9,11 @@
 #include "define.h"
 #include <algorithm>
 #include <array>
+#if defined(ASIO_STANDALONE)
+#include "use_asio.hpp"
+#else
 #include <boost/system/error_code.hpp>
+#endif
 #include <cctype>
 #include <cstddef> //std::byte
 #include <cstdlib>
