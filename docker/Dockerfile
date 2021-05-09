@@ -14,5 +14,5 @@ RUN make && make install
 ENV CINATRA=/cinatra
 WORKDIR $CINATRA
 RUN git clone https://github.com/qicosmos/cinatra.git
-RUN cd  /cinatra/cinatra/cinatra/example && \
+RUN cd  /cinatra/cinatra/example && \
     mkdir build && cd build &&  cmake -DLINUX=True ../ && make
