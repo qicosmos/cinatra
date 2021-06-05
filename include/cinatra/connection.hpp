@@ -302,8 +302,7 @@ private:
   void do_read() {
     reset();
 
-    if constexpr (is_ssl_) {
-      if (!has_shake_)
+    if (is_ssl_ && !has_shake_) {
         async_handshake();
     } else {
       async_read_some();
