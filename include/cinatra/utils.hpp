@@ -206,7 +206,10 @@ constexpr inline auto DEL = http_method::DEL;
 constexpr inline auto HEAD = http_method::HEAD;
 constexpr inline auto PUT = http_method::PUT;
 constexpr inline auto CONNECT = http_method::CONNECT;
+#ifdef TRACE
+#undef TRACE
 constexpr inline auto TRACE = http_method::TRACE;
+#endif
 constexpr inline auto OPTIONS = http_method::OPTIONS;
 
 enum class transfer_type { CHUNKED, ACCEPT_RANGES };
