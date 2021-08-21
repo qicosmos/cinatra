@@ -305,7 +305,7 @@ public:
   void render_string(std::string &&content) {
 #ifdef CINATRA_ENABLE_GZIP
     set_status_and_content(status_type::ok, std::move(content),
-                           res_content_type::string, content_encoding::gzip);
+                           req_content_type::string, content_encoding::gzip);
 #else
     set_status_and_content(status_type::ok, std::move(content),
                            req_content_type::string, content_encoding::none);

@@ -387,7 +387,7 @@ private:
     }
 #ifdef CINATRA_ENABLE_GZIP
     res.set_status_and_content(status_type::ok, file_buffer.str(),
-                               res_content_type::none, content_encoding::gzip);
+                               req_content_type::none, content_encoding::gzip);
 #else
     res.set_status_and_content(status_type::ok, file_buffer.str());
 #endif
