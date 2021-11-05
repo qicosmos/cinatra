@@ -348,7 +348,8 @@ private:
           } break;
           case cinatra::data_proc_state::data_end: {
             auto conn = req.get_conn<ScoketType>();
-            conn->on_close();
+            if(!conn->get_keep_alive())
+              conn->on_close();
           } break;
           case cinatra::data_proc_state::data_all_end: {
             // network error
