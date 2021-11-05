@@ -413,9 +413,9 @@ private:
   }
 
   void handle_request(std::size_t bytes_transferred) {
+    auto type = get_content_type();
+    req_.set_http_type(type);
     if (req_.has_body()) {
-      auto type = get_content_type();
-      req_.set_http_type(type);
       switch (type) {
       case cinatra::content_type::string:
       case cinatra::content_type::websocket:
