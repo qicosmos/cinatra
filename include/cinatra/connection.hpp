@@ -181,10 +181,6 @@ public:
 
   auto &get_tag() { return tag_; }
 
-  bool get_keep_alive(){
-    return keep_alive_;
-  }
-
   template <typename... Fs> void send_ws_string(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
   }
@@ -257,9 +253,6 @@ public:
                                }
 
                                call_back();
-                               if(keep_alive_){
-                                  do_read();
-                               }
                              });
   }
 
