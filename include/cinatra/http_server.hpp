@@ -328,10 +328,10 @@ private:
 
             req.get_conn<ScoketType>()->set_tag(in);
 
-            // if(is_small_file(in.get(),req)){
-            //	send_small_file(res, in.get(), mime);
-            //	return;
-            //}
+            if(is_small_file(in.get(),req)){
+            	send_small_file(res, in.get(), mime);
+            	return;
+            }
 
             if (transfer_type_ == transfer_type::CHUNKED)
               write_chunked_header(req, in, mime);
