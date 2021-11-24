@@ -129,11 +129,12 @@ public:
       outbuf.resize((size_t)payload_length_);
     }
 
-    if (mask_ != 0) {
+    if (mask_ == 0) {
       memcpy(&outbuf[0], (void *)(inp), payload_length_);
+    }else{
       // unmask data:
       for (size_t i = 0; i < payload_length_; i++) {
-        outbuf[i] = outbuf[i] ^ ((unsigned char *)(&mask_))[i % 4];
+        outbuf[i] = inp[i] ^ ((unsigned char *)(&mask_))[i % 4];
       }
     }
 
