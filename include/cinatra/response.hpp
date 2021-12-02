@@ -187,8 +187,10 @@ public:
       }
     } else
 #endif
+    {
       (void)encoding;
-    set_content(std::move(content));
+      set_content(std::move(content));
+    }
     build_response_str();
   }
 
