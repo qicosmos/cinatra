@@ -834,7 +834,7 @@ private:
   std::vector<char> buf_;
 
   size_t num_headers_ = 0;
-  struct phr_header headers_[32];
+  struct phr_header headers_[64];
   const char *method_ = nullptr;
   size_t method_len_ = 0;
   const char *url_ = nullptr;
