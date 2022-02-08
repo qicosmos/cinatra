@@ -415,6 +415,19 @@ public:
   }
 
   template <typename _Callable_t>
+  auto sync_upload(std::string uri, std::string filename, _Callable_t &&cb,
+                   size_t seconds = 60) {
+    auto promise = std::make_shared<std::promise<void>>();
+    auto callback = [promise, cb = std::forward<_Callable_t>(cb)](auto data) {
+      cb(std::move(data));
+      promise->set_value();
+    };
+    upload(std::move(uri), std::move(filename), 0, std::move(callback),
+           seconds);
+    promise->get_future().get();
+  }
+
+  template <typename _Callable_t>
   auto upload(std::string uri, std::string filename, size_t start,
               _Callable_t &&cb, size_t seconds = 60) {
     multipart_str_ = std::move(filename);

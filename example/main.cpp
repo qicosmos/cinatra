@@ -180,7 +180,7 @@ void test_download() {
 void test_upload() {
   std::string uri = "http://cn.bing.com/";
   auto client = cinatra::client_factory::instance().new_client();
-  client->upload(uri, "boost_1_72_0.7z", [](response_data data) {
+  client->sync_upload(uri, "boost_1_72_0.7z", [](response_data data) {
     if (data.ec) {
       std::cout << data.ec.message() << "\n";
       return;
@@ -230,11 +230,10 @@ int main() {
   }
 
   // server.on_connection([](auto conn) { return true; });
-  server.set_http_handler<GET, POST>(
-      "/", [](request &, response &res) mutable {
-        res.set_status_and_content(status_type::ok, "hello world");
-        // res.set_status_and_content(status_type::ok, std::move(str));
-      });
+  server.set_http_handler<GET, POST>("/", [](request &, response &res) mutable {
+    res.set_status_and_content(status_type::ok, "hello world");
+    // res.set_status_and_content(status_type::ok, std::move(str));
+  });
 
   server.set_http_handler<GET>("/plaintext", [](request &, response &res) {
     // res.set_status_and_content<status_type::ok,
@@ -264,9 +263,9 @@ int main() {
 
   //	person p{ 2 };
   //	server.set_http_handler<GET, POST>("/a", &person::foo, enable_cache{
-  //false }, log_t{});
+  // false }, log_t{});
   ////	server.set_http_handler<GET, POST>("/b", &person::foo1, log_t{},
-  ///enable_cache{ false });
+  /// enable_cache{ false });
   //
   //    server.set_http_handler<GET, POST>("/string", [](request& req, response&
   //    res) {
@@ -284,25 +283,25 @@ int main() {
   //    },enable_cache{false});
   //
   //	server.set_http_handler<GET, POST>("/login", [](request& req, response&
-  //res) { 		auto session = res.start_session();
-  //session->set_data("userid", std::string("1"));
-  //session->set_max_age(-1); 		res.set_status_and_content(status_type::ok,
-  //"login");
+  // res) { 		auto session = res.start_session();
+  // session->set_data("userid", std::string("1"));
+  // session->set_max_age(-1);
+  // res.set_status_and_content(status_type::ok, "login");
   //	},enable_cache{false});
   //
   //	server.set_http_handler<GET, POST>("/islogin", [](request& req,
-  //response& res) { 		auto ptr = req.get_session(); 		auto session
-  //= ptr.lock(); 		if (session == nullptr ||
-  //session->get_data<std::string>("userid") != "1") {
+  // response& res) { 		auto ptr = req.get_session(); 		auto
+  // session = ptr.lock(); 		if (session == nullptr ||
+  // session->get_data<std::string>("userid") != "1") {
   //			res.set_status_and_content(status_type::ok, "没有登录",
-  //res_content_type::string); 			return;
+  // res_content_type::string); 			return;
   //		}
   //		res.set_status_and_content(status_type::ok, "已经登录",
-  //res_content_type::string);
+  // res_content_type::string);
   //	},enable_cache{false});
   //
   //	server.set_http_handler<GET, POST>("/html", [](request& req, response&
-  //res) {
+  // res) {
   //        res.set_attr("number",1024);
   //        res.set_attr("test_text","hello,world");
   //        res.set_attr("header_text","你好 cinatra");
@@ -310,7 +309,7 @@ int main() {
   //	});
   //
   //	server.set_http_handler<GET, POST,OPTIONS>("/json", [](request& req,
-  //response& res) { 		nlohmann::json json;
+  // response& res) { 		nlohmann::json json;
   //        res.add_header("Access-Control-Allow-Origin","*");
   //		if(req.get_method()=="OPTIONS"){
   //            res.add_header("Access-Control-Allow-Headers","Authorization");
@@ -326,19 +325,19 @@ int main() {
   //	});
   //
   //	server.set_http_handler<GET,POST>("/redirect",[](request& req, response&
-  //res){ 		res.redirect("http://www.baidu.com"); //
-  //res.redirect("/json");
+  // res){ 		res.redirect("http://www.baidu.com"); //
+  // res.redirect("/json");
   //	});
   //
   //	server.set_http_handler<GET, POST>("/pathinfo/*", [](request& req,
-  //response& res) { 		auto s = req.get_query_value(0);
+  // response& res) { 		auto s = req.get_query_value(0);
   //		res.render_string(std::string(s.data(), s.length()));
   //	});
   //
   //	server.set_http_handler<GET, POST>("/restype", [](request& req,
-  //response& res) { 		auto type = req.get_query_value("type");
-  //auto res_type = cinatra::res_content_type::string; 		if (type ==
-  //"html")
+  // response& res) { 		auto type = req.get_query_value("type");
+  // auto res_type = cinatra::res_content_type::string; 		if (type
+  // == "html")
   //		{
   //			res_type = cinatra::res_content_type::html;
   //		}
@@ -349,24 +348,27 @@ int main() {
   //			//do not anything;
   //		}
   //		res.set_status_and_content(status_type::ok, "<a
-  //href='http://www.baidu.com'>hello world 百度</a>", res_type);
+  // href='http://www.baidu.com'>hello world 百度</a>", res_type);
   //	});
   //
   //	server.set_http_handler<GET, POST>("/getzh", [](request& req, response&
-  //res) { 		auto zh = req.get_query_value("zh");
+  // res) { 		auto zh = req.get_query_value("zh");
   //		res.render_string(std::string(zh.data(),zh.size()));
   //	});
   //
   //	server.set_http_handler<GET, POST>("/gzip", [](request& req, response&
-  //res) { 		auto body = req.body(); 		std::cout << body.data() <<
-  //std::endl; 		res.set_status_and_content(status_type::ok, "hello world",
-  //res_content_type::none, content_encoding::gzip);
+  // res) { 		auto body = req.body(); 		std::cout <<
+  // body.data()
+  // <<
+  // std::endl; 		res.set_status_and_content(status_type::ok,
+  // "hello world", res_content_type::none, content_encoding::gzip);
   //	});
   //
   //
   //	server.set_http_handler<GET, POST>("/test", [](request& req, response&
-  //res) { 		auto name = req.get_header_value("name"); 		if
-  //(name.empty()) { 			res.render_string("no name"); 			return;
+  // res) { 		auto name = req.get_header_value("name"); if
+  //(name.empty()) { 			res.render_string("no name");
+  // return;
   //		}
   //
   //		auto id = req.get_query_value("id");
@@ -379,7 +381,7 @@ int main() {
   //
   //	//aspect
   //	server.set_http_handler<GET, POST>("/aspect", [](request& req, response&
-  //res) { 		res.render_string("hello world");
+  // res) { 		res.render_string("hello world");
   //	}, check{}, log_t{});
   //
   ////web socket
@@ -393,23 +395,23 @@ int main() {
   //	req.on(ws_message, [](request& req) {
   //		auto part_data = req.get_part_data();
   //		//echo
-  //		std::string str = std::string(part_data.data(), part_data.length());
-  //req.get_conn()->send_ws_string(std::move(str)); 		std::cout <<
-  //part_data.data() << std::endl;
+  //		std::string str = std::string(part_data.data(),
+  // part_data.length()); req.get_conn()->send_ws_string(std::move(str));
+  // std::cout << part_data.data() << std::endl;
   //	});
 
   //	req.on(ws_error, [](request& req) {
   //		std::cout << "websocket pack error or network error" <<
-  //std::endl;
+  // std::endl;
   //	});
   //});
 
   //	server.set_http_handler<GET, POST>("/vue_html", [](request& req,
-  //response& res) { 		res.render_raw_view("./www/index.html");
+  // response& res) { 		res.render_raw_view("./www/index.html");
   //	});
   //
   //	server.set_http_handler<GET, POST>("/vue_demo", [](request& req,
-  //response& res) { 		res.render_raw_view("./www/dist/index.html");
+  // response& res) { 		res.render_raw_view("./www/dist/index.html");
   //	});
   //
   //	//http upload(multipart)
@@ -418,18 +420,20 @@ int main() {
   // content_type::multipart);
   //	auto& files = req.get_upload_files();
   //	for (auto& file : files) {
-  //		std::cout << file.get_file_path() << " " << file.get_file_size() <<
-  //std::endl;
+  //		std::cout << file.get_file_path() << " " << file.get_file_size()
+  //<< std::endl;
   //	}
   //	res.render_string("multipart finished");
   //});
   //
   //	//http upload(octet-stream)
   //	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request&
-  //req, response& res) { 		assert(req.get_content_type() ==
-  //content_type::octet_stream); 		auto& files = req.get_upload_files();
-  //for (auto& file : files) { 			std::cout << file.get_file_path() <<
-  //" " << file.get_file_size() << std::endl;
+  // req, response& res) { 		assert(req.get_content_type() ==
+  // content_type::octet_stream); 		auto& files =
+  // req.get_upload_files();
+  // for (auto& file : files) { 			std::cout <<
+  // file.get_file_path()
+  // << " " << file.get_file_size() << std::endl;
   //		}
   //		res.render_string("octet-stream finished");
   //	});
