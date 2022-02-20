@@ -190,6 +190,36 @@ void test_upload() {
   });
 }
 
+void test_smtp_client() {
+  boost::asio::io_context io_context;
+#ifdef CINATRA_ENABLE_SSL
+  auto client = cinatra::smtp::get_smtp_client<cinatra::SSL>(io_context);
+#else
+  auto client = cinatra::smtp::get_smtp_client<cinatra::NonSSL>(io_context);
+#endif
+  smtp::email_server server{};
+  server.server = "smtp.163.com";
+  server.port = client.IS_SSL ? "465" : "25";
+  server.user = "your_email@163.com";
+  server.password = "your_email_password";
+
+  smtp::email_data data{};
+  data.filepath = ""; // some file as attachment.
+  data.from_email = "your_email@163.com";
+  data.to_email.push_back("to_some_email@163.com");
+  // data.to_email.push_back("to_more_email@example.com");
+  data.subject = "it is a test from cinatra smtp";
+  data.text = "Hello cinatra smtp client";
+
+  client.set_email_server(server);
+  client.set_email_data(data);
+
+  client.start();
+
+  boost::system::error_code ec;
+  io_context.run(ec);
+}
+
 class qps {
 public:
   void increase() { counter_.fetch_add(1, std::memory_order_release); }
@@ -217,6 +247,7 @@ private:
 };
 
 int main() {
+  // test_smtp_client();
   // test_download();
   // test_sync_client();
   // test_async_client();
