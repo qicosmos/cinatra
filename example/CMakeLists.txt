@@ -51,8 +51,9 @@ set(CINATRA_EXAMPLE
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
 include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
-
-target_link_libraries(${project_name} ${Boost_LIBRARIES} -lstdc++fs)
+if(LINUX)
+	target_link_libraries(${project_name} ${Boost_LIBRARIES} -lstdc++fs)
+endif()
 if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()

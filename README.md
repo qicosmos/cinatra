@@ -6,6 +6,8 @@
 
 # 目录
 
+## [使用cinatra常见问题汇总(FAQ)](https://github.com/qicosmos/cinatra/wiki)
+
 * [cinatra简介](#cinatra简介)
 * [如何使用](#如何使用)
 * [快速示例](#快速示例)
@@ -121,7 +123,6 @@ cinatra是header-only的，直接引用头文件既可。
 				res.set_status_and_content(status_type::bad_request);
 				return false;
 			}
-			
 			return true;
 		}
 	
@@ -130,13 +131,26 @@ cinatra是header-only的，直接引用头文件既可。
 			return true;
 		}
 	};
-	
+
+	//将信息从中间件传输到处理程序
+	struct get_data {
+		bool before(request& req, response& res) {
+			req.set_aspect_data("hello", std::string("hello world"));
+			return true;
+		}
+	}
+
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
 		server.listen("0.0.0.0", "8080");
 		server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
 		}, check{}, log_t{});
+
+		server.set_http_handler<GET,POST>("/aspect/data", [](request& req, response& res) {
+			std::string hello = req.get_aspect_data<std::string>("hello");
+			res.set_status_and_content(status_type::ok, std::move(hello));
+		}, get_data{});
 
 		server.run();
 		return 0;
@@ -201,8 +215,11 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 ## 示例5：文件下载
 
+    cinatra提供下载功能非常简单，不需要编写代码，具体方法：
+    1. 启动cinatra server
+    2. 将要下载的文件放到http server同一级的www目录下即可。
+    3. 如何下载：如果你把test.txt放到www之后，那么直接通过http://127.0.0.1:8090/test.txt下载即可。
 	//chunked download
-	//http://127.0.0.1:8080/assets/show.jpg
 	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 
 ## 示例6：websocket
@@ -226,7 +243,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 				auto part_data = req.get_part_data();
 				//echo
 				std::string str = std::string(part_data.data(), part_data.length());
-				req.get_conn()->send_ws_string(std::move(str));
+				req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
 				std::cout << part_data.data() << std::endl;
 			});
 
@@ -430,11 +447,6 @@ void test_download() {
 
 websocket的业务函数是会多次进入的，因此写业务逻辑的时候需要注意，推荐按照示例中的方式去做。
 
-cinatra目前刚开始在生产环境中使用, 还处于开发完善阶段，可能还有一些bug，因此不建议现阶段直接用于生产环境，建议先在测试环境下试用。
-
-试用没问题了再在生产环境中使用，试用过程中发现了问题请及时提issue反馈或者邮件联系我。
-
-测试和使用稳定之后cinatra会发布正式版。
 
 # 联系方式
 
