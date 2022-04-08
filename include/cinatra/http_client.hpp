@@ -261,7 +261,7 @@ public:
   auto async_request(http_method method, std::string uri, _Callable_t &&cb,
                      req_content_type type = req_content_type::json,
                      size_t seconds = 15, std::string body = "")
-      -> MODERN_CALLBACK_RESULT(void(response_data)) {
+      ->MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
     MODERN_CALLBACK_TRAITS(cb, void(response_data));
     async_request_impl(method, std::move(uri), MODERN_CALLBACK_CALL(), type,
                        seconds, std::move(body));
@@ -339,7 +339,7 @@ public:
   template <typename _Callable_t>
   auto download(std::string src_file, std::string dest_file, int64_t size,
                 _Callable_t &&cb, size_t seconds = 60)
-      -> MODERN_CALLBACK_RESULT(void(response_data)) {
+      ->MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
     MODERN_CALLBACK_TRAITS(cb, void(response_data));
     download_impl(std::move(src_file), std::move(dest_file), size,
                   MODERN_CALLBACK_CALL(), seconds);
