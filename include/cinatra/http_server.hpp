@@ -301,7 +301,8 @@ private:
           switch (state) {
           case cinatra::data_proc_state::data_begin: {
             std::string relative_file_name = req.get_relative_filename();
-            std::string fullpath = static_dir_ + relative_file_name;
+            std::string fullpath =
+                static_dir_.append(fs::u8path(relative_file_name).string());
 
             auto mime = req.get_mime(relative_file_name);
             auto in = std::make_shared<std::ifstream>(fullpath,
@@ -311,7 +312,9 @@ private:
                 not_found_(req, res);
                 return;
               }
-              res.set_status_and_content(status_type::not_found, std::string(relative_file_name) + " not found");
+              res.set_status_and_content(status_type::not_found,
+                                         std::string(relative_file_name) +
+                                             " not found");
               return;
             }
 
@@ -328,9 +331,9 @@ private:
 
             req.get_conn<ScoketType>()->set_tag(in);
 
-            if(is_small_file(in.get(),req)){
-            	send_small_file(res, in.get(), mime);
-            	return;
+            if (is_small_file(in.get(), req)) {
+              send_small_file(res, in.get(), mime);
+              return;
             }
 
             if (transfer_type_ == transfer_type::CHUNKED)
@@ -348,7 +351,7 @@ private:
           } break;
           case cinatra::data_proc_state::data_end: {
             auto conn = req.get_conn<ScoketType>();
-            if(!conn->get_keep_alive())
+            if (!conn->get_keep_alive())
               conn->on_close();
           } break;
           case cinatra::data_proc_state::data_all_end: {
