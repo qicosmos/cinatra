@@ -256,6 +256,10 @@ private:
     acceptor->async_accept(
         new_conn->tcp_socket(),
         [this, new_conn, acceptor](const boost::system::error_code &e) {
+          if (!acceptor->is_open()) {
+            return;
+          }
+
           if (!e) {
             new_conn->tcp_socket().set_option(
                 boost::asio::ip::tcp::no_delay(true));
