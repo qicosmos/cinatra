@@ -610,7 +610,7 @@ private:
       reset();
       cancel_timer(); // avoid close two times
       shutdown();
-      close();
+      close(false);
     }
   }
 
@@ -1045,7 +1045,7 @@ private:
   void response_handshake() {
     std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
     if (buffers.empty()) {
-      close();
+      close(false);
       return;
     }
 
@@ -1054,7 +1054,7 @@ private:
         socket(), buffers,
         [this, self](const boost::system::error_code &ec, std::size_t) {
           if (ec) {
-            close();
+            close(false);
             return;
           }
 
@@ -1358,7 +1358,7 @@ private:
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
             call_back();
-            close();
+            close(false);
           }
         });
   }
