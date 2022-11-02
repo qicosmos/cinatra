@@ -531,6 +531,9 @@ private:
     if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
       upgrade_to_ssl();
+
+      SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
+                               u.get_host().c_str());
 #else
       // please open CINATRA_ENABLE_SSL before request https!
       assert(false);
