@@ -305,8 +305,7 @@ private:
           switch (state) {
           case cinatra::data_proc_state::data_begin: {
             std::string relative_file_name = req.get_relative_filename();
-            std::string fullpath =
-                static_dir_.append(fs::u8path(relative_file_name).string());
+            std::string fullpath =static_dir_+fs::u8path(relative_file_name).string();
 
             auto mime = req.get_mime(relative_file_name);
             auto in = std::make_shared<std::ifstream>(fullpath,
