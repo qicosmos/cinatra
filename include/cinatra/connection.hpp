@@ -1178,7 +1178,7 @@ private:
       req_.call_event(data_proc_state::data_close);
 
       std::string close_msg =
-          ws_.format_close_payload(opcode::close, close_frame.message, len);
+          ws_.format_close_payload(close_code::normal, close_frame.message, len);
       auto header = ws_.format_header(close_msg.length(), opcode::close);
       send_msg(std::move(header), std::move(close_msg));
     } break;
