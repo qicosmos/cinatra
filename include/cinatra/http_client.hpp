@@ -348,7 +348,7 @@ public:
 
   void download_impl(std::string src_file, std::string dest_file, int64_t size,
                      callback_t cb, size_t seconds = 60) {
-    auto parant_path = fs::path(dest_file).parent_path();
+    auto parant_path = fs::absolute(dest_file).parent_path();
     std::error_code code;
     fs::create_directories(parant_path, code);
     if (code) {
@@ -531,9 +531,6 @@ private:
     if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
       upgrade_to_ssl();
-
-      SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
-                               u.get_host().c_str());
 #else
       // please open CINATRA_ENABLE_SSL before request https!
       assert(false);
