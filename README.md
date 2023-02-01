@@ -454,7 +454,7 @@ purecpp@163.com
 
 qq群：545605838
 
-[http://purecpp.org/](http://purecpp.org/ "purecpp")
+[http://purecpp.cn/](http://purecpp.cn/ "purecpp")
 
 [https://github.com/qicosmos/cinatra](https://github.com/qicosmos/cinatra "cinatra")
 
