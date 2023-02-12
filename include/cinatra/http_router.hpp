@@ -24,9 +24,11 @@ public:
   register_handler(std::string_view name, Function &&f, const Ap &...ap) {
     if constexpr (sizeof...(Is) > 0) {
       auto arr = get_method_arr<Is...>();
-      register_nonmember_func(name, arr, std::forward<Function>(f), ap...);
+      (register_nonmember_func(name, method_name(Is), arr,
+                               std::forward<Function>(f), ap...),
+       ...);
     } else {
-      register_nonmember_func(name, {0}, std::forward<Function>(f), ap...);
+      register_nonmember_func(name, "", {0}, std::forward<Function>(f), ap...);
     }
   }
 
@@ -34,21 +36,25 @@ public:
   std::enable_if_t<std::is_same_v<T *, T1>>
   register_handler(std::string_view name, Type (T::*f)(request &, response &),
                    T1 t, const Ap &...ap) {
-    register_handler_impl<Is...>(name, f, t, ap...);
+    (register_handler_impl<Is...>(name, method_name(Is), f, t, ap...), ...);
   }
 
   template <http_method... Is, class T, class Type, typename... Ap>
   void register_handler(std::string_view name,
                         Type (T::*f)(request &, response &), const Ap &...ap) {
-    register_handler_impl<Is...>(name, f, (T *)nullptr, ap...);
+    (register_handler_impl(name, method_name(Is), f, (T *)nullptr, ap...), ...);
   }
 
   void remove_handler(std::string name) { this->map_invokers_.erase(name); }
 
   // elimate exception, resut type bool: true, success, false, failed
   bool route(std::string_view method, std::string_view url, request &req,
-             response &res) {
-    auto it = map_invokers_.find(url);
+             response &res, bool wild_card = false) {
+    std::string_view key =
+        wild_card
+            ? url
+            : std::string_view{method.data(), method.size() + url.size() + 1};
+    auto it = map_invokers_.find(key);
     if (it != map_invokers_.end()) {
       auto &pair = it->second;
       if (method[0] < 'A' || method[0] > 'Z')
@@ -63,8 +69,7 @@ public:
     } else {
       bool is_wild_card = get_wildcard_function(url, req, res);
       if (!is_wild_card) {
-        url = STATIC_RESOURCE;
-        return route(method, url, req, res);
+        return route(method, STATIC_RESOURCE, req, res, true);
       }
 
       return is_wild_card;
@@ -85,27 +90,36 @@ private:
   }
 
   template <http_method... Is, class T, class Type, typename T1, typename... Ap>
-  void register_handler_impl(std::string_view name, Type T::*f, T1 t,
-                             const Ap &...ap) {
+  void register_handler_impl(std::string_view name, std::string_view methd_name,
+                             Type T::*f, T1 t, const Ap &...ap) {
+    auto arr = get_method_arr<Is...>();
+    std::string key;
+    key.append(methd_name).append(" ").append(name);
     if constexpr (sizeof...(Is) > 0) {
-      auto arr = get_method_arr<Is...>();
-      register_member_func(name, arr, f, t, ap...);
+      register_member_func(key, arr, f, t, ap...);
     } else {
-      register_member_func(name, {0}, f, t, ap...);
+      register_member_func(key, arr, f, t, ap...);
     }
   }
 
   template <typename Function, typename... AP>
-  void register_nonmember_func(std::string_view raw_name,
+  void register_nonmember_func(std::string_view raw_name, std::string_view methd_name,
                                const std::array<char, 26> &arr, Function f,
                                const AP &...ap) {
+    std::string key;
+    if (raw_name == STATIC_RESOURCE) {
+      key = STATIC_RESOURCE;
+    } else {
+      key.append(methd_name).append(" ").append(raw_name);
+    }
+
     if (raw_name.back() == '*') {
-      this->wildcard_invokers_[raw_name.substr(0, raw_name.length() - 1)] = {
+      this->wildcard_invokers_[key.substr(0, key.length() - 1)] = {
           arr, std::bind(&http_router::invoke<Function, AP...>, this,
                          std::placeholders::_1, std::placeholders::_2,
                          std::move(f), ap...)};
     } else {
-      this->map_invokers_[raw_name] = {
+      this->map_invokers_[key] = {
           arr, std::bind(&http_router::invoke<Function, AP...>, this,
                          std::placeholders::_1, std::placeholders::_2,
                          std::move(f), ap...)};
@@ -135,7 +149,7 @@ private:
   }
 
   template <typename Function, typename Self, typename... AP>
-  void register_member_func(std::string_view raw_name,
+  void register_member_func(const std::string &raw_name,
                             const std::array<char, 26> &arr, Function f,
                             Self self, const AP &...ap) {
     if (raw_name.back() == '*') {
@@ -236,8 +250,25 @@ private:
   typedef std::pair<std::array<char, 26>,
                     std::function<void(request &, response &)>>
       invoker_function;
-  std::map<std::string_view, invoker_function> map_invokers_;
-  std::unordered_map<std::string_view, invoker_function>
+
+  struct string_hash {
+    using hash_type = std::hash<std::string_view>;
+    using is_transparent = void;
+
+    std::size_t operator()(const char *str) const { return hash_type{}(str); }
+    std::size_t operator()(std::string_view str) const {
+      return hash_type{}(str);
+    }
+    std::size_t operator()(std::string const &str) const {
+      return hash_type{}(str);
+    }
+  };
+
+  std::unordered_map<std::string, invoker_function, string_hash,
+                     std::equal_to<>>
+      map_invokers_;
+  std::unordered_map<std::string, invoker_function, string_hash,
+                     std::equal_to<>>
       wildcard_invokers_; // for url/*
 };
 } // namespace cinatra
