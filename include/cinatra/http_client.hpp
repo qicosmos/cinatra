@@ -49,7 +49,30 @@ public:
     future_ = read_close_finished_.get_future();
   }
 
-  ~http_client() { close(); }
+  ~http_client() {
+    close();
+#ifdef CINATRA_ENABLE_SSL
+    if (ssl_stream_) {
+      std::error_code ec;
+      ssl_stream_->shutdown(ec);
+      ssl_stream_ = nullptr;
+    }
+#endif
+  }
+
+  void close(bool close_ssl = true) {
+    if (has_closed_)
+      return;
+
+    ios_.post([this] {
+      boost::system::error_code ec;
+      has_connected_ = false;
+      timer_.cancel(ec);
+      socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+      socket_.close(ec);
+      has_closed_ = true;
+    });
+  }
 
   response_data get(std::string uri) {
     return request(http_method::GET, std::move(uri), req_content_type::json,
@@ -261,7 +284,7 @@ public:
   auto async_request(http_method method, std::string uri, _Callable_t &&cb,
                      req_content_type type = req_content_type::json,
                      size_t seconds = 15, std::string body = "")
-      ->MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
+      -> MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
     MODERN_CALLBACK_TRAITS(cb, void(response_data));
     async_request_impl(method, std::move(uri), MODERN_CALLBACK_CALL(), type,
                        seconds, std::move(body));
@@ -339,7 +362,7 @@ public:
   template <typename _Callable_t>
   auto download(std::string src_file, std::string dest_file, int64_t size,
                 _Callable_t &&cb, size_t seconds = 60)
-      ->MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
+      -> MODERN_CALLBACK_RESULT_TYPE(void(response_data)) {
     MODERN_CALLBACK_TRAITS(cb, void(response_data));
     download_impl(std::move(src_file), std::move(dest_file), size,
                   MODERN_CALLBACK_CALL(), seconds);
@@ -731,6 +754,10 @@ private:
     reset_timer();
     async_read_until(TWO_CRCF, [this, self = shared_from_this()](auto ec,
                                                                  size_t size) {
+      if (has_closed_) {
+        callback(std::make_error_code(std::errc::broken_pipe));
+        return;
+      }
       cancel_timer();
       if (!ec) {
         // parse header
@@ -951,26 +978,6 @@ private:
     }
   }
 
-  void close(bool close_ssl = true) {
-    boost::system::error_code ec;
-    if (close_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-      if (ssl_stream_) {
-        ssl_stream_->shutdown(ec);
-        ssl_stream_ = nullptr;
-      }
-#endif
-    }
-
-    if (!has_connected_)
-      return;
-
-    has_connected_ = false;
-    timer_.cancel(ec);
-    socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-    socket_.close(ec);
-  }
-
   void reset_timer() {
     if (timeout_seconds_ == 0 || promise_) {
       return;
@@ -1130,6 +1137,7 @@ private:
 
 private:
   std::atomic_bool has_connected_ = false;
+  std::atomic_bool has_closed_ = false;
   callback_t cb_;
   std::atomic_bool in_progress_ = false;
 
