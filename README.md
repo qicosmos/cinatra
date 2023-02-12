@@ -17,7 +17,7 @@
 * [联系方式](#联系方式)
 
 # cinatra简介
-[cinatra](https://github.com/qicosmos/cinatra)是一个高性能易用的http框架，它是用modern c++(c++17)开发的，它的目标是提供一个快速开发的c++ http框架。它的主要特点如下：
+[cinatra](https://github.com/qicosmos/cinatra)是一个高性能易用的http框架，它是用modern c++(c++20)开发的，它的目标是提供一个快速开发的c++ http框架。它的主要特点如下：
 
 1. 统一而简单的接口
 2. header-only
@@ -35,13 +35,12 @@ cinatra目前被很多公司在使用，在这里可以看到[谁在用cinatra](
 # 如何使用
 
 ## 编译依赖
-cinatra是基于boost.asio开发的，所以需要boost库。不过，cinatra同时也支持了ASIO_STANDALONE，你不必一定需要boost库。
+cinatra是基于asio开发的，需要启用ASIO_STANDALONE。
 
 cinatra需要的依赖项：
 
-1. C++17 编译器 (gcc 7.2, clang 4.0, Visual Studio 2017 update 15.5,或者更高的版本)
-2. Boost.Asio(或者独立的 Asio)
-3. Boost.System
+1. C++20 编译器 (gcc 10, clang 11, Visual Studio 2022 19.4,或者更高的版本)
+2. 独立的 Asio
 
 ## 使用
 cinatra是header-only的，直接引用头文件既可。

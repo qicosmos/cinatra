@@ -50,9 +50,9 @@ public:
 
   // elimate exception, resut type bool: true, success, false, failed
   bool route(std::string_view method, std::string_view url, request &req,
-             response &res) {
+             response &res, bool wild_card = false) {
     std::string_view key =
-        std::string_view{method.data(), method.size() + url.size() + 1};
+      wild_card? url :std::string_view{method.data(), method.size() + url.size() + 1};
     auto it = map_invokers_.find(key);
     if (it != map_invokers_.end()) {
       auto &pair = it->second;
@@ -68,8 +68,10 @@ public:
     } else {
       bool is_wild_card = get_wildcard_function(url, req, res);
       if (!is_wild_card) {
-        url = STATIC_RESOURCE;
-        return route(method, url, req, res);
+        std::string str(method);
+        str.append(" ").append(STATIC_RESOURCE);
+          //url = ""+STATIC_RESOURCE;
+        return route(method, std::string_view(str), req, res, true);
       }
 
       return is_wild_card;
