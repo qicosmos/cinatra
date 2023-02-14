@@ -6,7 +6,10 @@ set(CINATRA_EXAMPLE
 	)
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
-include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+target_include_directories(${project_name} PRIVATE
+        ${cinatra_SOURCE_DIR}/thirdparty/asio
+)
+
 if(LINUX)
 	target_link_libraries(${project_name} ${Boost_LIBRARIES} -lstdc++fs)
 endif()

@@ -17,16 +17,3 @@ if(BUILD_WITH_LIBCXX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 else()
     message(STATUS "Build with libstdc++")
 endif()
-
-# ccache
-option(USE_CCACHE "use ccache to faster compile when develop" OFF)
-if (USE_CCACHE)
-    find_program(CCACHE_FOUND ccache)
-    if (CCACHE_FOUND AND USE_CCACHE)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-        #set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) # ccache for link is useless
-        message(STATUS "ccache found")
-    else ()
-        message(WARNING "ccache not found :you'd better use ccache to faster compile if you are developer")
-    endif ()
-endif ()

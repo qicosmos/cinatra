@@ -1,8 +1,11 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-add_executable(test_cinatra
+set(project_name test_cinatra)
+add_executable(${project_name}
         test_cinatra.cpp
         main.cpp
         )
-add_test(NAME test_cinatra COMMAND test_cinatra)
-target_link_libraries(test_cinatra PRIVATE doctest)
+target_include_directories(${project_name} PRIVATE
+        ${cinatra_SOURCE_DIR}/thirdparty/asio
+)
+add_test(NAME ${project_name} COMMAND test_cinatra)
+target_link_libraries(${project_name} PRIVATE doctest)

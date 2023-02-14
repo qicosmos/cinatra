@@ -22,7 +22,7 @@ arch:
   script:
     - cd example
     - mkdir build && cd build
-    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASIO_STANDALONE=OFF
+    - cmake .. -DCMAKE_BUILD_TYPE=Debug
     - make -j4
 
 script:
