@@ -10,9 +10,6 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
 )
 
-if(LINUX)
-	target_link_libraries(${project_name} ${Boost_LIBRARIES} -lstdc++fs)
-endif()
 if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()

@@ -38,16 +38,16 @@ public:
   void set_ssl_conf(ssl_configure conf) { ssl_conf_ = std::move(conf); }
 
   bool port_in_use(unsigned short port) {
-    using namespace boost::asio;
+    using namespace asio;
     using ip::tcp;
 
     io_service svc;
     tcp::acceptor acept(svc);
 
-    boost::system::error_code ec;
+    std::error_code ec;
     acept.open(tcp::v4(), ec);
 #ifndef _WIN32
-    acept.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
+    acept.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
 #endif
     acept.bind({tcp::v4(), port}, ec);
 
@@ -63,7 +63,7 @@ public:
       return false;
     }
 
-    boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
+    asio::ip::tcp::resolver::query query(address.data(), port.data());
     auto [r, err_msg] = listen(query);
     return r;
   }
@@ -75,7 +75,7 @@ public:
       return false;
     }
 
-    boost::asio::ip::tcp::resolver::query query(address.data(), port.data());
+    asio::ip::tcp::resolver::query query(address.data(), port.data());
     auto [r, err_msg] = listen(query);
     error_msg = std::move(err_msg);
     return r;
@@ -87,27 +87,27 @@ public:
       return false;
     }
 
-    boost::asio::ip::tcp::resolver::query query(port.data());
+    asio::ip::tcp::resolver::query query(port.data());
     auto [r, err_msg] = listen(query);
     return r;
   }
 
   std::pair<bool, std::string>
-  listen(const boost::asio::ip::tcp::resolver::query &query) {
-    boost::asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
-    boost::asio::ip::tcp::resolver::iterator endpoints =
+  listen(const asio::ip::tcp::resolver::query &query) {
+    asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
+    asio::ip::tcp::resolver::iterator endpoints =
         resolver.resolve(query);
 
     bool r = false;
     std::string err_msg;
-    for (; endpoints != boost::asio::ip::tcp::resolver::iterator();
+    for (; endpoints != asio::ip::tcp::resolver::iterator();
          ++endpoints) {
-      boost::asio::ip::tcp::endpoint endpoint = *endpoints;
+      asio::ip::tcp::endpoint endpoint = *endpoints;
 
-      auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
+      auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(
           io_service_pool_.get_io_service());
       acceptor->open(endpoint.protocol());
-      acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+      acceptor->set_option(asio::ip::tcp::acceptor::reuse_address(true));
 
       try {
         acceptor->bind(endpoint);
@@ -247,7 +247,7 @@ public:
 
 private:
   void start_accept(
-      std::shared_ptr<boost::asio::ip::tcp::acceptor> const &acceptor) {
+      std::shared_ptr<asio::ip::tcp::acceptor> const &acceptor) {
     auto new_conn = std::make_shared<connection<ScoketType>>(
         io_service_pool_.get_io_service(), ssl_conf_, max_req_buf_size_,
         keep_alive_timeout_, http_handler_, upload_dir_,
@@ -255,14 +255,14 @@ private:
 
     acceptor->async_accept(
         new_conn->tcp_socket(),
-        [this, new_conn, acceptor](const boost::system::error_code &e) {
+        [this, new_conn, acceptor](const std::error_code &e) {
           if (!acceptor->is_open()) {
             return;
           }
 
           if (!e) {
             new_conn->tcp_socket().set_option(
-                boost::asio::ip::tcp::no_delay(true));
+                asio::ip::tcp::no_delay(true));
             if (multipart_begin_) {
               new_conn->set_multipart_begin(multipart_begin_);
             }

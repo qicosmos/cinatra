@@ -9,23 +9,9 @@
 #include <asio/ssl.hpp>
 #endif
 #include <asio/steady_timer.hpp>
-namespace boost {
-namespace asio {
-using namespace ::asio;
-}
-namespace system {
-using ::std::error_code;
-}
-} // namespace boost
-#else
-#include <boost/asio.hpp>
-#ifdef CINATRA_ENABLE_SSL
-#include <boost/asio/ssl.hpp>
-#endif
-#include <boost/asio/steady_timer.hpp>
 
-using tcp_socket = boost::asio::ip::tcp::socket;
+using tcp_socket = asio::ip::tcp::socket;
 #ifdef CINATRA_ENABLE_SSL
-using ssl_socket = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+using ssl_socket = asio::ssl::stream<asio::ip::tcp::socket>;
 #endif
 #endif
