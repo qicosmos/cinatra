@@ -23,7 +23,7 @@ TEST_CASE("test coro_http_client quit") {
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
   auto r = async_simple::coro::syncAwait(
-      client.async_connect("http://www.baidu.com"));
+      client.async_connect("http://www.purecpp.cn"));
   CHECK(r);
 }
 
