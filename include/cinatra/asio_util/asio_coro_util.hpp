@@ -155,6 +155,18 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
 }
 
 template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+    Socket &socket, AsioBuffer &&buffer, size_t size_to_read) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&, size_to_read](auto handler) {
+    asio::async_read(socket, buffer, asio::transfer_exactly(size_to_read),
+                     [&, handler](const auto &ec, auto size) {
+                       handler.set_value_then_resume(ec, size);
+                     });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_until(Socket &socket, AsioBuffer &buffer,
                  asio::string_view delim) noexcept {

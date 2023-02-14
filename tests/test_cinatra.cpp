@@ -20,6 +20,13 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
+TEST_CASE("test coro_http_client async_get") {
+  coro_http_client client{};
+  auto r =
+      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+  CHECK(r.status == 200);
+}
+
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
   auto r = async_simple::coro::syncAwait(
