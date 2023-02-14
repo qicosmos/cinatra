@@ -6,8 +6,10 @@ set(CINATRA_EXAMPLE
 	)
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
+target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
+        ${cinatra_SOURCE_DIR}/thirdparty/async_simple
 )
 
 if (ENABLE_SSL)
