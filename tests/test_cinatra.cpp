@@ -16,7 +16,7 @@ TEST_CASE("String_short_str") {
     server.stop();
   });
   auto server_run = [&server](){ server.run(); };
-  auto thread = std::thread(server_run);
+  auto thread = std::thread(std::move(server_run));
 
   std::this_thread::sleep_for(std::chrono:: milliseconds(100));
   
