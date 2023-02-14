@@ -1,0 +1,36 @@
+name: Ubuntu 20.04 (gcc)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - cpp20_base
+  pull_request:
+    branches:
+      - main
+      - master
+      - cpp20_base
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        #mode: [Release, Debug]
+        mode: [Debug] # remove Release to reduce ci time
+        ssl: [ON, OFF]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: CXX=g++ CC=gcc cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j `nproc` -V
