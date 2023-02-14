@@ -14,7 +14,7 @@ namespace cinatra {
 using http_handler = std::function<void(request &, response &)>;
 using send_ok_handler = std::function<void()>;
 using send_failed_handler =
-    std::function<void(const boost::system::error_code &)>;
+    std::function<void(const std::error_code &)>;
 
 class base_connection {
 public:
@@ -32,7 +32,7 @@ class connection : public base_connection,
                    private noncopyable {
 public:
   explicit connection(
-      boost::asio::io_service &io_service, ssl_configure ssl_conf,
+      asio::io_service &io_service, ssl_configure ssl_conf,
       std::size_t max_req_size, long keep_alive_timeout, http_handler &handler,
       std::string &static_dir,
       std::function<bool(request &req, response &res)> *upload_check)
@@ -49,11 +49,11 @@ public:
 
   void init_ssl_context(ssl_configure ssl_conf) {
 #ifdef CINATRA_ENABLE_SSL
-    unsigned long ssl_options = boost::asio::ssl::context::default_workarounds |
-                                boost::asio::ssl::context::no_sslv2 |
-                                boost::asio::ssl::context::single_dh_use;
+    unsigned long ssl_options = asio::ssl::context::default_workarounds |
+                                asio::ssl::context::no_sslv2 |
+                                asio::ssl::context::single_dh_use;
     try {
-      boost::asio::ssl::context ssl_context(boost::asio::ssl::context::sslv23);
+      asio::ssl::context ssl_context(asio::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
       ssl_context.set_password_callback([](auto, auto) { return "123456"; });
 
@@ -64,11 +64,11 @@ public:
 
       if (fs::exists(ssl_conf.key_file, ec))
         ssl_context.use_private_key_file(std::move(ssl_conf.key_file),
-                                         boost::asio::ssl::context::pem);
+                                         asio::ssl::context::pem);
 
       // ssl_context_callback(ssl_context);
       ssl_stream_ = std::make_unique<
-          boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>(
+          asio::ssl::stream<asio::ip::tcp::socket &>>(
           socket_, ssl_context);
     } catch (const std::exception &e) {
       std::cout << e.what() << "\n";
@@ -99,7 +99,7 @@ public:
     }
 
     std::stringstream ss;
-    boost::system::error_code ec;
+    std::error_code ec;
     ss << socket_.local_endpoint(ec);
     if (ec) {
       return "";
@@ -113,7 +113,7 @@ public:
     }
 
     std::stringstream ss;
-    boost::system::error_code ec;
+    std::error_code ec;
     ss << socket_.remote_endpoint(ec);
     if (ec) {
       return "";
@@ -158,7 +158,7 @@ public:
     timer_.expires_from_now(std::chrono::seconds(KEEP_ALIVE_TIMEOUT_));
     auto self = this->shared_from_this();
 
-    timer_.async_wait([self](boost::system::error_code const &ec) {
+    timer_.async_wait([self](std::error_code const &ec) {
       if (ec) {
         return;
       }
@@ -171,7 +171,7 @@ public:
     if (!enable_timeout_)
       return;
 
-    boost::system::error_code ec;
+    std::error_code ec;
     timer_.cancel(ec);
   }
 
@@ -215,9 +215,9 @@ public:
       chunked_header_ = http_range_chunk_header + "Content-Type: " +
                         std::string(mime.data(), mime.length()) + "\r\n\r\n";
     }
-    boost::asio::async_write(
-        socket(), boost::asio::buffer(chunked_header_),
-        [self = this->shared_from_this()](const boost::system::error_code &ec,
+    asio::async_write(
+        socket(), asio::buffer(chunked_header_),
+        [self = this->shared_from_this()](const std::error_code &ec,
                                           std::size_t) {
           self->handle_chunked_header(ec);
         });
@@ -226,26 +226,26 @@ public:
   void write_ranges_header(std::string header_str) {
     reset_timer();
     chunked_header_ = std::move(header_str); // reuse the variable
-    boost::asio::async_write(socket(), boost::asio::buffer(chunked_header_),
+    asio::async_write(socket(), asio::buffer(chunked_header_),
                              [this, self = this->shared_from_this()](
-                                 const boost::system::error_code &ec,
+                                 const std::error_code &ec,
                                  std::size_t) { handle_chunked_header(ec); });
   }
 
   void write_chunked_data(std::string &&buf, bool eof) {
     reset_timer();
 
-    std::vector<boost::asio::const_buffer> buffers =
+    std::vector<asio::const_buffer> buffers =
         res_.to_chunked_buffers(buf.data(), buf.length(), eof);
     if (buffers.empty()) {
-      handle_write(boost::system::error_code{});
+      handle_write(std::error_code{});
       return;
     }
 
     auto self = this->shared_from_this();
-    boost::asio::async_write(socket(), buffers,
+    asio::async_write(socket(), buffers,
                              [this, self, buf = std::move(buf), eof](
-                                 const boost::system::error_code &ec, size_t) {
+                                 const std::error_code &ec, size_t) {
                                if (ec) {
                                  return;
                                }
@@ -268,9 +268,9 @@ public:
 
     chunked_header_ = std::move(buf); // reuse the variable
     auto self = this->shared_from_this();
-    boost::asio::async_write(
-        socket(), boost::asio::buffer(chunked_header_),
-        [this, self, eof](const boost::system::error_code &ec, size_t) {
+    asio::async_write(
+        socket(), asio::buffer(chunked_header_),
+        [this, self, eof](const std::error_code &ec, size_t) {
           if (ec) {
             return;
           }
@@ -326,9 +326,9 @@ private:
 
   void async_handshake() {
 #ifdef CINATRA_ENABLE_SSL
-    ssl_stream_->async_handshake(boost::asio::ssl::stream_base::server,
+    ssl_stream_->async_handshake(asio::ssl::stream_base::server,
                                  [this, self = this->shared_from_this()](
-                                     const boost::system::error_code &error) {
+                                     const std::error_code &error) {
                                    if (error) {
                                      std::cout << error.message() << std::endl;
                                      return;
@@ -353,9 +353,9 @@ private:
 #endif
 
     socket().async_read_some(
-        boost::asio::buffer(req_.buffer(), req_.left_size()),
+        asio::buffer(req_.buffer(), req_.left_size()),
         [this, self = this->shared_from_this()](
-            const boost::system::error_code &e, std::size_t bytes_transferred) {
+            const std::error_code &e, std::size_t bytes_transferred) {
           if (e) {
             close();
             has_shake_ = false;
@@ -366,7 +366,7 @@ private:
         });
   }
 
-  void handle_read(const boost::system::error_code &e,
+  void handle_read(const std::error_code &e,
                    std::size_t bytes_transferred) {
     if (e) {
       close();
@@ -446,14 +446,14 @@ private:
       auto resp_vec =
           http_cache::get().get(std::string(raw_url.data(), raw_url.length()));
       if (!resp_vec.empty()) {
-        std::vector<boost::asio::const_buffer> buffers;
+        std::vector<asio::const_buffer> buffers;
         for (auto &iter : resp_vec) {
-          buffers.emplace_back(boost::asio::buffer(iter.data(), iter.size()));
+          buffers.emplace_back(asio::buffer(iter.data(), iter.size()));
         }
-        boost::asio::async_write(
+        asio::async_write(
             socket(), buffers,
             [self = this->shared_from_this(), resp_vec = std::move(resp_vec)](
-                const boost::system::error_code &ec, std::size_t) {
+                const std::error_code &ec, std::size_t) {
               self->handle_write(ec);
             });
       }
@@ -516,11 +516,11 @@ private:
     }
 
     res_.set_delay(false);
-    boost::asio::async_write(
-        socket(), boost::asio::buffer(rep_str.data(), rep_str.size()),
+    asio::async_write(
+        socket(), asio::buffer(rep_str.data(), rep_str.size()),
         [head_not_complete, body_not_complete, left_body_len, this,
          self = this->shared_from_this(),
-         &rep_str](const boost::system::error_code &ec, std::size_t) {
+         &rep_str](const std::error_code &ec, std::size_t) {
           rep_str.clear();
           if (head_not_complete) {
             do_read_head();
@@ -541,9 +541,9 @@ private:
     reset_timer();
 
     socket().async_read_some(
-        boost::asio::buffer(req_.buffer(), req_.left_size()),
+        asio::buffer(req_.buffer(), req_.left_size()),
         [this, self = this->shared_from_this()](
-            const boost::system::error_code &e, std::size_t bytes_transferred) {
+            const std::error_code &e, std::size_t bytes_transferred) {
           handle_read(e, bytes_transferred);
         });
   }
@@ -552,9 +552,9 @@ private:
     reset_timer();
 
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const boost::system::error_code &ec,
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+        [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
             // LOG_WARN << ec.message();
@@ -578,7 +578,7 @@ private:
 
     std::string &rep_str = res_.response_str();
     if (rep_str.empty()) {
-      handle_write(boost::system::error_code{});
+      handle_write(std::error_code{});
       return;
     }
 
@@ -592,14 +592,14 @@ private:
     // res_.raw_content());
     //			}
 
-    boost::asio::async_write(
-        socket(), boost::asio::buffer(rep_str.data(), rep_str.size()),
+    asio::async_write(
+        socket(), asio::buffer(rep_str.data(), rep_str.size()),
         [this,
-         self = this->shared_from_this()](const boost::system::error_code &ec,
+         self = this->shared_from_this()](const std::error_code &ec,
                                           std::size_t) { handle_write(ec); });
   }
 
-  void handle_write(const boost::system::error_code &ec) {
+  void handle_write(const std::error_code &ec) {
     if (ec) {
       return;
     }
@@ -647,7 +647,7 @@ private:
   void close(bool close_ssl = true) {
 #ifdef CINATRA_ENABLE_SSL
     if (close_ssl && ssl_stream_) {
-      boost::system::error_code ec;
+      std::error_code ec;
       ssl_stream_->shutdown(ec);
       ssl_stream_ = nullptr;
     }
@@ -659,7 +659,7 @@ private:
 
     req_.close_upload_file();
     shutdown();
-    boost::system::error_code ec;
+    std::error_code ec;
     socket_.close(ec);
     has_closed_ = true;
     has_shake_ = false;
@@ -726,9 +726,9 @@ private:
 
   void do_read_octet_stream_body() {
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const boost::system::error_code &ec,
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+        [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
@@ -796,9 +796,9 @@ private:
     reset_timer();
 
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const boost::system::error_code &ec,
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+        [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
             // LOG_WARN << ec.message();
@@ -953,9 +953,9 @@ private:
 
     req_.fit_size();
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), req_.left_body_len()),
-        [self, this](boost::system::error_code ec, std::size_t length) {
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+        [self, this](std::error_code ec, std::size_t length) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
             call_back();
@@ -985,9 +985,9 @@ private:
 
   void do_read_part_data() {
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), req_.left_body_size()),
-        [self, this](boost::system::error_code ec, std::size_t length) {
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), req_.left_body_size()),
+        [self, this](std::error_code ec, std::size_t length) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
             call_back();
@@ -1043,16 +1043,16 @@ private:
 
   //-------------web socket----------------//
   void response_handshake() {
-    std::vector<boost::asio::const_buffer> buffers = res_.to_buffers();
+    std::vector<asio::const_buffer> buffers = res_.to_buffers();
     if (buffers.empty()) {
       close(false);
       return;
     }
 
     auto self = this->shared_from_this();
-    boost::asio::async_write(
+    asio::async_write(
         socket(), buffers,
-        [this, self](const boost::system::error_code &ec, std::size_t) {
+        [this, self](const std::error_code &ec, std::size_t) {
           if (ec) {
             close(false);
             return;
@@ -1069,9 +1069,9 @@ private:
 
   void do_read_websocket_head(size_t length) {
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), length),
-        [this, self](const boost::system::error_code &ec,
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), length),
+        [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
             cancel_timer();
@@ -1110,9 +1110,9 @@ private:
 
   void do_read_websocket_data(size_t length) {
     auto self = this->shared_from_this();
-    boost::asio::async_read(
-        socket(), boost::asio::buffer(req_.buffer(), length),
-        [this, self](const boost::system::error_code &ec,
+    asio::async_read(
+        socket(), asio::buffer(req_.buffer(), length),
+        [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
             req_.call_event(data_proc_state::data_error);
@@ -1199,7 +1199,7 @@ private:
   void ws_ping() {
     timer_.expires_from_now(std::chrono::seconds(60));
     timer_.async_wait(
-        [self = this->shared_from_this()](boost::system::error_code const &ec) {
+        [self = this->shared_from_this()](std::error_code const &ec) {
           if (ec) {
             self->close(false);
             return;
@@ -1220,7 +1220,7 @@ private:
     }
   }
 
-  void handle_chunked_header(const boost::system::error_code &ec) {
+  void handle_chunked_header(const std::error_code &ec) {
     if (ec) {
       return;
     }
@@ -1307,13 +1307,13 @@ private:
   }
 
   void shutdown_send() {
-    boost::system::error_code ignored_ec;
-    socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ignored_ec);
+    std::error_code ignored_ec;
+    socket_.shutdown(asio::ip::tcp::socket::shutdown_send, ignored_ec);
   }
 
   void shutdown() {
-    boost::system::error_code ignored_ec;
-    socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
+    std::error_code ignored_ec;
+    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
   }
 
   //-----------------send message----------------//
@@ -1337,13 +1337,13 @@ private:
   void do_write_msg() {
     active_buffer_ ^= 1; // switch buffers
     for (const auto &data : buffers_[active_buffer_]) {
-      buffer_seq_.push_back(boost::asio::buffer(data));
+      buffer_seq_.push_back(asio::buffer(data));
     }
 
-    boost::asio::async_write(
+    asio::async_write(
         socket(), buffer_seq_,
         [this, self = this->shared_from_this()](
-            const boost::system::error_code &ec, size_t) {
+            const std::error_code &ec, size_t) {
           std::lock_guard<std::mutex> lock(buffers_mtx_);
           buffers_[active_buffer_].clear();
           buffer_seq_.clear();
@@ -1373,12 +1373,12 @@ private:
   static constexpr bool is_ssl_ = std::is_same_v<SocketType, SSL>;
 
   //-----------------send message----------------//
-  boost::asio::ip::tcp::socket socket_;
+  asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
       ssl_stream_ = nullptr;
 #endif
-  boost::asio::steady_timer timer_;
+  asio::steady_timer timer_;
   bool enable_timeout_ = true;
   response res_;
   request req_;
@@ -1394,10 +1394,10 @@ private:
   // for writing message
   std::mutex buffers_mtx_;
   std::vector<std::string> buffers_[2]; // a double buffer
-  std::vector<boost::asio::const_buffer> buffer_seq_;
+  std::vector<asio::const_buffer> buffer_seq_;
   int active_buffer_ = 0;
   std::function<void()> send_ok_cb_ = nullptr;
-  std::function<void(const boost::system::error_code &)> send_failed_cb_ =
+  std::function<void(const std::error_code &)> send_failed_cb_ =
       nullptr;
 
   std::string last_ws_str_;

@@ -11,8 +11,6 @@
 #include <array>
 #if defined(ASIO_STANDALONE)
 #include "use_asio.hpp"
-#else
-#include <boost/system/error_code.hpp>
 #endif
 #include <cctype>
 #include <cstddef> //std::byte
@@ -365,7 +363,7 @@ template <typename... Args> inline void print(Args... args) {
   std::cout << "\n";
 }
 
-inline void print(const boost::system::error_code &ec) {
+inline void print(const std::error_code &ec) {
   print(ec.value(), ec.message());
 }
 

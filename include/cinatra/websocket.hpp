@@ -163,11 +163,11 @@ public:
     return {msg_header_, header_length};
   }
 
-  std::vector<boost::asio::const_buffer>
+  std::vector<asio::const_buffer>
   format_message(const char *src, size_t length, opcode code) {
     size_t header_length = encode_header(length, code);
-    return {boost::asio::buffer(msg_header_, header_length),
-            boost::asio::buffer(src, length)};
+    return {asio::buffer(msg_header_, header_length),
+            asio::buffer(src, length)};
   }
 
   close_frame parse_close_payload(char *src, size_t length) {

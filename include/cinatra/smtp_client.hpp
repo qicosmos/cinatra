@@ -20,7 +20,7 @@ struct email_data {
 template <typename T> class client {
 public:
   static constexpr bool IS_SSL = std::is_same_v<T, cinatra::SSL>;
-  client(boost::asio::io_service &io_service)
+  client(asio::io_service &io_service)
       : io_context_(io_service), socket_(io_service), resolver_(io_service) {}
 
   ~client() { close(); }
@@ -35,12 +35,12 @@ public:
       host.erase(0, pos + 3);
     }
 
-    boost::asio::ip::tcp::resolver::query qry(
+    asio::ip::tcp::resolver::query qry(
         host, server_.port,
-        boost::asio::ip::resolver_query_base::numeric_service);
-    boost::system::error_code ec;
+        asio::ip::resolver_query_base::numeric_service);
+    std::error_code ec;
     auto endpoint_iterator = resolver_.resolve(qry, ec);
-    boost::asio::connect(socket_, endpoint_iterator, ec);
+    asio::connect(socket_, endpoint_iterator, ec);
     if (ec) {
       return;
     }
@@ -51,13 +51,13 @@ public:
 
     build_request();
 
-    boost::asio::write(socket(), request_, ec);
+    asio::write(socket(), request_, ec);
     if (ec) {
       return;
     }
 
     while (true) {
-      boost::asio::read(socket(), response_, boost::asio::transfer_at_least(1),
+      asio::read(socket(), response_, asio::transfer_at_least(1),
                         ec);
       if (ec) {
         return;
@@ -87,13 +87,13 @@ private:
   }
   void upgrade_to_ssl() {
 #ifdef CINATRA_ENABLE_SSL
-    boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
+    asio::ssl::context ctx(asio::ssl::context::sslv23);
     ctx.set_default_verify_paths();
     ctx.set_verify_mode(ctx.verify_fail_if_no_peer_cert);
 
     ssl_socket_ = std::make_unique<
-        boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>(socket_, ctx);
-    ssl_socket_->set_verify_mode(boost::asio::ssl::verify_none);
+        asio::ssl::stream<asio::ip::tcp::socket &>>(socket_, ctx);
+    ssl_socket_->set_verify_mode(asio::ssl::verify_none);
     ssl_socket_->set_verify_callback([](auto preverified, auto &ctx) {
       char subject_name[256];
       X509 *cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
@@ -102,8 +102,8 @@ private:
       return preverified;
     });
 
-    boost::system::error_code ec;
-    ssl_socket_->handshake(boost::asio::ssl::stream_base::client, ec);
+    std::error_code ec;
+    ssl_socket_->handshake(asio::ssl::stream_base::client, ec);
 #endif
   }
 
@@ -178,35 +178,35 @@ private:
   }
 
   void close() {
-    boost::system::error_code ignore_ec;
+    std::error_code ignore_ec;
     if constexpr (IS_SSL) {
 #ifdef CINATRA_ENABLE_SSL
       ssl_socket_->shutdown(ignore_ec);
 #endif
     }
 
-    socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignore_ec);
+    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
     socket_.close(ignore_ec);
   }
 
 private:
-  boost::asio::io_context &io_context_;
-  boost::asio::ip::tcp::socket socket_;
+  asio::io_context &io_context_;
+  asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
       ssl_socket_;
 #endif
-  boost::asio::ip::tcp::resolver resolver_;
+  asio::ip::tcp::resolver resolver_;
 
   email_server server_;
   email_data data_;
 
-  boost::asio::streambuf request_;
-  boost::asio::streambuf response_;
+  asio::streambuf request_;
+  asio::streambuf response_;
 };
 
 template <typename T>
-static inline auto get_smtp_client(boost::asio::io_service &io_service) {
+static inline auto get_smtp_client(asio::io_service &io_service) {
   return smtp::client<T>(io_service);
 }
 

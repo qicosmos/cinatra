@@ -73,18 +73,18 @@ void test_sync_client() {
 #ifdef CINATRA_ENABLE_SSL
   response_data result2 = client->get(uri2);
   ////if you need to verify peer
-  // client->set_ssl_context_callback([](boost::asio::ssl::context& ctx) {
-  //    ctx.set_verify_mode(boost::asio::ssl::context::verify_peer);
+  // client->set_ssl_context_callback([](asio::ssl::context& ctx) {
+  //    ctx.set_verify_mode(asio::ssl::context::verify_peer);
   //    ctx.load_verify_file("server.crt");
 
   //    //ctx.set_options(
-  //    //    boost::asio::ssl::context::default_workarounds
-  //    //    | boost::asio::ssl::context::no_sslv2
-  //    //    | boost::asio::ssl::context::single_dh_use);
+  //    //    asio::ssl::context::default_workarounds
+  //    //    | asio::ssl::context::no_sslv2
+  //    //    | asio::ssl::context::single_dh_use);
 
   //    //ctx.use_certificate_chain_file("server.crt");
   //    //ctx.use_private_key_file("server.key",
-  //    boost::asio::ssl::context::pem);
+  //    asio::ssl::context::pem);
   //    //ctx.use_tmp_dh_file("dh512.pem");
   //});
 
@@ -191,7 +191,7 @@ void test_upload() {
 }
 
 void test_smtp_client() {
-  boost::asio::io_context io_context;
+  asio::io_context io_context;
 #ifdef CINATRA_ENABLE_SSL
   auto client = cinatra::smtp::get_smtp_client<cinatra::SSL>(io_context);
 #else
@@ -216,7 +216,7 @@ void test_smtp_client() {
 
   client.start();
 
-  boost::system::error_code ec;
+  std::error_code ec;
   io_context.run(ec);
 }
 

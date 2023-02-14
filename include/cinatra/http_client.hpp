@@ -17,14 +17,12 @@
 #ifdef CINATRA_ENABLE_SSL
 #ifdef ASIO_STANDALONE
 #include <asio/ssl.hpp>
-#else
-#include <boost/asio/ssl.hpp>
 #endif
 #endif
 
 namespace cinatra {
 struct response_data {
-  boost::system::error_code ec;
+  std::error_code ec;
   int status;
   std::string_view resp_body;
   std::pair<phr_header *, size_t> resp_headers;
@@ -44,7 +42,7 @@ inline static std::string READ_TIMEOUT = "read timeout";
 
 class http_client : public std::enable_shared_from_this<http_client> {
 public:
-  http_client(boost::asio::io_service &ios)
+  http_client(asio::io_service &ios)
       : ios_(ios), resolver_(ios), socket_(ios), timer_(ios) {
     future_ = read_close_finished_.get_future();
   }
@@ -65,10 +63,10 @@ public:
       return;
 
     ios_.post([this] {
-      boost::system::error_code ec;
+      std::error_code ec;
       has_connected_ = false;
       timer_.cancel(ec);
-      socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+      socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
       socket_.close(ec);
       has_closed_ = true;
     });
@@ -139,8 +137,8 @@ public:
     in_progress_ = false;
     if (status == std::future_status::timeout) {
       promise_ = nullptr;
-      return {boost::asio::error::make_error_code(
-                  boost::asio::error::basic_errors::invalid_argument),
+      return {asio::error::make_error_code(
+                  asio::error::basic_errors::invalid_argument),
               404, REQUEST_TIMEOUT};
     }
     auto result = future.get();
@@ -302,7 +300,7 @@ public:
     }
 
     if (in_progress_) {
-      set_error_value(cb, boost::asio::error::basic_errors::in_progress,
+      set_error_value(cb, asio::error::basic_errors::in_progress,
                       MULTIPLE_REQUEST);
       return;
     } else {
@@ -310,7 +308,7 @@ public:
     }
 
     if (method != http_method::POST && !body.empty()) {
-      set_error_value(cb, boost::asio::error::basic_errors::invalid_argument,
+      set_error_value(cb, asio::error::basic_errors::invalid_argument,
                       METHOD_ERROR);
       return;
     }
@@ -332,7 +330,7 @@ public:
 
     auto [r, u] = get_uri(uri);
     if (!r) {
-      set_error_value(cb, boost::asio::error::basic_errors::invalid_argument,
+      set_error_value(cb, asio::error::basic_errors::invalid_argument,
                       INVALID_URI);
       return;
     }
@@ -376,8 +374,8 @@ public:
     fs::create_directories(parant_path, code);
     if (code) {
       cb_ = std::move(cb);
-      callback(boost::asio::error::make_error_code(
-                   boost::asio::error::basic_errors::invalid_argument),
+      callback(asio::error::make_error_code(
+                   asio::error::basic_errors::invalid_argument),
                INVALID_FILE_PATH);
       return;
     }
@@ -399,8 +397,8 @@ public:
         dest_file, std::ios::binary | std::ios::app);
     if (!download_file_->is_open()) {
       cb_ = std::move(cb);
-      callback(boost::asio::error::make_error_code(
-                   boost::asio::error::basic_errors::invalid_argument),
+      callback(asio::error::make_error_code(
+                   asio::error::basic_errors::invalid_argument),
                OPEN_FAILED);
       return;
     }
@@ -424,7 +422,7 @@ public:
 
   void download(
       std::string src_file,
-      std::function<void(boost::system::error_code, std::string_view)> chunk,
+      std::function<void(std::error_code, std::string_view)> chunk,
       size_t seconds = 60) {
     on_chunk_ = std::move(chunk);
     async_get(std::move(src_file), nullptr, req_content_type::none, seconds);
@@ -502,23 +500,23 @@ public:
 
 #ifdef CINATRA_ENABLE_SSL
   void set_ssl_context_callback(
-      std::function<void(boost::asio::ssl::context &)> ssl_context_callback) {
+      std::function<void(asio::ssl::context &)> ssl_context_callback) {
     ssl_context_callback_ = std::move(ssl_context_callback);
   }
 #endif
 
 private:
-  void callback(const boost::system::error_code &ec) { callback(ec, 404, ""); }
+  void callback(const std::error_code &ec) { callback(ec, 404, ""); }
 
-  void callback(const boost::system::error_code &ec, std::string error_msg) {
+  void callback(const std::error_code &ec, std::string error_msg) {
     callback(ec, 404, std::move(error_msg));
   }
 
-  void callback(const boost::system::error_code &ec, int status) {
+  void callback(const std::error_code &ec, int status) {
     callback(ec, status, "");
   }
 
-  void callback(const boost::system::error_code &ec, int status,
+  void callback(const std::error_code &ec, int status,
                 std::string_view result) {
     if (auto sp = weak_.lock(); sp) {
       sp->set_value({ec, status, result, get_resp_headers()});
@@ -565,21 +563,21 @@ private:
 
   void async_connect(context ctx) {
     reset_timer();
-    boost::asio::ip::tcp::resolver::query query(ctx.host, ctx.port);
+    asio::ip::tcp::resolver::query query(ctx.host, ctx.port);
     resolver_.async_resolve(
         query, [this, self = this->shared_from_this(), ctx = std::move(ctx)](
-                   boost::system::error_code ec,
-                   const boost::asio::ip::tcp::resolver::iterator &it) {
+                   std::error_code ec,
+                   const asio::ip::tcp::resolver::iterator &it) {
           if (ec) {
             callback(ec);
             return;
           }
 
-          boost::asio::async_connect(
+          asio::async_connect(
               socket_, it,
               [this, self = shared_from_this(), ctx = std::move(ctx)](
-                  boost::system::error_code ec,
-                  const boost::asio::ip::tcp::resolver::iterator &) {
+                  std::error_code ec,
+                  const asio::ip::tcp::resolver::iterator &) {
                 cancel_timer();
                 if (!ec) {
                   has_connected_ = true;
@@ -598,8 +596,8 @@ private:
   }
 
   void do_read_write(const context &ctx) {
-    boost::system::error_code error_ignored;
-    socket_.set_option(boost::asio::ip::tcp::no_delay(true), error_ignored);
+    std::error_code error_ignored;
+    socket_.set_option(asio::ip::tcp::no_delay(true), error_ignored);
     do_read();
     do_write(ctx);
   }
@@ -616,7 +614,7 @@ private:
     write_msg_ = build_write_msg(ctx);
     async_write(write_msg_,
                 [this, self = shared_from_this()](
-                    const boost::system::error_code &ec, const size_t) {
+                    const std::error_code &ec, const size_t) {
                   if (ec) {
                     callback(ec);
                     close();
@@ -629,8 +627,8 @@ private:
     auto filename = std::move(multipart_str_);
     auto file = std::make_shared<std::ifstream>(filename, std::ios::binary);
     if (!file) {
-      callback(boost::asio::error::make_error_code(
-                   boost::asio::error::basic_errors::invalid_argument),
+      callback(asio::error::make_error_code(
+                   asio::error::basic_errors::invalid_argument),
                INVALID_FILE_PATH);
       return;
     }
@@ -639,8 +637,8 @@ private:
     size_t size = fs::file_size(filename, ec);
     if (ec || start_ == -1) {
       file->close();
-      callback(boost::asio::error::make_error_code(
-                   boost::asio::error::basic_errors::invalid_argument),
+      callback(asio::error::make_error_code(
+                   asio::error::basic_errors::invalid_argument),
                FILE_SIZE_ERROR);
       return;
     }
@@ -664,9 +662,9 @@ private:
   void handshake(context ctx) {
 #ifdef CINATRA_ENABLE_SSL
     auto self = this->shared_from_this();
-    ssl_stream_->async_handshake(boost::asio::ssl::stream_base::client,
+    ssl_stream_->async_handshake(asio::ssl::stream_base::client,
                                  [this, self, ctx = std::move(ctx)](
-                                     const boost::system::error_code &ec) {
+                                     const std::error_code &ec) {
                                    if (!ec) {
                                      do_read_write(ctx);
                                    } else {
@@ -762,13 +760,13 @@ private:
       if (!ec) {
         // parse header
         const char *data_ptr =
-            boost::asio::buffer_cast<const char *>(read_buf_.data());
+            asio::buffer_cast<const char *>(read_buf_.data());
         size_t buf_size = read_buf_.size();
         int ret = parser_.parse_response(data_ptr, size, 0);
         read_buf_.consume(size);
         if (ret < 0) {
-          callback(boost::asio::error::make_error_code(
-                       boost::asio::error::basic_errors::invalid_argument),
+          callback(asio::error::make_error_code(
+                       asio::error::basic_errors::invalid_argument),
                    404, RESP_PARSE_ERROR);
           if (buf_size > size) {
             read_buf_.consume(buf_size - size);
@@ -830,7 +828,7 @@ private:
       if (!ec) {
         size_t data_size = read_buf_.size();
         const char *data_ptr =
-            boost::asio::buffer_cast<const char *>(read_buf_.data());
+            asio::buffer_cast<const char *>(read_buf_.data());
 
         callback(ec, status, {data_ptr, data_size});
 
@@ -860,13 +858,13 @@ private:
         /// simplify
         size_t additional_size = buf_size - size;
         const char *data_ptr =
-            boost::asio::buffer_cast<const char *>(read_buf_.data());
+            asio::buffer_cast<const char *>(read_buf_.data());
         std::string_view size_str(data_ptr, size - CRCF.size());
         auto chunk_size = hex_to_int(size_str);
         read_buf_.consume(size);
         if (chunk_size < 0) {
-          callback(boost::asio::error::make_error_code(
-                       boost::asio::error::basic_errors::invalid_argument),
+          callback(asio::error::make_error_code(
+                       asio::error::basic_errors::invalid_argument),
                    404, INVALID_CHUNK_SIZE);
           read_or_close(keep_alive);
           return;
@@ -890,7 +888,7 @@ private:
   void read_chunk(bool keep_alive, size_t length) {
     if (length > 0) {
       const char *data =
-          boost::asio::buffer_cast<const char *>(read_buf_.data());
+          asio::buffer_cast<const char *>(read_buf_.data());
       append_chunk(std::string_view(data, length));
       read_buf_.consume(length + CRCF.size());
       read_chunk_head(keep_alive);
@@ -941,13 +939,13 @@ private:
   void async_read(size_t size_to_read, Handler handler) {
     if (is_ssl()) {
 #ifdef CINATRA_ENABLE_SSL
-      boost::asio::async_read(*ssl_stream_, read_buf_,
-                              boost::asio::transfer_exactly(size_to_read),
+      asio::async_read(*ssl_stream_, read_buf_,
+                              asio::transfer_exactly(size_to_read),
                               std::move(handler));
 #endif
     } else {
-      boost::asio::async_read(socket_, read_buf_,
-                              boost::asio::transfer_exactly(size_to_read),
+      asio::async_read(socket_, read_buf_,
+                              asio::transfer_exactly(size_to_read),
                               std::move(handler));
     }
   }
@@ -956,11 +954,11 @@ private:
   void async_read_until(const std::string &delim, Handler handler) {
     if (is_ssl()) {
 #ifdef CINATRA_ENABLE_SSL
-      boost::asio::async_read_until(*ssl_stream_, read_buf_, delim,
+      asio::async_read_until(*ssl_stream_, read_buf_, delim,
                                     std::move(handler));
 #endif
     } else {
-      boost::asio::async_read_until(socket_, read_buf_, delim,
+      asio::async_read_until(socket_, read_buf_, delim,
                                     std::move(handler));
     }
   }
@@ -969,11 +967,11 @@ private:
   void async_write(const std::string &msg, Handler handler) {
     if (is_ssl()) {
 #ifdef CINATRA_ENABLE_SSL
-      boost::asio::async_write(*ssl_stream_, boost::asio::buffer(msg),
+      asio::async_write(*ssl_stream_, asio::buffer(msg),
                                std::move(handler));
 #endif
     } else {
-      boost::asio::async_write(socket_, boost::asio::buffer(msg),
+      asio::async_write(socket_, asio::buffer(msg),
                                std::move(handler));
     }
   }
@@ -985,7 +983,7 @@ private:
 
     auto self(this->shared_from_this());
     timer_.expires_from_now(std::chrono::seconds(timeout_seconds_));
-    timer_.async_wait([this, self](const boost::system::error_code &ec) {
+    timer_.async_wait([this, self](const std::error_code &ec) {
       if (ec || sync_) {
         return;
       }
@@ -1022,15 +1020,15 @@ private:
     if (ssl_stream_)
       return;
 
-    boost::asio::ssl::context ssl_context(boost::asio::ssl::context::sslv23);
+    asio::ssl::context ssl_context(asio::ssl::context::sslv23);
     ssl_context.set_default_verify_paths();
-    boost::system::error_code ec;
-    ssl_context.set_options(boost::asio::ssl::context::default_workarounds, ec);
+    std::error_code ec;
+    ssl_context.set_options(asio::ssl::context::default_workarounds, ec);
     if (ssl_context_callback_) {
       ssl_context_callback_(ssl_context);
     }
     ssl_stream_ = std::make_unique<
-        boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>(socket_,
+        asio::ssl::stream<asio::ip::tcp::socket &>>(socket_,
                                                                   ssl_context);
     // verify peer TODO
   }
@@ -1045,7 +1043,7 @@ private:
     auto self = this->shared_from_this();
     async_write(multipart_str_,
                 [this, self, file = std::move(file)](
-                    boost::system::error_code ec, std::size_t) mutable {
+                    std::error_code ec, std::size_t) mutable {
                   if (!ec) {
                     multipart_str_.clear();
                     send_file_data(std::move(file));
@@ -1111,25 +1109,25 @@ private:
   }
 
   void reset_socket() {
-    boost::system::error_code igored_ec;
+    std::error_code igored_ec;
     socket_ = decltype(socket_)(ios_);
     if (!socket_.is_open()) {
-      socket_.open(boost::asio::ip::tcp::v4(), igored_ec);
+      socket_.open(asio::ip::tcp::v4(), igored_ec);
     }
   }
 
   void set_error_value(const callback_t &cb,
-                       const boost::asio::error::basic_errors &,
+                       const asio::error::basic_errors &,
                        const std::string &error_msg) {
     if (promise_) {
       promise_->set_value(
-          {boost::asio::error::make_error_code(
-               boost::asio::error::basic_errors::invalid_argument),
+          {asio::error::make_error_code(
+               asio::error::basic_errors::invalid_argument),
            404, error_msg});
     }
     if (cb) {
-      cb({boost::asio::error::make_error_code(
-              boost::asio::error::basic_errors::invalid_argument),
+      cb({asio::error::make_error_code(
+              asio::error::basic_errors::invalid_argument),
           404, error_msg});
     }
     read_close_finished_ = {};
@@ -1141,17 +1139,17 @@ private:
   callback_t cb_;
   std::atomic_bool in_progress_ = false;
 
-  boost::asio::io_service &ios_;
-  boost::asio::ip::tcp::resolver resolver_;
-  boost::asio::ip::tcp::socket socket_;
+  asio::io_service &ios_;
+  asio::ip::tcp::resolver resolver_;
+  asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket &>>
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
       ssl_stream_;
-  std::function<void(boost::asio::ssl::context &)> ssl_context_callback_;
+  std::function<void(asio::ssl::context &)> ssl_context_callback_;
 #endif
-  boost::asio::steady_timer timer_;
+  asio::steady_timer timer_;
   std::size_t timeout_seconds_ = 60;
-  boost::asio::streambuf read_buf_;
+  asio::streambuf read_buf_;
 
   http_parser parser_;
   std::vector<std::pair<std::string, std::string>> copy_headers_;
@@ -1163,7 +1161,7 @@ private:
 
   std::string chunked_result_;
   std::shared_ptr<std::ofstream> download_file_ = nullptr;
-  std::function<void(boost::system::error_code, std::string_view)> on_chunk_ =
+  std::function<void(std::error_code, std::string_view)> on_chunk_ =
       nullptr;
 
   std::string multipart_str_;

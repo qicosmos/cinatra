@@ -32,8 +32,8 @@ private:
   client_factory(client_factory &&) = delete;
   client_factory &operator=(client_factory &&) = delete;
 
-  boost::asio::io_service ios_;
-  boost::asio::io_service::work work_;
+  asio::io_service ios_;
+  asio::io_service::work work_;
   std::shared_ptr<std::thread> thd_;
 };
 

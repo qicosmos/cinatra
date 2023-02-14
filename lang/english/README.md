@@ -31,8 +31,6 @@ Cinatra is a header-only library. So you can immediately use it in your code wit
 To compile your code with Cinatra, you need the following:
 
 1. C++20 compiler (gcc 10.2, clang 13, Visual Studio 2022, or later versions)
-2. Boost.Asio (or standalone Asio)
-3. Boost.System
 
 ## Examples
 
