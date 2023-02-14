@@ -14,7 +14,7 @@
 * [Contact](#contact)
 
 ## Introduction
-Cinatra is a high-performance, easy-to-use http framework developed in Modern C++ (C++17) with the goal of making it easy and quick to develop web applications using the C++ programming language. Its main features are as follows:
+Cinatra is a high-performance, easy-to-use http framework developed in Modern C++ (C++20) with the goal of making it easy and quick to develop web applications using the C++ programming language. Its main features are as follows:
 
 1. Unified and simple interface,
 2. Header-only,
@@ -30,7 +30,7 @@ Cinatra is a header-only library. So you can immediately use it in your code wit
 
 To compile your code with Cinatra, you need the following:
 
-1. C++17 compiler (gcc 7.2, clang 4.0, Visual Studio 2017 update 15.5, or later versions)
+1. C++20 compiler (gcc 10.2, clang 13, Visual Studio 2022, or later versions)
 2. Boost.Asio (or standalone Asio)
 3. Boost.System
 
