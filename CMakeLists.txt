@@ -1,10 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(cinatra
-        VERSION 1.0.0
-        DESCRIPTION "cinatra"
-        HOMEPAGE_URL "https://github.com/qicosmos/cinatra"
-        LANGUAGES CXX
-        )
+project(cinatra)
 
 include_directories(include)
 
