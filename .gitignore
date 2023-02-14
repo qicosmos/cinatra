@@ -1,9 +1,6 @@
 # Prerequisites
 *.d
-.idea
-cmake-build-debug
-.vscode
-*.swp
+
 # Compiled Object files
 *.slo
 *.lo
@@ -34,10 +31,21 @@ cmake-build-debug
 *.out
 *.app
 
-# Eclipse
-/build/
-.project
-.cproject
-.settings
-
-/example/build/
+#
+.idea
+cmake-*
+*build*
+.fleet
+.vs
+out
+.vscode
+.cache
+.coverage
+.coverage_lcov
+.coverage_llvm_cov
+doxygen-awesome-css
+html
+CMakeUserPresets.json
+.DS_Store
+node_modules
+/CMakeSettings.json
