@@ -1,5 +1,6 @@
 #include <future>
 
+#include "async_simple/coro/SyncAwait.h"
 #include "cinatra.hpp"
 #include "cinatra/coro_http_client.hpp"
 #include "doctest.h"
@@ -18,6 +19,14 @@ TEST_CASE("test coro_http_client quit") {
 
   CHECK(promise.get_future().get());
 }
+
+TEST_CASE("test coro_http_client async_connect") {
+  coro_http_client client{};
+  auto r = async_simple::coro::syncAwait(
+      client.async_connect("http://www.baidu.com"));
+  CHECK(r);
+}
+
 TEST_CASE("test basic http request") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
