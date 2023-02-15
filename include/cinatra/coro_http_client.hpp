@@ -148,6 +148,10 @@ class coro_http_client {
     co_return data;
   }
 
+  resp_data get(std::string uri) {
+    return async_simple::coro::syncAwait(async_get(std::move(uri)));
+  }
+
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;

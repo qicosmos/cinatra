@@ -18,6 +18,13 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
+TEST_CASE("test coro_http_client get") {
+  coro_http_client client{};
+  auto r = client.get("http://www.purecpp.cn");
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+}
+
 TEST_CASE("test coro_http_client add header and url queries") {
   coro_http_client client{};
   client.add_header("Connection", "keep-alive");
