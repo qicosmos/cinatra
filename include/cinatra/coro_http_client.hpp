@@ -117,7 +117,7 @@ class coro_http_client {
     if ((size_t)parser_.total_len() <= buf_size) {
       // get entire body
       std::string_view reply(data_ptr + parser_.header_len(), content_len);
-      std::cout << reply << "\n";
+      // std::cout << reply << "\n";
 
       read_buf_.consume(content_len);  // body size
 
@@ -140,7 +140,7 @@ class coro_http_client {
     const char *data_ptr1 = asio::buffer_cast<const char *>(read_buf_.data());
 
     std::string_view reply(data_ptr1, data_size);
-    std::cout << reply << "\n";
+    // std::cout << reply << "\n";
 
     read_buf_.consume(content_len);
     close_socket();
