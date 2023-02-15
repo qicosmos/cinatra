@@ -6,10 +6,10 @@
 
 | OS (Compiler Version)                          | Status                                                                                                   |
 |------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/qicosmos/cinatra/actions/workflows/linux_clang.yml/badge.svg?branch=main) |
-| Ubuntu 22.04 (gcc 11.2.0)                      | ![win](https://github.com/qicosmos/cinatra/actions/workflows/linux_gcc.yml/badge.svg?branch=main)   |
-| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/qicosmos/cinatra/actions/workflows/mac.yml/badge.svg?branch=main)         |
-| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/qicosmos/cinatra/actions/workflows/windows.yml/badge.svg?branch=main)     |
+| Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/qicosmos/cinatra/actions/workflows/linux_clang.yml/badge.svg?branch=master) |
+| Ubuntu 22.04 (gcc 11.2.0)                      | ![win](https://github.com/qicosmos/cinatra/actions/workflows/linux_gcc.yml/badge.svg?branch=master)   |
+| macOS Monterey 12 (AppleClang 14.0.0.14000029) | ![win](https://github.com/qicosmos/cinatra/actions/workflows/mac.yml/badge.svg?branch=master)         |
+| Windows Server 2022 (MSVC 19.33.31630.0)       | ![win](https://github.com/qicosmos/cinatra/actions/workflows/windows.yml/badge.svg?branch=master)     |
 
 # 目录
 
