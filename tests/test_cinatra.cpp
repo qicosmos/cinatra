@@ -15,8 +15,14 @@ TEST_CASE("String_short_str") {
     res.set_status_and_content(status_type::ok, "hello world");
     server.stop();
   });
-  auto server_run = [&server](){ server.run(); };
-  auto thread = std::thread(std::move(server_run));
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr](){ 
+      pr.set_value();
+      server.run(); 
+    });
+  f.wait();
 
   std::this_thread::sleep_for(std::chrono:: milliseconds(100));
   
@@ -25,6 +31,5 @@ TEST_CASE("String_short_str") {
   response_data result = client->get(uri);
   print(result);
   CHECK(result.resp_body == "hello world");
-
-  thread.join();
+  server_thread.join();
 }
