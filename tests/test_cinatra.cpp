@@ -45,7 +45,6 @@ TEST_CASE("test basic http request") {
   server.set_http_handler<GET, POST>(
       "/", [&server](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
-        server.stop();
       });
 
   std::promise<void> pr;
@@ -63,5 +62,6 @@ TEST_CASE("test basic http request") {
   response_data result = client->get(uri);
   print(result);
   CHECK(result.resp_body == "hello world");
+  server.stop();
   server_thread.join();
 }
