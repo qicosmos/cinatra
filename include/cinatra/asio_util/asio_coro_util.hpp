@@ -41,6 +41,12 @@ class AsioExecutor : public async_simple::Executor {
   async_simple::ExecutorStat stat() const override { return {}; }
 
  private:
+  void schedule(Func func, Duration dur) override {
+    auto timer = std::make_shared<asio::steady_timer>(io_context_, dur);
+    timer->async_wait([fn = std::move(func), timer](auto ec) {
+      fn();
+    });
+  }
   asio::io_context &io_context_;
 };
 
@@ -149,6 +155,18 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
 }
 
 template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+    Socket &socket, AsioBuffer &&buffer, size_t size_to_read) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&, size_to_read](auto handler) {
+    asio::async_read(socket, buffer, asio::transfer_exactly(size_to_read),
+                     [&, handler](const auto &ec, auto size) {
+                       handler.set_value_then_resume(ec, size);
+                     });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
 async_read_until(Socket &socket, AsioBuffer &buffer,
                  asio::string_view delim) noexcept {
@@ -177,9 +195,20 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     const std::string &host, const std::string &port) noexcept {
   callback_awaitor<std::error_code> awaitor;
   asio::ip::tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve(host, port);
+  asio::ip::tcp::resolver::iterator iterator;
+  auto ec = co_await awaitor.await_resume([&](auto handler) {
+    resolver.async_resolve(host, port, [&, handler](auto ec, auto it) {
+      iterator = it;
+      handler.set_value_then_resume(ec);
+    });
+  });
+
+  if (ec) {
+    co_return ec;
+  }
+
   co_return co_await awaitor.await_resume([&](auto handler) {
-    asio::async_connect(socket, endpoints,
+    asio::async_connect(socket, iterator,
                         [&, handler](const auto &ec, const auto &) mutable {
                           handler.set_value_then_resume(ec);
                         });

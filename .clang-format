@@ -1,0 +1,19 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+# Should be declared this way:
+BreakBeforeBraces: Custom
+BraceWrapping:
+  BeforeElse: true
+AllowShortLambdasOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+---
+Language: JavaScript
+DisableFormat: true
+---
+# Ignore json file
+Language: Json
+DisableFormat: true
+
+Language: Proto
+DisableFormat: true
