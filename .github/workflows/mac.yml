@@ -12,16 +12,11 @@ on:
       - master
       - cpp20_base
 
-env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release
-
 jobs:
-  build:
+  build_on_mac:
     strategy:
       matrix:
-        #mode: [Release, Debug]
-        mode: [Debug] # remove Release to reduce ci time
+        mode: [Debug, Release]
         ssl: [ON, OFF]
 
     runs-on: macos-12

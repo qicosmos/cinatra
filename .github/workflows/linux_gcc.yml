@@ -13,11 +13,10 @@ on:
       - cpp20_base
 
 jobs:
-  build:
+  build_by_gcc:
     strategy:
       matrix:
-        #mode: [Release, Debug]
-        mode: [Debug] # remove Release to reduce ci time
+        mode: [Debug, Release]
         ssl: [ON, OFF]
     runs-on: ubuntu-22.04
 

@@ -1,0 +1,39 @@
+name: Windows Server 2022
+
+on:
+  push:
+    branches: [ main, master, cpp20_base ]
+  pull_request:
+    branches: [ main, master, cpp20_base ]
+
+jobs:
+  build_on_windows:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        mode: [ Debug ] #[ Release, Debug ]
+        arch: [ amd64, x86 ] #[ amd64,x86 ]
+        ssl: [ OFF ] #[ ON, OFF ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v3
+
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.12.0
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Configure CMake
+        run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}/build
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j `nproc` -V
