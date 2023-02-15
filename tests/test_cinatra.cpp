@@ -41,15 +41,20 @@ TEST_CASE("test basic http request") {
     std::cout << "listen failed."
               << "\n";
   }
+
   server.set_http_handler<GET, POST>(
       "/", [&server](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
         server.stop();
       });
-  auto server_run = [&server]() {
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
     server.run();
-  };
-  auto thread = std::thread(std::move(server_run));
+  });
+  f.wait();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -58,6 +63,5 @@ TEST_CASE("test basic http request") {
   response_data result = client->get(uri);
   print(result);
   CHECK(result.resp_body == "hello world");
-
-  thread.join();
+  server_thread.join();
 }
