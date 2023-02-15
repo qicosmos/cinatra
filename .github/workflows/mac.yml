@@ -1,0 +1,45 @@
+name: macOS Monterey 12
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - cpp20_base
+  pull_request:
+    branches:
+      - main
+      - master
+      - cpp20_base
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        #mode: [Release, Debug]
+        mode: [Debug] # remove Release to reduce ci time
+        ssl: [ON, OFF]
+
+    runs-on: macos-12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: SetUp HomeBrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Configure CMake
+        run: CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C ${{matrix.mode}} -j `nproc` -V
