@@ -54,6 +54,16 @@ class coro_http_client {
 
   bool has_closed() { return has_closed_; }
 
+  void add_header(std::string key, std::string val) {
+    if (key.empty())
+      return;
+
+    if (key == "Host")
+      return;
+
+    req_headers_.emplace_back(std::move(key), std::move(val));
+  }
+
   async_simple::coro::Lazy<bool> async_ping(std::string uri) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
@@ -169,6 +179,25 @@ class coro_http_client {
     std::string req_str(method_name(http_method::GET));
     req_str.append(" ").append(u.get_path());
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+
+    bool has_connection = false;
+    // add user headers
+    if (!req_headers_.empty()) {
+      for (auto &pair : req_headers_) {
+        if (pair.first == "Connection") {
+          has_connection = true;
+        }
+        req_str.append(pair.first)
+            .append(": ")
+            .append(pair.second)
+            .append("\r\n");
+      }
+    }
+
+    if (!has_connection) {
+      req_str.append("Connection: keep-alive\r\n");
+    }
+
     req_str.append("\r\n");
 
     return req_str;
@@ -241,5 +270,7 @@ class coro_http_client {
 
   std::atomic<bool> has_closed_;
   asio::streambuf read_buf_;
+
+  std::vector<std::pair<std::string, std::string>> req_headers_;
 };
 }  // namespace cinatra
