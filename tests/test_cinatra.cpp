@@ -18,13 +18,18 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
-TEST_CASE("test coro_http_client add header") {
+TEST_CASE("test coro_http_client add header and url queries") {
   coro_http_client client{};
   client.add_header("Connection", "keep-alive");
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
   CHECK(!r.net_err);
   CHECK(r.status == 200);
+
+  auto r2 = async_simple::coro::syncAwait(
+      client.async_get("http://www.baidu.com?name='tom'&age=20"));
+  CHECK(!r2.net_err);
+  CHECK(r2.status == 200);
 }
 
 TEST_CASE("test coro_http_client not exist domain and bad uri") {

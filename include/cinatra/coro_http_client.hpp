@@ -178,6 +178,9 @@ class coro_http_client {
   std::string prepare_request_str(const uri_t &u) {
     std::string req_str(method_name(http_method::GET));
     req_str.append(" ").append(u.get_path());
+    if (!u.query.empty()) {
+      req_str.append("?").append(u.query);
+    }
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
 
     bool has_connection = false;
