@@ -18,17 +18,42 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
+TEST_CASE("test coro_http_client not exist domain and bad uri") {
+  {
+    coro_http_client client{};
+    auto r = async_simple::coro::syncAwait(
+        client.async_get("http://www.notexistwebsit.com"));
+    CHECK(r.net_err);
+    CHECK(r.status != 200);
+    CHECK(client.has_closed());
+  }
+
+  {
+    coro_http_client client{};
+    auto r = async_simple::coro::syncAwait(client.async_get("www.purecpp.cn"));
+    CHECK(r.net_err);
+    CHECK(r.status != 200);
+    CHECK(client.has_closed());
+  }
+}
+
 TEST_CASE("test coro_http_client async_get") {
   coro_http_client client{};
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+
+  auto r1 =
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  CHECK(!r.net_err);
   CHECK(r.status == 200);
 }
 
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
-  auto r = async_simple::coro::syncAwait(
-      client.async_connect("http://www.purecpp.cn"));
+  auto r =
+      async_simple::coro::syncAwait(client.async_ping("http://www.purecpp.cn"));
   CHECK(r);
 }
 

@@ -18,7 +18,7 @@
 
 namespace cinatra {
 struct resp_data {
-  std::error_code ec;
+  std::error_code net_err;
   int status;
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
@@ -52,8 +52,11 @@ class coro_http_client {
     });
   }
 
-  async_simple::coro::Lazy<bool> async_connect(std::string uri) {
-    auto [r, u] = get_uri(uri);
+  bool has_closed() { return has_closed_; }
+
+  async_simple::coro::Lazy<bool> async_ping(std::string uri) {
+    resp_data data{};
+    auto [r, u] = handle_uri(data, uri);
     if (!r) {
       std::cout << "url error";
       co_return false;
@@ -70,104 +73,89 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
-    auto [r, u] = get_uri(uri);
-    auto ec = co_await asio_util::async_connect(io_ctx_, socket_, u.get_host(),
-                                                u.get_port());
-
-    resp_data data{ec};
-    if (ec) {
-      std::cout << ec.message() << "\n";
+    resp_data data{};
+    if (has_closed_) {
+      data.net_err = std::make_error_code(std::errc::not_connected);
       data.status = (int)status_type::not_found;
       co_return data;
     }
 
-    std::string write_msg = prepare_request_str(u);
+    std::error_code ec{};
+    size_t size = 0;
+    http_parser parser;
 
-    co_await asio_util::async_write(socket_, asio::buffer(write_msg));
+    do {
+      if (auto [ok, u] = handle_uri(data, uri); !ok) {
+        break;
+      }
+      else {
+        if (ec = co_await asio_util::async_connect(io_ctx_, socket_,
+                                                   u.get_host(), u.get_port());
+            ec) {
+          break;
+        }
 
-    auto [err, size] =
-        co_await asio_util::async_read_until(socket_, read_buf_, TWO_CRCF);
-    if (err) {
-      data.ec = err;
-      data.status = (int)status_type::not_found;
-      std::cout << ec.message() << "\n";
-      co_return data;
-    }
+        std::string write_msg = prepare_request_str(u);
+        if (std::tie(ec, size) = co_await asio_util::async_write(
+                socket_, asio::buffer(write_msg));
+            ec) {
+          break;
+        }
+      }
 
-    // parse header
-    const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-    size_t buf_size = read_buf_.size();
-    int parse_ret = parser_.parse_response(data_ptr, size, 0);
-    if (parse_ret < 0) {
-      close_socket();
-      data.status = (int)status_type::not_implemented;
-      co_return data;
-    }
-    read_buf_.consume(size);  // header size
+      if (std::tie(ec, size) = co_await asio_util::async_read_until(
+              socket_, read_buf_, TWO_CRCF);
+          ec) {
+        break;
+      }
 
-    size_t content_len = (size_t)parser_.body_len();
-    if (content_len == 0) {
-      close_socket();
-      copy_headers();
-      data.status = (int)status_type::ok;
-      data.resp_headers = std::move(copy_headers_);
-      co_return data;
-    }
+      if (ec = handle_header(data, parser, size); ec) {
+        break;
+      }
 
-    if ((size_t)parser_.total_len() <= buf_size) {
-      // get entire body
-      std::string_view reply(data_ptr + parser_.header_len(), content_len);
-      // std::cout << reply << "\n";
+      size_t content_len = (size_t)parser.body_len();
 
-      read_buf_.consume(content_len);  // body size
+      if ((size_t)parser.body_len() <= read_buf_.size()) {
+        // Now get entire content, additional data will discard.
+        handle_entire_content(data, content_len);
+        break;
+      }
 
-      close_socket();
+      // read left part of content.
+      size_t size_to_read = content_len - read_buf_.size();
+      if (std::tie(ec, size) =
+              co_await asio_util::async_read(socket_, read_buf_, size_to_read);
+          ec) {
+        break;
+      }
 
-      copy_headers();
-      data.status = (int)status_type::ok;
-      data.resp_headers = std::move(copy_headers_);
-      data.resp_body = reply;
-      co_return data;
-    }
+      // Now get entire content, additional data will discard.
+      handle_entire_content(data, content_len);
+    } while (0);
 
-    size_t size_to_read = content_len - read_buf_.size();
-    copy_headers();
+    handle_result(data, ec, parser.keep_alive());
 
-    co_await asio_util::async_read(socket_, read_buf_, size_to_read);
-
-    // get entire body
-    size_t data_size = read_buf_.size();
-    const char *data_ptr1 = asio::buffer_cast<const char *>(read_buf_.data());
-
-    std::string_view reply(data_ptr1, data_size);
-    // std::cout << reply << "\n";
-
-    read_buf_.consume(content_len);
-    close_socket();
-
-    data.status = (int)status_type::ok;
-    data.resp_headers = std::move(copy_headers_);
-    data.resp_body = reply;
     co_return data;
   }
 
  private:
-  std::pair<bool, uri_t> get_uri(const std::string &uri) {
+  std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
-      if (u.schema.empty())
-        return {false, {}};
+      if (!u.schema.empty()) {
+        auto new_uri = url_encode(uri);
 
-      auto new_uri = url_encode(uri);
-
-      if (!u.parse_from(new_uri.data())) {
-        return {false, {}};
+        if (!u.parse_from(new_uri.data())) {
+          data.net_err = std::make_error_code(std::errc::protocol_error);
+          data.status = (int)status_type::not_found;
+          return {false, {}};
+        }
       }
     }
 
     if (u.schema == "https"sv) {
 #ifdef CINATRA_ENABLE_SSL
-      upgrade_to_ssl();
+      // upgrade_to_ssl();
 #else
       // please open CINATRA_ENABLE_SSL before request https!
       assert(false);
@@ -186,16 +174,57 @@ class coro_http_client {
     return req_str;
   }
 
-  void copy_headers() {
-    if (!copy_headers_.empty()) {
-      copy_headers_.clear();
+  std::error_code handle_header(resp_data &data, http_parser &parser,
+                                size_t header_size) {
+    // parse header
+    const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+    int parse_ret = parser.parse_response(data_ptr, header_size, 0);
+    if (parse_ret < 0) {
+      return std::make_error_code(std::errc::protocol_error);
     }
-    auto [headers, num_headers] = parser_.get_headers();
+    read_buf_.consume(header_size);  // header size
+    data.resp_headers = get_headers(parser);
+    return {};
+  }
+
+  void handle_entire_content(resp_data &data, size_t content_len) {
+    if (content_len > 0) {
+      assert(content_len == read_buf_.size());
+      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      std::string_view reply(data_ptr, content_len);
+      data.resp_body = reply;
+      read_buf_.consume(content_len);
+    }
+
+    data.status = (int)status_type::ok;
+  }
+
+  void handle_result(resp_data &data, std::error_code ec, bool is_keep_alive) {
+    if (ec) {
+      close_socket();
+      data.net_err = ec;
+      data.status = (int)status_type::not_found;
+      std::cout << ec.message() << "\n";
+    }
+    else {
+      if (!is_keep_alive) {
+        close_socket();
+      }
+    }
+  }
+
+  std::vector<std::pair<std::string, std::string>> get_headers(
+      http_parser &parser) {
+    std::vector<std::pair<std::string, std::string>> resp_headers;
+
+    auto [headers, num_headers] = parser.get_headers();
     for (size_t i = 0; i < num_headers; i++) {
-      copy_headers_.emplace_back(
+      resp_headers.emplace_back(
           std::string(headers[i].name, headers[i].name_len),
           std::string(headers[i].value, headers[i].value_len));
     }
+
+    return resp_headers;
   }
 
   void close_socket() {
@@ -212,8 +241,5 @@ class coro_http_client {
 
   std::atomic<bool> has_closed_;
   asio::streambuf read_buf_;
-
-  http_parser parser_;
-  std::vector<std::pair<std::string, std::string>> copy_headers_;
 };
 }  // namespace cinatra
