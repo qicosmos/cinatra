@@ -93,6 +93,7 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
     http_parser parser;
+    bool is_keep_alive = false;
 
     do {
       if (auto [ok, u] = handle_uri(data, uri); !ok) {
@@ -123,6 +124,8 @@ class coro_http_client {
         break;
       }
 
+      is_keep_alive = parser.keep_alive();
+
       size_t content_len = (size_t)parser.body_len();
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
@@ -143,7 +146,7 @@ class coro_http_client {
       handle_entire_content(data, content_len);
     } while (0);
 
-    handle_result(data, ec, parser.keep_alive());
+    handle_result(data, ec, is_keep_alive);
 
     co_return data;
   }
