@@ -1,8 +1,6 @@
 #include <future>
 
-#include "async_simple/coro/SyncAwait.h"
 #include "cinatra.hpp"
-#include "cinatra/coro_http_client.hpp"
 #include "doctest.h"
 
 using namespace cinatra;
@@ -57,10 +55,9 @@ TEST_CASE("test basic http request") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-  auto client = cinatra::client_factory::instance().new_client();
+  coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090";
-  response_data result = client->get(uri);
-  print(result);
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.resp_body == "hello world");
   server.stop();
   server_thread.join();
