@@ -20,7 +20,7 @@
 namespace cinatra {
 struct resp_data {
   std::error_code net_err;
-  int status;
+  status_type status;
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
 };
@@ -109,7 +109,7 @@ class coro_http_client {
     resp_data data{};
     if (has_closed_) {
       data.net_err = std::make_error_code(std::errc::not_connected);
-      data.status = (int)status_type::not_found;
+      data.status = status_type::not_found;
       co_return data;
     }
 
@@ -184,7 +184,7 @@ class coro_http_client {
 
         if (!u.parse_from(new_uri.data())) {
           data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = (int)status_type::not_found;
+          data.status = status_type::not_found;
           return {false, {}};
         }
       }
@@ -283,14 +283,14 @@ class coro_http_client {
       read_buf_.consume(content_len);
     }
 
-    data.status = (int)status_type::ok;
+    data.status = status_type::ok;
   }
 
   void handle_result(resp_data &data, std::error_code ec, bool is_keep_alive) {
     if (ec) {
       close_socket();
       data.net_err = ec;
-      data.status = (int)status_type::not_found;
+      data.status = status_type::not_found;
       std::cout << ec.message() << "\n";
     }
     else {
