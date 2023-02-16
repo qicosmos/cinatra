@@ -86,9 +86,15 @@ TEST_CASE("test basic http request") {
               << "\n";
   }
 
-  server.set_http_handler<GET, POST>(
+  server.set_http_handler<GET>(
       "/", [&server](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.set_http_handler<POST>(
+      "/", [&server](request &req, response &res) mutable {
+        std::string str(req.body());
+        str.append(" reply from post");
+        res.set_status_and_content(status_type::ok, std::move(str));
       });
 
   std::promise<void> pr;
@@ -105,6 +111,11 @@ TEST_CASE("test basic http request") {
   std::string uri = "http://127.0.0.1:8090";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.resp_body == "hello world");
+
+  result = async_simple::coro::syncAwait(client.async_post(
+      uri, "hello coro_http_client", req_content_type::string));
+  CHECK(result.resp_body == "hello coro_http_client reply from post");
+
   server.stop();
   server_thread.join();
 }

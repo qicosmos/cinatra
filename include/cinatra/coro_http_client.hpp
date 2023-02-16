@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <charconv>
 #include <memory>
 #include <string_view>
 #include <thread>
@@ -83,6 +84,28 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
+    return async_request(std::move(uri), http_method::GET, "");
+  }
+
+  resp_data get(std::string uri) {
+    return async_simple::coro::syncAwait(async_get(std::move(uri)));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_post(
+      std::string uri, std::string content, req_content_type content_type) {
+    return async_request(std::move(uri), http_method::POST, std::move(content),
+                         content_type);
+  }
+
+  resp_data post(std::string uri, std::string content,
+                 req_content_type content_type) {
+    return async_simple::coro::syncAwait(
+        async_post(std::move(uri), std::move(content), content_type));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_request(
+      std::string uri, http_method method, std::string content,
+      req_content_type conten_type = req_content_type::none) {
     resp_data data{};
     if (has_closed_) {
       data.net_err = std::make_error_code(std::errc::not_connected);
@@ -106,7 +129,8 @@ class coro_http_client {
           break;
         }
 
-        std::string write_msg = prepare_request_str(u);
+        std::string write_msg =
+            prepare_request_str(u, method, content, conten_type);
         if (std::tie(ec, size) = co_await asio_util::async_write(
                 socket_, asio::buffer(write_msg));
             ec) {
@@ -151,10 +175,6 @@ class coro_http_client {
     co_return data;
   }
 
-  resp_data get(std::string uri) {
-    return async_simple::coro::syncAwait(async_get(std::move(uri)));
-  }
-
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
@@ -182,13 +202,19 @@ class coro_http_client {
     return {true, u};
   }
 
-  std::string prepare_request_str(const uri_t &u) {
-    std::string req_str(method_name(http_method::GET));
+  std::string prepare_request_str(const uri_t &u, http_method method,
+                                  std::string content,
+                                  req_content_type content_type) {
+    std::string req_str(method_name(method));
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
     }
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+    auto type_str = get_content_type_str(content_type);
+    if (!type_str.empty()) {
+      req_headers_.emplace_back("Content-Type", std::move(type_str));
+    }
 
     bool has_connection = false;
     // add user headers
@@ -208,7 +234,29 @@ class coro_http_client {
       req_str.append("Connection: keep-alive\r\n");
     }
 
+    // add content
+    size_t content_len = content.size();
+    bool should_add = false;
+    if (content_len > 0) {
+      should_add = true;
+    }
+    else {
+      if (method == http_method::POST)
+        should_add = true;
+    }
+
+    if (should_add) {
+      char buf[32];
+      auto [ptr, ec] = std::to_chars(buf, buf + 32, content_len);
+      req_str.append("Content-Length: ")
+          .append(std::string_view(buf, ptr - buf))
+          .append("\r\n");
+    }
+
     req_str.append("\r\n");
+
+    if (content_len > 0)
+      req_str.append(std::move(content));
 
     return req_str;
   }
