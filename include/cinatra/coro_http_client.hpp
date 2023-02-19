@@ -105,7 +105,7 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_request(
       std::string uri, http_method method, std::string content,
-      req_content_type conten_type = req_content_type::none) {
+      req_content_type conten_type = req_content_type::none, bool is_download_ = false) {
     resp_data data{};
     if (has_closed_) {
       data.net_err = std::make_error_code(std::errc::not_connected);
@@ -166,6 +166,11 @@ class coro_http_client {
         break;
       }
 
+      if (is_download_) {
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+        download_file_->write(data_ptr, read_buf_.size());
+      }
+
       // Now get entire content, additional data will discard.
       handle_entire_content(data, content_len);
     } while (0);
@@ -173,6 +178,37 @@ class coro_http_client {
     handle_result(data, ec, is_keep_alive);
 
     co_return data;
+  }
+
+  async_simple::coro::Lazy<resp_data> async_download(std::string src_file, std::string dest_file, int64_t size) {
+    auto parant_path = fs::absolute(dest_file).parent_path();
+    std::error_code code;
+    fs::create_directories(parant_path, code);
+    resp_data data{};
+    if (code) {
+      data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
+      data.status = status_type::ok;
+    }
+
+    download_file_ = std::make_shared<std::ofstream>(
+        dest_file, std::ios::binary | std::ios::app);
+    if (!download_file_->is_open()) {
+      data.net_err = std::make_error_code(std::errc::invalid_argument);
+      data.status = status_type::ok;     
+    }
+
+    if (size > 0) {
+      char buffer[20];
+      auto p = i64toa_jeaiii(size, buffer);
+      add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+    }
+    else {
+      char buffer[20];
+      int64_t file_size = fs::file_size(dest_file, code);
+      auto p = i64toa_jeaiii(file_size, buffer);
+      add_header("cinatra_start_pos", std::string(buffer, p - buffer));
+    }
+    return async_request(std::move(src_file), http_method::GET, "",  req_content_type::none, true);
   }
 
  private:
@@ -328,6 +364,8 @@ class coro_http_client {
 
   std::atomic<bool> has_closed_;
   asio::streambuf read_buf_;
+
+  std::shared_ptr<std::ofstream> download_file_ = nullptr;
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
 };
