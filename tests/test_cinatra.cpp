@@ -1,4 +1,6 @@
+#include <filesystem>
 #include <future>
+#include <system_error>
 
 #include "cinatra.hpp"
 #include "cinatra/client_factory.hpp"
@@ -32,10 +34,14 @@ TEST_CASE("test coro_http_client chunked download") {
 
   SUBCASE("test the correctness of the downloaded file") {
     auto self_http_client = client_factory::instance().new_client();
+    std::string self_filename = "_" + filename;
 
     std::promise<bool> pro;
     auto fu = pro.get_future();
-    self_http_client->download(uri, "_" + filename, [&](response_data data) {
+
+    std::error_code ec;
+    std::filesystem::remove(self_filename, ec);
+    self_http_client->download(uri, self_filename, [&](response_data data) {
       if (data.ec) {
         std::cout << data.ec.message() << "\n";
         pro.set_value(false);
@@ -59,7 +65,7 @@ TEST_CASE("test coro_http_client chunked download") {
       return file_content;
     };
     auto f1 = read_file(filename);
-    auto f2 = read_file("_" + filename);
+    auto f2 = read_file(self_filename);
 
     REQUIRE(f1.size() == f2.size());
     CHECK(f1 == f2);
