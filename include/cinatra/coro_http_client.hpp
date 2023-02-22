@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <charconv>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string_view>
 #include <thread>
@@ -23,6 +25,14 @@ struct resp_data {
   status_type status;
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
+  bool eof;
+};
+
+template <typename Stream>
+struct req_context {
+  req_content_type conten_type = req_content_type::none;
+  std::string content;
+  Stream stream;
 };
 
 class coro_http_client {
@@ -84,7 +94,8 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
-    return async_request(std::move(uri), http_method::GET, "");
+    req_context<std::string> ctx{};
+    return async_request(std::move(uri), http_method::GET, std::move(ctx));
   }
 
   resp_data get(std::string uri) {
@@ -93,8 +104,8 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, std::string content, req_content_type content_type) {
-    return async_request(std::move(uri), http_method::POST, std::move(content),
-                         content_type);
+    req_context<std::string> ctx{content_type, std::move(content)};
+    return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
   resp_data post(std::string uri, std::string content,
@@ -103,9 +114,33 @@ class coro_http_client {
         async_post(std::move(uri), std::move(content), content_type));
   }
 
-  async_simple::coro::Lazy<resp_data> async_request(
-      std::string uri, http_method method, std::string content,
-      req_content_type conten_type = req_content_type::none) {
+  async_simple::coro::Lazy<resp_data> async_download(std::string uri,
+                                                     std::string filename) {
+    resp_data data{};
+    std::error_code ec{};
+    std::filesystem::remove(filename, ec);
+    std::ofstream file(filename, std::ios::binary | std::ios::app);
+    if (!file) {
+      data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
+      data.status = status_type::not_found;
+      co_return data;
+    }
+
+    req_context<std::ofstream> ctx{req_content_type::none, "", std::move(file)};
+    data = co_await async_request(std::move(uri), http_method::GET,
+                                  std::move(ctx));
+
+    co_return data;
+  }
+
+  resp_data download(std::string uri, std::string filename) {
+    return async_simple::coro::syncAwait(
+        async_download(std::move(uri), std::move(filename)));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_request(std::string uri,
+                                                    http_method method,
+                                                    auto ctx) {
     resp_data data{};
     if (has_closed_) {
       data.net_err = std::make_error_code(std::errc::not_connected);
@@ -129,8 +164,8 @@ class coro_http_client {
           break;
         }
 
-        std::string write_msg =
-            prepare_request_str(u, method, content, conten_type);
+        std::string write_msg = prepare_request_str(
+            u, method, std::move(ctx.content), ctx.conten_type);
         if (std::tie(ec, size) = co_await asio_util::async_write(
                 socket_, asio::buffer(write_msg));
             ec) {
@@ -145,6 +180,11 @@ class coro_http_client {
       }
 
       if (ec = handle_header(data, parser, size); ec) {
+        break;
+      }
+
+      if (parser.is_chunked()) {
+        ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
 
@@ -282,6 +322,7 @@ class coro_http_client {
       data.resp_body = reply;
       read_buf_.consume(content_len);
     }
+    data.eof = (read_buf_.size() == 0);
 
     data.status = status_type::ok;
   }
@@ -298,6 +339,59 @@ class coro_http_client {
         close_socket();
       }
     }
+  }
+
+  template <typename Stream>
+  async_simple::coro::Lazy<std::error_code> handle_chunked(
+      resp_data &data, req_context<Stream> ctx) {
+    std::error_code ec{};
+    size_t size = 0;
+    while (true) {
+      if (std::tie(ec, size) =
+              co_await asio_util::async_read_until(socket_, read_buf_, CRCF);
+          ec) {
+        break;
+      }
+
+      size_t buf_size = read_buf_.size();
+      size_t additional_size = buf_size - size;
+      const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      std::string_view size_str(data_ptr, size - CRCF.size());
+      auto chunk_size = hex_to_int(size_str);
+      read_buf_.consume(size);
+      if (chunk_size < 0) {
+        std::cout << "bad chunked size\n";
+        ec = asio::error::make_error_code(
+            asio::error::basic_errors::invalid_argument);
+        break;
+      }
+
+      if (chunk_size == 0) {
+        // all finished, no more data
+        data.status = status_type::ok;
+        data.eof = true;
+        break;
+      }
+
+      if (additional_size < size_t(chunk_size + 2)) {
+        // not a complete chunk, read left chunk data.
+        size_t size_to_read = chunk_size + 2 - additional_size;
+        if (std::tie(ec, size) = co_await asio_util::async_read(
+                socket_, read_buf_, size_to_read);
+            ec) {
+          break;
+        }
+      }
+
+      const char *data = asio::buffer_cast<const char *>(read_buf_.data());
+      if constexpr (std::is_same_v<std::ofstream,
+                                   std::remove_cvref_t<Stream>>) {
+        ctx.stream.write(data, chunk_size);
+      }
+
+      read_buf_.consume(chunk_size + CRCF.size());
+    }
+    co_return std::error_code{};
   }
 
   std::vector<std::pair<std::string, std::string>> get_headers(

@@ -18,6 +18,16 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
+TEST_CASE("test chunked download") {
+  coro_http_client client{};
+  std::string uri =
+      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+
+  auto r = client.download(uri, "test.jpg");
+  CHECK(!r.net_err);
+  CHECK(r.status == status_type::ok);
+}
+
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
   auto r = client.get("http://www.purecpp.cn");
