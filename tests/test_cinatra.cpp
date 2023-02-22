@@ -60,7 +60,7 @@ TEST_CASE("test coro_http_client chunked download") {
       std::array<char, 1024> buff;
       while (ifs.read(buff.data(), buff.size())) {
         file_content.append(
-            std::string_view{buff.data(), (unsigned long long)ifs.gcount()});
+            std::string_view{buff.data(), static_cast<std::string_view::size_type>(ifs.gcount())});
       }
       return file_content;
     };
