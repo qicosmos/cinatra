@@ -13,11 +13,12 @@ enum class content_type {
   unknown,
 };
 
-enum class req_content_type { html, json, string, multipart, none };
+enum class req_content_type { html, json, string, multipart, ranges, none };
 
 constexpr inline auto HTML = req_content_type::html;
 constexpr inline auto JSON = req_content_type::json;
 constexpr inline auto TEXT = req_content_type::string;
+constexpr inline auto RANGES = req_content_type::ranges;
 constexpr inline auto NONE = req_content_type::none;
 
 inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
@@ -31,4 +32,4 @@ const static inline std::string MULTIPART_END =
 
 struct NonSSL {};
 struct SSL {};
-} // namespace cinatra
+}  // namespace cinatra
