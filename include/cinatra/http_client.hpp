@@ -403,19 +403,6 @@ public:
       return;
     }
 
-    if (size > 0) {
-      char buffer[20];
-      auto p = i64toa_jeaiii(size, buffer);
-      add_header("cinatra_start_pos", std::string(buffer, p - buffer));
-    } else {
-      int64_t file_size = fs::file_size(dest_file, code);
-      if (!code && file_size > 0) {
-        char buffer[20];
-        auto p = i64toa_jeaiii(file_size, buffer);
-        add_header("cinatra_start_pos", std::string(buffer, p - buffer));
-      }
-    }
-
     async_get(std::move(src_file), std::move(cb), req_content_type::none,
               seconds);
   }
@@ -893,6 +880,7 @@ private:
       read_buf_.consume(length + CRCF.size());
       read_chunk_head(keep_alive);
     } else {
+      read_buf_.consume(CRCF.size());
       callback({}, 200, chunked_result_);
       clear_chunk_buffer();
       do_read();

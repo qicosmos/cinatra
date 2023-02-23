@@ -366,13 +366,6 @@ class coro_http_client {
         break;
       }
 
-      if (chunk_size == 0) {
-        // all finished, no more data
-        data.status = status_type::ok;
-        data.eof = true;
-        break;
-      }
-
       if (additional_size < size_t(chunk_size + 2)) {
         // not a complete chunk, read left chunk data.
         size_t size_to_read = chunk_size + 2 - additional_size;
@@ -383,15 +376,22 @@ class coro_http_client {
         }
       }
 
-      const char *data = asio::buffer_cast<const char *>(read_buf_.data());
+      data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if constexpr (std::is_same_v<std::ofstream,
                                    std::remove_cvref_t<Stream>>) {
-        ctx.stream.write(data, chunk_size);
+        ctx.stream.write(data_ptr, chunk_size);
       }
 
       read_buf_.consume(chunk_size + CRCF.size());
+
+      if (chunk_size == 0) {
+        // all finished, no more data
+        data.status = status_type::ok;
+        data.eof = true;
+        break;
+      }
     }
-    co_return std::error_code{};
+    co_return ec;
   }
 
   std::vector<std::pair<std::string, std::string>> get_headers(
