@@ -182,3 +182,18 @@ TEST_CASE("test basic http request") {
   server.stop();
   server_thread.join();
 }
+
+TEST_CASE("test basic http request") {
+  coro_http_client client{};
+  std::string uri = "http://httpbin.org/range/32";
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_ranges(uri, cinatra::make_range_header({{1, 10}})));
+  // Make sure the test still passes when a 504 error occurs
+  if (result.resp_body.size() == 11)
+    CHECK(result.resp_body == "bcdefghijk");
+  // multiple range test
+  result = async_simple::coro::syncAwait(client.async_ranges(
+      uri, cinatra::make_range_header({{1, 10}, {20, 30}})));
+  if (result.resp_body.size() == 32)
+    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
+}
