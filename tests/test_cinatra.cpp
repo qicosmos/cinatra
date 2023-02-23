@@ -28,7 +28,15 @@ TEST_CASE("test coro_http_client chunked download") {
       "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
   std::string filename = "test.jpg";
 
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
   auto r = client.download(uri, filename);
+  CHECK(!r.net_err);
+  CHECK(r.status == status_type::ok);
+
+  filename = "test2.jpg";
+  std::filesystem::remove(filename, ec);
+  r = client.download(uri, filename);
   CHECK(!r.net_err);
   CHECK(r.status == status_type::ok);
 

@@ -117,8 +117,6 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
                                                      std::string filename) {
     resp_data data{};
-    std::error_code ec{};
-    std::filesystem::remove(filename, ec);
     std::ofstream file(filename, std::ios::binary | std::ios::app);
     if (!file) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
@@ -142,11 +140,6 @@ class coro_http_client {
                                                     http_method method,
                                                     auto ctx) {
     resp_data data{};
-    if (has_closed_) {
-      data.net_err = std::make_error_code(std::errc::not_connected);
-      data.status = status_type::not_found;
-      co_return data;
-    }
 
     std::error_code ec{};
     size_t size = 0;
@@ -158,10 +151,13 @@ class coro_http_client {
         break;
       }
       else {
-        if (ec = co_await asio_util::async_connect(io_ctx_, socket_,
-                                                   u.get_host(), u.get_port());
-            ec) {
-          break;
+        if (has_closed_) {
+          if (ec = co_await asio_util::async_connect(
+                  io_ctx_, socket_, u.get_host(), u.get_port());
+              ec) {
+            break;
+          }
+          has_closed_ = false;
         }
 
         std::string write_msg = prepare_request_str(
@@ -183,12 +179,13 @@ class coro_http_client {
         break;
       }
 
+      is_keep_alive = parser.keep_alive();
+
       if (parser.is_chunked()) {
+        is_keep_alive = true;
         ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
-
-      is_keep_alive = parser.keep_alive();
 
       size_t content_len = (size_t)parser.body_len();
 
@@ -366,6 +363,14 @@ class coro_http_client {
         break;
       }
 
+      if (chunk_size == 0) {
+        // all finished, no more data
+        read_buf_.consume(CRCF.size());
+        data.status = status_type::ok;
+        data.eof = true;
+        break;
+      }
+
       if (additional_size < size_t(chunk_size + 2)) {
         // not a complete chunk, read left chunk data.
         size_t size_to_read = chunk_size + 2 - additional_size;
@@ -383,13 +388,6 @@ class coro_http_client {
       }
 
       read_buf_.consume(chunk_size + CRCF.size());
-
-      if (chunk_size == 0) {
-        // all finished, no more data
-        data.status = status_type::ok;
-        data.eof = true;
-        break;
-      }
     }
     co_return ec;
   }
@@ -420,7 +418,7 @@ class coro_http_client {
   std::unique_ptr<asio::io_context::work> work_;
   std::thread io_thd_;
 
-  std::atomic<bool> has_closed_;
+  std::atomic<bool> has_closed_ = true;
   asio::streambuf read_buf_;
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
