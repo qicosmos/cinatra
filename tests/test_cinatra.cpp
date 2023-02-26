@@ -12,6 +12,21 @@ void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
 
+TEST_CASE("test ranges") {
+  coro_http_client client{};
+  std::string uri = "http://httpbin.org/range/32";
+  resp_data result =
+      async_simple::coro::syncAwait(client.async_ranges(uri, "1-10"));
+  // Make sure the test still passes when a 504 error occurs
+  if (result.resp_body.size() == 10)
+    CHECK(result.resp_body == "bcdefghijk");
+  // multiple range test
+  result =
+      async_simple::coro::syncAwait(client.async_ranges(uri, "1-10, 20-30"));
+  if (result.resp_body.size() == 31)
+    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
+}
+
 TEST_CASE("test coro_http_client quit") {
   std::promise<bool> promise;
   [&] {
@@ -181,19 +196,4 @@ TEST_CASE("test basic http request") {
 
   server.stop();
   server_thread.join();
-}
-
-TEST_CASE("test basic http request") {
-  coro_http_client client{};
-  std::string uri = "http://httpbin.org/range/32";
-  resp_data result = async_simple::coro::syncAwait(
-      client.async_ranges(uri, cinatra::make_range_header({{1, 10}})));
-  // Make sure the test still passes when a 504 error occurs
-  if (result.resp_body.size() == 11)
-    CHECK(result.resp_body == "bcdefghijk");
-  // multiple range test
-  result = async_simple::coro::syncAwait(client.async_ranges(
-      uri, cinatra::make_range_header({{1, 10}, {20, 30}})));
-  if (result.resp_body.size() == 32)
-    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
 }

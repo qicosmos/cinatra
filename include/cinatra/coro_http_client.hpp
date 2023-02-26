@@ -30,31 +30,11 @@ struct resp_data {
 
 template <typename Stream>
 struct req_context {
-  req_content_type conten_type = req_content_type::none;
+  req_content_type content_type = req_content_type::none;
+  std::string req_str;
   std::string content;
   Stream stream;
 };
-
-using Range = std::pair<size_t, size_t>;
-using Ranges = std::vector<Range>;
-std::pair<std::string, std::string> make_range_header(Ranges ranges) {
-  std::string field = "bytes=";
-  auto i = 0;
-  for (auto r : ranges) {
-    if (i != 0) {
-      field += ", ";
-    }
-    if (r.first != -1) {
-      field += std::to_string(r.first);
-    }
-    field += '-';
-    if (r.second != -1) {
-      field += std::to_string(r.second);
-    }
-    i++;
-  }
-  return std::make_pair("Range", std::move(field));
-}
 
 class coro_http_client {
  public:
@@ -125,7 +105,7 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context<std::string> ctx{content_type, std::move(content)};
+    req_context<std::string> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
@@ -145,7 +125,8 @@ class coro_http_client {
       co_return data;
     }
 
-    req_context<std::ofstream> ctx{req_content_type::none, "", std::move(file)};
+    req_context<std::ofstream> ctx{req_content_type::none, "", "",
+                                   std::move(file)};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 
@@ -157,12 +138,11 @@ class coro_http_client {
         async_download(std::move(uri), std::move(filename)));
   }
 
-  async_simple::coro::Lazy<resp_data> async_ranges(
-      std::string uri, std::pair<std::string, std::string> range) {
+  async_simple::coro::Lazy<resp_data> async_ranges(std::string uri,
+                                                   std::string range) {
     resp_data data{};
-    std::string content = make_ranges_content(range);
-    req_context<std::string> ctx{req_content_type::ranges, content,
-                                 std::move(content)};
+    req_context<std::ofstream> ctx{
+        req_content_type::ranges, std::move(range), {}};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
     co_return data;
@@ -192,8 +172,7 @@ class coro_http_client {
           has_closed_ = false;
         }
 
-        std::string write_msg = prepare_request_str(
-            u, method, std::move(ctx.content), ctx.conten_type);
+        std::string write_msg = prepare_request_str(u, method, ctx);
         if (std::tie(ec, size) = co_await asio_util::async_write(
                 socket_, asio::buffer(write_msg));
             ec) {
@@ -272,15 +251,14 @@ class coro_http_client {
   }
 
   std::string prepare_request_str(const uri_t &u, http_method method,
-                                  std::string content,
-                                  req_content_type content_type) {
+                                  const auto &ctx) {
     std::string req_str(method_name(method));
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
     }
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
-    auto type_str = get_content_type_str(content_type);
+    auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
       req_headers_.emplace_back("Content-Type", std::move(type_str));
     }
@@ -303,36 +281,32 @@ class coro_http_client {
       req_str.append("Connection: keep-alive\r\n");
     }
 
-    if (content_type == req_content_type::ranges) {
-      req_str.append(content);
-      req_str.append("\r\n");
-      req_str.append("\r\n");
+    req_str.append("Range: bytes=").append(ctx.req_str).append(CRCF);
+
+    // add content
+    size_t content_len = ctx.content.size();
+    bool should_add = false;
+    if (content_len > 0) {
+      should_add = true;
     }
     else {
-      // add content
-      size_t content_len = content.size();
-      bool should_add = false;
-      if (content_len > 0) {
+      if (method == http_method::POST)
         should_add = true;
-      }
-      else {
-        if (method == http_method::POST)
-          should_add = true;
-      }
-
-      if (should_add) {
-        char buf[32];
-        auto [ptr, ec] = std::to_chars(buf, buf + 32, content_len);
-        req_str.append("Content-Length: ")
-            .append(std::string_view(buf, ptr - buf))
-            .append("\r\n");
-      }
-
-      req_str.append("\r\n");
-
-      if (content_len > 0)
-        req_str.append(std::move(content));
     }
+
+    if (should_add) {
+      char buf[32];
+      auto [ptr, ec] = std::to_chars(buf, buf + 32, content_len);
+      req_str.append("Content-Length: ")
+          .append(std::string_view(buf, ptr - buf))
+          .append("\r\n");
+    }
+
+    req_str.append("\r\n");
+
+    if (content_len > 0)
+      req_str.append(std::move(ctx.content));
+
     return req_str;
   }
 
@@ -449,11 +423,6 @@ class coro_http_client {
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
     socket_.close(ec);
     has_closed_ = true;
-  }
-
-  std::string make_ranges_content(std::pair<std::string, std::string> ranges) {
-    std::string range_req_str = ranges.first + ": " + ranges.second;
-    return range_req_str;
   }
 
   asio::io_context io_ctx_;
