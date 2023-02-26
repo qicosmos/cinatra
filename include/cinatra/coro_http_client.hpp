@@ -131,7 +131,9 @@ class coro_http_client {
       ctx = {req_content_type::none, "", "", std::move(file)};
     }
     else {
-      ctx = {req_content_type::ranges, std::move(range), {}, std::move(file)};
+      std::string req_str = "Range: bytes=";
+      req_str.append(range).append(CRCF);
+      ctx = {req_content_type::none, std::move(req_str), {}, std::move(file)};
     }
 
     data = co_await async_request(std::move(uri), http_method::GET,
@@ -279,12 +281,8 @@ class coro_http_client {
       req_str.append("Connection: keep-alive\r\n");
     }
 
-    if (ctx.content_type == req_content_type::ranges) {
-      req_str.append("Range: bytes=");
-    }
-
     if (!ctx.req_str.empty())
-      req_str.append(ctx.req_str).append(CRCF);
+      req_str.append(ctx.req_str);
 
     // add content
     size_t content_len = ctx.content.size();
