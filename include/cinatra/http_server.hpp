@@ -140,6 +140,10 @@ public:
 
   intptr_t poll_one() { return io_service_pool_.poll_one(); }
 
+  asio::io_service &get_io_service() {
+    return io_service_pool_.get_io_service();
+  }
+
   void set_static_dir(std::string path) {
     set_file_dir(std::move(path), static_dir_);
   }
