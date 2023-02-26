@@ -116,7 +116,8 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
-                                                     std::string filename) {
+                                                     std::string filename,
+                                                     std::string range = "") {
     resp_data data{};
     std::ofstream file(filename, std::ios::binary | std::ios::app);
     if (!file) {
@@ -125,35 +126,24 @@ class coro_http_client {
       co_return data;
     }
 
-    req_context<std::ofstream> ctx{req_content_type::none, "", "",
-                                   std::move(file)};
+    req_context<std::ofstream> ctx{};
+    if (range.empty()) {
+      ctx = {req_content_type::none, "", "", std::move(file)};
+    }
+    else {
+      ctx = {req_content_type::ranges, std::move(range), {}, std::move(file)};
+    }
+
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 
     co_return data;
   }
 
-  resp_data download(std::string uri, std::string filename) {
+  resp_data download(std::string uri, std::string filename,
+                     std::string range = "") {
     return async_simple::coro::syncAwait(
-        async_download(std::move(uri), std::move(filename)));
-  }
-
-  async_simple::coro::Lazy<resp_data> async_ranges(std::string uri,
-                                                   std::string filename,
-                                                   std::string range) {
-    resp_data data{};
-    std::ofstream file(filename, std::ios::binary | std::ios::app);
-    if (!file) {
-      data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
-      data.status = status_type::not_found;
-      co_return data;
-    }
-
-    req_context<std::ofstream> ctx{
-        req_content_type::ranges, std::move(range), {}, std::move(file)};
-    data = co_await async_request(std::move(uri), http_method::GET,
-                                  std::move(ctx));
-    co_return data;
+        async_download(std::move(uri), std::move(filename), std::move(range)));
   }
 
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,

@@ -12,15 +12,15 @@ void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
 
-TEST_CASE("test ranges") {
+TEST_CASE("test ranges download") {
   coro_http_client client{};
   std::string uri = "http://httpbin.org/range/32";
 
   std::string filename = "test1.txt";
   std::error_code ec{};
   std::filesystem::remove(filename, ec);
-  resp_data result =
-      async_simple::coro::syncAwait(client.async_ranges(uri, filename, "1-10"));
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "1-10"));
   if (result.status == status_type::ok) {
     CHECK(std::filesystem::file_size(filename) == 10);
   }
@@ -28,13 +28,13 @@ TEST_CASE("test ranges") {
   filename = "test2.txt";
   std::filesystem::remove(filename, ec);
   result = async_simple::coro::syncAwait(
-      client.async_ranges(uri, filename, "10-15"));
+      client.async_download(uri, filename, "10-15"));
   if (result.status == status_type::ok) {
     CHECK(std::filesystem::file_size(filename) == 6);
   }
   // multiple range test
   //  auto result =
-  //      async_simple::coro::syncAwait(client.async_ranges(uri, "test2.txt",
+  //      async_simple::coro::syncAwait(client.async_download(uri, "test2.txt",
   //      "1-10, 20-30"));
   //  if (result.resp_body.size() == 31)
   //    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
