@@ -12,6 +12,20 @@ void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
 
+TEST_CASE("test multiple ranges download") {
+  coro_http_client client{};
+  std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
+
+  std::string filename = "test1.txt";
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "1-10,11-16"));
+  if (result.status == status_type::ok) {
+    CHECK(std::filesystem::file_size(filename) == 16);
+  }
+}
+
 TEST_CASE("test ranges download") {
   coro_http_client client{};
   std::string uri = "http://httpbin.org/range/32";
