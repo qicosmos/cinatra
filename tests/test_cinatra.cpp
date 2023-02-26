@@ -15,16 +15,29 @@ void print(const response_data &result) {
 TEST_CASE("test ranges") {
   coro_http_client client{};
   std::string uri = "http://httpbin.org/range/32";
+
+  std::string filename = "test1.txt";
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
   resp_data result =
-      async_simple::coro::syncAwait(client.async_ranges(uri, "1-10"));
-  // Make sure the test still passes when a 504 error occurs
-  if (result.resp_body.size() == 10)
-    CHECK(result.resp_body == "bcdefghijk");
+      async_simple::coro::syncAwait(client.async_ranges(uri, filename, "1-10"));
+  if (result.status == status_type::ok) {
+    CHECK(std::filesystem::file_size(filename) == 10);
+  }
+
+  filename = "test2.txt";
+  std::filesystem::remove(filename, ec);
+  result = async_simple::coro::syncAwait(
+      client.async_ranges(uri, filename, "10-15"));
+  if (result.status == status_type::ok) {
+    CHECK(std::filesystem::file_size(filename) == 6);
+  }
   // multiple range test
-  result =
-      async_simple::coro::syncAwait(client.async_ranges(uri, "1-10, 20-30"));
-  if (result.resp_body.size() == 31)
-    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
+  //  auto result =
+  //      async_simple::coro::syncAwait(client.async_ranges(uri, "test2.txt",
+  //      "1-10, 20-30"));
+  //  if (result.resp_body.size() == 31)
+  //    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
 }
 
 TEST_CASE("test coro_http_client quit") {

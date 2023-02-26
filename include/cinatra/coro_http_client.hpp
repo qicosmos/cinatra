@@ -139,10 +139,18 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> async_ranges(std::string uri,
+                                                   std::string filename,
                                                    std::string range) {
     resp_data data{};
+    std::ofstream file(filename, std::ios::binary | std::ios::app);
+    if (!file) {
+      data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
+      data.status = status_type::not_found;
+      co_return data;
+    }
+
     req_context<std::ofstream> ctx{
-        req_content_type::ranges, std::move(range), {}};
+        req_content_type::ranges, std::move(range), {}, std::move(file)};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
     co_return data;
@@ -202,7 +210,7 @@ class coro_http_client {
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
-        handle_entire_content(data, content_len);
+        handle_entire_content(data, content_len, parser, ctx);
         break;
       }
 
@@ -215,7 +223,7 @@ class coro_http_client {
       }
 
       // Now get entire content, additional data will discard.
-      handle_entire_content(data, content_len);
+      handle_entire_content(data, content_len, parser, ctx);
     } while (0);
 
     handle_result(data, ec, is_keep_alive);
@@ -281,7 +289,12 @@ class coro_http_client {
       req_str.append("Connection: keep-alive\r\n");
     }
 
-    req_str.append("Range: bytes=").append(ctx.req_str).append(CRCF);
+    if (ctx.content_type == req_content_type::ranges) {
+      req_str.append("Range: bytes=");
+    }
+
+    if (!ctx.req_str.empty())
+      req_str.append(ctx.req_str).append(CRCF);
 
     // add content
     size_t content_len = ctx.content.size();
@@ -323,12 +336,23 @@ class coro_http_client {
     return {};
   }
 
-  void handle_entire_content(resp_data &data, size_t content_len) {
+  void handle_entire_content(resp_data &data, size_t content_len,
+                             const auto &parser, auto &ctx) {
     if (content_len > 0) {
-      assert(content_len == read_buf_.size());
-      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      std::string_view reply(data_ptr, content_len);
-      data.resp_body = reply;
+      if (parser.is_ranges()) {
+        if constexpr (std::is_same_v<
+                          std::ofstream,
+                          std::remove_cvref_t<decltype(ctx.stream)>>) {
+          auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+          ctx.stream.write(data_ptr, content_len);
+        }
+      }
+      else {
+        assert(content_len == read_buf_.size());
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+        std::string_view reply(data_ptr, content_len);
+        data.resp_body = reply;
+      }
       read_buf_.consume(content_len);
     }
     data.eof = (read_buf_.size() == 0);

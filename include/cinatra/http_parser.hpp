@@ -30,7 +30,7 @@ public:
     return header_len_;
   }
 
-  std::string_view get_header_value(std::string_view key) {
+  std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
       if (iequal(headers_[i].name, headers_[i].name_len, key.data()))
         return std::string_view(headers_[i].value, headers_[i].value_len);
@@ -39,7 +39,7 @@ public:
     return {};
   }
 
-  bool is_chunked() {
+  bool is_chunked() const {
     auto transfer_encoding = this->get_header_value("transfer-encoding");
     if (transfer_encoding == "chunked"sv) {
       return true;
@@ -48,7 +48,12 @@ public:
     return false;
   }
 
-  bool keep_alive() {
+    bool is_ranges() const {
+        auto transfer_encoding = this->get_header_value("Accept-Ranges");
+        return !transfer_encoding.empty();
+    }
+
+  bool keep_alive() const {
     auto val = this->get_header_value("connection");
     if (val.empty() || iequal(val.data(), val.length(), "keep-alive")) {
       return true;
@@ -93,7 +98,7 @@ private:
     return {};
   }
 
-  bool iequal(const char *s, size_t l, const char *t) {
+  bool iequal(const char *s, size_t l, const char *t) const {
     if (strlen(t) != l)
       return false;
 
