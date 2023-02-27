@@ -392,8 +392,8 @@ int main() {
   // body.data()
   // <<
   // std::endl; 		res.set_status_and_content(status_type::ok,
-  // "hello world", res_content_type::none, content_encoding::gzip);
-  //	});
+  // "hello world", req_content_type::none, content_encoding::gzip);
+  // 	});
   //
   //
   //	server.set_http_handler<GET, POST>("/test", [](request& req, response&
