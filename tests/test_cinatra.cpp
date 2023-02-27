@@ -5,10 +5,11 @@
 
 #include "cinatra.hpp"
 #include "cinatra/client_factory.hpp"
-#include "cinatra/gzip.hpp"
 #include "cinatra/http_client.hpp"
 #include "doctest.h"
-
+#ifdef CINATRA_ENABLE_GZIP
+#include "cinatra/gzip.hpp"
+#endif
 using namespace cinatra;
 void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
@@ -22,7 +23,7 @@ std::string_view get_header_value(
   }
   return {};
 }
-
+#ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test for gzip") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
@@ -59,7 +60,7 @@ TEST_CASE("test for gzip") {
   server.stop();
   server_thread.join();
 }
-
+#endif
 TEST_CASE("test multiple ranges download") {
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
