@@ -21,7 +21,7 @@ TEST_CASE("test multiple ranges download") {
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10,11-16"));
-  if (result.status == status_type::ok) {
+  if (result.status == status_type::ok && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 16);
   }
 }
@@ -35,7 +35,7 @@ TEST_CASE("test ranges download") {
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10"));
-  if (result.status == status_type::ok) {
+  if (result.status == status_type::ok && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 10);
   }
 
@@ -43,7 +43,7 @@ TEST_CASE("test ranges download") {
   std::filesystem::remove(filename, ec);
   result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "10-15"));
-  if (result.status == status_type::ok) {
+  if (result.status == status_type::ok && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 6);
   }
   // multiple range test
@@ -232,7 +232,25 @@ TEST_CASE("test coro http proxy request") {
   // Make sure the host and port are matching with your proxy server
   client.set_proxy("192.168.102.1", 7890);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
 }
 #endif
+
+TEST_CASE("test coro http basic auth request") {
+  coro_http_client client{};
+  std::string uri = "http://www.purecpp.cn";
+  client.set_proxy_basic_auth("user", "pass");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
+}
+
+TEST_CASE("test coro http bearer token auth request") {
+  coro_http_client client{};
+  std::string uri = "http://www.purecpp.cn";
+  client.set_proxy_bearer_token_auth("password");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
+}
