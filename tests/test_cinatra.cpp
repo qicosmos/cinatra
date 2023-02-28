@@ -231,7 +231,25 @@ TEST_CASE("test coro http proxy request") {
   // Make sure the host and port are matching with your proxy server
   client.set_proxy("192.168.102.1", 7890);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
 }
 #endif
+
+TEST_CASE("test coro http basic auth request") {
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com";
+  client.set_proxy_basic_auth("user", "pass");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
+}
+
+TEST_CASE("test coro http basic auth request") {
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com";
+  client.set_proxy_bearer_token_auth("password");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
+}

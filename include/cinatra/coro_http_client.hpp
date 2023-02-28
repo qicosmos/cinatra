@@ -259,6 +259,16 @@ class coro_http_client {
     proxy_port_ = port;
   }
 
+  inline void set_proxy_basic_auth(const std::string &username,
+                                   const std::string &password) {
+    proxy_basic_auth_username_ = username;
+    proxy_basic_auth_password_ = password;
+  }
+
+  inline void set_proxy_bearer_token_auth(const std::string &token) {
+    proxy_bearer_token_auth_token_ = token;
+  }
+
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
@@ -324,6 +334,22 @@ class coro_http_client {
 
     if (!ctx.req_str.empty())
       req_str.append(ctx.req_str);
+
+    if (!proxy_basic_auth_username_.empty() &&
+        !proxy_basic_auth_password_.empty()) {
+      std::string basic_auth_str = "Proxy-Authorization: Basic ";
+      std::string basic_user_pass_str =
+          proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_;
+      std::string basic_base64_str = base64_encode(basic_user_pass_str);
+      req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
+    }
+
+    if (!proxy_bearer_token_auth_token_.empty()) {
+      std::string bearer_token_str = "Proxy-Authorization: Bearer ";
+      req_str.append(bearer_token_str)
+          .append(proxy_bearer_token_auth_token_)
+          .append(CRCF);
+    }
 
     // add content
     size_t content_len = ctx.content.size();
@@ -490,5 +516,10 @@ class coro_http_client {
 
   std::string proxy_host_;
   int proxy_port_ = -1;
+
+  std::string proxy_basic_auth_username_;
+  std::string proxy_basic_auth_password_;
+
+  std::string proxy_bearer_token_auth_token_;
 };
 }  // namespace cinatra
