@@ -224,3 +224,15 @@ TEST_CASE("test basic http request") {
   server.stop();
   server_thread.join();
 }
+
+#if ENABLE_TEST_PROXY_REQUEST
+TEST_CASE("test coro http proxy request") {
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com";
+  // Make sure the host and port are matching with your proxy server
+  client.set_proxy("192.168.102.1", 7890);
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!r.net_err);
+  CHECK(r.status == status_type::ok);
+}
+#endif
