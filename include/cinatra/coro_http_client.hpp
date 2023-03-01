@@ -1,7 +1,4 @@
 #pragma once
-
-#include <vcruntime.h>
-
 #include <atomic>
 #include <charconv>
 #include <filesystem>
@@ -157,41 +154,13 @@ class coro_http_client {
     return true;
   }
 
-  /*
-  --${Boundary}
-  Content-Disposition: form-data; name="name of pdf"; filename="pdf-file.pdf"
-  Content-Type: application/octet-stream
-
-  bytes of pdf file
-  --${Boundary}
-  Content-Disposition: form-data; name="key"
-  Content-Type: text/plain;charset=UTF-8
-
-  text encoded in UTF-8
-  --${Boundary}--
-  */
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     if (form_data_.empty()) {
       std::cout << "no multipart\n";
       co_return resp_data{{}, status_type::not_found};
     }
 
-    std::string content;
-
-    size_t content_len = 0;
-    for (auto &part : form_data_) {
-      content_len += part.second.content.size();
-      std::string part_content = BOUNDARY;
-      part_content.append(CRCF);
-      part_content.append("Content-Disposition: form-data; name=");
-      part_content.append(part.first);
-      if (!part.second.filename.empty()) {
-        part_content.append("; filename=").append(part.second.filename);
-      }
-      part_content.append(part.second.content).append(CRCF);
-      content.append(part_content);
-    }
-    content.append("--").append(BOUNDARY).append("--");
+    std::string content = build_multipart_content();
 
     co_return co_await async_post(std::move(uri), std::move(content),
                                   req_content_type::multipart);
@@ -200,7 +169,8 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
                                                    std::string name,
                                                    std::string filename) {
-    co_return resp_data{};
+    add_file_part(std::move(name), std::move(filename));
+    return async_upload(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
@@ -348,6 +318,9 @@ class coro_http_client {
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
+      if (ctx.content_type == req_content_type::multipart) {
+        type_str.append(BOUNDARY);
+      }
       req_headers_.emplace_back("Content-Type", std::move(type_str));
     }
 
@@ -416,11 +389,14 @@ class coro_http_client {
                              const auto &parser, auto &ctx) {
     if (content_len > 0) {
       if (parser.is_ranges()) {
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         if constexpr (std::is_same_v<
                           std::ofstream,
                           std::remove_cvref_t<decltype(ctx.stream)>>) {
-          auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
           ctx.stream.write(data_ptr, content_len);
+        }
+        else {
+          ctx.stream.append(data_ptr, content_len);
         }
       }
       else {
@@ -504,6 +480,34 @@ class coro_http_client {
     co_return ec;
   }
 
+  std::string build_multipart_content() {
+    std::string content;
+
+    for (auto &[key, part] : form_data_) {
+      std::string part_content;
+      part_content.append("--").append(BOUNDARY).append(CRCF);
+      part_content.append("Content-Disposition: form-data; name=\"");
+      part_content.append(key).append("\"");
+      if (!part.filename.empty()) {
+        part_content.append("; filename=\"")
+            .append(part.filename)
+            .append("\"")
+            .append(CRCF);
+        auto ext = std::filesystem::path(part.filename).extension().string();
+        if (auto it = g_content_type_map.find(ext);
+            it != g_content_type_map.end()) {
+          part_content.append("Content-Type: ").append(it->second);
+        }
+      }
+      part_content.append(TWO_CRCF);
+
+      part_content.append(part.content).append(CRCF);
+      content.append(part_content);
+    }
+    content.append("--").append(BOUNDARY).append("--").append(CRCF);
+    return content;
+  }
+
   std::vector<std::pair<std::string, std::string>> get_headers(
       http_parser &parser) {
     std::vector<std::pair<std::string, std::string>> resp_headers;
@@ -535,6 +539,6 @@ class coro_http_client {
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
 
-  std::unordered_map<std::string, multipart_t> form_data_;
+  std::map<std::string, multipart_t> form_data_;
 };
 }  // namespace cinatra
