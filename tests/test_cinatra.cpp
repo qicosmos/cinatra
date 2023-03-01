@@ -12,6 +12,102 @@ void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
 
+std::string_view get_header_value(
+    std::vector<std::pair<std::string, std::string>> &resp_headers,
+    std::string_view key) {
+  for (const auto &p : resp_headers) {
+    if (p.first == key)
+      return std::string_view(p.second.data(), p.second.size());
+  }
+  return {};
+}
+#ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("test for gzip") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<GET, POST>("/gzip", [](request &req, response &res) {
+    CHECK(req.get_header_value("Content-Encoding") == "gzip");
+    res.set_status_and_content(status_type::ok, "hello world",
+                               req_content_type::none, content_encoding::gzip);
+  });
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/gzip";
+  client.add_header("Content-Encoding", "gzip");
+  auto result = async_simple::coro::syncAwait(client.async_get(uri));
+  auto content = get_header_value(result.resp_headers, "Content-Encoding");
+  CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
+  std::string decompress_data;
+  bool ret = gzip_codec::uncompress(result.resp_body, decompress_data);
+  CHECK(ret == true);
+  CHECK(decompress_data == "hello world");
+  server.stop();
+  server_thread.join();
+}
+#endif
+
+TEST_CASE("test upload file") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<POST>("/multipart", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::multipart);
+    auto &files = req.get_upload_files();
+    for (auto &file : files) {
+      std::cout << file.get_file_path() << " " << file.get_file_size()
+                << std::endl;
+    }
+    res.render_string("multipart finished");
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/multipart";
+  client.add_str_part("hello", "world");
+  client.add_str_part("key", "value");
+  //  client.add_file_part("test", "test1.txt");
+  resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
+  if (result.status == status_type::ok) {
+    CHECK(result.resp_body == "multipart finished");
+  }
+
+  // could also use this method
+  //    result = async_simple::coro::syncAwait(client.async_upload(uri, "test",
+  //    "test1.txt")); if (result.status == status_type::ok) {
+  //        CHECK(result.resp_body == "multipart finished");
+  //    }
+
+  server.stop();
+  server_thread.join();
+}
+
 TEST_CASE("test multiple ranges download") {
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
