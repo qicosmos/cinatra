@@ -392,8 +392,8 @@ int main() {
   // body.data()
   // <<
   // std::endl; 		res.set_status_and_content(status_type::ok,
-  // "hello world", res_content_type::none, content_encoding::gzip);
-  //	});
+  // "hello world", req_content_type::none, content_encoding::gzip);
+  // 	});
   //
   //
   //	server.set_http_handler<GET, POST>("/test", [](request& req, response&
@@ -473,6 +473,19 @@ int main() {
   // http://127.0.0.1:8080/assets/show.jpg
   // cinatra will send you the file, if the file is big file(more than 5M) the
   // file will be downloaded by chunked
+
+  asio::signal_set signals(server.get_io_service());
+
+  signals.add(SIGINT);
+  signals.add(SIGTERM);
+#if defined(SIGQUIT)
+  signals.add(SIGQUIT);
+#endif
+  signals.async_wait([&server](asio::error_code ec, int) {
+    std::cout << "Stop server since receive signal to quit." << std::endl;
+    server.stop();
+  });
+
   server.run();
   return 0;
 }
