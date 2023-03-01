@@ -222,47 +222,17 @@ class coro_http_client {
       }
       else {
         if (has_closed_) {
-          if (!proxy_host_.empty() && proxy_port_ != -1) {
-            if (ec = co_await asio_util::async_connect(
-                    io_ctx_, socket_, proxy_host_, std::to_string(proxy_port_));
-                ec) {
-              break;
-            }
+          std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
+          std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
+          if (ec = co_await asio_util::async_connect(io_ctx_, socket_, host,
+                                                     port);
+              ec) {
+            break;
           }
-          else {
-            if (ec = co_await asio_util::async_connect(
-                    io_ctx_, socket_, u.get_host(), u.get_port());
-                ec) {
-              break;
-            }
-            // Should the connection be actively closed in proxy? Maybe it's
-            // better to let the user judge.
-            has_closed_ = false;
-          }
+          has_closed_ = false;
         }
 
-        std::string write_msg = "";
-        if (!proxy_host_.empty() && proxy_port_ != -1) {
-          std::string proxy_url = "";
-          if (u.get_port() == "http") {
-            proxy_url += " http://" + u.get_host() + ":";
-            proxy_url += "80";
-          }
-          else if (u.get_port() == "https") {
-            proxy_url += " https://" + u.get_host() + ":";
-            proxy_url += "443";
-          }
-          else {
-            // all be http
-            proxy_url += " http://" + u.get_host() + ":";
-            proxy_url += u.get_port();
-          }
-          proxy_url += u.get_path();
-          write_msg = prepare_request_str(u, method, ctx, proxy_url);
-        }
-        else {
-          write_msg = prepare_request_str(u, method, ctx);
-        }
+        std::string write_msg = prepare_request_str(u, method, ctx);
 
         if (std::tie(ec, size) = co_await asio_util::async_write(
                 socket_, asio::buffer(write_msg));
@@ -314,7 +284,7 @@ class coro_http_client {
     co_return data;
   }
 
-  inline void set_proxy(const std::string &host, int port) {
+  inline void set_proxy(const std::string &host, const std::string &port) {
     proxy_host_ = host;
     proxy_port_ = port;
   }
@@ -352,22 +322,43 @@ class coro_http_client {
       assert(false);
 #endif
     }
+    // construct proxy request uri
+    construct_proxy_uri(u);
 
     return {true, u};
   }
 
-  std::string prepare_request_str(const uri_t &u, http_method method,
-                                  const auto &ctx, std::string proxy_url = "") {
-    std::string req_str(method_name(method));
-    if (!proxy_url.empty()) {
-      req_str.append(proxy_url);
-    }
-    else {
-      req_str.append(" ").append(u.get_path());
-      if (!u.query.empty()) {
-        req_str.append("?").append(u.query);
+  void construct_proxy_uri(uri_t &u) {
+    if (!proxy_host_.empty() && !proxy_port_.empty()) {
+      if (!proxy_request_uri_.empty())
+        proxy_request_uri_.clear();
+      if (u.get_port() == "http") {
+        proxy_request_uri_ += "http://" + u.get_host() + ":";
+        proxy_request_uri_ += "80";
       }
+      else if (u.get_port() == "https") {
+        proxy_request_uri_ += "https://" + u.get_host() + ":";
+        proxy_request_uri_ += "443";
+      }
+      else {
+        // all be http
+        proxy_request_uri_ += " http://" + u.get_host() + ":";
+        proxy_request_uri_ += u.get_port();
+      }
+      proxy_request_uri_ += u.get_path();
+      u.path = std::string_view(proxy_request_uri_);
     }
+  }
+
+  std::string prepare_request_str(const uri_t &u, http_method method,
+                                  const auto &ctx) {
+    std::string req_str(method_name(method));
+
+    req_str.append(" ").append(u.get_path());
+    if (!u.query.empty()) {
+      req_str.append("?").append(u.query);
+    }
+
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
@@ -607,8 +598,9 @@ class coro_http_client {
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
 
+  std::string proxy_request_uri_ = "";
   std::string proxy_host_;
-  int proxy_port_ = -1;
+  std::string proxy_port_;
 
   std::string proxy_basic_auth_username_;
   std::string proxy_basic_auth_password_;
