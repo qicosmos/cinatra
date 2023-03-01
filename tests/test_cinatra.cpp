@@ -13,13 +13,13 @@ void print(const response_data &result) {
 }
 
 std::string_view get_header_value(
-        std::vector<std::pair<std::string, std::string>> &resp_headers,
-        std::string_view key) {
-    for (const auto &p : resp_headers) {
-        if (p.first == key)
-            return std::string_view(p.second.data(), p.second.size());
-    }
-    return {};
+    std::vector<std::pair<std::string, std::string>> &resp_headers,
+    std::string_view key) {
+  for (const auto &p : resp_headers) {
+    if (p.first == key)
+      return std::string_view(p.second.data(), p.second.size());
+  }
+  return {};
 }
 #ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test for gzip") {
