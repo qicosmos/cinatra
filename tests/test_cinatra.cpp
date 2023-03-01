@@ -1,19 +1,17 @@
 #include <filesystem>
 #include <future>
-#include <string_view>
 #include <system_error>
 
 #include "cinatra.hpp"
 #include "cinatra/client_factory.hpp"
 #include "cinatra/http_client.hpp"
 #include "doctest.h"
-#ifdef CINATRA_ENABLE_GZIP
-#include "cinatra/gzip.hpp"
-#endif
+
 using namespace cinatra;
 void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
+
 std::string_view get_header_value(
     std::vector<std::pair<std::string, std::string>> &resp_headers,
     std::string_view key) {
@@ -61,6 +59,55 @@ TEST_CASE("test for gzip") {
   server_thread.join();
 }
 #endif
+
+TEST_CASE("test upload file") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<POST>("/multipart", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::multipart);
+    auto &files = req.get_upload_files();
+    for (auto &file : files) {
+      std::cout << file.get_file_path() << " " << file.get_file_size()
+                << std::endl;
+    }
+    res.render_string("multipart finished");
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/multipart";
+  client.add_str_part("hello", "world");
+  client.add_str_part("key", "value");
+  //  client.add_file_part("test", "test1.txt");
+  resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
+  if (result.status == status_type::ok) {
+    CHECK(result.resp_body == "multipart finished");
+  }
+
+  // could also use this method
+  //    result = async_simple::coro::syncAwait(client.async_upload(uri, "test",
+  //    "test1.txt")); if (result.status == status_type::ok) {
+  //        CHECK(result.resp_body == "multipart finished");
+  //    }
+
+  server.stop();
+  server_thread.join();
+}
+
 TEST_CASE("test multiple ranges download") {
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
@@ -221,8 +268,8 @@ TEST_CASE("test coro_http_client async_get") {
 
   auto r1 =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  CHECK(!r1.net_err);
-  CHECK(r1.status == status_type::ok);
+  CHECK(!r.net_err);
+  CHECK(r.status == status_type::ok);
 }
 
 TEST_CASE("test coro_http_client async_connect") {

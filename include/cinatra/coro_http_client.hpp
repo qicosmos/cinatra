@@ -1,5 +1,4 @@
 #pragma once
-
 #include <atomic>
 #include <charconv>
 #include <filesystem>
@@ -7,6 +6,7 @@
 #include <memory>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 
 #include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
@@ -34,6 +34,11 @@ struct req_context {
   std::string req_str;
   std::string content;
   Stream stream;
+};
+
+struct multipart_t {
+  std::string filename;
+  std::string content;
 };
 
 class coro_http_client {
@@ -113,6 +118,59 @@ class coro_http_client {
                  req_content_type content_type) {
     return async_simple::coro::syncAwait(
         async_post(std::move(uri), std::move(content), content_type));
+  }
+
+  // async_simple::coro::Lazy<resp_data> async_download(std::string uri) {}
+
+  bool add_str_part(std::string name, std::string content) {
+    return form_data_
+        .emplace(std::move(name), multipart_t{"", std::move(content)})
+        .second;
+  }
+
+  bool add_file_part(std::string name, std::string filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+      std::cout << "open file failed\n";
+      return false;
+    }
+
+    if (form_data_.find(name) != form_data_.end()) {
+      std::cout << "name already exist\n";
+      return false;
+    }
+
+    std::string short_name =
+        std::filesystem::path(filename).filename().string();
+
+    size_t file_size = std::filesystem::file_size(filename);
+
+    size_t size_to_read = 1024 * 1024;
+    std::string file_data;
+    file_data.resize(file_size);
+    file.read(file_data.data(), size_to_read);
+    form_data_.emplace(std::move(name), multipart_t{std::move(short_name),
+                                                    std::move(file_data)});
+    return true;
+  }
+
+  async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
+    if (form_data_.empty()) {
+      std::cout << "no multipart\n";
+      co_return resp_data{{}, status_type::not_found};
+    }
+
+    std::string content = build_multipart_content();
+
+    co_return co_await async_post(std::move(uri), std::move(content),
+                                  req_content_type::multipart);
+  }
+
+  async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
+                                                   std::string name,
+                                                   std::string filename) {
+    add_file_part(std::move(name), std::move(filename));
+    return async_upload(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
@@ -260,6 +318,9 @@ class coro_http_client {
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
+      if (ctx.content_type == req_content_type::multipart) {
+        type_str.append(BOUNDARY);
+      }
       req_headers_.emplace_back("Content-Type", std::move(type_str));
     }
 
@@ -328,11 +389,14 @@ class coro_http_client {
                              const auto &parser, auto &ctx) {
     if (content_len > 0) {
       if (parser.is_ranges()) {
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         if constexpr (std::is_same_v<
                           std::ofstream,
                           std::remove_cvref_t<decltype(ctx.stream)>>) {
-          auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
           ctx.stream.write(data_ptr, content_len);
+        }
+        else {
+          ctx.stream.append(data_ptr, content_len);
         }
       }
       else {
@@ -416,6 +480,34 @@ class coro_http_client {
     co_return ec;
   }
 
+  std::string build_multipart_content() {
+    std::string content;
+
+    for (auto &[key, part] : form_data_) {
+      std::string part_content;
+      part_content.append("--").append(BOUNDARY).append(CRCF);
+      part_content.append("Content-Disposition: form-data; name=\"");
+      part_content.append(key).append("\"");
+      if (!part.filename.empty()) {
+        part_content.append("; filename=\"")
+            .append(part.filename)
+            .append("\"")
+            .append(CRCF);
+        auto ext = std::filesystem::path(part.filename).extension().string();
+        if (auto it = g_content_type_map.find(ext);
+            it != g_content_type_map.end()) {
+          part_content.append("Content-Type: ").append(it->second);
+        }
+      }
+      part_content.append(TWO_CRCF);
+
+      part_content.append(part.content).append(CRCF);
+      content.append(part_content);
+    }
+    content.append("--").append(BOUNDARY).append("--").append(CRCF);
+    return content;
+  }
+
   std::vector<std::pair<std::string, std::string>> get_headers(
       http_parser &parser) {
     std::vector<std::pair<std::string, std::string>> resp_headers;
@@ -446,5 +538,7 @@ class coro_http_client {
   asio::streambuf read_buf_;
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
+
+  std::map<std::string, multipart_t> form_data_;
 };
 }  // namespace cinatra
