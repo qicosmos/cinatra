@@ -1,5 +1,4 @@
 #pragma once
-#include "use_asio.hpp"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,18 +12,20 @@
 #include "router.hpp"
 #include "session_manager.hpp"
 #include "url_encode_decode.hpp"
+#include "use_asio.hpp"
 
 namespace cinatra {
 
 // cache
-template <typename T> struct enable_cache {
+template <typename T>
+struct enable_cache {
   enable_cache(T t) : value(t) {}
   T value;
 };
 
 template <typename ScoketType, class service_pool_policy = io_service_pool>
 class http_server_ : private noncopyable {
-public:
+ public:
   using type = ScoketType;
   template <class... Args>
   explicit http_server_(Args &&...args)
@@ -92,16 +93,14 @@ public:
     return r;
   }
 
-  std::pair<bool, std::string>
-  listen(const asio::ip::tcp::resolver::query &query) {
+  std::pair<bool, std::string> listen(
+      const asio::ip::tcp::resolver::query &query) {
     asio::ip::tcp::resolver resolver(io_service_pool_.get_io_service());
-    asio::ip::tcp::resolver::iterator endpoints =
-        resolver.resolve(query);
+    asio::ip::tcp::resolver::iterator endpoints = resolver.resolve(query);
 
     bool r = false;
     std::string err_msg;
-    for (; endpoints != asio::ip::tcp::resolver::iterator();
-         ++endpoints) {
+    for (; endpoints != asio::ip::tcp::resolver::iterator(); ++endpoints) {
       asio::ip::tcp::endpoint endpoint = *endpoints;
 
       auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(
@@ -118,7 +117,7 @@ public:
         err_msg = ex.what();
 #ifdef DEBUG
         std::cout << ex.what() << "\n";
-#endif // DEBUG
+#endif  // DEBUG
       }
     }
 
@@ -161,10 +160,12 @@ public:
 
   void set_keep_alive_timeout(long seconds) { keep_alive_timeout_ = seconds; }
 
-  template <typename T> bool need_cache(T &&t) {
+  template <typename T>
+  bool need_cache(T &&t) {
     if constexpr (std::is_same_v<T, enable_cache<bool>>) {
       return t.value;
-    } else {
+    }
+    else {
       return false;
     }
   }
@@ -173,13 +174,14 @@ public:
   template <http_method... Is, typename Function, typename... AP>
   void set_http_handler(std::string_view name, Function &&f, AP &&...ap) {
     if constexpr (has_type<enable_cache<bool>,
-                           std::tuple<std::decay_t<AP>...>>::value) { // for
-                                                                      // cache
+                           std::tuple<std::decay_t<AP>...>>::value) {  // for
+                                                                       // cache
       bool b = false;
       ((!b && (b = need_cache(std::forward<AP>(ap)))), ...);
       if (!b) {
         http_cache::get().add_skip(name);
-      } else {
+      }
+      else {
         http_cache::get().add_single_cache(name);
       }
       auto tp = filter<enable_cache<bool>>(std::forward<AP>(ap)...);
@@ -188,7 +190,8 @@ public:
                                              std::move(ap)...);
       };
       std::apply(lm, std::move(tp));
-    } else {
+    }
+    else {
       http_router_.register_handler<Is...>(name, std::forward<Function>(f),
                                            std::forward<AP>(ap)...);
     }
@@ -208,14 +211,14 @@ public:
     return http_cache::get().get_cache_max_age();
   }
 
-  void
-  set_download_check(std::function<bool(request &req, response &res)> checker) {
+  void set_download_check(
+      std::function<bool(request &req, response &res)> checker) {
     download_check_ = std::move(checker);
   }
 
   // should be called before listen
-  void
-  set_upload_check(std::function<bool(request &req, response &res)> checker) {
+  void set_upload_check(
+      std::function<bool(request &req, response &res)> checker) {
     upload_check_ = std::move(checker);
   }
 
@@ -228,8 +231,8 @@ public:
     not_found_ = std::move(not_found);
   }
 
-  void
-  set_multipart_begin(std::function<void(request &, std::string &)> begin) {
+  void set_multipart_begin(
+      std::function<void(request &, std::string &)> begin) {
     multipart_begin_ = std::move(begin);
   }
 
@@ -249,9 +252,8 @@ public:
     on_conn_ = std::move(on_conn);
   }
 
-private:
-  void start_accept(
-      std::shared_ptr<asio::ip::tcp::acceptor> const &acceptor) {
+ private:
+  void start_accept(std::shared_ptr<asio::ip::tcp::acceptor> const &acceptor) {
     auto new_conn = std::make_shared<connection<ScoketType>>(
         io_service_pool_.get_io_service(), ssl_conf_, max_req_buf_size_,
         keep_alive_timeout_, http_handler_, upload_dir_,
@@ -265,8 +267,7 @@ private:
           }
 
           if (!e) {
-            new_conn->tcp_socket().set_option(
-                asio::ip::tcp::no_delay(true));
+            new_conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
             if (multipart_begin_) {
               new_conn->set_multipart_begin(multipart_begin_);
             }
@@ -280,12 +281,14 @@ private:
 
             if (!on_conn_) {
               new_conn->start();
-            } else {
+            }
+            else {
               if (on_conn_(new_conn)) {
                 new_conn->start();
               }
             }
-          } else {
+          }
+          else {
             // LOG_INFO << "server::handle_accept: " << e.message();
           }
 
@@ -307,69 +310,73 @@ private:
 
           auto state = req.get_state();
           switch (state) {
-          case cinatra::data_proc_state::data_begin: {
-            std::string relative_file_name = req.get_relative_filename();
-            std::string fullpath =static_dir_+fs::u8path(relative_file_name).string();
+            case cinatra::data_proc_state::data_begin: {
+              auto u8relative_file_name =
+                  fs::path(req.get_relative_filename()).u8string();
+              std::string relative_file_name(u8relative_file_name.begin(),
+                                             u8relative_file_name.end());
 
-            auto mime = req.get_mime(relative_file_name);
-            auto in = std::make_shared<std::ifstream>(fullpath,
-                                                      std::ios_base::binary);
-            if (!in->is_open()) {
-              if (not_found_) {
-                not_found_(req, res);
+              std::string fullpath = static_dir_ + relative_file_name;
+
+              auto mime = req.get_mime(relative_file_name);
+              auto in = std::make_shared<std::ifstream>(fullpath,
+                                                        std::ios_base::binary);
+              if (!in->is_open()) {
+                if (not_found_) {
+                  not_found_(req, res);
+                  return;
+                }
+                res.set_status_and_content(
+                    status_type::not_found,
+                    std::string(relative_file_name) + " not found");
                 return;
               }
-              res.set_status_and_content(status_type::not_found,
-                                         std::string(relative_file_name) +
-                                             " not found");
-              return;
-            }
 
-            auto start_sv = req.get_header_value("cinatra_start_pos");
-            if (!start_sv.empty()) {
-              std::string start_str(start_sv);
-              int64_t start = (int64_t)atoll(start_str.data());
-              std::error_code code;
-              int64_t file_size = fs::file_size(fullpath, code);
-              if (start > 0 && !code && file_size >= start) {
-                in->seekg(start);
+              auto start_sv = req.get_header_value("cinatra_start_pos");
+              if (!start_sv.empty()) {
+                std::string start_str(start_sv);
+                int64_t start = (int64_t)atoll(start_str.data());
+                std::error_code code;
+                int64_t file_size = fs::file_size(fullpath, code);
+                if (start > 0 && !code && file_size >= start) {
+                  in->seekg(start);
+                }
               }
-            }
 
-            req.get_conn<ScoketType>()->set_tag(in);
+              req.get_conn<ScoketType>()->set_tag(in);
 
-            if (is_small_file(in.get(), req)) {
-              send_small_file(res, in.get(), mime);
-              return;
-            }
+              if (is_small_file(in.get(), req)) {
+                send_small_file(res, in.get(), mime);
+                return;
+              }
 
-            if (transfer_type_ == transfer_type::CHUNKED)
-              write_chunked_header(req, in, mime);
-            else
-              write_ranges_header(
-                  req, mime, fs::path(relative_file_name).filename().string(),
-                  std::to_string(fs::file_size(fullpath)));
-          } break;
-          case cinatra::data_proc_state::data_continue: {
-            if (transfer_type_ == transfer_type::CHUNKED)
-              write_chunked_body(req);
-            else
-              write_ranges_data(req);
-          } break;
-          case cinatra::data_proc_state::data_end: {
-            auto conn = req.get_conn<ScoketType>();
-            if (!conn->get_keep_alive())
-              conn->on_close();
-          } break;
-          case cinatra::data_proc_state::data_all_end: {
-            // network error
-          } break;
-          case cinatra::data_proc_state::data_close: {
-            // network error
-          } break;
-          case cinatra::data_proc_state::data_error: {
-            // network error
-          } break;
+              if (transfer_type_ == transfer_type::CHUNKED)
+                write_chunked_header(req, in, mime);
+              else
+                write_ranges_header(
+                    req, mime, fs::path(relative_file_name).filename().string(),
+                    std::to_string(fs::file_size(fullpath)));
+            } break;
+            case cinatra::data_proc_state::data_continue: {
+              if (transfer_type_ == transfer_type::CHUNKED)
+                write_chunked_body(req);
+              else
+                write_ranges_data(req);
+            } break;
+            case cinatra::data_proc_state::data_end: {
+              auto conn = req.get_conn<ScoketType>();
+              if (!conn->get_keep_alive())
+                conn->on_close();
+            } break;
+            case cinatra::data_proc_state::data_all_end: {
+              // network error
+            } break;
+            case cinatra::data_proc_state::data_close: {
+              // network error
+            } break;
+            case cinatra::data_proc_state::data_error: {
+              // network error
+            } break;
           }
         },
         enable_cache{false});
@@ -447,8 +454,9 @@ private:
 
   void write_ranges_header(request &req, std::string_view mime,
                            std::string filename, std::string file_size) {
-    std::string header_str = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
-                             "*\r\nAccept-Ranges: bytes\r\n";
+    std::string header_str =
+        "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
+        "*\r\nAccept-Ranges: bytes\r\n";
     header_str.append("Content-Disposition: attachment;filename=");
     header_str.append(std::move(filename)).append("\r\n");
     header_str.append("Connection: keep-alive\r\n");
@@ -520,7 +528,8 @@ private:
 
     if (path[0] == '/' || (path.length() >= 2 && path[1] == ':')) {
       dir = std::move(path);
-    } else {
+    }
+    else {
       dir = fs::absolute(path).string();
     }
   }
@@ -542,12 +551,13 @@ private:
 
   service_pool_policy io_service_pool_;
 
-  std::size_t max_req_buf_size_ = 3 * 1024 * 1024; // max request buffer size 3M
-  long keep_alive_timeout_ = 60;                   // max request timeout 60s
+  std::size_t max_req_buf_size_ =
+      3 * 1024 * 1024;            // max request buffer size 3M
+  long keep_alive_timeout_ = 60;  // max request timeout 60s
 
   http_router http_router_;
-  std::string static_dir_ = fs::absolute("www").string(); // default
-  std::string upload_dir_ = fs::absolute("www").string(); // default
+  std::string static_dir_ = fs::absolute("www").string();  // default
+  std::string upload_dir_ = fs::absolute("www").string();  // default
   std::time_t static_res_cache_max_age_ = 0;
 
   bool enable_timeout_ = true;
@@ -574,4 +584,4 @@ using http_server_proxy = http_server_<T, io_service_pool>;
 
 using http_server = http_server_proxy<NonSSL>;
 using http_ssl_server = http_server_proxy<SSL>;
-} // namespace cinatra
+}  // namespace cinatra
