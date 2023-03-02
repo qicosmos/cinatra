@@ -120,8 +120,6 @@ class coro_http_client {
         async_post(std::move(uri), std::move(content), content_type));
   }
 
-  // async_simple::coro::Lazy<resp_data> async_download(std::string uri) {}
-
   bool add_str_part(std::string name, std::string content) {
     return form_data_
         .emplace(std::move(name), multipart_t{"", std::move(content)})
@@ -249,7 +247,7 @@ class coro_http_client {
       }
 
       is_keep_alive = parser.keep_alive();
-
+      bool is_ranges = parser.is_ranges();
       if (parser.is_chunked()) {
         is_keep_alive = true;
         ec = co_await handle_chunked(data, std::move(ctx));
@@ -260,7 +258,7 @@ class coro_http_client {
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
-        handle_entire_content(data, content_len, parser, ctx);
+        handle_entire_content(data, content_len, is_ranges, ctx);
         break;
       }
 
@@ -273,7 +271,7 @@ class coro_http_client {
       }
 
       // Now get entire content, additional data will discard.
-      handle_entire_content(data, content_len, parser, ctx);
+      handle_entire_content(data, content_len, is_ranges, ctx);
     } while (0);
 
     handle_result(data, ec, is_keep_alive);
@@ -386,9 +384,9 @@ class coro_http_client {
   }
 
   void handle_entire_content(resp_data &data, size_t content_len,
-                             const auto &parser, auto &ctx) {
+                             bool is_ranges, auto &ctx) {
     if (content_len > 0) {
-      if (parser.is_ranges()) {
+      if (is_ranges) {
         auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         if constexpr (std::is_same_v<
                           std::ofstream,
