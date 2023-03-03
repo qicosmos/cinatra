@@ -6,7 +6,7 @@
 
 namespace cinatra {
 class websocket {
-public:
+ public:
   bool is_upgrade(const request &req) {
     if (req.get_method() != "GET"sv)
       return false;
@@ -98,17 +98,20 @@ public:
     left_header_len_ = 0;
     if (length_field <= 125) {
       payload_length_ = length_field;
-    } else if (length_field == 126) // msglen is 16bit!
+    }
+    else if (length_field == 126)  // msglen is 16bit!
     {
-      payload_length_ = ntohs(*(uint16_t *)&inp[2]); // (inp[2] << 8) + inp[3];
+      payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
       pos += 2;
       left_header_len_ = MEDIUM_HEADER - size;
-    } else if (length_field == 127) // msglen is 64bit!
+    }
+    else if (length_field == 127)  // msglen is 64bit!
     {
       payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
       pos += 8;
       left_header_len_ = LONG_HEADER - size;
-    } else {
+    }
+    else {
       return -1;
     }
 
@@ -131,7 +134,8 @@ public:
 
     if (mask_ == 0) {
       memcpy(&outbuf[0], (void *)(inp), payload_length_);
-    }else{
+    }
+    else {
       // unmask data:
       for (size_t i = 0; i < payload_length_; i++) {
         outbuf[i] = inp[i] ^ ((unsigned char *)(&mask_))[i % 4];
@@ -141,8 +145,8 @@ public:
     if (msg_opcode_ == 0x0)
       return (msg_fin_)
                  ? ws_frame_type::WS_TEXT_FRAME
-                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME; // continuation
-                                                            // frame ?
+                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;  // continuation
+                                                             // frame ?
     if (msg_opcode_ == 0x1)
       return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
                         : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;
@@ -163,8 +167,8 @@ public:
     return {msg_header_, header_length};
   }
 
-  std::vector<asio::const_buffer>
-  format_message(const char *src, size_t length, opcode code) {
+  std::vector<asio::const_buffer> format_message(const char *src, size_t length,
+                                                 opcode code) {
     size_t header_length = encode_header(length, code);
     return {asio::buffer(msg_header_, header_length),
             asio::buffer(src, length)};
@@ -203,25 +207,27 @@ public:
 
   opcode get_opcode() { return (opcode)msg_opcode_; }
 
-private:
+ private:
   size_t encode_header(size_t length, opcode code) {
     size_t header_length;
 
     if (length < 126) {
       header_length = 2;
       msg_header_[1] = static_cast<char>(length);
-    } else if (length <= UINT16_MAX) {
+    }
+    else if (length <= UINT16_MAX) {
       header_length = 4;
       msg_header_[1] = 126;
       *((uint16_t *)&msg_header_[2]) = htons(static_cast<uint16_t>(length));
-    } else {
+    }
+    else {
       header_length = 10;
       msg_header_[1] = 127;
       *((uint64_t *)&msg_header_[2]) = htobe64(length);
     }
 
     int flags = 0;
-    msg_header_[0] = (flags & SND_NO_FIN ? 0 : 128);
+    msg_header_[0] = (flags & SND_NO_FIN ? 0 : char(128));
     if (!(flags & SND_CONTINUATION)) {
       msg_header_[0] |= code;
     }
@@ -249,4 +255,4 @@ private:
   char msg_header_[10];
 };
 
-} // namespace cinatra
+}  // namespace cinatra
