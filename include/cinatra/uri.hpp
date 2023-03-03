@@ -40,6 +40,10 @@ public:
     }
   }
 
+  bool is_websocket() {
+      return schema == "ws"sv || schema == "wss"sv;
+  }
+
   bool is_user_info_character(int c) {
     return is_unreserved(c) || is_sub_delim(c) || c == '%' || c == ':';
   }

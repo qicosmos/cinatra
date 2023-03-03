@@ -60,6 +60,74 @@ TEST_CASE("test for gzip") {
 }
 #endif
 
+async_simple::coro::Lazy<void> test_websocket() {
+  coro_http_client client{};
+  client.on_ws_close([&] {
+    std::cout << "web socket close\n";
+    client.close();
+  });
+  client.on_ws_msg([](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
+    std::cout << data.resp_body << "\n";
+  });
+  bool r = co_await client.async_connect("ws://127.0.0.1:8090/ws");
+  if (!r) {
+    co_return;
+  }
+
+  auto result = co_await client.async_send_ws("hello websocket", false);
+  std::cout << result.net_err << "\n";
+
+  std::getchar();
+}
+
+TEST_CASE("test websocket") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+  server.set_http_handler<GET, POST>("/ws", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
+
+    req.on(ws_open, [](request &req) {
+      std::cout << "websocket start" << std::endl;
+    });
+
+    req.on(ws_message, [](request &req) {
+      auto part_data = req.get_part_data();
+      // echo
+      std::string str = std::string(part_data.data(), part_data.length());
+      req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
+      std::cout << part_data.data() << std::endl;
+    });
+
+    req.on(ws_error, [](request &req) {
+      std::cout << "websocket pack error or network error" << std::endl;
+    });
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  async_simple::coro::syncAwait(test_websocket());
+
+  server.stop();
+  server_thread.join();
+}
+
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
@@ -274,8 +342,8 @@ TEST_CASE("test coro_http_client async_get") {
 
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
-  auto r =
-      async_simple::coro::syncAwait(client.async_ping("http://www.purecpp.cn"));
+  auto r = async_simple::coro::syncAwait(
+      client.async_connect("http://www.purecpp.cn"));
   CHECK(r);
 }
 

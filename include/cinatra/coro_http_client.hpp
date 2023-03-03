@@ -18,6 +18,7 @@
 #include "modern_callback.h"
 #include "response_cv.hpp"
 #include "uri.hpp"
+#include "websocket.hpp"
 
 namespace cinatra {
 struct resp_data {
@@ -81,7 +82,9 @@ class coro_http_client {
     req_headers_.emplace_back(std::move(key), std::move(val));
   }
 
-  async_simple::coro::Lazy<bool> async_ping(std::string uri) {
+  void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
+
+  async_simple::coro::Lazy<bool> async_connect(std::string uri) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
@@ -89,14 +92,53 @@ class coro_http_client {
       co_return false;
     }
 
-    auto ec = co_await asio_util::async_connect(io_ctx_, socket_, u.get_host(),
-                                                u.get_port());
-
-    if (ec) {
-      std::cout << ec.message() << "\n";
+    req_context<std::string> ctx{};
+    if (u.is_websocket()) {
+      // build websocket http header
+      add_header("Upgrade", "websocket");
+      add_header("Connection", "Upgrade");
+      if (ws_sec_key_.empty()) {
+        ws_sec_key_ = "I0g8QD1VRui3vHkICDYr8d0o";  // provide a random string.
+      }
+      add_header("Sec-WebSocket-Key", ws_sec_key_);
+      add_header("Sec-WebSocket-Version", "13");
     }
 
-    co_return !ec;
+    data = co_await async_request(std::move(uri), http_method::GET,
+                                  std::move(ctx));
+
+    co_return !data.net_err;
+  }
+
+  async_simple::coro::Lazy<resp_data> async_send_ws(std::string msg,
+                                                    bool need_mask = true,
+                                                    opcode op = opcode::text) {
+    resp_data data{};
+
+    websocket ws{};
+    if (op == opcode::close) {
+      msg = ws.format_close_payload(close_code::normal, msg.data(), msg.size());
+    }
+
+    std::string encode_header = ws.encode_frame(msg, op, need_mask);
+    std::vector<asio::const_buffer> buffers{
+        asio::buffer(encode_header.data(), encode_header.size()),
+        asio::buffer(msg.data(), msg.size())};
+
+    auto [ec, _] = co_await asio_util::async_write(socket_, buffers);
+    if (ec) {
+      data.net_err = ec;
+      data.status = status_type::not_found;
+    }
+
+    co_return data;
+  }
+
+  void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
+    on_ws_msg_ = std::move(on_ws_msg);
+  }
+  void on_ws_close(std::function<void()> on_ws_close) {
+    on_ws_close_ = std::move(on_ws_close);
   }
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
@@ -294,7 +336,7 @@ class coro_http_client {
       }
     }
 
-    if (u.schema == "https"sv) {
+    if (u.schema == "https"sv || u.schema == "wss"sv) {
 #ifdef CINATRA_ENABLE_SSL
       // upgrade_to_ssl();
 #else
@@ -538,5 +580,9 @@ class coro_http_client {
   std::vector<std::pair<std::string, std::string>> req_headers_;
 
   std::map<std::string, multipart_t> form_data_;
+
+  std::function<void(resp_data)> on_ws_msg_;
+  std::function<void()> on_ws_close_;
+  std::string ws_sec_key_;
 };
 }  // namespace cinatra
