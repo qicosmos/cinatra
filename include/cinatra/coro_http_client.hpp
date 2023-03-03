@@ -220,8 +220,10 @@ class coro_http_client {
       }
       else {
         if (has_closed_) {
-          if (ec = co_await asio_util::async_connect(
-                  io_ctx_, socket_, u.get_host(), u.get_port());
+          std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
+          std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
+          if (ec = co_await asio_util::async_connect(io_ctx_, socket_, host,
+                                                     port);
               ec) {
             break;
           }
@@ -229,6 +231,7 @@ class coro_http_client {
         }
 
         std::string write_msg = prepare_request_str(u, method, ctx);
+
         if (std::tie(ec, size) = co_await asio_util::async_write(
                 socket_, asio::buffer(write_msg));
             ec) {
@@ -279,6 +282,21 @@ class coro_http_client {
     co_return data;
   }
 
+  inline void set_proxy(const std::string &host, const std::string &port) {
+    proxy_host_ = host;
+    proxy_port_ = port;
+  }
+
+  inline void set_proxy_basic_auth(const std::string &username,
+                                   const std::string &password) {
+    proxy_basic_auth_username_ = username;
+    proxy_basic_auth_password_ = password;
+  }
+
+  inline void set_proxy_bearer_token_auth(const std::string &token) {
+    proxy_bearer_token_auth_token_ = token;
+  }
+
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
@@ -302,17 +320,43 @@ class coro_http_client {
       assert(false);
 #endif
     }
+    // construct proxy request uri
+    construct_proxy_uri(u);
 
     return {true, u};
+  }
+
+  void construct_proxy_uri(uri_t &u) {
+    if (!proxy_host_.empty() && !proxy_port_.empty()) {
+      if (!proxy_request_uri_.empty())
+        proxy_request_uri_.clear();
+      if (u.get_port() == "http") {
+        proxy_request_uri_ += "http://" + u.get_host() + ":";
+        proxy_request_uri_ += "80";
+      }
+      else if (u.get_port() == "https") {
+        proxy_request_uri_ += "https://" + u.get_host() + ":";
+        proxy_request_uri_ += "443";
+      }
+      else {
+        // all be http
+        proxy_request_uri_ += " http://" + u.get_host() + ":";
+        proxy_request_uri_ += u.get_port();
+      }
+      proxy_request_uri_ += u.get_path();
+      u.path = std::string_view(proxy_request_uri_);
+    }
   }
 
   std::string prepare_request_str(const uri_t &u, http_method method,
                                   const auto &ctx) {
     std::string req_str(method_name(method));
+
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
     }
+
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
@@ -338,6 +382,21 @@ class coro_http_client {
 
     if (!has_connection) {
       req_str.append("Connection: keep-alive\r\n");
+    }
+
+    if (!proxy_basic_auth_username_.empty() &&
+        !proxy_basic_auth_password_.empty()) {
+      std::string basic_auth_str = "Proxy-Authorization: Basic ";
+      std::string basic_base64_str = base64_encode(
+          proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_);
+      req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
+    }
+
+    if (!proxy_bearer_token_auth_token_.empty()) {
+      std::string bearer_token_str = "Proxy-Authorization: Bearer ";
+      req_str.append(bearer_token_str)
+          .append(proxy_bearer_token_auth_token_)
+          .append(CRCF);
     }
 
     if (!ctx.req_str.empty())
@@ -536,6 +595,15 @@ class coro_http_client {
   asio::streambuf read_buf_;
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
+
+  std::string proxy_request_uri_ = "";
+  std::string proxy_host_;
+  std::string proxy_port_;
+
+  std::string proxy_basic_auth_username_;
+  std::string proxy_basic_auth_password_;
+
+  std::string proxy_bearer_token_auth_token_;
 
   std::map<std::string, multipart_t> form_data_;
 };
