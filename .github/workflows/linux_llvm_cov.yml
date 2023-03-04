@@ -6,7 +6,7 @@ on:
       - main
       - master
       - cpp20_base
-  pull_request:
+  pull_request_target:
     branches:
       - main
       - master
