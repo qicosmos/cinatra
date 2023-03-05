@@ -10,6 +10,16 @@ if(BUILD_UNIT_TESTS)
     enable_testing()
 endif()
 
+# coverage test
+option(COVERAGE_TEST "Build with unit test coverage" OFF)
+if(COVERAGE_TEST)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage --coverage")
+    else()
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
+    endif()
+endif()
+
 macro(check_asan _RESULT)
     include(CheckCXXSourceRuns)
     set(CMAKE_REQUIRED_FLAGS "-fsanitize=address")
