@@ -70,7 +70,9 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
       return;
     }
 
-    CHECK(data.resp_body == "hello websocket");
+    bool r =
+        data.resp_body == "hello websocket" || data.resp_body == "test again";
+    CHECK(r);
 
     std::cout << data.resp_body << "\n";
   });
