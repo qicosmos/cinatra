@@ -70,6 +70,8 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
       return;
     }
 
+    CHECK(data.resp_body == "hello websocket");
+
     std::cout << data.resp_body << "\n";
   });
   bool r = co_await client.async_connect("ws://127.0.0.1:8090/ws");
