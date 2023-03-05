@@ -608,14 +608,16 @@ class coro_http_client {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
-        data_ptr += sizeof(uint16_t);
-      }
-
-      std::string out;
-      if (header->mask) {
-        std::string out;
-        ws.parse_payload(data_ptr, payload_len, out);
-        data_ptr = out.data();
+        payload_len -= 2;
+        if (payload_len > 0) {
+          data_ptr += sizeof(uint16_t);
+          std::string out;
+          if (header->mask) {
+            std::string out;
+            ws.parse_payload(data_ptr, payload_len, out);
+            data_ptr = out.data();
+          }
+        }
       }
 
       data.status = status_type::ok;
@@ -627,6 +629,7 @@ class coro_http_client {
       if (is_close_frame) {
         if (on_ws_close_)
           on_ws_close_(data.resp_body);
+        co_await async_send_ws("close", false, opcode::close);
         close();
         co_return;
       }
