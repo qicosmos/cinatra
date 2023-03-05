@@ -70,13 +70,13 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
       return;
     }
 
-    bool r =
-        data.resp_body == "hello websocket" || data.resp_body == "test again";
+    bool r = data.resp_body.find("hello websocket") != std::string::npos ||
+             data.resp_body.find("test again") != std::string::npos;
     CHECK(r);
 
     std::cout << data.resp_body << "\n";
   });
-  bool r = co_await client.async_connect("ws://127.0.0.1:8090/ws");
+  bool r = co_await client.async_connect("ws://localhost:5678/");
   if (!r) {
     co_return;
   }

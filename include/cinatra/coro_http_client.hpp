@@ -98,7 +98,7 @@ class coro_http_client {
       add_header("Upgrade", "websocket");
       add_header("Connection", "Upgrade");
       if (ws_sec_key_.empty()) {
-        ws_sec_key_ = "I0g8QD1VRui3vHkICDYr8d0o";  // provide a random string.
+        ws_sec_key_ = "s//GYHa/XO7Hd2F2eOGfyA==";  // provide a random string.
       }
       add_header("Sec-WebSocket-Key", ws_sec_key_);
       add_header("Sec-WebSocket-Version", "13");
@@ -609,6 +609,13 @@ class coro_http_client {
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
         data_ptr += sizeof(uint16_t);
+      }
+
+      std::string out;
+      if (header->mask) {
+        std::string out;
+        ws.parse_payload(data_ptr, payload_len, out);
+        data_ptr = out.data();
       }
 
       data.status = status_type::ok;

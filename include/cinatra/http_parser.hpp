@@ -57,7 +57,7 @@ class http_parser {
 
   bool is_websocket() const {
     auto upgrade = this->get_header_value("Upgrade");
-    return upgrade == "WebSocket"sv;
+    return upgrade == "WebSocket"sv || upgrade == "websocket"sv;
   }
 
   bool keep_alive() const {
