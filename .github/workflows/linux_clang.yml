@@ -25,8 +25,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install Dependencies
+        run: |
+          sudo apt-get install openssl
+          sudo apt-get install libssl-dev
+
       - name: Configure CMake
-        run: CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}}
+        run: CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DENABLE_SSL=${{matrix.ssl}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}}
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
