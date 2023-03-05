@@ -180,6 +180,13 @@ enum ws_head_len {
   INVALID_HEADER
 };
 
+enum client_ws_head_len {
+  CLIENT_SHORT_HEADER = 2,
+  CLIENT_MEDIUM_HEADER = 4,
+  CLIENT_LONG_HEADER = 10,
+  CLIENT_INVALID_HEADER
+};
+
 enum ws_send_state {
   SND_CONTINUATION = 1,
   SND_NO_FIN = 2,

@@ -106,7 +106,8 @@ class coro_http_client {
 
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
-
+    async_read_ws().start([](auto &&) {
+    });
     co_return !data.net_err;
   }
 
@@ -137,7 +138,7 @@ class coro_http_client {
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
     on_ws_msg_ = std::move(on_ws_msg);
   }
-  void on_ws_close(std::function<void()> on_ws_close) {
+  void on_ws_close(std::function<void(std::string_view)> on_ws_close) {
     on_ws_close_ = std::move(on_ws_close);
   }
 
@@ -562,6 +563,71 @@ class coro_http_client {
     return resp_headers;
   }
 
+  async_simple::coro::Lazy<void> async_read_ws() {
+    resp_data data{};
+
+    read_buf_.consume(read_buf_.size());
+    size_t header_size = 2;
+
+    websocket ws{};
+    while (true) {
+      if (auto [ec, _] =
+              co_await asio_util::async_read(socket_, read_buf_, header_size);
+          ec) {
+        data.net_err = ec;
+        data.status = status_type::not_found;
+        if (on_ws_msg_)
+          on_ws_msg_(data);
+        co_return;
+      }
+
+      const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      auto ret = ws.parse_header(data_ptr, header_size, false);
+      if (ret == -2) {
+        header_size += ws.left_header_len();
+        continue;
+      }
+      frame_header *header = (frame_header *)data_ptr;
+      bool is_close_frame = header->opcode == opcode::close;
+
+      read_buf_.consume(header_size);
+
+      size_t payload_len = ws.payload_length();
+      if (payload_len > read_buf_.size()) {
+        size_t size_to_read = payload_len - read_buf_.size();
+        if (auto [ec, size] = co_await asio_util::async_read(socket_, read_buf_,
+                                                             size_to_read);
+            ec) {
+          data.net_err = ec;
+          data.status = status_type::not_found;
+          if (on_ws_msg_)
+            on_ws_msg_(data);
+          co_return;
+        }
+      }
+
+      data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      if (is_close_frame) {
+        data_ptr += sizeof(uint16_t);
+      }
+
+      data.status = status_type::ok;
+      data.resp_body = {data_ptr, payload_len};
+
+      read_buf_.consume(read_buf_.size());
+      header_size = 2;
+
+      if (is_close_frame) {
+        if (on_ws_close_)
+          on_ws_close_(data.resp_body);
+        close();
+        co_return;
+      }
+      if (on_ws_msg_)
+        on_ws_msg_(data);
+    }
+  }
+
   void close_socket() {
     std::error_code ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
@@ -582,7 +648,7 @@ class coro_http_client {
   std::map<std::string, multipart_t> form_data_;
 
   std::function<void(resp_data)> on_ws_msg_;
-  std::function<void()> on_ws_close_;
+  std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
 };
 }  // namespace cinatra

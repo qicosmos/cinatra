@@ -60,11 +60,9 @@ TEST_CASE("test for gzip") {
 }
 #endif
 
-async_simple::coro::Lazy<void> test_websocket() {
-  coro_http_client client{};
-  client.on_ws_close([&] {
-    std::cout << "web socket close\n";
-    client.close();
+async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
+  client.on_ws_close([](std::string_view reason) {
+    std::cout << "web socket close " << reason << "\n";
   });
   client.on_ws_msg([](resp_data data) {
     if (data.net_err) {
@@ -81,8 +79,6 @@ async_simple::coro::Lazy<void> test_websocket() {
 
   auto result = co_await client.async_send_ws("hello websocket", false);
   std::cout << result.net_err << "\n";
-
-  std::getchar();
 }
 
 TEST_CASE("test websocket") {
@@ -92,6 +88,7 @@ TEST_CASE("test websocket") {
     std::cout << "listen failed."
               << "\n";
   }
+  server.enable_timeout(false);
   server.set_http_handler<GET, POST>("/ws", [](request &req, response &res) {
     assert(req.get_content_type() == content_type::websocket);
 
@@ -103,7 +100,7 @@ TEST_CASE("test websocket") {
       auto part_data = req.get_part_data();
       // echo
       std::string str = std::string(part_data.data(), part_data.length());
-      req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
+      req.get_conn<cinatra::NonSSL>()->send_ws_string(str);
       std::cout << part_data.data() << std::endl;
     });
 
@@ -122,7 +119,12 @@ TEST_CASE("test websocket") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-  async_simple::coro::syncAwait(test_websocket());
+  coro_http_client client;
+  async_simple::coro::syncAwait(test_websocket(client));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  async_simple::coro::syncAwait(client.async_send_ws("test again"));
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   server.stop();
   server_thread.join();

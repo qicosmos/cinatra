@@ -85,7 +85,7 @@ class websocket {
   Payload length:  7 bits, 7+16 bits, or 7+64 bits
   Masking-key:  0 or 4 bytes
   */
-  int parse_header(const char *buf, size_t size) {
+  int parse_header(const char *buf, size_t size, bool is_server = true) {
     const unsigned char *inp = (const unsigned char *)(buf);
 
     msg_opcode_ = inp[0] & 0x0F;
@@ -103,13 +103,14 @@ class websocket {
     {
       payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
       pos += 2;
-      left_header_len_ = MEDIUM_HEADER - size;
+      left_header_len_ =
+          is_server ? MEDIUM_HEADER : CLIENT_MEDIUM_HEADER - size;
     }
     else if (length_field == 127)  // msglen is 64bit!
     {
       payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
       pos += 8;
-      left_header_len_ = LONG_HEADER - size;
+      left_header_len_ = is_server ? LONG_HEADER : CLIENT_LONG_HEADER - size;
     }
     else {
       return -1;
