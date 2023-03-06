@@ -2,6 +2,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 set(project_name test_cinatra)
 add_executable(${project_name}
         test_cinatra.cpp
+        test_cinatra_websocket.cpp
         main.cpp
         )
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
