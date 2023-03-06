@@ -163,6 +163,24 @@ class coro_http_client {
         async_post(std::move(uri), std::move(content), content_type));
   }
 
+  async_simple::coro::Lazy<resp_data> async_redirect(std::string uri) {
+    req_context<std::string> ctx{};
+    resp_data data{};
+    data = co_await async_request(std::move(uri), http_method::GET,
+                                  std::move(ctx));
+
+    if (!redirect_uri_.empty() && is_redirect_resp()) {
+      data = co_await async_request(std::move(redirect_uri_), http_method::GET,
+                                    std::move(ctx));
+      co_return data;
+    }
+    co_return data;
+  }
+
+  resp_data redirect(std::string uri) {
+    return async_simple::coro::syncAwait(async_redirect(std::move(uri)));
+  }
+
   bool add_str_part(std::string name, std::string content) {
     return form_data_
         .emplace(std::move(name), multipart_t{"", std::move(content)})
@@ -299,6 +317,10 @@ class coro_http_client {
         ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
+
+      bool is_redirect = parser.is_location();
+      if (is_redirect)
+        redirect_uri_ = parser.get_header_value("Location");
 
       size_t content_len = (size_t)parser.body_len();
 
@@ -476,6 +498,11 @@ class coro_http_client {
                                 size_t header_size) {
     // parse header
     const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+
+    char status[4];
+    memcpy(status, data_ptr + 9, 3);
+    response_code_.assign(status);
+
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
     if (parse_ret < 0) {
       return std::make_error_code(std::errc::protocol_error);
@@ -704,6 +731,22 @@ class coro_http_client {
     has_closed_ = true;
   }
 
+  template <typename E>
+  constexpr auto to_underlying(E e) noexcept {
+    return static_cast<std::underlying_type_t<E>>(e);
+  }
+
+  bool is_redirect_resp() {
+    int resp_code = std::stoi(response_code_);
+    if (resp_code == to_underlying(status_type::moved_temporarily) ||
+        resp_code == to_underlying(status_type::moved_permanently) ||
+        resp_code == to_underlying(status_type::not_modified) ||
+        resp_code == to_underlying(status_type::multiple_choices) ||
+        resp_code == to_underlying(status_type::temporary_redirect))
+      return true;
+    return false;
+  }
+
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
   std::unique_ptr<asio::io_context::work> work_;
@@ -728,5 +771,9 @@ class coro_http_client {
   std::function<void(resp_data)> on_ws_msg_;
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
+
+  std::string redirect_uri_;
+
+  std::string response_code_;
 };
 }  // namespace cinatra

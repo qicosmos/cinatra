@@ -80,6 +80,11 @@ class http_parser {
 
   int total_len() const { return header_len_ + body_len_; }
 
+  bool is_location() {
+    auto location = this->get_header_value("Location");
+    return !location.empty();
+  }
+
   std::string_view msg() const { return msg_; }
 
   std::pair<phr_header *, size_t> get_headers() {

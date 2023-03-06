@@ -350,3 +350,11 @@ TEST_CASE("test coro http bearer token auth request") {
   CHECK(!result.net_err);
   CHECK(result.status == status_type::ok);
 }
+
+TEST_CASE("test coro http redirect request") {
+  coro_http_client client{};
+  std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
+  resp_data result = async_simple::coro::syncAwait(client.async_redirect(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == status_type::ok);
+}
