@@ -1,23 +1,23 @@
 #pragma once
+#include <any>
+#include <cassert>
+#include <mutex>
+#include <vector>
+
 #include "define.h"
 #include "http_cache.hpp"
 #include "request.hpp"
 #include "response.hpp"
 #include "use_asio.hpp"
 #include "websocket.hpp"
-#include <any>
-#include <cassert>
-#include <mutex>
-#include <vector>
 
 namespace cinatra {
 using http_handler = std::function<void(request &, response &)>;
 using send_ok_handler = std::function<void()>;
-using send_failed_handler =
-    std::function<void(const std::error_code &)>;
+using send_failed_handler = std::function<void(const std::error_code &)>;
 
 class base_connection {
-public:
+ public:
   virtual ~base_connection() {}
 };
 
@@ -30,15 +30,19 @@ template <typename SocketType>
 class connection : public base_connection,
                    public std::enable_shared_from_this<connection<SocketType>>,
                    private noncopyable {
-public:
+ public:
   explicit connection(
       asio::io_service &io_service, ssl_configure ssl_conf,
       std::size_t max_req_size, long keep_alive_timeout, http_handler &handler,
       std::string &static_dir,
       std::function<bool(request &req, response &res)> *upload_check)
-      : socket_(io_service), MAX_REQ_SIZE_(max_req_size),
-        KEEP_ALIVE_TIMEOUT_(keep_alive_timeout), timer_(io_service),
-        http_handler_(handler), req_(res_), static_dir_(static_dir),
+      : socket_(io_service),
+        MAX_REQ_SIZE_(max_req_size),
+        KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
+        timer_(io_service),
+        http_handler_(handler),
+        req_(res_),
+        static_dir_(static_dir),
         upload_check_(upload_check) {
     if constexpr (is_ssl_) {
       init_ssl_context(std::move(ssl_conf));
@@ -55,7 +59,9 @@ public:
     try {
       asio::ssl::context ssl_context(asio::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
-      ssl_context.set_password_callback([](auto, auto) { return "123456"; });
+      ssl_context.set_password_callback([](auto, auto) {
+        return "123456";
+      });
 
       std::error_code ec;
       if (fs::exists(ssl_conf.cert_file, ec)) {
@@ -67,9 +73,9 @@ public:
                                          asio::ssl::context::pem);
 
       // ssl_context_callback(ssl_context);
-      ssl_stream_ = std::make_unique<
-          asio::ssl::stream<asio::ip::tcp::socket &>>(
-          socket_, ssl_context);
+      ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_, ssl_context);
     } catch (const std::exception &e) {
       std::cout << e.what() << "\n";
     }
@@ -85,10 +91,11 @@ public:
 #else
       static_assert(
           !is_ssl_,
-          "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed
-                                                       // coming in this branch
+          "please add definition CINATRA_ENABLE_SSL");  // guard, not allowed
+                                                        // coming in this branch
 #endif
-    } else {
+    }
+    else {
       return socket_;
     }
   }
@@ -181,15 +188,15 @@ public:
 
   auto &get_tag() { return tag_; }
 
-  bool get_keep_alive(){
-    return keep_alive_;
-  }
+  bool get_keep_alive() { return keep_alive_; }
 
-  template <typename... Fs> void send_ws_string(std::string msg, Fs &&...fs) {
+  template <typename... Fs>
+  void send_ws_string(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
   }
 
-  template <typename... Fs> void send_ws_binary(std::string msg, Fs &&...fs) {
+  template <typename... Fs>
+  void send_ws_binary(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
   }
 
@@ -211,25 +218,26 @@ public:
     if (!is_range) {
       chunked_header_ = http_chunk_header + "Content-Type: " +
                         std::string(mime.data(), mime.length()) + "\r\n\r\n";
-    } else {
+    }
+    else {
       chunked_header_ = http_range_chunk_header + "Content-Type: " +
                         std::string(mime.data(), mime.length()) + "\r\n\r\n";
     }
-    asio::async_write(
-        socket(), asio::buffer(chunked_header_),
-        [self = this->shared_from_this()](const std::error_code &ec,
-                                          std::size_t) {
-          self->handle_chunked_header(ec);
-        });
+    asio::async_write(socket(), asio::buffer(chunked_header_),
+                      [self = this->shared_from_this()](
+                          const std::error_code &ec, std::size_t) {
+                        self->handle_chunked_header(ec);
+                      });
   }
 
   void write_ranges_header(std::string header_str) {
     reset_timer();
-    chunked_header_ = std::move(header_str); // reuse the variable
+    chunked_header_ = std::move(header_str);  // reuse the variable
     asio::async_write(socket(), asio::buffer(chunked_header_),
-                             [this, self = this->shared_from_this()](
-                                 const std::error_code &ec,
-                                 std::size_t) { handle_chunked_header(ec); });
+                      [this, self = this->shared_from_this()](
+                          const std::error_code &ec, std::size_t) {
+                        handle_chunked_header(ec);
+                      });
   }
 
   void write_chunked_data(std::string &&buf, bool eof) {
@@ -244,51 +252,52 @@ public:
 
     auto self = this->shared_from_this();
     asio::async_write(socket(), buffers,
-                             [this, self, buf = std::move(buf), eof](
-                                 const std::error_code &ec, size_t) {
-                               if (ec) {
-                                 return;
-                               }
+                      [this, self, buf = std::move(buf), eof](
+                          const std::error_code &ec, size_t) {
+                        if (ec) {
+                          return;
+                        }
 
-                               if (eof) {
-                                 req_.set_state(data_proc_state::data_end);
-                               } else {
-                                 req_.set_state(data_proc_state::data_continue);
-                               }
+                        if (eof) {
+                          req_.set_state(data_proc_state::data_end);
+                        }
+                        else {
+                          req_.set_state(data_proc_state::data_continue);
+                        }
 
-                               call_back();
-                               if(keep_alive_){
-                                  do_read();
-                               }
-                             });
+                        call_back();
+                        if (keep_alive_) {
+                          do_read();
+                        }
+                      });
   }
 
   void write_ranges_data(std::string &&buf, bool eof) {
     reset_timer();
 
-    chunked_header_ = std::move(buf); // reuse the variable
+    chunked_header_ = std::move(buf);  // reuse the variable
     auto self = this->shared_from_this();
-    asio::async_write(
-        socket(), asio::buffer(chunked_header_),
-        [this, self, eof](const std::error_code &ec, size_t) {
-          if (ec) {
-            return;
-          }
+    asio::async_write(socket(), asio::buffer(chunked_header_),
+                      [this, self, eof](const std::error_code &ec, size_t) {
+                        if (ec) {
+                          return;
+                        }
 
-          if (eof) {
-            req_.set_state(data_proc_state::data_end);
-          } else {
-            req_.set_state(data_proc_state::data_continue);
-          }
+                        if (eof) {
+                          req_.set_state(data_proc_state::data_end);
+                        }
+                        else {
+                          req_.set_state(data_proc_state::data_continue);
+                        }
 
-          call_back();
-        });
+                        call_back();
+                      });
   }
 
   void response_now() { do_write(); }
 
-  void
-  set_multipart_begin(std::function<void(request &, std::string &)> begin) {
+  void set_multipart_begin(
+      std::function<void(request &, std::string &)> begin) {
     multipart_begin_ = std::move(begin);
   }
 
@@ -305,13 +314,14 @@ public:
   //~connection() {
   //	close();
   //}
-private:
+ private:
   void do_read() {
     reset();
 
     if (is_ssl_ && !has_shake_) {
-        async_handshake();
-    } else {
+      async_handshake();
+    }
+    else {
       async_read_some();
     }
   }
@@ -326,22 +336,22 @@ private:
 
   void async_handshake() {
 #ifdef CINATRA_ENABLE_SSL
-    ssl_stream_->async_handshake(asio::ssl::stream_base::server,
-                                 [this, self = this->shared_from_this()](
-                                     const std::error_code &error) {
-                                   if (error) {
-                                     std::cout << error.message() << std::endl;
-                                     return;
-                                   }
+    ssl_stream_->async_handshake(
+        asio::ssl::stream_base::server,
+        [this, self = this->shared_from_this()](const std::error_code &error) {
+          if (error) {
+            std::cout << error.message() << std::endl;
+            return;
+          }
 
-                                   has_shake_ = true;
-                                   async_read_some();
-                                 });
+          has_shake_ = true;
+          async_read_some();
+        });
 #else
     static_assert(
         !is_ssl_,
-        "please add definition CINATRA_ENABLE_SSL"); // guard, not allowed
-                                                     // coming in this branch
+        "please add definition CINATRA_ENABLE_SSL");  // guard, not allowed
+                                                      // coming in this branch
 #endif
   }
 
@@ -354,8 +364,8 @@ private:
 
     socket().async_read_some(
         asio::buffer(req_.buffer(), req_.left_size()),
-        [this, self = this->shared_from_this()](
-            const std::error_code &e, std::size_t bytes_transferred) {
+        [this, self = this->shared_from_this()](const std::error_code &e,
+                                                std::size_t bytes_transferred) {
           if (e) {
             close();
             has_shake_ = false;
@@ -366,8 +376,7 @@ private:
         });
   }
 
-  void handle_read(const std::error_code &e,
-                   std::size_t bytes_transferred) {
+  void handle_read(const std::error_code &e, std::size_t bytes_transferred) {
     if (e) {
       close();
       return;
@@ -392,7 +401,8 @@ private:
     check_keep_alive();
     if (ret == parse_status::not_complete) {
       do_read_head();
-    } else {
+    }
+    else {
       auto total_len = req_.total_len();
       if (bytes_transferred > total_len + 4) {
         std::string_view str(req_.data() + len_ + total_len, 4);
@@ -417,25 +427,26 @@ private:
     req_.set_http_type(type);
     if (req_.has_body()) {
       switch (type) {
-      case cinatra::content_type::string:
-      case cinatra::content_type::websocket:
-      case cinatra::content_type::unknown:
-        handle_string_body(bytes_transferred);
-        break;
-      case cinatra::content_type::multipart:
-        handle_multipart();
-        break;
-      case cinatra::content_type::octet_stream:
-        handle_octet_stream(bytes_transferred);
-        break;
-      case cinatra::content_type::urlencoded:
-        handle_form_urlencoded(bytes_transferred);
-        break;
-      case cinatra::content_type::chunked:
-        handle_chunked(bytes_transferred);
-        break;
+        case cinatra::content_type::string:
+        case cinatra::content_type::websocket:
+        case cinatra::content_type::unknown:
+          handle_string_body(bytes_transferred);
+          break;
+        case cinatra::content_type::multipart:
+          handle_multipart();
+          break;
+        case cinatra::content_type::octet_stream:
+          handle_octet_stream(bytes_transferred);
+          break;
+        case cinatra::content_type::urlencoded:
+          handle_form_urlencoded(bytes_transferred);
+          break;
+        case cinatra::content_type::chunked:
+          handle_chunked(bytes_transferred);
+          break;
       }
-    } else {
+    }
+    else {
       handle_header_request();
     }
   }
@@ -501,12 +512,14 @@ private:
 
       if (len_ == last_transfer_) {
         break;
-      } else if (len_ > last_transfer_) {
+      }
+      else if (len_ > last_transfer_) {
         auto n = len_ - last_transfer_;
         len_ -= total_len;
         if (n < req_.header_len()) {
           head_not_complete = true;
-        } else {
+        }
+        else {
           body_not_complete = true;
           left_body_len = n;
         }
@@ -516,25 +529,24 @@ private:
     }
 
     res_.set_delay(false);
-    asio::async_write(
-        socket(), asio::buffer(rep_str.data(), rep_str.size()),
-        [head_not_complete, body_not_complete, left_body_len, this,
-         self = this->shared_from_this(),
-         &rep_str](const std::error_code &ec, std::size_t) {
-          rep_str.clear();
-          if (head_not_complete) {
-            do_read_head();
-            return;
-          }
+    asio::async_write(socket(), asio::buffer(rep_str.data(), rep_str.size()),
+                      [head_not_complete, body_not_complete, left_body_len,
+                       this, self = this->shared_from_this(),
+                       &rep_str](const std::error_code &ec, std::size_t) {
+                        rep_str.clear();
+                        if (head_not_complete) {
+                          do_read_head();
+                          return;
+                        }
 
-          if (body_not_complete) {
-            req_.set_left_body_size(left_body_len);
-            do_read_body();
-            return;
-          }
+                        if (body_not_complete) {
+                          req_.set_left_body_size(left_body_len);
+                          do_read_body();
+                          return;
+                        }
 
-          handle_write(ec);
-        });
+                        handle_write(ec);
+                      });
   }
 
   void do_read_head() {
@@ -542,8 +554,8 @@ private:
 
     socket().async_read_some(
         asio::buffer(req_.buffer(), req_.left_size()),
-        [this, self = this->shared_from_this()](
-            const std::error_code &e, std::size_t bytes_transferred) {
+        [this, self = this->shared_from_this()](const std::error_code &e,
+                                                std::size_t bytes_transferred) {
           handle_read(e, bytes_transferred);
         });
   }
@@ -554,8 +566,7 @@ private:
     auto self = this->shared_from_this();
     asio::async_read(
         socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const std::error_code &ec,
-                     size_t bytes_transferred) {
+        [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             // LOG_WARN << ec.message();
             close();
@@ -567,7 +578,8 @@ private:
 
           if (req_.body_finished()) {
             handle_body();
-          } else {
+          }
+          else {
             do_read_body();
           }
         });
@@ -592,11 +604,11 @@ private:
     // res_.raw_content());
     //			}
 
-    asio::async_write(
-        socket(), asio::buffer(rep_str.data(), rep_str.size()),
-        [this,
-         self = this->shared_from_this()](const std::error_code &ec,
-                                          std::size_t) { handle_write(ec); });
+    asio::async_write(socket(), asio::buffer(rep_str.data(), rep_str.size()),
+                      [this, self = this->shared_from_this()](
+                          const std::error_code &ec, std::size_t) {
+                        handle_write(ec);
+                      });
   }
 
   void handle_write(const std::error_code &ec) {
@@ -606,9 +618,10 @@ private:
 
     if (keep_alive_) {
       do_read();
-    } else {
+    }
+    else {
       reset();
-      cancel_timer(); // avoid close two times
+      cancel_timer();  // avoid close two times
       shutdown();
       close(false);
     }
@@ -623,8 +636,9 @@ private:
       if (content_type.find("application/x-www-form-urlencoded") !=
           std::string_view::npos) {
         return content_type::urlencoded;
-      } else if (content_type.find("multipart/form-data") !=
-                 std::string_view::npos) {
+      }
+      else if (content_type.find("multipart/form-data") !=
+               std::string_view::npos) {
         auto size = content_type.find("=");
         auto bd = content_type.substr(size + 1, content_type.length() - size);
         if (bd[0] == '"' && bd[bd.length() - 1] == '"') {
@@ -633,10 +647,12 @@ private:
         std::string boundary(bd.data(), bd.length());
         multipart_parser_.set_boundary("\r\n--" + std::move(boundary));
         return content_type::multipart;
-      } else if (content_type.find("application/octet-stream") !=
-                 std::string_view::npos) {
+      }
+      else if (content_type.find("application/octet-stream") !=
+               std::string_view::npos) {
         return content_type::octet_stream;
-      } else {
+      }
+      else {
         return content_type::string;
       }
     }
@@ -677,7 +693,8 @@ private:
 
     if (req_.has_recieved_all()) {
       handle_body();
-    } else {
+    }
+    else {
       req_.expand_size();
       assert(req_.current_size() >= req_.header_len());
       size_t part_size = req_.current_size() - req_.header_len();
@@ -703,7 +720,7 @@ private:
       return;
     }
 
-    req_.set_state(data_proc_state::data_continue); // data
+    req_.set_state(data_proc_state::data_continue);  // data
     size_t part_size = bytes_transferred - req_.header_len();
     if (part_size != 0) {
       req_.reduce_left_body_size(part_size);
@@ -717,7 +734,8 @@ private:
       req_.set_state(data_proc_state::data_end);
       call_back();
       do_write();
-    } else {
+    }
+    else {
       req_.fit_size();
       req_.set_current_size(0);
       do_read_octet_stream_body();
@@ -728,8 +746,7 @@ private:
     auto self = this->shared_from_this();
     asio::async_read(
         socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const std::error_code &ec,
-                     size_t bytes_transferred) {
+        [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
             call_back();
@@ -747,7 +764,8 @@ private:
             req_.set_state(data_proc_state::data_end);
             call_back();
             do_write();
-          } else {
+          }
+          else {
             do_read_octet_stream_body();
           }
         });
@@ -766,7 +784,8 @@ private:
 
     if (req_.has_recieved_all()) {
       handle_url_urlencoded_body();
-    } else {
+    }
+    else {
       req_.expand_size();
       size_t part_size = bytes_transferred - req_.header_len();
       req_.reduce_left_body_size(part_size);
@@ -798,8 +817,7 @@ private:
     auto self = this->shared_from_this();
     asio::async_read(
         socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
-        [this, self](const std::error_code &ec,
-                     size_t bytes_transferred) {
+        [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             // LOG_WARN << ec.message();
             close();
@@ -811,7 +829,8 @@ private:
 
           if (req_.body_finished()) {
             handle_url_urlencoded_body();
-          } else {
+          }
+          else {
             do_read_form_urlencoded();
           }
         });
@@ -858,7 +877,8 @@ private:
                                       ex.what());
           return;
         }
-      } else {
+      }
+      else {
         auto key = req_.get_multipart_field_name("name");
         req_.save_multipart_key_value(std::string(key.data(), key.size()), "");
       }
@@ -869,7 +889,8 @@ private:
       }
       if (is_multi_part_file_) {
         req_.write_upload_data(buf, size);
-      } else {
+      }
+      else {
         auto key = req_.get_multipart_field_name("name");
         req_.update_multipart_value(std::move(key), buf, size);
       }
@@ -942,7 +963,8 @@ private:
     if (req_.has_recieved_all_part()) {
       call_back();
       do_write();
-    } else {
+    }
+    else {
       req_.set_current_size(0);
       do_read_multipart();
     }
@@ -965,7 +987,7 @@ private:
 
           bool has_error = parse_multipart(0, length);
 
-          if (has_error) { // parse error
+          if (has_error) {  // parse error
             keep_alive_ = false;
             response_back(status_type::bad_request, "mutipart error");
             return;
@@ -1004,7 +1026,8 @@ private:
           reset_timer();
           if (!req_.body_finished()) {
             do_read_part_data();
-          } else {
+          }
+          else {
             // response_back(status_type::ok, "multipart finished");
             call_back();
             do_write();
@@ -1014,7 +1037,7 @@ private:
   //-------------multipart----------------------//
 
   void handle_header_request() {
-    if (is_upgrade_) { // websocket
+    if (is_upgrade_) {  // websocket
       req_.set_http_type(content_type::websocket);
       // timer_.cancel();
       ws_.upgrade_to_websocket(req_, res_);
@@ -1050,29 +1073,27 @@ private:
     }
 
     auto self = this->shared_from_this();
-    asio::async_write(
-        socket(), buffers,
-        [this, self](const std::error_code &ec, std::size_t) {
-          if (ec) {
-            close(false);
-            return;
-          }
+    asio::async_write(socket(), buffers,
+                      [this, self](const std::error_code &ec, std::size_t) {
+                        if (ec) {
+                          close(false);
+                          return;
+                        }
 
-          req_.set_state(data_proc_state::data_begin);
-          call_back();
-          req_.call_event(req_.get_state());
+                        req_.set_state(data_proc_state::data_begin);
+                        call_back();
+                        req_.call_event(req_.get_state());
 
-          req_.set_current_size(0);
-          do_read_websocket_head(SHORT_HEADER);
-        });
+                        req_.set_current_size(0);
+                        do_read_websocket_head(SHORT_HEADER);
+                      });
   }
 
   void do_read_websocket_head(size_t length) {
     auto self = this->shared_from_this();
     asio::async_read(
         socket(), asio::buffer(req_.buffer(), length),
-        [this, self](const std::error_code &ec,
-                     size_t bytes_transferred) {
+        [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             cancel_timer();
             req_.call_event(data_proc_state::data_error);
@@ -1098,10 +1119,12 @@ private:
             req_.set_current_size(0);
             req_.fit_size();
             do_read_websocket_data(req_.left_body_len());
-          } else if (ret == parse_status::not_complete) {
+          }
+          else if (ret == parse_status::not_complete) {
             req_.set_current_size(bytes_transferred);
             do_read_websocket_head(ws_.left_header_len());
-          } else {
+          }
+          else {
             req_.call_event(data_proc_state::data_error);
             close();
           }
@@ -1112,8 +1135,7 @@ private:
     auto self = this->shared_from_this();
     asio::async_read(
         socket(), asio::buffer(req_.buffer(), length),
-        [this, self](const std::error_code &ec,
-                     size_t bytes_transferred) {
+        [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             req_.call_event(data_proc_state::data_error);
             close();
@@ -1150,47 +1172,46 @@ private:
 
   bool handle_ws_frame(ws_frame_type ret, std::string &&payload, size_t) {
     switch (ret) {
-    case cinatra::ws_frame_type::WS_ERROR_FRAME:
-      req_.call_event(data_proc_state::data_error);
-      close();
-      return false;
-    case cinatra::ws_frame_type::WS_OPENING_FRAME:
-      break;
-    case cinatra::ws_frame_type::WS_TEXT_FRAME:
-    case cinatra::ws_frame_type::WS_BINARY_FRAME: {
-      reset_timer();
-      std::string temp;
-      if (!last_ws_str_.empty()) {
-        temp = std::move(last_ws_str_);
+      case cinatra::ws_frame_type::WS_ERROR_FRAME:
+        req_.call_event(data_proc_state::data_error);
+        close();
+        return false;
+      case cinatra::ws_frame_type::WS_OPENING_FRAME:
+        break;
+      case cinatra::ws_frame_type::WS_TEXT_FRAME:
+      case cinatra::ws_frame_type::WS_BINARY_FRAME: {
+        reset_timer();
+        std::string temp;
+        if (!last_ws_str_.empty()) {
+          temp = std::move(last_ws_str_);
+        }
+        temp.append(std::move(payload));
+        req_.set_part_data(temp);
+        req_.call_event(data_proc_state::data_continue);
       }
-      temp.append(std::move(payload));
-      req_.set_part_data(temp);
-      req_.call_event(data_proc_state::data_continue);
-    }
-    // on message
-    break;
-    case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
-      close_frame close_frame =
-          ws_.parse_close_payload(payload.data(), payload.length());
-      const int MAX_CLOSE_PAYLOAD = 123;
-      size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, payload.length());
-      req_.set_part_data({close_frame.message, len});
-      req_.call_event(data_proc_state::data_close);
+      // on message
+      break;
+      case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
+        close_frame close_frame =
+            ws_.parse_close_payload(payload.data(), payload.length());
+        size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, payload.length());
+        req_.set_part_data({close_frame.message, len});
+        req_.call_event(data_proc_state::data_close);
 
-      std::string close_msg =
-          ws_.format_close_payload(close_code::normal, close_frame.message, len);
-      auto header = ws_.format_header(close_msg.length(), opcode::close);
-      send_msg(std::move(header), std::move(close_msg));
-    } break;
-    case cinatra::ws_frame_type::WS_PING_FRAME: {
-      auto header = ws_.format_header(payload.length(), opcode::pong);
-      send_msg(std::move(header), std::move(payload));
-    } break;
-    case cinatra::ws_frame_type::WS_PONG_FRAME:
-      ws_ping();
-      break;
-    default:
-      break;
+        std::string close_msg = ws_.format_close_payload(
+            close_code::normal, close_frame.message, len);
+        auto header = ws_.format_header(close_msg.length(), opcode::close);
+        send_msg(std::move(header), std::move(close_msg));
+      } break;
+      case cinatra::ws_frame_type::WS_PING_FRAME: {
+        auto header = ws_.format_header(payload.length(), opcode::pong);
+        send_msg(std::move(header), std::move(payload));
+      } break;
+      case cinatra::ws_frame_type::WS_PONG_FRAME:
+        ws_ping();
+        break;
+      default:
+        break;
     }
 
     return true;
@@ -1226,7 +1247,7 @@ private:
     }
 
     req_.set_state(data_proc_state::data_continue);
-    call_back(); // app set the data
+    call_back();  // app set the data
   }
   //-------------chunked(read chunked not support yet, write chunked is
   // ok)----------------------//
@@ -1276,12 +1297,12 @@ private:
 
   void response_back(status_type status, std::string &&content) {
     res_.set_status_and_content(status, std::move(content));
-    do_write(); // response to client
+    do_write();  // response to client
   }
 
   void response_back(status_type status) {
     res_.set_status_and_content(status);
-    do_write(); // response to client
+    do_write();  // response to client
   }
 
   enum parse_status {
@@ -1295,7 +1316,8 @@ private:
     if (req_.is_http11()) {
       keep_alive_ = req_conn_hdr.empty() ||
                     !iequal(req_conn_hdr.data(), req_conn_hdr.size(), "close");
-    } else {
+    }
+    else {
       keep_alive_ =
           !req_conn_hdr.empty() &&
           iequal(req_conn_hdr.data(), req_conn_hdr.size(), "keep-alive");
@@ -1320,7 +1342,7 @@ private:
   void send_msg(std::string &&data) {
     std::lock_guard<std::mutex> lock(buffers_mtx_);
     buffers_[active_buffer_ ^ 1].push_back(
-        std::move(data)); // move input data to the inactive buffer
+        std::move(data));  // move input data to the inactive buffer
     if (!writing())
       do_write_msg();
   }
@@ -1329,21 +1351,21 @@ private:
     std::lock_guard<std::mutex> lock(buffers_mtx_);
     buffers_[active_buffer_ ^ 1].push_back(std::move(header));
     buffers_[active_buffer_ ^ 1].push_back(
-        std::move(data)); // move input data to the inactive buffer
+        std::move(data));  // move input data to the inactive buffer
     if (!writing())
       do_write_msg();
   }
 
   void do_write_msg() {
-    active_buffer_ ^= 1; // switch buffers
+    active_buffer_ ^= 1;  // switch buffers
     for (const auto &data : buffers_[active_buffer_]) {
       buffer_seq_.push_back(asio::buffer(data));
     }
 
     asio::async_write(
         socket(), buffer_seq_,
-        [this, self = this->shared_from_this()](
-            const std::error_code &ec, size_t) {
+        [this, self = this->shared_from_this()](const std::error_code &ec,
+                                                size_t) {
           std::lock_guard<std::mutex> lock(buffers_mtx_);
           buffers_[active_buffer_].clear();
           buffer_seq_.clear();
@@ -1351,9 +1373,10 @@ private:
           if (!ec) {
             if (send_ok_cb_)
               send_ok_cb_();
-            if (!buffers_[active_buffer_ ^ 1].empty()) // have more work
+            if (!buffers_[active_buffer_ ^ 1].empty())  // have more work
               do_write_msg();
-          } else {
+          }
+          else {
             if (send_failed_cb_)
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
@@ -1365,7 +1388,8 @@ private:
 
   bool writing() const { return !buffer_seq_.empty(); }
 
-  template <typename F1, typename F2> void set_callback(F1 &&f1, F2 &&f2) {
+  template <typename F1, typename F2>
+  void set_callback(F1 &&f1, F2 &&f2) {
     send_ok_cb_ = std::move(f1);
     send_failed_cb_ = std::move(f2);
   }
@@ -1375,8 +1399,8 @@ private:
   //-----------------send message----------------//
   asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      ssl_stream_ = nullptr;
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_ =
+      nullptr;
 #endif
   asio::steady_timer timer_;
   bool enable_timeout_ = true;
@@ -1393,12 +1417,11 @@ private:
 
   // for writing message
   std::mutex buffers_mtx_;
-  std::vector<std::string> buffers_[2]; // a double buffer
+  std::vector<std::string> buffers_[2];  // a double buffer
   std::vector<asio::const_buffer> buffer_seq_;
   int active_buffer_ = 0;
   std::function<void()> send_ok_cb_ = nullptr;
-  std::function<void(const std::error_code &)> send_failed_cb_ =
-      nullptr;
+  std::function<void(const std::error_code &)> send_failed_cb_ = nullptr;
 
   std::string last_ws_str_;
 
@@ -1419,4 +1442,4 @@ inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
 inline constexpr data_proc_state ws_message = data_proc_state::data_continue;
 inline constexpr data_proc_state ws_close = data_proc_state::data_close;
 inline constexpr data_proc_state ws_error = data_proc_state::data_error;
-} // namespace cinatra
+}  // namespace cinatra

@@ -1,0 +1,59 @@
+name: Ubuntu 22.04 (llvm cov)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - cpp20_base
+  pull_request_target:
+    branches:
+      - main
+      - master
+      - cpp20_base
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get install openssl
+          sudo apt-get install libssl-dev
+          sudo apt-get install llvm
+
+      - name: Run Coverage
+        run: |
+          mkdir build && cd build
+          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
+          make -j test_cinatra
+          export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
+          ./tests/test_cinatra
+          llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
+          llvm-cov show ./tests/test_cinatra -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
+          echo "Done!"
+
+      - name: Upload Coverage Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: llvm-cov
+          path: ${{ github.workspace }}/.coverage_llvm_cov
+
+      - name: Create Code Coverage Report
+        working-directory: ${{github.workspace}}/build
+        run: |
+          echo "Code Coverage Report" > tmp.log
+          echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
+          echo "\`\`\`" >> tmp.log
+          llvm-cov report ./tests/test_cinatra -instr-profile=test_cinatra.profdata -ignore-filename-regex="thirdparty|tests" -show-region-summary=false >> tmp.log
+          echo "\`\`\`" >> tmp.log
+
+      - name: Create Comment
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: '${{github.workspace}}/build/tmp.log'

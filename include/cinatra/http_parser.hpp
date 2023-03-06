@@ -1,15 +1,16 @@
 #pragma once
-#include "picohttpparser.h"
 #include <cctype>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "picohttpparser.h"
+
 using namespace std::string_view_literals;
 
 namespace cinatra {
 class http_parser {
-public:
+ public:
   int parse_response(const char *data, size_t size, int last_len) {
     int minor_version;
 
@@ -23,7 +24,8 @@ public:
     auto header_value = this->get_header_value("content-length");
     if (header_value.empty()) {
       body_len_ = 0;
-    } else {
+    }
+    else {
       body_len_ = atoi(header_value.data());
     }
 
@@ -48,12 +50,20 @@ public:
     return false;
   }
 
-    bool is_ranges() const {
-        auto transfer_encoding = this->get_header_value("Accept-Ranges");
-        return !transfer_encoding.empty();
-    }
+  bool is_ranges() const {
+    auto transfer_encoding = this->get_header_value("Accept-Ranges");
+    return !transfer_encoding.empty();
+  }
+
+  bool is_websocket() const {
+    auto upgrade = this->get_header_value("Upgrade");
+    return upgrade == "WebSocket"sv || upgrade == "websocket"sv;
+  }
 
   bool keep_alive() const {
+    if (is_websocket()) {
+      return true;
+    }
     auto val = this->get_header_value("connection");
     if (val.empty() || iequal(val.data(), val.length(), "keep-alive")) {
       return true;
@@ -76,8 +86,8 @@ public:
     return {headers_, num_headers_};
   }
 
-  void
-  set_headers(const std::vector<std::pair<std::string, std::string>> &headers) {
+  void set_headers(
+      const std::vector<std::pair<std::string, std::string>> &headers) {
     num_headers_ = headers.size();
     for (size_t i = 0; i < num_headers_; i++) {
       headers_[i].name = headers[i].first.data();
@@ -87,7 +97,7 @@ public:
     }
   }
 
-private:
+ private:
   std::string_view get_header_value(phr_header *headers, size_t num_headers,
                                     std::string_view key) {
     for (size_t i = 0; i < num_headers; i++) {
@@ -117,4 +127,4 @@ private:
   int body_len_ = 0;
   struct phr_header headers_[100];
 };
-} // namespace cinatra
+}  // namespace cinatra

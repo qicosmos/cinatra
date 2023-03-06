@@ -1,12 +1,13 @@
 #pragma once
-#include "utils.hpp"
 #include <cctype>
 #include <string_view>
+
+#include "utils.hpp"
 
 namespace cinatra {
 // most of this code is from cpprestsdk
 class uri_t {
-public:
+ public:
   std::string_view schema;
   std::string_view uinfo;
   std::string_view host;
@@ -23,22 +24,24 @@ public:
 
   bool is_sub_delim(int c) {
     switch (c) {
-    case '!':
-    case '$':
-    case '&':
-    case '\'':
-    case '(':
-    case ')':
-    case '*':
-    case '+':
-    case ',':
-    case ';':
-    case '=':
-      return true;
-    default:
-      return false;
+      case '!':
+      case '$':
+      case '&':
+      case '\'':
+      case '(':
+      case ')':
+      case '*':
+      case '+':
+      case ',':
+      case ';':
+      case '=':
+        return true;
+      default:
+        return false;
     }
   }
+
+  bool is_websocket() { return schema == "ws"sv || schema == "wss"sv; }
 
   bool is_user_info_character(int c) {
     return is_unreserved(c) || is_sub_delim(c) || c == '%' || c == ':';
@@ -149,7 +152,8 @@ public:
           port_begin++;
 
           port = std::string_view(port_begin, authority_end - port_begin);
-        } else {
+        }
+        else {
           // no port
           host_begin = authority_begin;
           host_end = authority_end;
@@ -229,13 +233,16 @@ public:
     if (is_ssl) {
       if (port.empty()) {
         port_str = "https";
-      } else {
+      }
+      else {
         port_str = std::string(port);
       }
-    } else {
+    }
+    else {
       if (port.empty()) {
         port_str = "http";
-      } else {
+      }
+      else {
         port_str = std::string(port);
       }
     }
@@ -291,10 +298,17 @@ struct context {
 
   context() = default;
   context(const uri_t &u, http_method mthd)
-      : host(u.get_host()), port(u.get_port()), path(u.get_path()),
-        query(u.get_query()), method(mthd) {}
+      : host(u.get_host()),
+        port(u.get_port()),
+        path(u.get_path()),
+        query(u.get_query()),
+        method(mthd) {}
   context(const uri_t &u, http_method mthd, std::string b)
-      : host(u.get_host()), port(u.get_port()), path(u.get_path()),
-        query(u.get_query()), method(mthd), body(std::move(b)) {}
+      : host(u.get_host()),
+        port(u.get_port()),
+        path(u.get_path()),
+        query(u.get_query()),
+        method(mthd),
+        body(std::move(b)) {}
 };
-} // namespace cinatra
+}  // namespace cinatra

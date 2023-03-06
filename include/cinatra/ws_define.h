@@ -29,7 +29,7 @@ inline uint64_t be64toh(uint64_t val) {
 #include <libkern/OSByteOrder.h>
 #define be64toh(x) OSSwapBigToHostInt64(x)
 #define htobe64(x) OSSwapHostToBigInt64(x)
-#endif //_WIN32
+#endif  //_WIN32
 
 enum opcode : std::uint8_t {
   cont = 0,
@@ -155,9 +155,9 @@ enum class ws_frame_type {
   WS_INCOMPLETE_TEXT_FRAME = 0x01,
   WS_INCOMPLETE_BINARY_FRAME = 0x02,
 
-  WS_TEXT_FRAME = 0x81,   // 128 + 1 == WS_FRAGMENT_FIN | WS_OPCODE_TEXT
-  WS_BINARY_FRAME = 0x82, // 128 + 2
-  WS_RSV3_FRAME = 0x83,   // 128 + 3
+  WS_TEXT_FRAME = 0x81,    // 128 + 1 == WS_FRAGMENT_FIN | WS_OPCODE_TEXT
+  WS_BINARY_FRAME = 0x82,  // 128 + 2
+  WS_RSV3_FRAME = 0x83,    // 128 + 3
   WS_RSV4_FRAME = 0x84,
   WS_RSV5_FRAME = 0x85,
   WS_RSV6_FRAME = 0x86,
@@ -180,10 +180,27 @@ enum ws_head_len {
   INVALID_HEADER
 };
 
+enum client_ws_head_len {
+  CLIENT_SHORT_HEADER = 2,
+  CLIENT_MEDIUM_HEADER = 4,
+  CLIENT_LONG_HEADER = 10,
+  CLIENT_INVALID_HEADER
+};
+
 enum ws_send_state {
   SND_CONTINUATION = 1,
   SND_NO_FIN = 2,
   SND_COMPRESSED = 64
+};
+
+struct frame_header {
+  uint8_t opcode : 4;
+  uint8_t rsv3 : 1;
+  uint8_t rsv2 : 1;
+  uint8_t rsv1 : 1;
+  uint8_t fin : 1;
+  uint8_t len : 7;
+  uint8_t mask : 1;
 };
 
 #define WEBSOCKET_FRAME_MAXLEN 16384
@@ -191,7 +208,9 @@ enum ws_send_state {
 #define WEBSOCKET_PAYLOAD_EXTEND_1 126
 #define WEBSOCKET_PAYLOAD_EXTEND_2 127
 
+inline constexpr const size_t MAX_CLOSE_PAYLOAD = 123;
+
 inline constexpr const std::string_view WEBSOCKET = "websocket"sv;
 inline constexpr const std::string_view UPGRADE = "upgrade"sv;
 inline constexpr const char ws_guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-} // namespace cinatra
+}  // namespace cinatra
