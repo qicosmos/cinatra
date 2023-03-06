@@ -190,8 +190,8 @@ class websocket {
     if (data.empty()) {
       int mask = 0;
       header.resize(sizeof(frame_header) + sizeof(mask));
-      std::memcmp(header.data(), &hdr, sizeof(hdr));
-      std::memcmp(header.data() + sizeof(hdr), &mask, sizeof(mask));
+      std::memcpy(header.data(), &hdr, sizeof(hdr));
+      std::memcpy(header.data() + sizeof(hdr), &mask, sizeof(mask));
       return header;
     }
 
@@ -210,12 +210,12 @@ class websocket {
       if (data.size() >= 65536) {
         uint64_t len = data.size();
         str_payload_len.resize(sizeof(uint64_t));
-        std::memcmp(str_payload_len.data(), &len, sizeof(uint64_t));
+        std::memcpy(str_payload_len.data(), &len, sizeof(uint64_t));
       }
       else {
         uint16_t len = data.size();
         str_payload_len.resize(sizeof(uint16_t));
-        std::memcmp(str_payload_len.data(), &len, sizeof(uint16_t));
+        std::memcpy(str_payload_len.data(), &len, sizeof(uint16_t));
       }
       header.append(str_payload_len);
     }
