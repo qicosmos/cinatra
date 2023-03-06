@@ -85,7 +85,7 @@ class websocket {
   Payload length:  7 bits, 7+16 bits, or 7+64 bits
   Masking-key:  0 or 4 bytes
   */
-  int parse_header(const char *buf, size_t size) {
+  int parse_header(const char *buf, size_t size, bool is_server = true) {
     const unsigned char *inp = (const unsigned char *)(buf);
 
     msg_opcode_ = inp[0] & 0x0F;
@@ -103,20 +103,21 @@ class websocket {
     {
       payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
       pos += 2;
-      left_header_len_ = MEDIUM_HEADER - size;
+      left_header_len_ =
+          is_server ? MEDIUM_HEADER : CLIENT_MEDIUM_HEADER - size;
     }
     else if (length_field == 127)  // msglen is 64bit!
     {
       payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
       pos += 8;
-      left_header_len_ = LONG_HEADER - size;
+      left_header_len_ = is_server ? LONG_HEADER : CLIENT_LONG_HEADER - size;
     }
     else {
       return -1;
     }
 
     if (msg_masked) {
-      mask_ = *((unsigned int *)(inp + pos));
+      std::memcpy(mask_, inp + pos, 4);
     }
 
     return left_header_len_ == 0 ? 0 : -2;
@@ -132,13 +133,13 @@ class websocket {
       outbuf.resize((size_t)payload_length_);
     }
 
-    if (mask_ == 0) {
+    if (*(uint32_t *)mask_ == 0) {
       memcpy(&outbuf[0], (void *)(inp), payload_length_);
     }
     else {
       // unmask data:
       for (size_t i = 0; i < payload_length_; i++) {
-        outbuf[i] = inp[i] ^ ((unsigned char *)(&mask_))[i % 4];
+        outbuf[i] = inp[i] ^ mask_[i % 4];
       }
     }
 
@@ -172,6 +173,70 @@ class websocket {
     size_t header_length = encode_header(length, code);
     return {asio::buffer(msg_header_, header_length),
             asio::buffer(src, length)};
+  }
+
+  inline std::string encode_frame(std::string &data, opcode op,
+                                  bool need_mask) {
+    std::string header;
+    /// Base header.
+    frame_header hdr{};
+    hdr.fin = 1;
+    hdr.rsv1 = 0;
+    hdr.rsv2 = 0;
+    hdr.rsv3 = 0;
+    hdr.opcode = static_cast<uint8_t>(op);
+    hdr.mask = 1;
+
+    if (data.empty()) {
+      int mask = 0;
+      header.resize(sizeof(frame_header) + sizeof(mask));
+      std::memcmp(header.data(), &hdr, sizeof(hdr));
+      std::memcmp(header.data() + sizeof(hdr), &mask, sizeof(mask));
+      return header;
+    }
+
+    hdr.len =
+        data.size() < 126 ? data.size() : (data.size() < 65536 ? 126 : 127);
+
+    uint8_t buffer[sizeof(frame_header)];
+    std::memcpy(buffer, (uint8_t *)&hdr, sizeof(hdr));
+    std::string str_hdr_len =
+        std::string((const char *)buffer, sizeof(frame_header));
+    header.append(str_hdr_len);
+
+    /// The payload length may be larger than 126 bytes.
+    std::string str_payload_len;
+    if (data.size() >= 126) {
+      if (data.size() >= 65536) {
+        uint64_t len = data.size();
+        str_payload_len.resize(sizeof(uint64_t));
+        std::memcmp(str_payload_len.data(), &len, sizeof(uint64_t));
+      }
+      else {
+        uint16_t len = data.size();
+        str_payload_len.resize(sizeof(uint16_t));
+        std::memcmp(str_payload_len.data(), &len, sizeof(uint16_t));
+      }
+      header.append(str_payload_len);
+    }
+
+    /// The mask is a 32-bit value.
+    uint8_t mask[4] = {};
+    if (need_mask) {
+      header[1] |= 0x80;
+      uint32_t random = (uint32_t)rand();
+      memcpy(mask, &random, 4);
+    }
+
+    size_t size = header.size();
+    header.resize(size + 4);
+    std::memcpy(header.data() + size, mask, 4);
+
+    for (int i = 0; i < data.size(); ++i) {
+      data[i] ^= mask[i % 4];
+    }
+
+    return header;
   }
 
   close_frame parse_close_payload(char *src, size_t length) {
@@ -248,7 +313,7 @@ class websocket {
   size_t left_payload_length_ = 0;
 
   size_t left_header_len_ = 0;
-  unsigned int mask_ = 0;
+  uint8_t mask_[4] = {};
   unsigned char msg_opcode_ = 0;
   unsigned char msg_fin_ = 0;
 
