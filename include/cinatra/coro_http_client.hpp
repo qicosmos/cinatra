@@ -144,7 +144,17 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
     req_context<std::string> ctx{};
-    return async_request(std::move(uri), http_method::GET, std::move(ctx));
+    resp_data data{};
+    data = co_await async_request(std::move(uri), http_method::GET,
+                                  std::move(ctx));
+    if (enable_follow_redirect_) {
+      if (!redirect_uri_.empty() && is_redirect_resp()) {
+        data = co_await async_request(std::move(redirect_uri_),
+                                      http_method::GET, std::move(ctx));
+        co_return data;
+      }
+    }
+    co_return data;
   }
 
   resp_data get(std::string uri) {
@@ -161,24 +171,6 @@ class coro_http_client {
                  req_content_type content_type) {
     return async_simple::coro::syncAwait(
         async_post(std::move(uri), std::move(content), content_type));
-  }
-
-  async_simple::coro::Lazy<resp_data> async_redirect(std::string uri) {
-    req_context<std::string> ctx{};
-    resp_data data{};
-    data = co_await async_request(std::move(uri), http_method::GET,
-                                  std::move(ctx));
-
-    if (!redirect_uri_.empty() && is_redirect_resp()) {
-      data = co_await async_request(std::move(redirect_uri_), http_method::GET,
-                                    std::move(ctx));
-      co_return data;
-    }
-    co_return data;
-  }
-
-  resp_data redirect(std::string uri) {
-    return async_simple::coro::syncAwait(async_redirect(std::move(uri)));
   }
 
   bool add_str_part(std::string name, std::string content) {
@@ -319,7 +311,7 @@ class coro_http_client {
       }
 
       bool is_redirect = parser.is_location();
-      if (is_redirect)
+      if (is_redirect && enable_follow_redirect_)
         redirect_uri_ = parser.get_header_value("Location");
 
       size_t content_len = (size_t)parser.body_len();
@@ -361,6 +353,15 @@ class coro_http_client {
   inline void set_proxy_bearer_token_auth(const std::string &token) {
     proxy_bearer_token_auth_token_ = token;
   }
+
+  inline void set_follow_location(const std::string &enable_follow_redirect) {
+    if (enable_follow_redirect == "on")
+      enable_follow_redirect_ = true;
+    else
+      enable_follow_redirect_ = false;
+  }
+
+  std::string get_http_status() { return response_code_; }
 
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
@@ -775,6 +776,7 @@ class coro_http_client {
   std::string ws_sec_key_;
 
   std::string redirect_uri_;
+  bool enable_follow_redirect_ = false;
 
   std::string response_code_;
 };
