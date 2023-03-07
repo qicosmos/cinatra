@@ -70,6 +70,42 @@ class coro_http_client {
     });
   }
 
+#ifdef ENABLE_SSL
+  [[nodiscard]] bool init_ssl(const std::string &base_path,
+                              const std::string &cert_file,
+                              const std::string &domain = "localhost") {
+    try {
+      ssl_init_ret_ = false;
+      ELOGV(INFO, "init ssl: %s", domain.data());
+      auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
+      ELOGV(INFO, "current path %s",
+            std::filesystem::current_path().string().data());
+      if (file_exists(full_cert_file)) {
+        ELOGV(INFO, "load %s", full_cert_file.string().data());
+        ssl_ctx_.load_verify_file(full_cert_file);
+      }
+      else {
+        ELOGV(INFO, "no certificate file %s", full_cert_file.string().data());
+        return ssl_init_ret_;
+      }
+
+      ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
+
+      // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
+
+      ssl_ctx_.set_verify_callback(asio::ssl::host_name_verification(domain));
+      ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_, ssl_ctx_);
+      use_ssl_ = true;
+      ssl_init_ret_ = true;
+    } catch (std::exception &e) {
+      ELOGV(ERROR, "init ssl failed: %s", e.what());
+    }
+    return ssl_init_ret_;
+  }
+#endif
+
   bool has_closed() { return has_closed_; }
 
   void add_header(std::string key, std::string val) {
@@ -126,7 +162,7 @@ class coro_http_client {
         asio::buffer(encode_header.data(), encode_header.size()),
         asio::buffer(msg.data(), msg.size())};
 
-    auto [ec, _] = co_await asio_util::async_write(socket_, buffers);
+    auto [ec, _] = co_await async_write(buffers);
     if (ec) {
       data.net_err = ec;
       data.status = status_type::not_found;
@@ -270,20 +306,29 @@ class coro_http_client {
               ec) {
             break;
           }
+#ifdef ENABLE_SSL
+          if (use_ssl_) {
+            assert(ssl_stream_);
+            std::tie(ec) = co_await asio_util::async_handshake(
+                ssl_stream_, asio::ssl::stream_base::client);
+            if (ec) {
+              std::cout << "handle failed\n";
+              break;
+            }
+          }
+#endif
           has_closed_ = false;
         }
 
         std::string write_msg = prepare_request_str(u, method, ctx);
 
-        if (std::tie(ec, size) = co_await asio_util::async_write(
-                socket_, asio::buffer(write_msg));
+        if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
             ec) {
           break;
         }
       }
 
-      if (std::tie(ec, size) = co_await asio_util::async_read_until(
-              socket_, read_buf_, TWO_CRCF);
+      if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
           ec) {
         break;
       }
@@ -310,8 +355,7 @@ class coro_http_client {
 
       // read left part of content.
       size_t size_to_read = content_len - read_buf_.size();
-      if (std::tie(ec, size) =
-              co_await asio_util::async_read(socket_, read_buf_, size_to_read);
+      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
           ec) {
         break;
       }
@@ -532,9 +576,7 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
     while (true) {
-      if (std::tie(ec, size) =
-              co_await asio_util::async_read_until(socket_, read_buf_, CRCF);
-          ec) {
+      if (std::tie(ec, size) = co_await async_read_until(read_buf_, CRCF); ec) {
         break;
       }
 
@@ -562,8 +604,7 @@ class coro_http_client {
       if (additional_size < size_t(chunk_size + 2)) {
         // not a complete chunk, read left chunk data.
         size_t size_to_read = chunk_size + 2 - additional_size;
-        if (std::tie(ec, size) = co_await asio_util::async_read(
-                socket_, read_buf_, size_to_read);
+        if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
             ec) {
           break;
         }
@@ -630,9 +671,7 @@ class coro_http_client {
 
     websocket ws{};
     while (true) {
-      if (auto [ec, _] =
-              co_await asio_util::async_read(socket_, read_buf_, header_size);
-          ec) {
+      if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = status_type::not_found;
         if (on_ws_msg_)
@@ -654,8 +693,7 @@ class coro_http_client {
       size_t payload_len = ws.payload_length();
       if (payload_len > read_buf_.size()) {
         size_t size_to_read = payload_len - read_buf_.size();
-        if (auto [ec, size] = co_await asio_util::async_read(socket_, read_buf_,
-                                                             size_to_read);
+        if (auto [ec, size] = co_await async_read(read_buf_, size_to_read);
             ec) {
           data.net_err = ec;
           data.status = status_type::not_found;
@@ -697,6 +735,54 @@ class coro_http_client {
     }
   }
 
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+      AsioBuffer &buffer, size_t size_to_read) noexcept {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      assert(ssl_stream_);
+      return asio_util::async_read(*ssl_stream_, buffer, size_to_read);
+    }
+    else {
+#endif
+      return asio_util::async_read(socket_, buffer, size_to_read);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
+  }
+
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
+      AsioBuffer &&buffer) {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      assert(ssl_stream_);
+      return asio_util::async_write(*ssl_stream_, buffer);
+    }
+    else {
+#endif
+      return asio_util::async_write(socket_, buffer);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
+  }
+
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+      AsioBuffer &buffer, asio::string_view delim) noexcept {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      assert(ssl_stream_);
+      return asio_util::async_read_until(*ssl_stream_, buffer, delim);
+    }
+    else {
+#endif
+      return asio_util::async_read_until(socket_, buffer, delim);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
+  }
+
   void close_socket() {
     std::error_code ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
@@ -728,5 +814,12 @@ class coro_http_client {
   std::function<void(resp_data)> on_ws_msg_;
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
+
+#ifdef CINATRA_ENABLE_SSL
+  asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
+  bool ssl_init_ret_ = true;
+  bool use_ssl_ = false;
+#endif
 };
 }  // namespace cinatra
