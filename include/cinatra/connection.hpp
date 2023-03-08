@@ -114,6 +114,12 @@ class connection : public base_connection,
     return ss.str();
   }
 
+  using QuitCallback = std::function<void(const uint64_t &conn_id)>;
+  void set_quit_callback(QuitCallback callback, uint64_t conn_id) {
+    quit_callback_ = std::move(callback);
+    conn_id_ = conn_id;
+  }
+
   std::string remote_address() {
     if (has_closed_) {
       return "";
@@ -314,6 +320,12 @@ class connection : public base_connection,
   //~connection() {
   //	close();
   //}
+  void async_close() {
+    asio::dispatch(socket_.get_executor(), [this] {
+      close();
+    });
+  }
+
  private:
   void do_read() {
     reset();
@@ -677,6 +689,10 @@ class connection : public base_connection,
     shutdown();
     std::error_code ec;
     socket_.close(ec);
+    timer_.cancel();
+    if (quit_callback_) {
+      quit_callback_(conn_id_);
+    }
     has_closed_ = true;
     has_shake_ = false;
   }
@@ -1436,6 +1452,9 @@ class connection : public base_connection,
 
   size_t len_ = 0;
   size_t last_transfer_ = 0;
+
+  QuitCallback quit_callback_ = nullptr;
+  uint64_t conn_id_ = 0;
 };
 
 inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
