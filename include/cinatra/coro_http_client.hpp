@@ -70,7 +70,7 @@ class coro_http_client {
     });
   }
 
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
   [[nodiscard]] bool init_ssl(const std::string &base_path,
                               const std::string &cert_file,
                               const std::string &domain = "localhost") {
@@ -306,17 +306,23 @@ class coro_http_client {
               ec) {
             break;
           }
-#ifdef ENABLE_SSL
-          if (use_ssl_) {
-            assert(ssl_stream_);
-            std::tie(ec) = co_await asio_util::async_handshake(
-                ssl_stream_, asio::ssl::stream_base::client);
-            if (ec) {
-              std::cout << "handle failed\n";
-              break;
+
+          if (u.schema == "https"sv || u.schema == "wss"sv) {
+#ifdef CINATRA_ENABLE_SSL
+            if (use_ssl_) {
+              assert(ssl_stream_);
+              std::tie(ec) = co_await asio_util::async_handshake(
+                  ssl_stream_, asio::ssl::stream_base::client);
+              if (ec) {
+                std::cout << "handle failed\n";
+                break;
+              }
             }
-          }
+#else
+            // please open CINATRA_ENABLE_SSL before request https!
+            assert(false);
 #endif
+          }
           has_closed_ = false;
         }
 
@@ -399,14 +405,6 @@ class coro_http_client {
       }
     }
 
-    if (u.schema == "https"sv || u.schema == "wss"sv) {
-#ifdef CINATRA_ENABLE_SSL
-      // upgrade_to_ssl();
-#else
-      // please open CINATRA_ENABLE_SSL before request https!
-      assert(false);
-#endif
-    }
     // construct proxy request uri
     construct_proxy_uri(u);
 
