@@ -1,5 +1,6 @@
-#include "../include/cinatra.hpp"
 #include <iostream>
+
+#include "../include/cinatra.hpp"
 
 using namespace cinatra;
 
@@ -105,7 +106,6 @@ void test_sync_client() {
 }
 
 void test_async_client() {
-
   std::string uri = "http://www.baidu.com";
   std::string uri1 = "http://cn.bing.com";
   std::string uri2 = "https://www.baidu.com";
@@ -113,28 +113,38 @@ void test_async_client() {
 
   {
     auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri, [](response_data data) { print(data); });
+    client->async_get(uri, [](response_data data) {
+      print(data);
+    });
   }
 
   {
     auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri1, [](response_data data) { print(data); });
+    client->async_get(uri1, [](response_data data) {
+      print(data);
+    });
   }
 
   {
     auto client = cinatra::client_factory::instance().new_client();
-    client->async_post(uri, "hello", [](response_data data) { print(data); });
+    client->async_post(uri, "hello", [](response_data data) {
+      print(data);
+    });
   }
 
 #ifdef CINATRA_ENABLE_SSL
   {
     auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri2, [](response_data data) { print(data); });
+    client->async_get(uri2, [](response_data data) {
+      print(data);
+    });
   }
 
   {
     auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri3, [](response_data data) { print(data); });
+    client->async_get(uri3, [](response_data data) {
+      print(data);
+    });
   }
 #endif
 }
@@ -170,7 +180,8 @@ void test_download() {
 
       if (data.empty()) {
         std::cout << "finished all \n";
-      } else {
+      }
+      else {
         std::cout << data.size() << "\n";
       }
     });
@@ -186,7 +197,7 @@ void test_upload() {
       return;
     }
 
-    std::cout << data.resp_body << "\n"; // finished upload
+    std::cout << data.resp_body << "\n";  // finished upload
   });
 }
 
@@ -204,7 +215,7 @@ void test_smtp_client() {
   server.password = "your_email_password";
 
   smtp::email_data data{};
-  data.filepath = ""; // some file as attachment.
+  data.filepath = "";  // some file as attachment.
   data.from_email = "your_email@163.com";
   data.to_email.push_back("to_some_email@163.com");
   // data.to_email.push_back("to_more_email@example.com");
@@ -221,7 +232,7 @@ void test_smtp_client() {
 }
 
 class qps {
-public:
+ public:
   void increase() { counter_.fetch_add(1, std::memory_order_release); }
 
   qps() : counter_(0) {
@@ -240,7 +251,7 @@ public:
     thd_.join();
   }
 
-private:
+ private:
   bool stop_ = false;
   std::thread thd_;
   std::atomic<uint32_t> counter_;
@@ -474,18 +485,15 @@ int main() {
   // cinatra will send you the file, if the file is big file(more than 5M) the
   // file will be downloaded by chunked
 
-  asio::signal_set signals(server.get_io_service());
-
-  signals.add(SIGINT);
-  signals.add(SIGTERM);
-#if defined(SIGQUIT)
-  signals.add(SIGQUIT);
-#endif
-  signals.async_wait([&server](asio::error_code ec, int) {
-    std::cout << "Stop server since receive signal to quit." << std::endl;
-    server.stop();
+  std::thread stop_thd([&] {
+    std::string str;
+    std::cin >> str;
+    if (str == "quit") {
+      server.stop();
+      std::cout << "quit server\n";
+    }
   });
-
   server.run();
+  stop_thd.join();
   return 0;
 }
