@@ -103,15 +103,15 @@ class http_server_ : private noncopyable {
     for (; endpoints != asio::ip::tcp::resolver::iterator(); ++endpoints) {
       asio::ip::tcp::endpoint endpoint = *endpoints;
 
-      auto acceptor = std::make_shared<asio::ip::tcp::acceptor>(
+      acceptor_ = std::make_shared<asio::ip::tcp::acceptor>(
           io_service_pool_.get_io_service());
-      acceptor->open(endpoint.protocol());
-      acceptor->set_option(asio::ip::tcp::acceptor::reuse_address(true));
+      acceptor_->open(endpoint.protocol());
+      acceptor_->set_option(asio::ip::tcp::acceptor::reuse_address(true));
 
       try {
-        acceptor->bind(endpoint);
-        acceptor->listen();
-        start_accept(acceptor);
+        acceptor_->bind(endpoint);
+        acceptor_->listen();
+        start_accept();
         r = true;
       } catch (const std::exception &ex) {
         err_msg = ex.what();
@@ -124,7 +124,30 @@ class http_server_ : private noncopyable {
     return {r, std::move(err_msg)};
   }
 
-  void stop() { io_service_pool_.stop(); }
+  void close_acceptor() {
+    asio::dispatch(acceptor_->get_executor(), [this]() {
+      asio::error_code ec;
+      acceptor_->cancel(ec);
+      acceptor_->close(ec);
+    });
+  }
+
+  void stop() {
+    close_acceptor();
+
+    {
+      std::unique_lock lock(conns_mtx_);
+      for (auto &conn : conns_) {
+        if (!conn.second->has_close()) {
+          conn.second->async_close();
+        }
+      }
+
+      conns_.clear();
+    }
+
+    io_service_pool_.stop();
+  }
 
   void run() {
     init_dir(static_dir_);
@@ -253,16 +276,15 @@ class http_server_ : private noncopyable {
   }
 
  private:
-  void start_accept(std::shared_ptr<asio::ip::tcp::acceptor> const &acceptor) {
+  void start_accept() {
     auto new_conn = std::make_shared<connection<ScoketType>>(
         io_service_pool_.get_io_service(), ssl_conf_, max_req_buf_size_,
         keep_alive_timeout_, http_handler_, upload_dir_,
         upload_check_ ? &upload_check_ : nullptr);
 
-    acceptor->async_accept(
-        new_conn->tcp_socket(),
-        [this, new_conn, acceptor](const std::error_code &e) {
-          if (!acceptor->is_open()) {
+    acceptor_->async_accept(
+        new_conn->tcp_socket(), [this, new_conn](const std::error_code &e) {
+          if (!acceptor_->is_open()) {
             return;
           }
 
@@ -274,6 +296,19 @@ class http_server_ : private noncopyable {
 
             new_conn->enable_response_time(need_response_time_);
             new_conn->enable_timeout(enable_timeout_);
+
+            int64_t conn_id = ++conn_id_;
+            {
+              std::unique_lock lock(conns_mtx_);
+              conns_.emplace(conn_id, new_conn);
+            }
+
+            new_conn->set_quit_callback(
+                [this](const uint64_t &id) {
+                  std::unique_lock lock(conns_mtx_);
+                  conns_.erase(id);
+                },
+                conn_id);
 
             if (check_headers_) {
               new_conn->set_validate(max_header_len_, check_headers_);
@@ -289,10 +324,13 @@ class http_server_ : private noncopyable {
             }
           }
           else {
+            if (e == asio::error::operation_aborted) {
+              return;
+            }
             // LOG_INFO << "server::handle_accept: " << e.message();
           }
 
-          start_accept(acceptor);
+          start_accept();
         });
   }
 
@@ -577,6 +615,11 @@ class http_server_ : private noncopyable {
   transfer_type transfer_type_ = transfer_type::CHUNKED;
   ssl_configure ssl_conf_;
   bool need_response_time_ = false;
+  std::shared_ptr<asio::ip::tcp::acceptor> acceptor_;
+
+  uint64_t conn_id_ = 0;
+  std::unordered_map<uint64_t, std::shared_ptr<connection<ScoketType>>> conns_;
+  std::mutex conns_mtx_;
 };
 
 template <typename T>
