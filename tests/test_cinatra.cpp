@@ -92,17 +92,23 @@ TEST_CASE("test upload file") {
   std::string uri = "http://127.0.0.1:8090/multipart";
   client.add_str_part("hello", "world");
   client.add_str_part("key", "value");
-  //  client.add_file_part("test", "test1.txt");
   resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
   if (result.status == status_type::ok) {
     CHECK(result.resp_body == "multipart finished");
   }
 
-  // could also use this method
-  //    result = async_simple::coro::syncAwait(client.async_upload(uri, "test",
-  //    "test1.txt")); if (result.status == status_type::ok) {
-  //        CHECK(result.resp_body == "multipart finished");
-  //    }
+  std::string test_file_name = "test1.txt";
+  std::ofstream test_file;
+  test_file.open(test_file_name, std::ios::binary);
+  std::vector<char> test_file_data(1024 * 1024, '0');
+  test_file.write(test_file_data.data(), test_file_data.size());
+  result = async_simple::coro::syncAwait(
+      client.async_upload(uri, "test", test_file_name));
+  if (result.status == status_type::ok) {
+    CHECK(result.resp_body == "multipart finished");
+  }
+  test_file.close();
+  std::filesystem::remove(std::filesystem::path(test_file_name));
 
   server.stop();
   server_thread.join();
