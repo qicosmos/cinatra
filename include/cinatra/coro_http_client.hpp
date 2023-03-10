@@ -23,7 +23,7 @@
 namespace cinatra {
 struct resp_data {
   std::error_code net_err;
-  status_type status;
+  int status;
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
   bool eof;
@@ -129,7 +129,7 @@ class coro_http_client {
     auto [ec, _] = co_await asio_util::async_write(socket_, buffers);
     if (ec) {
       data.net_err = ec;
-      data.status = status_type::not_found;
+      data.status = 404;
     }
 
     co_return data;
@@ -147,14 +147,16 @@ class coro_http_client {
     resp_data data{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
-    if (enable_follow_redirect_) {
-      if (!redirect_uri_.empty() && is_redirect_resp()) {
+
+    if (redirect_uri_.empty() || !is_redirect(data)) {
+      co_return data;
+    }
+    else {
+      if (enable_follow_redirect_)
         data = co_await async_request(std::move(redirect_uri_),
                                       http_method::GET, std::move(ctx));
-        co_return data;
-      }
+      co_return data;
     }
-    co_return data;
   }
 
   resp_data get(std::string uri) {
@@ -208,7 +210,7 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     if (form_data_.empty()) {
       std::cout << "no multipart\n";
-      co_return resp_data{{}, status_type::not_found};
+      co_return resp_data{{}, 404};
     }
 
     std::string content = build_multipart_content();
@@ -231,7 +233,7 @@ class coro_http_client {
     std::ofstream file(filename, std::ios::binary | std::ios::app);
     if (!file) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
-      data.status = status_type::not_found;
+      data.status = 404;
       co_return data;
     }
 
@@ -310,8 +312,9 @@ class coro_http_client {
         break;
       }
 
+      redirect_uri_.clear();
       bool is_redirect = parser.is_location();
-      if (is_redirect && enable_follow_redirect_)
+      if (is_redirect)
         redirect_uri_ = parser.get_header_value("Location");
 
       size_t content_len = (size_t)parser.body_len();
@@ -354,14 +357,17 @@ class coro_http_client {
     proxy_bearer_token_auth_token_ = token;
   }
 
-  inline void set_follow_location(const std::string &enable_follow_redirect) {
-    if (enable_follow_redirect == "on")
-      enable_follow_redirect_ = true;
-    else
-      enable_follow_redirect_ = false;
+  inline void enable_auto_location(bool enable_follow_redirect) {
+    enable_follow_redirect_ = enable_follow_redirect;
   }
 
-  std::string get_http_status() { return response_code_; }
+  std::string get_redirect_uri() { return redirect_uri_; }
+
+  bool is_redirect(resp_data &data) {
+    if (data.status > 299 && data.status <= 399)
+      return true;
+    return false;
+  }
 
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
@@ -372,7 +378,7 @@ class coro_http_client {
 
         if (!u.parse_from(new_uri.data())) {
           data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = status_type::not_found;
+          data.status = 404;
           return {false, {}};
         }
       }
@@ -503,7 +509,7 @@ class coro_http_client {
     char status[4] = {0};
     if (data_ptr != nullptr) {
       memcpy(status, data_ptr + 9, 3);
-      response_code_.assign(status);
+      data.status = std::stoi(status);
     }
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
@@ -538,15 +544,13 @@ class coro_http_client {
       read_buf_.consume(content_len);
     }
     data.eof = (read_buf_.size() == 0);
-
-    data.status = status_type::ok;
   }
 
   void handle_result(resp_data &data, std::error_code ec, bool is_keep_alive) {
     if (ec) {
       close_socket();
       data.net_err = ec;
-      data.status = status_type::not_found;
+      data.status = 404;
       std::cout << ec.message() << "\n";
     }
     else {
@@ -584,7 +588,7 @@ class coro_http_client {
       if (chunk_size == 0) {
         // all finished, no more data
         read_buf_.consume(CRCF.size());
-        data.status = status_type::ok;
+        data.status = 200;
         data.eof = true;
         break;
       }
@@ -664,7 +668,7 @@ class coro_http_client {
               co_await asio_util::async_read(socket_, read_buf_, header_size);
           ec) {
         data.net_err = ec;
-        data.status = status_type::not_found;
+        data.status = 404;
         if (on_ws_msg_)
           on_ws_msg_(data);
         co_return;
@@ -688,7 +692,7 @@ class coro_http_client {
                                                              size_to_read);
             ec) {
           data.net_err = ec;
-          data.status = status_type::not_found;
+          data.status = 404;
           if (on_ws_msg_)
             on_ws_msg_(data);
           co_return;
@@ -709,7 +713,7 @@ class coro_http_client {
         }
       }
 
-      data.status = status_type::ok;
+      data.status = 200;
       data.resp_body = {data_ptr, payload_len};
 
       read_buf_.consume(read_buf_.size());
@@ -732,22 +736,6 @@ class coro_http_client {
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
     socket_.close(ec);
     has_closed_ = true;
-  }
-
-  template <typename E>
-  constexpr auto to_underlying(E e) noexcept {
-    return static_cast<std::underlying_type_t<E>>(e);
-  }
-
-  bool is_redirect_resp() {
-    int resp_code = std::stoi(response_code_);
-    if (resp_code == to_underlying(status_type::moved_temporarily) ||
-        resp_code == to_underlying(status_type::moved_permanently) ||
-        resp_code == to_underlying(status_type::not_modified) ||
-        resp_code == to_underlying(status_type::multiple_choices) ||
-        resp_code == to_underlying(status_type::temporary_redirect))
-      return true;
-    return false;
   }
 
   asio::io_context io_ctx_;
@@ -777,7 +765,5 @@ class coro_http_client {
 
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
-
-  std::string response_code_;
 };
 }  // namespace cinatra
