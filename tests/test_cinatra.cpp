@@ -94,7 +94,7 @@ TEST_CASE("test upload file") {
   client.add_str_part("key", "value");
   //  client.add_file_part("test", "test1.txt");
   resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
-  if (result.status == status_type::ok) {
+  if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
 
@@ -117,7 +117,7 @@ TEST_CASE("test multiple ranges download") {
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10,11-16"));
-  if (result.status == status_type::ok && !result.resp_body.empty()) {
+  if (result.status == 200 && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 16);
   }
 }
@@ -131,7 +131,7 @@ TEST_CASE("test ranges download") {
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10"));
-  if (result.status == status_type::ok && !result.resp_body.empty()) {
+  if (result.status == 200 && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 10);
   }
 
@@ -139,7 +139,7 @@ TEST_CASE("test ranges download") {
   std::filesystem::remove(filename, ec);
   result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "10-15"));
-  if (result.status == status_type::ok && !result.resp_body.empty()) {
+  if (result.status == 200 && !result.resp_body.empty()) {
     CHECK(std::filesystem::file_size(filename) == 6);
   }
   // multiple range test
@@ -170,13 +170,13 @@ TEST_CASE("test coro_http_client chunked download") {
   std::filesystem::remove(filename, ec);
   auto r = client.download(uri, filename);
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 
   filename = "test2.jpg";
   std::filesystem::remove(filename, ec);
   r = client.download(uri, filename);
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 
   SUBCASE("test the correctness of the downloaded file") {
     auto self_http_client = client_factory::instance().new_client();
@@ -223,7 +223,7 @@ TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
   auto r = client.get("http://www.purecpp.cn");
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 }
 
 TEST_CASE("test coro_http_client add header and url queries") {
@@ -232,12 +232,12 @@ TEST_CASE("test coro_http_client add header and url queries") {
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 
   auto r2 = async_simple::coro::syncAwait(
       client.async_get("http://www.baidu.com?name='tom'&age=20"));
   CHECK(!r2.net_err);
-  CHECK(r2.status == status_type::ok);
+  CHECK(r2.status == 200);
 }
 
 TEST_CASE("test coro_http_client not exist domain and bad uri") {
@@ -246,7 +246,7 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
     auto r = async_simple::coro::syncAwait(
         client.async_get("http://www.notexistwebsit.com"));
     CHECK(r.net_err);
-    CHECK(r.status != status_type::ok);
+    CHECK(r.status != 200);
     CHECK(client.has_closed());
   }
 
@@ -254,7 +254,7 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
     coro_http_client client{};
     auto r = async_simple::coro::syncAwait(client.async_get("www.purecpp.cn"));
     CHECK(r.net_err);
-    CHECK(r.status != status_type::ok);
+    CHECK(r.status != 200);
     CHECK(client.has_closed());
   }
 }
@@ -264,12 +264,12 @@ TEST_CASE("test coro_http_client async_get") {
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 
   auto r1 =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CHECK(!r.net_err);
-  CHECK(r.status == status_type::ok);
+  CHECK(r.status == 200);
 }
 
 TEST_CASE("test coro_http_client async_connect") {
@@ -329,7 +329,7 @@ TEST_CASE("test coro http proxy request") {
   client.set_proxy("192.168.102.1", 7890);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == status_type::ok);
+  CHECK(result.status == 200);
 }
 #endif
 
@@ -339,7 +339,7 @@ TEST_CASE("test coro http basic auth request") {
   client.set_proxy_basic_auth("user", "pass");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == status_type::ok);
+  CHECK(result.status == 200);
 }
 
 TEST_CASE("test coro http bearer token auth request") {
@@ -348,5 +348,26 @@ TEST_CASE("test coro http bearer token auth request") {
   client.set_proxy_bearer_token_auth("password");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == status_type::ok);
+  CHECK(result.status == 200);
+}
+
+TEST_CASE("test coro http redirect request") {
+  coro_http_client client{};
+  std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == 302);
+
+  if (client.is_redirect(result)) {
+    std::string redirect_uri = client.get_redirect_uri();
+    result = async_simple::coro::syncAwait(client.async_get(redirect_uri));
+    CHECK(!result.net_err);
+    if (result.status != 502)
+      CHECK(result.status == 200);
+  }
+
+  client.enable_auto_location(true);
+  result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == 200);
 }
