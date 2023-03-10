@@ -506,18 +506,13 @@ class coro_http_client {
     // parse header
     const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
 
-    char status[4] = {0};
-    if (data_ptr != nullptr) {
-      memcpy(status, data_ptr + 9, 3);
-      data.status = std::stoi(status);
-    }
-
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
     if (parse_ret < 0) {
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
     data.resp_headers = get_headers(parser);
+    data.status = parser.status();
     return {};
   }
 
