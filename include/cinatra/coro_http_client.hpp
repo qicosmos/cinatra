@@ -412,7 +412,7 @@ class coro_http_client {
       }
       else {
         // all be http
-        proxy_request_uri_ += " http://" + u.get_host() + ":";
+        proxy_request_uri_ += "http://" + u.get_host() + ":";
         proxy_request_uri_ += u.get_port();
       }
       proxy_request_uri_ += u.get_path();

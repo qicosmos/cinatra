@@ -104,7 +104,7 @@ TEST_CASE("test upload file") {
   test_file.write(test_file_data.data(), test_file_data.size());
   result = async_simple::coro::syncAwait(
       client.async_upload(uri, "test", test_file_name));
-  if (result.status == status_type::ok) {
+  if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
   test_file.close();
@@ -376,4 +376,112 @@ TEST_CASE("test coro http redirect request") {
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
   CHECK(result.status == 200);
+}
+
+void simple_proxy_server() {
+  asio::io_context my_context;
+  asio::ip::tcp::acceptor acceptor(my_context);
+  asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("0.0.0.0"),
+                                   17890);
+  asio::error_code ec;
+  acceptor.open(endpoint.protocol());
+  acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+  acceptor.bind(endpoint);
+  acceptor.listen();
+  asio::ip::tcp::socket socket(my_context);
+  acceptor.accept(socket);
+
+  // get request from cinatra
+  std::string request_from_client;
+  asio::read_until(socket, asio::dynamic_buffer(request_from_client), TWO_CRCF);
+
+  // send request to baidu
+  asio::ip::tcp::socket baidu_socket(my_context);
+  asio::ip::tcp::resolver resolver(my_context);
+  size_t n = request_from_client.find("Host:");
+  n += strlen("Host:");
+  std::string host;
+  while (request_from_client[n] != '\r') {
+    if (request_from_client[n] == ' ') {
+      n++;
+    }
+    else {
+      host += request_from_client[n++];
+    }
+  }
+  std::string http_or_https = "http";
+  if (request_from_client.find("https") != std::string::npos) {
+    http_or_https = "https";
+  }
+  asio::ip::tcp::resolver::query query(host, http_or_https);
+  asio::ip::tcp::resolver::iterator iter = resolver.resolve(query);
+  asio::ip::tcp::endpoint baidu_endpoint = *iter++;
+  baidu_socket.connect(baidu_endpoint);
+  asio::write(baidu_socket,
+              asio::buffer(request_from_client, request_from_client.size()));
+
+  // get result from baidu
+  std::string result_from_baidu;
+  n = asio::read_until(baidu_socket, asio::dynamic_buffer(result_from_baidu),
+                       TWO_CRCF, ec);
+  std::string header_from_baidu = result_from_baidu.substr(0, n);
+  result_from_baidu.erase(0, n);
+  std::string content_from_baidu;
+  n = header_from_baidu.find("Content-Length:");
+  if (n != std::string::npos) {
+    n += strlen("Content-Length:");
+    std::string content_length;
+    while (header_from_baidu[n] != '\r') {
+      if (header_from_baidu[n] == ' ') {
+        n++;
+      }
+      else {
+        content_length += header_from_baidu[n++];
+      }
+    }
+    size_t size_to_read = std::stoi(content_length) - result_from_baidu.size();
+    std::string left_content;
+    left_content.resize(size_to_read);
+    asio::read(baidu_socket, asio::buffer(left_content, size_to_read));
+    content_from_baidu = result_from_baidu + left_content;
+  }
+
+  // send result to cinatra
+  size_t size_to_write = header_from_baidu.size() + content_from_baidu.size();
+  asio::write(socket, asio::buffer(header_from_baidu + content_from_baidu,
+                                   size_to_write));
+
+  baidu_socket.shutdown(asio::ip::tcp::socket::shutdown_both);
+  baidu_socket.close();
+  socket.shutdown(asio::ip::tcp::socket::shutdown_both);
+  socket.close();
+  acceptor.close();
+}
+
+TEST_CASE("test proxy with port") {
+  std::thread proxy_server_thread(simple_proxy_server);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com:80";
+  client.set_proxy("0.0.0.0", "17890");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == 200);
+
+  proxy_server_thread.join();
+}
+
+TEST_CASE("test proxy without port") {
+  std::thread proxy_server_thread(simple_proxy_server);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com";
+  client.set_proxy("0.0.0.0", "17890");
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == 200);
+
+  proxy_server_thread.join();
 }
