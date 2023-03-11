@@ -92,9 +92,10 @@ void test_websocket_content(size_t len) {
               << "\n";
   }
 
-  server.set_http_handler<GET>("/", [&len, &server](request &, response &res) mutable {
-    res.set_status_and_content(status_type::ok, std::string(len, '\0'));
-  });
+  server.set_http_handler<GET>(
+      "/", [&len, &server](request &, response &res) mutable {
+        res.set_status_and_content(status_type::ok, std::string(len, '\0'));
+      });
 
   std::promise<void> pr;
   std::future<void> f = pr.get_future();
