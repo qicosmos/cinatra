@@ -222,8 +222,11 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
                                                    std::string name,
                                                    std::string filename) {
-    add_file_part(std::move(name), std::move(filename));
-    return async_upload(std::move(uri));
+    if (!add_file_part(std::move(name), std::move(filename))) {
+      std::cout << "open file failed or duplicate test names\n";
+      co_return resp_data{{}, 404};
+    }
+    co_return co_await async_upload(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
