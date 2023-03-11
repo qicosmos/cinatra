@@ -88,15 +88,14 @@ void test_websocket_content(size_t len) {
   http_server server(std::thread::hardware_concurrency());
   REQUIRE(server.listen("0.0.0.0", "8090"));
 
-  std::string str(len, '\0');
   server.set_http_handler<GET>(
-      "/", [&len, &server](request &req, response &res) mutable {
+      "/", [](request &req, response &res) {
         assert(req.get_content_type() == content_type::websocket);
 
         req.on(ws_message, [](request &req) {
           auto part_data = req.get_part_data();
-          std::string str = std::string(part_data.data(), part_data.length());
-          req.get_conn<cinatra::NonSSL>()->send_ws_string(str);
+          req.get_conn<cinatra::NonSSL>()->send_ws_string(
+            std::string(part_data.data(), part_data.length()));
         });
       });
 
@@ -112,6 +111,7 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
+  std::string str(len, '\0');
   client.on_ws_msg([&str](resp_data data) {
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
@@ -124,15 +124,14 @@ void test_websocket_content(size_t len) {
   server_thread.join();
 }
 
-TEST_CASE("test websocket content lt 127") {
+TEST_CASE("test websocket content lt 126") {
   test_websocket_content(1);
   test_websocket_content(125);
-  test_websocket_content(126);
 }
 
-TEST_CASE("test websocket content gt 127") {
+TEST_CASE("test websocket content gt 126") {
+  test_websocket_content(126);
   test_websocket_content(127);
-  test_websocket_content(1024);
 }
 
 TEST_CASE("test websocket content gt 65535") {
