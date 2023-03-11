@@ -63,7 +63,7 @@ TEST_CASE("test for gzip") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl client") {
   coro_http_client client{};
-  bool ok = client->init_ssl("./", "server.crt");
+  bool ok = client.init_ssl("../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 }
 #endif
