@@ -73,23 +73,24 @@ class coro_http_client {
 #ifdef CINATRA_ENABLE_SSL
   [[nodiscard]] bool init_ssl(const std::string &base_path,
                               const std::string &cert_file,
+                              int verify_mode = asio::ssl::verify_none,
                               const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
-      ELOGV(INFO, "init ssl: %s", domain.data());
+      printf("init ssl: %s", domain.data());
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
-      ELOGV(INFO, "current path %s",
-            std::filesystem::current_path().string().data());
-      if (file_exists(full_cert_file)) {
-        ELOGV(INFO, "load %s", full_cert_file.string().data());
-        ssl_ctx_.load_verify_file(full_cert_file);
+      printf("current path %s",
+             std::filesystem::current_path().string().data());
+      if (std::filesystem::exists(full_cert_file)) {
+        printf("load %s", full_cert_file.string().data());
+        ssl_ctx_.load_verify_file(full_cert_file.string());
       }
       else {
-        ELOGV(INFO, "no certificate file %s", full_cert_file.string().data());
+        printf("no certificate file %s", full_cert_file.string().data());
         return ssl_init_ret_;
       }
 
-      ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
+      ssl_ctx_.set_verify_mode(verify_mode);
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
 
@@ -100,7 +101,7 @@ class coro_http_client {
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
-      ELOGV(ERROR, "init ssl failed: %s", e.what());
+      printf("init ssl failed: %s", e.what());
     }
     return ssl_init_ret_;
   }
@@ -307,14 +308,14 @@ class coro_http_client {
             break;
           }
 
-          if (u.schema == "https"sv || u.schema == "wss"sv) {
+          if (u.is_ssl) {
 #ifdef CINATRA_ENABLE_SSL
             if (use_ssl_) {
               assert(ssl_stream_);
-              std::tie(ec) = co_await asio_util::async_handshake(
+              auto ec = co_await asio_util::async_handshake(
                   ssl_stream_, asio::ssl::stream_base::client);
               if (ec) {
-                std::cout << "handle failed\n";
+                std::cout << "handle failed " << ec.message() << "\n";
                 break;
               }
             }
@@ -402,6 +403,9 @@ class coro_http_client {
           data.status = status_type::not_found;
           return {false, {}};
         }
+      }
+      else {
+        return {false, {}};
       }
     }
 

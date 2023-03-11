@@ -55,6 +55,18 @@ void print(const response_data &result) {
   print(result.ec, result.status, result.resp_body, result.resp_headers.second);
 }
 
+#ifdef CINATRA_ENABLE_SSL
+void test_coro_http_client() {
+  using namespace cinatra;
+  coro_http_client client{};
+  client.init_ssl("../include/cinatra", "server.crt");
+  auto data = client.get("https://www.bing.com");
+  std::cout << data.resp_body << "\n";
+  data = client.get("https://www.bing.com");
+  std::cout << data.resp_body << "\n";
+}
+#endif
+
 void test_sync_client() {
   auto client = cinatra::client_factory::instance().new_client();
   std::string uri = "http://www.baidu.com";
@@ -258,6 +270,7 @@ class qps {
 };
 
 int main() {
+  // test_coro_http_client();
   // test_smtp_client();
   // test_download();
   // test_sync_client();
