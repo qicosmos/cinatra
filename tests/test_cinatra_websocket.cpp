@@ -83,3 +83,49 @@ TEST_CASE("test websocket") {
   server.stop();
   server_thread.join();
 }
+
+void test_websocket_content(size_t len) {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<GET>("/", [&len, &server](request &, response &res) mutable {
+    res.set_status_and_content(status_type::ok, std::string(len, '\0'));
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client{};
+  std::string uri = "ws://localhost:8090";
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+
+  CHECK(result.resp_body == std::string(len, '\0'));
+  CHECK(result.resp_body.size() == len);
+
+  server.stop();
+  server_thread.join();
+}
+
+TEST_CASE("test websocket content lt 127") {
+  test_websocket_content(1);
+  test_websocket_content(126);
+}
+
+TEST_CASE("test websocket content gt 127") {
+  test_websocket_content(127);
+  test_websocket_content(1024);
+}
+
+TEST_CASE("test websocket content gt 65535") {
+  test_websocket_content(65535);
+  test_websocket_content(65536);
+}
