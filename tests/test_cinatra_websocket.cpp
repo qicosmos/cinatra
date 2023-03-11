@@ -129,12 +129,12 @@ TEST_CASE("test websocket content lt 126") {
   test_websocket_content(125);
 }
 
-TEST_CASE("test websocket content gt 126") {
+TEST_CASE("test websocket content ge 126") {
   test_websocket_content(126);
   test_websocket_content(127);
 }
 
-TEST_CASE("test websocket content gt 65535") {
+TEST_CASE("test websocket content ge 65535") {
   test_websocket_content(65535);
   test_websocket_content(65536);
 }
