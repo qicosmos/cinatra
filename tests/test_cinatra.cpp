@@ -176,7 +176,8 @@ TEST_CASE("test ranges download with a bad filename") {
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10,11-16"));
   CHECK(result.status == 404);
-  CHECK(result.net_err == std::make_error_code(std::errc::no_such_file_or_directory));
+  CHECK(result.net_err ==
+        std::make_error_code(std::errc::no_such_file_or_directory));
 }
 
 TEST_CASE("test coro_http_client quit") {
@@ -289,7 +290,8 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
 
   // {
   //   coro_http_client client{};
-  //   auto r = async_simple::coro::syncAwait(client.async_get("http://www.baidu.com/><"));
+  //   auto r = async_simple::coro::syncAwait(
+  //       client.async_get("http://www.baidu.com/><"));
   //   CHECK(r.net_err);
   //   CHECK(r.status != 200);
   //   CHECK(client.has_closed());
