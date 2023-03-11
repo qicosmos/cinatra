@@ -86,15 +86,18 @@ TEST_CASE("test websocket") {
 
 void test_websocket_content(size_t len) {
   http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
+  REQUIRE(server.listen("0.0.0.0", "8090"));
 
+  std::string str(len, '\0');
   server.set_http_handler<GET>(
-      "/", [&len, &server](request &, response &res) mutable {
-        res.set_status_and_content(status_type::ok, std::string(len, '\0'));
+      "/", [&len, &server](request &req, response &res) mutable {
+        assert(req.get_content_type() == content_type::websocket);
+
+        req.on(ws_message, [](request &req) {
+          auto part_data = req.get_part_data();
+          std::string str = std::string(part_data.data(), part_data.length());
+          req.get_conn<cinatra::NonSSL>()->send_ws_string(str);
+        });
       });
 
   std::promise<void> pr;
@@ -105,12 +108,16 @@ void test_websocket_content(size_t len) {
   });
   f.wait();
 
-  coro_http_client client{};
-  std::string uri = "ws://localhost:8090";
-  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  coro_http_client client;
+  REQUIRE(async_simple::coro::syncAwait(client.async_connect("ws://localhost:8090")));
 
-  CHECK(result.resp_body == std::string(len, '\0'));
-  CHECK(result.resp_body.size() == len);
+  client.on_ws_msg([str](resp_data data) {
+    REQUIRE(data.resp_body.size() == str.size());
+    CHECK(data.resp_body == str);
+  });
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
+  std::cout << result.net_err << "\n";
 
   server.stop();
   server_thread.join();
@@ -118,6 +125,7 @@ void test_websocket_content(size_t len) {
 
 TEST_CASE("test websocket content lt 127") {
   test_websocket_content(1);
+  test_websocket_content(125);
   test_websocket_content(126);
 }
 
