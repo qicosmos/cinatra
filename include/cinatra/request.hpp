@@ -1,9 +1,10 @@
 #pragma once
+#include <any>
+#include <fstream>
+
 #include "multipart_reader.hpp"
 #include "picohttpparser.h"
 #include "utils.hpp"
-#include <any>
-#include <fstream>
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
@@ -25,44 +26,49 @@ enum class data_proc_state : int8_t {
 };
 
 class base_connection;
-template <typename T> class connection;
+template <typename T>
+class connection;
 
 using conn_type = std::weak_ptr<base_connection>;
 class request;
 using check_header_cb = std::function<bool(request &)>;
 
 class request {
-public:
+ public:
   using event_call_back = std::function<void(request &)>;
 
   request(response &res) : res_(res) { buf_.resize(1024); }
 
   void set_conn(conn_type conn) { conn_ = std::move(conn); }
 
-  template <typename T> connection<T> *get_raw_conn() {
-    static_assert(std::is_same_v<T, cinatra::SSL> ||
-                      std::is_same_v<T, cinatra::NonSSL>,
-                  "invalid socket type, must be SSL or NonSSL");
+  template <typename T>
+  connection<T> *get_raw_conn() {
+    static_assert(
+        std::is_same_v<T, cinatra::SSL> || std::is_same_v<T, cinatra::NonSSL>,
+        "invalid socket type, must be SSL or NonSSL");
     if (conn_.expired())
       return nullptr;
 
     if (auto base_conn = conn_.lock(); base_conn != nullptr) {
       return (connection<T> *)(base_conn.get());
-    } else {
+    }
+    else {
       return nullptr;
     }
   }
 
-  template <typename T> std::shared_ptr<connection<T>> get_conn() {
-    static_assert(std::is_same_v<T, cinatra::SSL> ||
-                      std::is_same_v<T, cinatra::NonSSL>,
-                  "invalid socket type, must be SSL or NonSSL");
+  template <typename T>
+  std::shared_ptr<connection<T>> get_conn() {
+    static_assert(
+        std::is_same_v<T, cinatra::SSL> || std::is_same_v<T, cinatra::NonSSL>,
+        "invalid socket type, must be SSL or NonSSL");
     if (conn_.expired())
       return nullptr;
 
     if (auto base_conn = conn_.lock(); base_conn != nullptr) {
       return std::static_pointer_cast<connection<T>>(base_conn);
-    } else {
+    }
+    else {
       return nullptr;
     }
   }
@@ -103,7 +109,8 @@ public:
       }
 
       body_len_ = 0;
-    } else {
+    }
+    else {
       set_body_len(atoll(header_value.data()));
     }
 
@@ -173,7 +180,7 @@ public:
   }
 
   bool update_and_expand_size(size_t size) {
-    if (update_size(size)) { // at capacity
+    if (update_size(size)) {  // at capacity
       return true;
     }
 
@@ -238,7 +245,7 @@ public:
   }
 
   void fit_size() {
-    auto total = left_body_len_; // total_len();
+    auto total = left_body_len_;  // total_len();
     auto size = buf_.size();
     if (size == MaxSize)
       return;
@@ -246,7 +253,8 @@ public:
     if (total < MaxSize) {
       if (total > size)
         resize(total);
-    } else {
+    }
+    else {
       resize(MaxSize);
     }
   }
@@ -261,7 +269,8 @@ public:
     if (total < MaxSize) {
       if (total > size)
         resize(total);
-    } else {
+    }
+    else {
       resize(MaxSize);
     }
   }
@@ -369,7 +378,8 @@ public:
   void update_multipart_value(std::string key, const char *buf, size_t size) {
     if (!key.empty()) {
       last_multpart_key_ = key;
-    } else {
+    }
+    else {
       key = last_multpart_key_;
     }
 
@@ -426,8 +436,8 @@ public:
     }
   }
 
-  std::map<std::string_view, std::string_view>
-  parse_query(std::string_view str) {
+  std::map<std::string_view, std::string_view> parse_query(
+      std::string_view str) {
     std::map<std::string_view, std::string_view> query;
     std::string_view key;
     std::string_view val;
@@ -439,7 +449,8 @@ public:
         key = {&str[pos], i - pos};
         key = trim(key);
         pos = i + 1;
-      } else if (c == '&') {
+      }
+      else if (c == '&') {
         val = {&str[pos], i - pos};
         val = trim(val);
         pos = i + 1;
@@ -458,7 +469,8 @@ public:
       val = {&str[pos], length - pos};
       val = trim(val);
       query.emplace(key, val);
-    } else if ((length - pos) == 0) {
+    }
+    else if ((length - pos) == 0) {
       query.emplace(key, "");
     }
 
@@ -495,6 +507,8 @@ public:
 
     return {method_str_.data(), method_str_.length()};
   }
+
+  size_t has_resize() { return method_len_ == 0; }
 
   std::string_view get_url() const {
     if (method_len_ != 0)
@@ -583,12 +597,14 @@ public:
         return {};
 
       return get_val(form_url_map_);
-    } else {
+    }
+    else {
       return get_val(queries_);
     }
   }
 
-  template <typename T> T get_query_value(std::string_view key) {
+  template <typename T>
+  T get_query_value(std::string_view key) {
     static_assert(std::is_arithmetic_v<T>);
     auto val = get_query_value(key);
     if (val.empty()) {
@@ -603,21 +619,24 @@ public:
         throw std::invalid_argument(std::string(val) + ": is not an integer");
       }
       return r;
-    } else if constexpr (std::is_same_v<T, int64_t> ||
-                         std::is_same_v<T, uint64_t>) {
+    }
+    else if constexpr (std::is_same_v<T, int64_t> ||
+                       std::is_same_v<T, uint64_t>) {
       auto r = std::atoll(val.data());
       if (val[0] != '0' && r == 0) {
         throw std::invalid_argument(std::string(val) + ": is not an integer");
       }
       return r;
-    } else if constexpr (std::is_floating_point_v<T>) {
+    }
+    else if constexpr (std::is_floating_point_v<T>) {
       char *end;
       auto f = strtof(val.data(), &end);
       if (val.back() != *(end - 1)) {
         throw std::invalid_argument(std::string(val) + ": is not a float");
       }
       return f;
-    } else {
+    }
+    else {
       throw std::invalid_argument("not support the value type");
     }
   }
@@ -771,7 +790,8 @@ public:
     aspect_data_.insert({key, data});
   }
 
-  template <typename T> T get_aspect_data(const std::string &&key) {
+  template <typename T>
+  T get_aspect_data(const std::string &&key) {
     return std::any_cast<T>(aspect_data_[key]);
   }
 
@@ -782,7 +802,7 @@ public:
     check_headers_ = std::move(check_headers);
   }
 
-private:
+ private:
   void resize_double() {
     size_t size = buf_.size();
     resize(2 * size);
@@ -822,7 +842,8 @@ private:
     auto encoding = get_header_value("content-encoding");
     if (encoding.empty()) {
       has_gzip_ = false;
-    } else {
+    }
+    else {
       auto it = encoding.find("gzip");
       has_gzip_ = (it != std::string_view::npos);
     }
@@ -852,7 +873,7 @@ private:
   size_t cur_size_ = 0;
   size_t left_body_len_ = 0;
 
-  size_t last_len_ = 0; // for pipeline, last request buffer position
+  size_t last_len_ = 0;  // for pipeline, last request buffer position
 
   std::map<std::string_view, std::string_view> queries_;
   std::map<std::string_view, std::string_view> form_url_map_;
@@ -882,4 +903,4 @@ private:
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
 };
-} // namespace cinatra
+}  // namespace cinatra

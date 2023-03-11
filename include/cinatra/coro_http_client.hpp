@@ -23,7 +23,7 @@
 namespace cinatra {
 struct resp_data {
   std::error_code net_err;
-  status_type status;
+  int status;
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
   bool eof;
@@ -166,7 +166,7 @@ class coro_http_client {
     auto [ec, _] = co_await async_write(buffers);
     if (ec) {
       data.net_err = ec;
-      data.status = status_type::not_found;
+      data.status = 404;
     }
 
     co_return data;
@@ -181,7 +181,19 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
     req_context<std::string> ctx{};
-    return async_request(std::move(uri), http_method::GET, std::move(ctx));
+    resp_data data{};
+    data = co_await async_request(std::move(uri), http_method::GET,
+                                  std::move(ctx));
+
+    if (redirect_uri_.empty() || !is_redirect(data)) {
+      co_return data;
+    }
+    else {
+      if (enable_follow_redirect_)
+        data = co_await async_request(std::move(redirect_uri_),
+                                      http_method::GET, std::move(ctx));
+      co_return data;
+    }
   }
 
   resp_data get(std::string uri) {
@@ -235,7 +247,7 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     if (form_data_.empty()) {
       std::cout << "no multipart\n";
-      co_return resp_data{{}, status_type::not_found};
+      co_return resp_data{{}, 404};
     }
 
     std::string content = build_multipart_content();
@@ -258,7 +270,7 @@ class coro_http_client {
     std::ofstream file(filename, std::ios::binary | std::ios::app);
     if (!file) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
-      data.status = status_type::not_found;
+      data.status = 404;
       co_return data;
     }
 
@@ -352,6 +364,11 @@ class coro_http_client {
         break;
       }
 
+      redirect_uri_.clear();
+      bool is_redirect = parser.is_location();
+      if (is_redirect)
+        redirect_uri_ = parser.get_header_value("Location");
+
       size_t content_len = (size_t)parser.body_len();
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
@@ -391,6 +408,18 @@ class coro_http_client {
     proxy_bearer_token_auth_token_ = token;
   }
 
+  inline void enable_auto_location(bool enable_follow_redirect) {
+    enable_follow_redirect_ = enable_follow_redirect;
+  }
+
+  std::string get_redirect_uri() { return redirect_uri_; }
+
+  bool is_redirect(resp_data &data) {
+    if (data.status > 299 && data.status <= 399)
+      return true;
+    return false;
+  }
+
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
@@ -400,7 +429,7 @@ class coro_http_client {
 
         if (!u.parse_from(new_uri.data())) {
           data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = status_type::not_found;
+          data.status = 404;
           return {false, {}};
         }
       }
@@ -522,12 +551,14 @@ class coro_http_client {
                                 size_t header_size) {
     // parse header
     const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
     if (parse_ret < 0) {
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
     data.resp_headers = get_headers(parser);
+    data.status = parser.status();
     return {};
   }
 
@@ -554,15 +585,13 @@ class coro_http_client {
       read_buf_.consume(content_len);
     }
     data.eof = (read_buf_.size() == 0);
-
-    data.status = status_type::ok;
   }
 
   void handle_result(resp_data &data, std::error_code ec, bool is_keep_alive) {
     if (ec) {
       close_socket();
       data.net_err = ec;
-      data.status = status_type::not_found;
+      data.status = 404;
       std::cout << ec.message() << "\n";
     }
     else {
@@ -598,7 +627,7 @@ class coro_http_client {
       if (chunk_size == 0) {
         // all finished, no more data
         read_buf_.consume(CRCF.size());
-        data.status = status_type::ok;
+        data.status = 200;
         data.eof = true;
         break;
       }
@@ -675,7 +704,7 @@ class coro_http_client {
     while (true) {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
-        data.status = status_type::not_found;
+        data.status = 404;
         if (on_ws_msg_)
           on_ws_msg_(data);
         co_return;
@@ -698,7 +727,7 @@ class coro_http_client {
         if (auto [ec, size] = co_await async_read(read_buf_, size_to_read);
             ec) {
           data.net_err = ec;
-          data.status = status_type::not_found;
+          data.status = 404;
           if (on_ws_msg_)
             on_ws_msg_(data);
           co_return;
@@ -719,7 +748,7 @@ class coro_http_client {
         }
       }
 
-      data.status = status_type::ok;
+      data.status = 200;
       data.resp_body = {data_ptr, payload_len};
 
       read_buf_.consume(read_buf_.size());
@@ -823,5 +852,7 @@ class coro_http_client {
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
 #endif
+  std::string redirect_uri_;
+  bool enable_follow_redirect_ = false;
 };
 }  // namespace cinatra
