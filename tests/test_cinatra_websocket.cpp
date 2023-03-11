@@ -109,9 +109,10 @@ void test_websocket_content(size_t len) {
   f.wait();
 
   coro_http_client client;
-  REQUIRE(async_simple::coro::syncAwait(client.async_connect("ws://localhost:8090")));
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("ws://localhost:8090")));
 
-  client.on_ws_msg([str](resp_data data) {
+  client.on_ws_msg([&str](resp_data data) {
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
   });
