@@ -88,16 +88,15 @@ void test_websocket_content(size_t len) {
   http_server server(std::thread::hardware_concurrency());
   REQUIRE(server.listen("0.0.0.0", "8090"));
 
-  server.set_http_handler<GET>(
-      "/", [](request &req, response &res) {
-        assert(req.get_content_type() == content_type::websocket);
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
 
-        req.on(ws_message, [](request &req) {
-          auto part_data = req.get_part_data();
-          req.get_conn<cinatra::NonSSL>()->send_ws_string(
-            std::string(part_data.data(), part_data.length()));
-        });
-      });
+    req.on(ws_message, [](request &req) {
+      auto part_data = req.get_part_data();
+      req.get_conn<cinatra::NonSSL>()->send_ws_string(
+          std::string(part_data.data(), part_data.length()));
+    });
+  });
 
   std::promise<void> pr;
   std::future<void> f = pr.get_future();
