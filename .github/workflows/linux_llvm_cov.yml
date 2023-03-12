@@ -1,11 +1,6 @@
 name: Ubuntu 22.04 (llvm cov)
 
 on:
-  push:
-    branches:
-      - main
-      - master
-      - cpp20_base
   pull_request_target:
     branches:
       - main
@@ -29,7 +24,7 @@ jobs:
       - name: Run Coverage
         run: |
           mkdir build && cd build
-          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DENABLE_SSL=ON
+          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
           make -j test_cinatra
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           ./tests/test_cinatra

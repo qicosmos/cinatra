@@ -29,7 +29,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Configure CMake
-        run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}/build
+        run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DCINATRA_ENABLE_SSL=${{matrix.ssl}} -G Ninja -B ${{github.workspace}}/build
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{ matrix.mode }}
