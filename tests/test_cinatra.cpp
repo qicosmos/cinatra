@@ -63,8 +63,10 @@ TEST_CASE("test for gzip") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl client") {
   coro_http_client client{};
-  bool ok = client.init_ssl("../include/cinatra", "server.crt");
+  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+  auto result = client.get("https://www.bing.com");
+  CHECK(result.status==302);
 }
 #endif
 

@@ -10,17 +10,20 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
         ${cinatra_SOURCE_DIR}/thirdparty/async_simple
 )
+
+add_test(NAME ${project_name} COMMAND test_cinatra)
+
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
     message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
-    target_compile_definitions(${project_name} INTERFACE CINATRA_ENABLE_SSL)
-    target_link_libraries(${project_name} INTERFACE OpenSSL::SSL OpenSSL::Crypto)
+    add_definitions(-DCINATRA_ENABLE_SSL)
+    target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
-add_test(NAME ${project_name} COMMAND test_cinatra)
+
 if (ENABLE_GZIP)
-	target_link_libraries(${project_name} PRIVATE ${ZLIB_LIBRARIES} doctest)
+	target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
 else()
-        target_link_libraries(${project_name} PRIVATE doctest)
+        target_link_libraries(test_cinatra doctest)
 endif()
 
