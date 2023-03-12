@@ -99,7 +99,7 @@ class uri_t {
       }
       auto scheme_end = p;
       schema = std::string_view(scheme_begin, scheme_end - scheme_begin);
-      is_ssl = (schema == "https");
+      is_ssl = (schema == "https" || schema == "wss");
 
       // skip over the colon
       p++;

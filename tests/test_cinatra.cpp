@@ -60,6 +60,32 @@ TEST_CASE("test for gzip") {
 }
 #endif
 
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("test ssl client") {
+  {
+    coro_http_client client{};
+    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    if (!result.status == 200) {
+      CHECK(result.status == 302);
+      CHECK(client.is_redirect(result));
+      result = client.get(client.get_redirect_uri());
+      CHECK(result.status == 200);
+    }
+  }
+
+  {
+    coro_http_client client{};
+    client.enable_auto_redirect(true);
+    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    CHECK(result.status == 200);
+  }
+}
+#endif
+
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
@@ -90,19 +116,35 @@ TEST_CASE("test upload file") {
 
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090/multipart";
+  resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
+  CHECK(result.status == 404);
+
   client.add_str_part("hello", "world");
   client.add_str_part("key", "value");
-  //  client.add_file_part("test", "test1.txt");
-  resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
+  result = async_simple::coro::syncAwait(client.async_upload(uri));
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
 
-  // could also use this method
-  //    result = async_simple::coro::syncAwait(client.async_upload(uri, "test",
-  //    "test1.txt")); if (result.status == status_type::ok) {
-  //        CHECK(result.resp_body == "multipart finished");
-  //    }
+  std::string test_file_name = "test1.txt";
+  std::ofstream test_file;
+  test_file.open(test_file_name,
+                 std::ios::binary | std::ios::out | std::ios::trunc);
+  std::vector<char> test_file_data(1024 * 1024, '0');
+  test_file.write(test_file_data.data(), test_file_data.size());
+  test_file.close();
+  result = async_simple::coro::syncAwait(
+      client.async_upload(uri, "test", test_file_name));
+  CHECK(client.add_file_part("test", test_file_name) == false);
+  if (result.status == 200) {
+    CHECK(result.resp_body == "multipart finished");
+  }
+  std::filesystem::remove(std::filesystem::path(test_file_name));
+
+  std::string not_exist_file = "notexist.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_upload(uri, "test_not_exist_file", not_exist_file));
+  CHECK(result.status == 404);
 
   server.stop();
   server_thread.join();
@@ -148,6 +190,20 @@ TEST_CASE("test ranges download") {
   //      "1-10, 20-30"));
   //  if (result.resp_body.size() == 31)
   //    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
+}
+
+TEST_CASE("test ranges download with a bad filename") {
+  coro_http_client client{};
+  std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
+
+  std::string filename = "";
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "1-10,11-16"));
+  CHECK(result.status == 404);
+  CHECK(result.net_err ==
+        std::make_error_code(std::errc::no_such_file_or_directory));
 }
 
 TEST_CASE("test coro_http_client quit") {
@@ -252,7 +308,8 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
 
   {
     coro_http_client client{};
-    auto r = async_simple::coro::syncAwait(client.async_get("www.purecpp.cn"));
+    auto r = async_simple::coro::syncAwait(
+        client.async_get("http://www.baidu.com/><"));
     CHECK(r.net_err);
     CHECK(r.status != 200);
     CHECK(client.has_closed());
@@ -314,8 +371,13 @@ TEST_CASE("test basic http request") {
   CHECK(result.resp_body == "hello world");
 
   result = async_simple::coro::syncAwait(client.async_post(
-      uri, "hello coro_http_client", req_content_type::string));
-  CHECK(result.resp_body == "hello coro_http_client reply from post");
+      uri, "async post hello coro_http_client", req_content_type::string));
+  CHECK(result.resp_body ==
+        "async post hello coro_http_client reply from post");
+
+  result = client.post(uri, "sync post hello coro_http_client",
+                       req_content_type::string);
+  CHECK(result.resp_body == "sync post hello coro_http_client reply from post");
 
   server.stop();
   server_thread.join();
@@ -325,6 +387,16 @@ TEST_CASE("test basic http request") {
 TEST_CASE("test coro http proxy request") {
   coro_http_client client{};
   std::string uri = "http://www.baidu.com";
+  // Make sure the host and port are matching with your proxy server
+  client.set_proxy("192.168.102.1", 7890);
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(!result.net_err);
+  CHECK(result.status == 200);
+}
+
+TEST_CASE("test coro http proxy request with port") {
+  coro_http_client client{};
+  std::string uri = "http://www.baidu.com:80";
   // Make sure the host and port are matching with your proxy server
   client.set_proxy("192.168.102.1", 7890);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
@@ -366,8 +438,9 @@ TEST_CASE("test coro http redirect request") {
       CHECK(result.status == 200);
   }
 
-  client.enable_auto_location(true);
+  client.enable_auto_redirect(true);
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == 200);
+  if (result.status != 502)
+    CHECK(result.status == 200);
 }

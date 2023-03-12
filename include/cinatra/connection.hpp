@@ -1012,7 +1012,8 @@ class connection : public base_connection,
           reset_timer();
           if (req_.body_finished()) {
             call_back();
-            do_write();
+            if (!res_.need_delay())
+              do_write();
             return;
           }
 
