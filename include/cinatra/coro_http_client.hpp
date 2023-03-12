@@ -376,15 +376,9 @@ class coro_http_client {
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
-      if (!u.schema.empty()) {
-        auto new_uri = url_encode(uri);
-
-        if (!u.parse_from(new_uri.data())) {
-          data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = 404;
-          return {false, {}};
-        }
-      }
+      data.net_err = std::make_error_code(std::errc::protocol_error);
+      data.status = 404;
+      return {false, {}};
     }
 
     if (u.schema == "https"sv || u.schema == "wss"sv) {
