@@ -259,8 +259,11 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
                                                    std::string name,
                                                    std::string filename) {
-    add_file_part(std::move(name), std::move(filename));
-    return async_upload(std::move(uri));
+    if (!add_file_part(std::move(name), std::move(filename))) {
+      std::cout << "open file failed or duplicate test names\n";
+      co_return resp_data{{}, 404};
+    }
+    co_return co_await async_upload(std::move(uri));
   }
 
   async_simple::coro::Lazy<resp_data> async_download(std::string uri,
@@ -424,18 +427,9 @@ class coro_http_client {
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
-      if (!u.schema.empty()) {
-        auto new_uri = url_encode(uri);
-
-        if (!u.parse_from(new_uri.data())) {
-          data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = 404;
-          return {false, {}};
-        }
-      }
-      else {
-        return {false, {}};
-      }
+      data.net_err = std::make_error_code(std::errc::protocol_error);
+      data.status = 404;
+      return {false, {}};
     }
 
     // construct proxy request uri
@@ -458,7 +452,7 @@ class coro_http_client {
       }
       else {
         // all be http
-        proxy_request_uri_ += " http://" + u.get_host() + ":";
+        proxy_request_uri_ += "http://" + u.get_host() + ":";
         proxy_request_uri_ += u.get_port();
       }
       proxy_request_uri_ += u.get_path();
