@@ -310,44 +310,44 @@ class coro_http_client {
     bool is_keep_alive = false;
 
     do {
-      if (auto [ok, u] = handle_uri(data, uri); !ok) {
+      auto [ok, u] = handle_uri(data, uri);
+      if (!ok) {
         break;
       }
-      else {
-        if (has_closed_) {
-          std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
-          std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-          if (ec = co_await asio_util::async_connect(io_ctx_, socket_, host,
-                                                     port);
-              ec) {
-            break;
-          }
 
-          if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-            if (use_ssl_) {
-              assert(ssl_stream_);
-              auto ec = co_await asio_util::async_handshake(
-                  ssl_stream_, asio::ssl::stream_base::client);
-              if (ec) {
-                std::cout << "handle failed " << ec.message() << "\n";
-                break;
-              }
-            }
-#else
-            // please open CINATRA_ENABLE_SSL before request https!
-            assert(false);
-#endif
-          }
-          has_closed_ = false;
-        }
-
-        std::string write_msg = prepare_request_str(u, method, ctx);
-
-        if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
+      if (has_closed_) {
+        std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
+        std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
+        if (ec =
+                co_await asio_util::async_connect(io_ctx_, socket_, host, port);
             ec) {
           break;
         }
+
+        if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+          if (use_ssl_) {
+            assert(ssl_stream_);
+            auto ec = co_await asio_util::async_handshake(
+                ssl_stream_, asio::ssl::stream_base::client);
+            if (ec) {
+              std::cout << "handle failed " << ec.message() << "\n";
+              break;
+            }
+          }
+#else
+          // please open CINATRA_ENABLE_SSL before request https!
+          assert(false);
+#endif
+        }
+        has_closed_ = false;
+      }
+
+      std::string write_msg = prepare_request_str(u, method, ctx);
+
+      if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
+          ec) {
+        break;
       }
 
       if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
