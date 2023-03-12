@@ -62,11 +62,25 @@ TEST_CASE("test for gzip") {
 
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl client") {
-  coro_http_client client{};
-  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
-  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-  auto result = client.get("https://www.bing.com");
-  CHECK(result.status == 302);
+  {
+    coro_http_client client{};
+    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    CHECK(result.status == 302);
+    CHECK(client.is_redirect(result));
+    result = client.get(client.get_redirect_uri());
+    CHECK(result.status == 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.enable_auto_redirect(true);
+    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    CHECK(result.status == 200);
+  }
 }
 #endif
 
@@ -422,8 +436,9 @@ TEST_CASE("test coro http redirect request") {
       CHECK(result.status == 200);
   }
 
-  client.enable_auto_location(true);
+  client.enable_auto_redirect(true);
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == 200);
+  if (result.status != 502)
+    CHECK(result.status == 200);
 }

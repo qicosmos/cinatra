@@ -411,7 +411,7 @@ class coro_http_client {
     proxy_bearer_token_auth_token_ = token;
   }
 
-  inline void enable_auto_location(bool enable_follow_redirect) {
+  inline void enable_auto_redirect(bool enable_follow_redirect) {
     enable_follow_redirect_ = enable_follow_redirect;
   }
 
