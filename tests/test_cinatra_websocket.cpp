@@ -44,7 +44,7 @@ TEST_CASE("test wss client") {
     CHECK(data.resp_body == "hello");
   });
 
-  auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));  
+  auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
   std::cout << result.net_err << "\n";
 
   server.stop();
