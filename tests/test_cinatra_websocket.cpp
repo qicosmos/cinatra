@@ -10,6 +10,48 @@
 
 using namespace cinatra;
 
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("test wss client") {
+  http_ssl_server server(std::thread::hardware_concurrency());
+  server.set_ssl_conf({"server.crt", "server.key"});
+  REQUIRE(server.listen("0.0.0.0", "9001"));
+
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
+
+    req.on(ws_message, [](request &req) {
+      auto part_data = req.get_part_data();
+      req.get_conn<cinatra::SSL>()->send_ws_string(
+          std::string(part_data.data(), part_data.length()));
+    });
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("wss://localhost:9001")));
+
+  client.on_ws_msg([](resp_data data) {
+    CHECK(data.resp_body == "hello");
+  });
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));  
+  std::cout << result.net_err << "\n";
+
+  server.stop();
+  server_thread.join();
+}
+#endif
+
 async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
