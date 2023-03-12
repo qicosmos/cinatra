@@ -60,6 +60,16 @@ TEST_CASE("test for gzip") {
 }
 #endif
 
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("test ssl client") {
+  coro_http_client client{};
+  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+  auto result = client.get("https://www.bing.com");
+  CHECK(result.status == 302);
+}
+#endif
+
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
