@@ -306,7 +306,6 @@ class coro_http_client {
 
     std::error_code ec{};
     size_t size = 0;
-    http_parser parser;
     bool is_keep_alive = false;
 
     do {
@@ -350,49 +349,9 @@ class coro_http_client {
         break;
       }
 
-      if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
-          ec) {
-        break;
-      }
-
-      if (ec = handle_header(data, parser, size); ec) {
-        break;
-      }
-
-      is_keep_alive = parser.keep_alive();
-      bool is_ranges = parser.is_ranges();
-      if (parser.is_chunked()) {
-        is_keep_alive = true;
-        ec = co_await handle_chunked(data, std::move(ctx));
-        break;
-      }
-
-      redirect_uri_.clear();
-      bool is_redirect = parser.is_location();
-      if (is_redirect)
-        redirect_uri_ = parser.get_header_value("Location");
-
-      size_t content_len = (size_t)parser.body_len();
-
-      if ((size_t)parser.body_len() <= read_buf_.size()) {
-        // Now get entire content, additional data will discard.
-        handle_entire_content(data, content_len, is_ranges, ctx);
-        break;
-      }
-
-      // read left part of content.
-      size_t size_to_read = content_len - read_buf_.size();
-      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
-          ec) {
-        break;
-      }
-
-      // Now get entire content, additional data will discard.
-      handle_entire_content(data, content_len, is_ranges, ctx);
+      data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
-
     handle_result(data, ec, is_keep_alive);
-
     co_return data;
   }
 
@@ -559,6 +518,57 @@ class coro_http_client {
     data.resp_headers = get_headers(parser);
     data.status = parser.status();
     return {};
+  }
+
+  async_simple::coro::Lazy<resp_data> handle_read(std::error_code &ec,
+                                                  size_t size,
+                                                  bool &is_keep_alive,
+                                                  auto ctx) {
+    resp_data data{};
+    do {
+      if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
+          ec) {
+        break;
+      }
+
+      http_parser parser;
+      if (ec = handle_header(data, parser, size); ec) {
+        break;
+      }
+
+      is_keep_alive = parser.keep_alive();
+      bool is_ranges = parser.is_ranges();
+      if (parser.is_chunked()) {
+        is_keep_alive = true;
+        ec = co_await handle_chunked(data, std::move(ctx));
+        break;
+      }
+
+      redirect_uri_.clear();
+      bool is_redirect = parser.is_location();
+      if (is_redirect)
+        redirect_uri_ = parser.get_header_value("Location");
+
+      size_t content_len = (size_t)parser.body_len();
+
+      if ((size_t)parser.body_len() <= read_buf_.size()) {
+        // Now get entire content, additional data will discard.
+        handle_entire_content(data, content_len, is_ranges, ctx);
+        break;
+      }
+
+      // read left part of content.
+      size_t size_to_read = content_len - read_buf_.size();
+      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
+          ec) {
+        break;
+      }
+
+      // Now get entire content, additional data will discard.
+      handle_entire_content(data, content_len, is_ranges, ctx);
+    } while (0);
+
+    co_return data;
   }
 
   void handle_entire_content(resp_data &data, size_t content_len,
