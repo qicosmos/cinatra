@@ -460,8 +460,8 @@ class coro_http_client {
     }
   }
 
-  std::string prepare_request_str(const uri_t &u, http_method method,
-                                  const auto &ctx) {
+  std::string build_request_header(const uri_t &u, http_method method,
+                                   const auto &ctx) {
     std::string req_str(method_name(method));
 
     req_str.append(" ").append(u.get_path());
@@ -514,7 +514,6 @@ class coro_http_client {
     if (!ctx.req_str.empty())
       req_str.append(ctx.req_str);
 
-    // add content
     size_t content_len = ctx.content.size();
     bool should_add = false;
     if (content_len > 0) {
@@ -534,8 +533,14 @@ class coro_http_client {
     }
 
     req_str.append("\r\n");
+    return req_str;
+  }
 
-    if (content_len > 0)
+  std::string prepare_request_str(const uri_t &u, http_method method,
+                                  const auto &ctx) {
+    std::string req_str = build_request_header(u, method, ctx);
+
+    if (!ctx.content.empty())
       req_str.append(std::move(ctx.content));
 
     return req_str;
