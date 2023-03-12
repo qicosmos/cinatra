@@ -250,10 +250,62 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    std::string content = build_multipart_content();
+    req_context<std::string> ctx{req_content_type::multipart, "", ""};
+    resp_data data{};
+    auto [ok, u] = handle_uri(data, uri);
+    if (!ok) {
+      co_return resp_data{{}, 404};
+    }
 
-    co_return co_await async_post(std::move(uri), std::move(content),
-                                  req_content_type::multipart);
+    std::string header_str = build_request_header(u, http_method::POST, ctx);
+
+    std::error_code ec{};
+    size_t size = 0;
+    if (std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
+        ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    for (auto &[key, part] : form_data_) {
+      std::string part_content;
+      part_content.append("--").append(BOUNDARY).append(CRCF);
+      part_content.append("Content-Disposition: form-data; name=\"");
+      part_content.append(key).append("\"");
+      if (!part.filename.empty()) {
+        part_content.append("; filename=\"")
+            .append(part.filename)
+            .append("\"")
+            .append(CRCF);
+        auto ext = std::filesystem::path(part.filename).extension().string();
+        if (auto it = g_content_type_map.find(ext);
+            it != g_content_type_map.end()) {
+          part_content.append("Content-Type: ").append(it->second);
+        }
+      }
+      part_content.append(TWO_CRCF);
+
+      part_content.append(part.content).append(CRCF);
+
+      if (std::tie(ec, size) = co_await async_write(asio::buffer(part_content));
+          ec) {
+        co_return resp_data{ec, 404};
+      }
+    }
+
+    std::string last_part;
+    last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
+    if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
+        ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    bool is_keep_alive = true;
+    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+    handle_result(data, ec, is_keep_alive);
+    co_return data;
+
+    // co_return co_await async_post(std::move(uri), std::move(content),
+    //                               req_content_type::multipart);
   }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
