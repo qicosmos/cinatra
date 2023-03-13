@@ -44,7 +44,7 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_) {
+  coro_http_client() : socket_(io_ctx_), timer_(io_ctx_) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -309,6 +309,10 @@ class coro_http_client {
     http_parser parser;
     bool is_keep_alive = false;
 
+    if (enable_timeout_)
+      async_timeout().start([](auto &&) {
+      });
+
     do {
       if (auto [ok, u] = handle_uri(data, uri); !ok) {
         break;
@@ -422,6 +426,13 @@ class coro_http_client {
       return true;
     return false;
   }
+
+  inline void set_timeout(std::size_t timeout_sec) {
+    enable_timeout_ = true;
+    timeout_seconds_ = timeout_sec;
+  }
+
+  inline bool is_request_timeout() { return is_timeout_; }
 
  private:
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
@@ -812,7 +823,22 @@ class coro_http_client {
     std::error_code ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
     socket_.close(ec);
+    timer_.cancel(ec);
     has_closed_ = true;
+  }
+
+  inline async_simple::coro::Lazy<void> async_timeout() noexcept {
+    if (timeout_seconds_ == 0)
+      co_return;
+    timer_.expires_from_now(std::chrono::seconds(timeout_seconds_));
+    is_timeout_ = co_await asio_util::async_await(timer_);
+    if (is_timeout_) {
+      std::cout << "timeout! close socket." << std::endl;
+      close_socket();
+      co_return;
+    }
+    timer_.cancel();
+    co_return;
   }
 
   asio::io_context io_ctx_;
@@ -848,5 +874,10 @@ class coro_http_client {
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
+
+  bool enable_timeout_;
+  bool is_timeout_;
+  std::size_t timeout_seconds_ = 60;
+  asio::steady_timer timer_;
 };
 }  // namespace cinatra

@@ -242,6 +242,16 @@ inline async_simple::coro::Lazy<std::error_code> async_handshake(
 }
 #endif
 
+inline async_simple::coro::Lazy<bool> async_await(
+    asio::steady_timer &timer) noexcept {
+  callback_awaitor<bool> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    timer.async_wait([&, handler](const auto &ec) {
+      handler.set_value_then_resume(!ec);
+    });
+  });
+}
+
 class period_timer : public asio::steady_timer {
  public:
   period_timer(asio::io_context &ctx) : asio::steady_timer(ctx) {}
