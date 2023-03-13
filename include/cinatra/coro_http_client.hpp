@@ -232,18 +232,9 @@ class coro_http_client {
       return false;
     }
 
-    std::string short_name =
-        std::filesystem::path(filename).filename().string();
-
     size_t file_size = std::filesystem::file_size(filename);
-
-    size_t size_to_read = 1024 * 1024;
-    std::string file_data;
-    file_data.resize(file_size);
-    file.read(file_data.data(), size_to_read);
-    form_data_.emplace(
-        std::move(name),
-        multipart_t{std::move(short_name), std::move(file_data), file_size});
+    form_data_.emplace(std::move(name),
+                       multipart_t{std::move(filename), "", file_size});
     return true;
   }
 
@@ -301,18 +292,21 @@ class coro_http_client {
     return content_len;
   }
 
-  std::string build_single_part(const std::string &key,
-                                const multipart_t &part) {
+  async_simple::coro::Lazy<resp_data> send_single_part(
+      const std::string &key, const multipart_t &part) {
     std::string part_content;
     part_content.append("--").append(BOUNDARY).append(CRCF);
     part_content.append("Content-Disposition: form-data; name=\"");
     part_content.append(key).append("\"");
-    if (!part.filename.empty()) {
+    bool is_file = !part.filename.empty();
+    std::string short_name =
+        std::filesystem::path(part.filename).filename().string();
+    if (is_file) {
       part_content.append("; filename=\"")
-          .append(part.filename)
+          .append(short_name)
           .append("\"")
           .append(CRCF);
-      auto ext = std::filesystem::path(part.filename).extension().string();
+      auto ext = std::filesystem::path(short_name).extension().string();
       if (auto it = g_content_type_map.find(ext);
           it != g_content_type_map.end()) {
         part_content.append("Content-Type: ").append(it->second);
@@ -320,8 +314,30 @@ class coro_http_client {
     }
     part_content.append(TWO_CRCF);
 
-    part_content.append(part.content).append(CRCF);
-    return part_content;
+    if (is_file) {
+      size_t size_to_read = 1024 * 1024;
+      std::string file_data;
+      file_data.resize(part.size);
+
+      std::ifstream file(part.filename, std::ios::binary);
+      if (!file) {
+        std::cout << "open file " << part.filename << " failed\n";
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+      file.read(file_data.data(), size_to_read);
+      part_content.append(file_data).append(CRCF);
+    }
+    else {
+      part_content.append(part.content).append(CRCF);
+    }
+
+    if (auto [ec, size] = co_await async_write(asio::buffer(part_content));
+        ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    co_return resp_data{{}, 200};
   }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
@@ -358,11 +374,10 @@ class coro_http_client {
     }
 
     for (auto &[key, part] : form_data_) {
-      std::string part_content = build_single_part(key, part);
+      data = co_await send_single_part(key, part);
 
-      if (std::tie(ec, size) = co_await async_write(asio::buffer(part_content));
-          ec) {
-        co_return resp_data{ec, 404};
+      if (data.net_err) {
+        co_return data;
       }
     }
 
