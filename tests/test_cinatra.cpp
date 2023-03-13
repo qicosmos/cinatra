@@ -131,12 +131,12 @@ TEST_CASE("test upload file") {
   std::ofstream test_file;
   test_file.open(test_file_name,
                  std::ios::binary | std::ios::out | std::ios::trunc);
-  std::vector<char> test_file_data(1024 * 1024, '0');
+  std::vector<char> test_file_data(2 * 1024 * 1024, '0');
   test_file.write(test_file_data.data(), test_file_data.size());
   test_file.close();
   result = async_simple::coro::syncAwait(
       client.async_upload(uri, "test", test_file_name));
-  CHECK(client.add_file_part("test", test_file_name) == false);
+
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }

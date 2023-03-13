@@ -223,7 +223,8 @@ class coro_http_client {
   bool add_file_part(std::string name, std::string filename) {
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
-      std::cout << "open file failed\n";
+      std::cout << "open file failed, "
+                << std::filesystem::current_path().string() << std::endl;
       return false;
     }
 
@@ -238,109 +239,13 @@ class coro_http_client {
     return true;
   }
 
-  async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
-    if (has_closed_) {
-      std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
-      std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec =
-              co_await asio_util::async_connect(io_ctx_, socket_, host, port);
-          ec) {
-        co_return resp_data{ec, 404};
-      }
-
-      if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-        if (use_ssl_) {
-          assert(ssl_stream_);
-          auto ec = co_await asio_util::async_handshake(
-              ssl_stream_, asio::ssl::stream_base::client);
-          if (ec) {
-            std::cout << "handle failed " << ec.message() << "\n";
-            co_return resp_data{ec, 404};
-          }
-        }
-#else
-        // please open CINATRA_ENABLE_SSL before request https!
-        assert(false);
-#endif
-      }
-      has_closed_ = false;
-    }
-
-    co_return resp_data{};
-  }
-
-  size_t multipart_content_len() {
-    size_t content_len = 0;
-    for (auto &[key, part] : form_data_) {
-      content_len += 75;
-      content_len += key.size() + 1;
-      if (!part.filename.empty()) {
-        content_len += (12 + part.filename.size() + 3);
-        auto ext = std::filesystem::path(part.filename).extension().string();
-        if (auto it = g_content_type_map.find(ext);
-            it != g_content_type_map.end()) {
-          content_len += (14 + it->second.size());
-        }
-      }
-
-      content_len += 4;
-
-      content_len += (part.size + 2);
-    }
-    content_len += (6 + BOUNDARY.size());
-    return content_len;
-  }
-
-  async_simple::coro::Lazy<resp_data> send_single_part(
-      const std::string &key, const multipart_t &part) {
-    std::string part_content;
-    part_content.append("--").append(BOUNDARY).append(CRCF);
-    part_content.append("Content-Disposition: form-data; name=\"");
-    part_content.append(key).append("\"");
-    bool is_file = !part.filename.empty();
-    std::string short_name =
-        std::filesystem::path(part.filename).filename().string();
-    if (is_file) {
-      part_content.append("; filename=\"")
-          .append(short_name)
-          .append("\"")
-          .append(CRCF);
-      auto ext = std::filesystem::path(short_name).extension().string();
-      if (auto it = g_content_type_map.find(ext);
-          it != g_content_type_map.end()) {
-        part_content.append("Content-Type: ").append(it->second);
-      }
-    }
-    part_content.append(TWO_CRCF);
-
-    if (is_file) {
-      size_t size_to_read = 1024 * 1024;
-      std::string file_data;
-      file_data.resize(part.size);
-
-      std::ifstream file(part.filename, std::ios::binary);
-      if (!file) {
-        std::cout << "open file " << part.filename << " failed\n";
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
-      }
-      file.read(file_data.data(), size_to_read);
-      part_content.append(file_data).append(CRCF);
-    }
-    else {
-      part_content.append(part.content).append(CRCF);
-    }
-
-    if (auto [ec, size] = co_await async_write(asio::buffer(part_content));
-        ec) {
-      co_return resp_data{ec, 404};
-    }
-
-    co_return resp_data{{}, 200};
-  }
+  void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      req_headers_.clear();
+      form_data_.clear();
+    });
     if (form_data_.empty()) {
       std::cout << "no multipart\n";
       co_return resp_data{{}, 404};
@@ -800,32 +705,123 @@ class coro_http_client {
     co_return ec;
   }
 
-  std::string build_multipart_content() {
-    std::string content;
+  async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
+    if (has_closed_) {
+      std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
+      std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
+      if (auto ec =
+              co_await asio_util::async_connect(io_ctx_, socket_, host, port);
+          ec) {
+        co_return resp_data{ec, 404};
+      }
 
+      if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
+        if (use_ssl_) {
+          assert(ssl_stream_);
+          auto ec = co_await asio_util::async_handshake(
+              ssl_stream_, asio::ssl::stream_base::client);
+          if (ec) {
+            std::cout << "handle failed " << ec.message() << "\n";
+            co_return resp_data{ec, 404};
+          }
+        }
+#else
+        // please open CINATRA_ENABLE_SSL before request https!
+        assert(false);
+#endif
+      }
+      has_closed_ = false;
+    }
+
+    co_return resp_data{};
+  }
+
+  size_t multipart_content_len() {
+    size_t content_len = 0;
     for (auto &[key, part] : form_data_) {
-      std::string part_content;
-      part_content.append("--").append(BOUNDARY).append(CRCF);
-      part_content.append("Content-Disposition: form-data; name=\"");
-      part_content.append(key).append("\"");
+      content_len += 75;
+      content_len += key.size() + 1;
       if (!part.filename.empty()) {
-        part_content.append("; filename=\"")
-            .append(part.filename)
-            .append("\"")
-            .append(CRCF);
+        content_len += (12 + part.filename.size() + 1);
         auto ext = std::filesystem::path(part.filename).extension().string();
         if (auto it = g_content_type_map.find(ext);
             it != g_content_type_map.end()) {
-          part_content.append("Content-Type: ").append(it->second);
+          content_len += (14 + it->second.size());
         }
       }
-      part_content.append(TWO_CRCF);
 
-      part_content.append(part.content).append(CRCF);
-      content.append(part_content);
+      content_len += 4;
+
+      content_len += (part.size + 2);
     }
-    content.append("--").append(BOUNDARY).append("--").append(CRCF);
-    return content;
+    content_len += (6 + BOUNDARY.size());
+    return content_len;
+  }
+
+  async_simple::coro::Lazy<resp_data> send_single_part(
+      const std::string &key, const multipart_t &part) {
+    std::string part_content_head;
+    part_content_head.append("--").append(BOUNDARY).append(CRCF);
+    part_content_head.append("Content-Disposition: form-data; name=\"");
+    part_content_head.append(key).append("\"");
+    bool is_file = !part.filename.empty();
+    std::string short_name =
+        std::filesystem::path(part.filename).filename().string();
+    if (is_file) {
+      part_content_head.append("; filename=\"").append(short_name).append("\"");
+      auto ext = std::filesystem::path(short_name).extension().string();
+      if (auto it = g_content_type_map.find(ext);
+          it != g_content_type_map.end()) {
+        part_content_head.append("Content-Type: ").append(it->second);
+      }
+
+      std::error_code ec;
+      if (!std::filesystem::exists(part.filename, ec)) {
+        std::cout << "file " << part.filename << " not exist\n";
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+    part_content_head.append(TWO_CRCF);
+    if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));
+        ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    if (is_file) {
+      std::ifstream file(part.filename, std::ios::binary);
+      if (!file) {
+        std::cout << "open file " << part.filename << " failed\n";
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+
+      size_t left_size = part.size;
+      size_t size_to_read = left_size;
+      std::string file_data;
+      while (left_size > 0) {
+        size_to_read = (std::min)(left_size, max_single_part_size_);
+        file_data.resize(size_to_read);
+        left_size -= file.read(file_data.data(), file_data.size()).gcount();
+        if (auto [ec, size] = co_await async_write(asio::buffer(file_data));
+            ec) {
+          co_return resp_data{ec, 404};
+        }
+      }
+    }
+    else {
+      if (auto [ec, size] = co_await async_write(asio::buffer(part.content));
+          ec) {
+        co_return resp_data{ec, 404};
+      }
+    }
+
+    if (auto [ec, size] = co_await async_write(asio::buffer(CRCF)); ec) {
+      co_return resp_data{ec, 404};
+    }
+
+    co_return resp_data{{}, 200};
   }
 
   std::vector<std::pair<std::string, std::string>> get_headers(
@@ -989,6 +985,7 @@ class coro_http_client {
   std::string proxy_bearer_token_auth_token_;
 
   std::map<std::string, multipart_t> form_data_;
+  size_t max_single_part_size_ = 1024 * 1024;
 
   std::function<void(resp_data)> on_ws_msg_;
   std::function<void(std::string_view)> on_ws_close_;
