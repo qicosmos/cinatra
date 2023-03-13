@@ -446,13 +446,35 @@ TEST_CASE("test coro http redirect request") {
 }
 
 TEST_CASE("test coro http request timeout") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<GET>(
+      "/", [&server](request &, response &res) mutable {
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
   coro_http_client client{};
-  std::string uri = "http://google.com";
+  std::string uri = "http://127.0.0.1:8090";
   client.set_timeout(1);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(client.is_request_timeout() == false);
+  CHECK(client.is_request_timeout() == true);
 
-  uri = "http://baidu.com";
-  result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(client.is_request_timeout() == false);
+  server.stop();
+  server_thread.join();
 }
