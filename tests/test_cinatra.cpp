@@ -88,6 +88,7 @@ TEST_CASE("test ssl client") {
 
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
+  //  server.enable_timeout(false);
   bool r = server.listen("0.0.0.0", "8090");
   if (!r) {
     std::cout << "listen failed."

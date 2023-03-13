@@ -710,7 +710,7 @@ class coro_http_client {
         }
       }
       else {
-        assert(content_len == read_buf_.size());
+        assert(content_len <= read_buf_.size());
         auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         std::string_view reply(data_ptr, content_len);
         data.resp_body = reply;
