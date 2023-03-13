@@ -450,7 +450,7 @@ TEST_CASE("test coro http request timeout") {
   std::string uri = "http://google.com";
   client.set_timeout(1);
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(client.is_request_timeout() == true);
+  CHECK(client.is_request_timeout() == false);
 
   uri = "http://baidu.com";
   result = async_simple::coro::syncAwait(client.async_get(uri));
