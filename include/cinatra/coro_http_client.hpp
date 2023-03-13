@@ -40,7 +40,7 @@ struct req_context {
 struct multipart_t {
   std::string filename;
   std::string content;
-  size_t file_size = 0;
+  size_t size = 0;
 };
 
 class coro_http_client {
@@ -214,8 +214,9 @@ class coro_http_client {
   }
 
   bool add_str_part(std::string name, std::string content) {
+    size_t size = content.size();
     return form_data_
-        .emplace(std::move(name), multipart_t{"", std::move(content)})
+        .emplace(std::move(name), multipart_t{"", std::move(content), size})
         .second;
   }
 
@@ -278,6 +279,51 @@ class coro_http_client {
     co_return resp_data{};
   }
 
+  size_t multipart_content_len() {
+    size_t content_len = 0;
+    for (auto &[key, part] : form_data_) {
+      content_len += 75;
+      content_len += key.size() + 1;
+      if (!part.filename.empty()) {
+        content_len += (12 + part.filename.size() + 3);
+        auto ext = std::filesystem::path(part.filename).extension().string();
+        if (auto it = g_content_type_map.find(ext);
+            it != g_content_type_map.end()) {
+          content_len += (14 + it->second.size());
+        }
+      }
+
+      content_len += 4;
+
+      content_len += (part.size + 2);
+    }
+    content_len += (6 + BOUNDARY.size());
+    return content_len;
+  }
+
+  std::string build_single_part(const std::string &key,
+                                const multipart_t &part) {
+    std::string part_content;
+    part_content.append("--").append(BOUNDARY).append(CRCF);
+    part_content.append("Content-Disposition: form-data; name=\"");
+    part_content.append(key).append("\"");
+    if (!part.filename.empty()) {
+      part_content.append("; filename=\"")
+          .append(part.filename)
+          .append("\"")
+          .append(CRCF);
+      auto ext = std::filesystem::path(part.filename).extension().string();
+      if (auto it = g_content_type_map.find(ext);
+          it != g_content_type_map.end()) {
+        part_content.append("Content-Type: ").append(it->second);
+      }
+    }
+    part_content.append(TWO_CRCF);
+
+    part_content.append(part.content).append(CRCF);
+    return part_content;
+  }
+
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     if (form_data_.empty()) {
       std::cout << "no multipart\n";
@@ -291,30 +337,8 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    size_t content_len = 0;
-    for (auto &[key, part] : form_data_) {
-      std::string part_content;
-      part_content.append("--").append(BOUNDARY).append(CRCF);
-      part_content.append("Content-Disposition: form-data; name=\"");
-      part_content.append(key).append("\"");
-      if (!part.filename.empty()) {
-        part_content.append("; filename=\"")
-            .append(part.filename)
-            .append("\"")
-            .append(CRCF);
-        auto ext = std::filesystem::path(part.filename).extension().string();
-        if (auto it = g_content_type_map.find(ext);
-            it != g_content_type_map.end()) {
-          part_content.append("Content-Type: ").append(it->second);
-        }
-      }
-      part_content.append(TWO_CRCF);
+    size_t content_len = multipart_content_len();
 
-      part_content.append(part.content).append(CRCF);
-
-      content_len += part_content.size();
-    }
-    content_len += (6 + BOUNDARY.size());
     add_header("Content-Length", std::to_string(content_len));
 
     std::string header_str = build_request_header(u, http_method::POST, ctx);
@@ -334,24 +358,7 @@ class coro_http_client {
     }
 
     for (auto &[key, part] : form_data_) {
-      std::string part_content;
-      part_content.append("--").append(BOUNDARY).append(CRCF);
-      part_content.append("Content-Disposition: form-data; name=\"");
-      part_content.append(key).append("\"");
-      if (!part.filename.empty()) {
-        part_content.append("; filename=\"")
-            .append(part.filename)
-            .append("\"")
-            .append(CRCF);
-        auto ext = std::filesystem::path(part.filename).extension().string();
-        if (auto it = g_content_type_map.find(ext);
-            it != g_content_type_map.end()) {
-          part_content.append("Content-Type: ").append(it->second);
-        }
-      }
-      part_content.append(TWO_CRCF);
-
-      part_content.append(part.content).append(CRCF);
+      std::string part_content = build_single_part(key, part);
 
       if (std::tie(ec, size) = co_await async_write(asio::buffer(part_content));
           ec) {
@@ -370,9 +377,6 @@ class coro_http_client {
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     handle_result(data, ec, is_keep_alive);
     co_return data;
-
-    // co_return co_await async_post(std::move(uri), std::move(content),
-    //                               req_content_type::multipart);
   }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri,
