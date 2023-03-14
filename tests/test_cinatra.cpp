@@ -87,11 +87,16 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  std::promise<void> promise;
+  std::shared_ptr<std::promise<void>> promise =
+      std::make_shared<std::promise<void>>();
   std::string str(len, '\0');
   client.on_ws_msg([&str, &promise](resp_data data) {
     if (data.net_err) {
-      promise.set_value();
+      if (promise) {
+        promise->set_value();
+        promise = nullptr;
+      }
+
       std::cout << data.net_err.message() << "\n";
       return;
     }
@@ -99,13 +104,16 @@ void test_websocket_content(size_t len) {
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
-    promise.set_value();
+    if (promise) {
+      promise->set_value();
+      promise = nullptr;
+    }
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
   CHECK(!result.net_err);
 
-  promise.get_future().wait();
+  promise->get_future().wait();
   server.stop();
   server_thread.join();
 }
