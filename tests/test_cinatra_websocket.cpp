@@ -36,19 +36,26 @@ TEST_CASE("test wss client") {
   f.wait();
 
   coro_http_client client;
+  std::promise<void> promise;
   bool ok = client.init_ssl("../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("wss://localhost:9001")));
 
-  client.on_ws_msg([](resp_data data) {
+  client.on_ws_msg([&promise](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
     CHECK(data.resp_body == "hello");
+    promise.set_value();
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
   std::cout << result.net_err << "\n";
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+  promise.get_future().wait();
 
   server.stop();
   server_thread.join();
@@ -156,16 +163,10 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  std::shared_ptr<std::promise<void>> promise =
-      std::make_shared<std::promise<void>>();
+  std::promise<void> promise;
   std::string str(len, '\0');
-  client.on_ws_msg([&str, &promise](resp_data data) {
+  client.on_ws_msg([&](resp_data data) {
     if (data.net_err) {
-      if (promise) {
-        promise->set_value();
-        promise = nullptr;
-      }
-
       std::cout << data.net_err.message() << "\n";
       return;
     }
@@ -173,17 +174,13 @@ void test_websocket_content(size_t len) {
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
-    if (promise) {
-      promise->set_value();
-      promise = nullptr;
-    }
+    promise.set_value();
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
   CHECK(!result.net_err);
 
-  if (promise)
-    promise->get_future().wait();
+  promise.get_future().wait();
 
   server.stop();
   server_thread.join();
