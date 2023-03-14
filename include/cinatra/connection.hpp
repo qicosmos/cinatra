@@ -60,7 +60,7 @@ class connection : public base_connection,
       asio::ssl::context ssl_context(asio::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
       ssl_context.set_password_callback([](auto, auto) {
-        return "123456";
+        return "test";
       });
 
       std::error_code ec;
@@ -674,11 +674,11 @@ class connection : public base_connection,
 
   void close(bool close_ssl = true) {
 #ifdef CINATRA_ENABLE_SSL
-    if (close_ssl && ssl_stream_) {
-      std::error_code ec;
-      ssl_stream_->shutdown(ec);
-      ssl_stream_ = nullptr;
-    }
+    // if (close_ssl && ssl_stream_) {
+    //   std::error_code ec;
+    //   ssl_stream_->shutdown(ec);
+    //   ssl_stream_ = nullptr;
+    // }
 #endif
     (void)close_ssl;
     if (has_closed_) {

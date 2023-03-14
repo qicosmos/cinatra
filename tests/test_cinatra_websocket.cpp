@@ -13,10 +13,10 @@ using namespace cinatra;
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test wss client") {
   http_ssl_server server(std::thread::hardware_concurrency());
-  server.set_ssl_conf({"server.crt", "server.key"});
+  server.set_ssl_conf(
+      {"../../include/cinatra/server.crt", "../../include/cinatra/server.key"});
   REQUIRE(server.listen("0.0.0.0", "9001"));
 
-  server.enable_timeout(false);
   server.set_http_handler<GET>("/", [](request &req, response &res) {
     assert(req.get_content_type() == content_type::websocket);
 
@@ -56,6 +56,63 @@ TEST_CASE("test wss client") {
   std::cout << result.net_err << "\n";
 
   promise.get_future().wait();
+
+  client.close();
+
+  server.stop();
+  server_thread.join();
+}
+#endif
+
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("test wss client") {
+  http_ssl_server server(std::thread::hardware_concurrency());
+  server.set_ssl_conf(
+      {"../../include/cinatra/server.crt", "../../include/cinatra/server.key"});
+  REQUIRE(server.listen("0.0.0.0", "9001"));
+
+  // server.enable_timeout(false);
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
+
+    req.on(ws_message, [](request &req) {
+      auto part_data = req.get_part_data();
+      req.get_conn<cinatra::SSL>()->send_ws_string(
+          std::string(part_data.data(), part_data.length()));
+    });
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("wss://localhost:9001")));
+
+  std::promise<void> promise;
+  client.on_ws_msg([&promise](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
+    CHECK(data.resp_body == "hello");
+    promise.set_value();
+  });
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
+  std::cout << result.net_err << "\n";
+
+  promise.get_future().wait();
+
+  client.close();
 
   server.stop();
   server_thread.join();
