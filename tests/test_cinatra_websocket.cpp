@@ -36,12 +36,12 @@ TEST_CASE("test wss client") {
   f.wait();
 
   coro_http_client client;
-  std::promise<void> promise;
   bool ok = client.init_ssl("../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("wss://localhost:9001")));
 
+  std::promise<void> promise;
   client.on_ws_msg([&promise](resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
@@ -165,7 +165,7 @@ void test_websocket_content(size_t len) {
 
   std::promise<void> promise;
   std::string str(len, '\0');
-  client.on_ws_msg([&](resp_data data) {
+  client.on_ws_msg([&str, &promise](resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
       return;
