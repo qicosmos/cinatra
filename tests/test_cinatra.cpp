@@ -60,6 +60,70 @@ TEST_CASE("test for gzip") {
 }
 #endif
 
+void test_websocket_content(size_t len) {
+  http_server server(std::thread::hardware_concurrency());
+  server.enable_timeout(false);
+  REQUIRE(server.listen("0.0.0.0", "8090"));
+
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
+
+    req.on(ws_message, [](request &req) {
+      auto part_data = req.get_part_data();
+      req.get_conn<cinatra::NonSSL>()->send_ws_string(
+          std::string(part_data.data(), part_data.length()));
+      req.get_conn<cinatra::NonSSL>()->send_ws_msg("", opcode::close);
+    });
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("ws://localhost:8090")));
+
+  std::string str(len, '\0');
+  client.on_ws_msg([&str](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
+    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
+    REQUIRE(data.resp_body.size() == str.size());
+    CHECK(data.resp_body == str);
+  });
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
+  CHECK(!result.net_err);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+
+  server.stop();
+  server_thread.join();
+}
+
+TEST_CASE("test websocket content lt 126") {
+  test_websocket_content(1);
+  test_websocket_content(125);
+}
+
+TEST_CASE("test websocket content ge 126") {
+  test_websocket_content(126);
+  test_websocket_content(127);
+}
+
+TEST_CASE("test websocket content ge 65535") {
+  test_websocket_content(65535);
+  test_websocket_content(65536);
+}
+
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl client") {
   {
@@ -67,7 +131,7 @@ TEST_CASE("test ssl client") {
     bool ok = client.init_ssl("../../include/cinatra", "server.crt");
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
-    if (!result.status == 200) {
+    if (result.status != 200) {
       CHECK(result.status == 302);
       CHECK(client.is_redirect(result));
       result = client.get(client.get_redirect_uri());
@@ -88,6 +152,7 @@ TEST_CASE("test ssl client") {
 
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
+  //  server.enable_timeout(false);
   bool r = server.listen("0.0.0.0", "8090");
   if (!r) {
     std::cout << "listen failed."
@@ -121,21 +186,23 @@ TEST_CASE("test upload file") {
 
   client.add_str_part("hello", "world");
   client.add_str_part("key", "value");
+  CHECK(!client.add_file_part("key", "value"));
   result = async_simple::coro::syncAwait(client.async_upload(uri));
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
 
+  client.set_max_single_part_size(1024);
   std::string test_file_name = "test1.txt";
   std::ofstream test_file;
   test_file.open(test_file_name,
                  std::ios::binary | std::ios::out | std::ios::trunc);
-  std::vector<char> test_file_data(1024 * 1024, '0');
+  std::vector<char> test_file_data(2 * 1024 * 1024, '0');
   test_file.write(test_file_data.data(), test_file_data.size());
   test_file.close();
   result = async_simple::coro::syncAwait(
       client.async_upload(uri, "test", test_file_name));
-  CHECK(client.add_file_part("test", test_file_name) == false);
+
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
@@ -428,7 +495,8 @@ TEST_CASE("test coro http redirect request") {
   std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == 302);
+  if (result.status != 502)
+    CHECK(result.status == 302);
 
   if (client.is_redirect(result)) {
     std::string redirect_uri = client.get_redirect_uri();
