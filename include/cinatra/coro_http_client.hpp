@@ -879,11 +879,11 @@ class coro_http_client {
         if (payload_len > 0) {
           data_ptr += sizeof(uint16_t);
           std::string out;
-          if (header->mask) {
-            std::string out;
-            ws.parse_payload(data_ptr, payload_len, out);
-            data_ptr = out.data();
-          }
+          //          if (header->mask) {
+          //            std::string out;
+          //            ws.parse_payload(data_ptr, payload_len, out);
+          //            data_ptr = out.data();
+          //          }
         }
       }
 
