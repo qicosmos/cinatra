@@ -8,10 +8,8 @@
 #include "doctest.h"
 
 using namespace cinatra;
-void print(const response_data &result) {
-  print(result.ec, result.status, result.resp_body, result.resp_headers.second);
-}
 
+#ifdef CINATRA_ENABLE_GZIP
 std::string_view get_header_value(
     std::vector<std::pair<std::string, std::string>> &resp_headers,
     std::string_view key) {
@@ -21,7 +19,7 @@ std::string_view get_header_value(
   }
   return {};
 }
-#ifdef CINATRA_ENABLE_GZIP
+
 TEST_CASE("test for gzip") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
