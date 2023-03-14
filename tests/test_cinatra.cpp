@@ -8,10 +8,8 @@
 #include "doctest.h"
 
 using namespace cinatra;
-void print(const response_data &result) {
-  print(result.ec, result.status, result.resp_body, result.resp_headers.second);
-}
 
+#ifdef CINATRA_ENABLE_GZIP
 std::string_view get_header_value(
     std::vector<std::pair<std::string, std::string>> &resp_headers,
     std::string_view key) {
@@ -21,7 +19,7 @@ std::string_view get_header_value(
   }
   return {};
 }
-#ifdef CINATRA_ENABLE_GZIP
+
 TEST_CASE("test for gzip") {
   http_server server(std::thread::hardware_concurrency());
   bool r = server.listen("0.0.0.0", "8090");
@@ -72,7 +70,6 @@ void test_websocket_content(size_t len) {
       auto part_data = req.get_part_data();
       req.get_conn<cinatra::NonSSL>()->send_ws_string(
           std::string(part_data.data(), part_data.length()));
-      req.get_conn<cinatra::NonSSL>()->send_ws_msg("", opcode::close);
     });
   });
 
@@ -88,8 +85,9 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
+  std::promise<void> promise;
   std::string str(len, '\0');
-  client.on_ws_msg([&str](resp_data data) {
+  client.on_ws_msg([&](resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
       return;
@@ -98,12 +96,13 @@ void test_websocket_content(size_t len) {
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
+    promise.set_value();
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
   CHECK(!result.net_err);
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+  promise.get_future().wait();
 
   server.stop();
   server_thread.join();
