@@ -61,7 +61,8 @@ TEST_CASE("test for gzip") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test wss client") {
   http_ssl_server server(std::thread::hardware_concurrency());
-  server.set_ssl_conf({"../../include/cinatra/server.crt", "../../include/cinatra/server.key"});
+  server.set_ssl_conf(
+      {"../../include/cinatra/server.crt", "../../include/cinatra/server.key"});
   REQUIRE(server.listen("0.0.0.0", "9001"));
 
   // server.enable_timeout(false);
