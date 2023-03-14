@@ -48,6 +48,8 @@ TEST_CASE("test wss client") {
   auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
   std::cout << result.net_err << "\n";
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+
   server.stop();
   server_thread.join();
 }
