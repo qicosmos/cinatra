@@ -221,15 +221,15 @@ class coro_http_client {
   }
 
   bool add_file_part(std::string name, std::string filename) {
+    if (form_data_.find(name) != form_data_.end()) {
+      std::cout << "name already exist\n";
+      return false;
+    }
+
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
       std::cout << "open file failed, "
                 << std::filesystem::current_path().string() << std::endl;
-      return false;
-    }
-
-    if (form_data_.find(name) != form_data_.end()) {
-      std::cout << "name already exist\n";
       return false;
     }
 
@@ -239,7 +239,10 @@ class coro_http_client {
     return true;
   }
 
-  void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
+  void set_max_single_part_size(size_t size) {
+    assert(size > 0);
+    max_single_part_size_ = size;
+  }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
@@ -777,11 +780,7 @@ class coro_http_client {
       }
 
       std::error_code ec;
-      if (!std::filesystem::exists(part.filename, ec)) {
-        std::cout << "file " << part.filename << " not exist\n";
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
-      }
+      assert(std::filesystem::exists(part.filename, ec));
     }
     part_content_head.append(TWO_CRCF);
     if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));
@@ -791,11 +790,7 @@ class coro_http_client {
 
     if (is_file) {
       std::ifstream file(part.filename, std::ios::binary);
-      if (!file) {
-        std::cout << "open file " << part.filename << " failed\n";
-        co_return resp_data{
-            std::make_error_code(std::errc::no_such_file_or_directory), 404};
-      }
+      assert(file.is_open());
 
       size_t left_size = part.size;
       size_t size_to_read = left_size;
