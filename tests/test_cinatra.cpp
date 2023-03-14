@@ -149,6 +149,10 @@ TEST_CASE("test upload file") {
       client.async_upload(uri, "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
+  result = async_simple::coro::syncAwait(client.async_upload(
+      "http//badurl.com", "test_not_exist_file", not_exist_file));
+  CHECK(result.status == 404);
+
   server.stop();
   server_thread.join();
 }
@@ -337,6 +341,10 @@ TEST_CASE("test coro_http_client async_connect") {
   auto r = async_simple::coro::syncAwait(
       client.async_connect("http://www.purecpp.cn"));
   CHECK(r);
+
+  r = async_simple::coro::syncAwait(
+      client.async_connect("http//www.badurl.com"));
+  CHECK(!r);
 }
 
 TEST_CASE("test basic http request") {
