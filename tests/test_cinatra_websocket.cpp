@@ -128,6 +128,7 @@ TEST_CASE("test websocket") {
 
 void test_websocket_content(size_t len) {
   http_server server(std::thread::hardware_concurrency());
+  server.enable_timeout(false);
   REQUIRE(server.listen("0.0.0.0", "8090"));
 
   server.set_http_handler<GET>("/", [](request &req, response &res) {
@@ -137,6 +138,7 @@ void test_websocket_content(size_t len) {
       auto part_data = req.get_part_data();
       req.get_conn<cinatra::NonSSL>()->send_ws_string(
           std::string(part_data.data(), part_data.length()));
+      req.get_conn<cinatra::NonSSL>()->send_ws_msg("", opcode::close);
     });
   });
 
@@ -154,12 +156,20 @@ void test_websocket_content(size_t len) {
 
   std::string str(len, '\0');
   client.on_ws_msg([&str](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
+    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
-  std::cout << result.net_err << "\n";
+  CHECK(!result.net_err);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
   server.stop();
   server_thread.join();
