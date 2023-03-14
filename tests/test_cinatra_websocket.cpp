@@ -16,6 +16,7 @@ TEST_CASE("test wss client") {
   server.set_ssl_conf({"server.crt", "server.key"});
   REQUIRE(server.listen("0.0.0.0", "9001"));
 
+  server.enable_timeout(false);
   server.set_http_handler<GET>("/", [](request &req, response &res) {
     assert(req.get_content_type() == content_type::websocket);
 
