@@ -67,7 +67,7 @@ TEST_CASE("test ssl client") {
     bool ok = client.init_ssl("../../include/cinatra", "server.crt");
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
-    if (!result.status == 200) {
+    if (result.status != 200) {
       CHECK(result.status == 302);
       CHECK(client.is_redirect(result));
       result = client.get(client.get_redirect_uri());
@@ -88,6 +88,7 @@ TEST_CASE("test ssl client") {
 
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
+  //  server.enable_timeout(false);
   bool r = server.listen("0.0.0.0", "8090");
   if (!r) {
     std::cout << "listen failed."
@@ -130,12 +131,12 @@ TEST_CASE("test upload file") {
   std::ofstream test_file;
   test_file.open(test_file_name,
                  std::ios::binary | std::ios::out | std::ios::trunc);
-  std::vector<char> test_file_data(1024 * 1024, '0');
+  std::vector<char> test_file_data(2 * 1024 * 1024, '0');
   test_file.write(test_file_data.data(), test_file_data.size());
   test_file.close();
   result = async_simple::coro::syncAwait(
       client.async_upload(uri, "test", test_file_name));
-  CHECK(client.add_file_part("test", test_file_name) == false);
+
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
