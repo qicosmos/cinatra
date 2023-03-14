@@ -104,13 +104,14 @@ class websocket {
       payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
       pos += 2;
       left_header_len_ =
-          is_server ? MEDIUM_HEADER : CLIENT_MEDIUM_HEADER - size;
+          is_server ? MEDIUM_HEADER - size : CLIENT_MEDIUM_HEADER - size;
     }
     else if (length_field == 127)  // msglen is 64bit!
     {
       payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
       pos += 8;
-      left_header_len_ = is_server ? LONG_HEADER : CLIENT_LONG_HEADER - size;
+      left_header_len_ =
+          is_server ? LONG_HEADER - size : CLIENT_LONG_HEADER - size;
     }
     else {
       return -1;
@@ -210,12 +211,12 @@ class websocket {
       if (data.size() >= 65536) {
         uint64_t len = data.size();
         str_payload_len.resize(sizeof(uint64_t));
-        std::memcpy(str_payload_len.data(), &len, sizeof(uint64_t));
+        *((uint64_t *)&str_payload_len[0]) = htobe64(len);
       }
       else {
         uint16_t len = data.size();
         str_payload_len.resize(sizeof(uint16_t));
-        std::memcpy(str_payload_len.data(), &len, sizeof(uint16_t));
+        *((uint16_t *)&str_payload_len[0]) = htons(static_cast<uint16_t>(len));
       }
       header.append(str_payload_len);
     }
