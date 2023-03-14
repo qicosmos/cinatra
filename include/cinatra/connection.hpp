@@ -60,7 +60,7 @@ class connection : public base_connection,
       asio::ssl::context ssl_context(asio::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
       ssl_context.set_password_callback([](auto, auto) {
-        return "123456";
+        return "test";
       });
 
       std::error_code ec;
