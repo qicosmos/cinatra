@@ -454,9 +454,10 @@ class coro_http_client {
     return false;
   }
 
-  inline void set_timeout(std::size_t timeout_millisec) {
+  inline void set_timeout(
+      std::chrono::steady_clock::duration timeout_duration) {
     enable_timeout_ = true;
-    timeout_miliseconds_ = timeout_millisec;
+    timeout_duration_ = timeout_duration;
   }
 
  private:
@@ -973,17 +974,18 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
-                                         std::string /*err_msg*/) {
+                                         std::string msg) {
     if (!enable_timeout_) {
       is_timeout_ = false;
       promise.setValue(async_simple::Unit());
       co_return false;
     }
     else {
-      timer.expires_after(std::chrono::milliseconds(timeout_miliseconds_));
+      timer.expires_after(timeout_duration_);
       is_timeout_ = co_await timer.async_await();
       if (!is_timeout_) {
         promise.setValue(async_simple::Unit());
+        std::cout << msg << '\n';
         co_return false;
       }
       close_socket();
@@ -1030,6 +1032,7 @@ class coro_http_client {
 
   bool is_timeout_ = false;
   bool enable_timeout_ = false;
-  std::size_t timeout_miliseconds_ = 60;
+  std::chrono::steady_clock::duration timeout_duration_ =
+      std::chrono::seconds(60);
 };
 }  // namespace cinatra

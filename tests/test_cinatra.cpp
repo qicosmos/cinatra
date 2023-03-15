@@ -513,7 +513,7 @@ TEST_CASE("test coro http request timeout") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.status == 200);
 
-  client.set_timeout(500);  // ms
+  client.set_timeout(500ms);
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.net_err == std::errc::timed_out);
 
