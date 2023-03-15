@@ -423,7 +423,6 @@ TEST_CASE("test basic http request") {
   server_thread.join();
 }
 
-
 TEST_CASE("test coro http proxy request") {
   coro_http_client client{};
   std::string uri = "http://www.baidu.com";
