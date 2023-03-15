@@ -90,8 +90,7 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
   std::cout << result.net_err << "\n";
   result = co_await client.async_send_ws("test again", /*need_mask = */ false);
   std::cout << result.net_err << "\n";
-  result = co_await client.async_send_ws("ws close", /*need_mask = */ false,
-                                         opcode::close);
+  result = co_await client.async_send_ws_close("ws close");
   std::cout << result.net_err << "\n";
 }
 

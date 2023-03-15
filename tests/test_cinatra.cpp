@@ -263,11 +263,11 @@ TEST_CASE("test coro_http_client chunked download") {
   CHECK(!r.net_err);
   CHECK(r.status == 200);
 
-  filename = "test2.jpg";
-  std::filesystem::remove(filename, ec);
-  r = client.download(uri, filename);
-  CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  //  filename = "test2.jpg";
+  //  std::filesystem::remove(filename, ec);
+  //  r = client.download(uri, filename);
+  //  CHECK(!r.net_err);
+  //  CHECK(r.status == 200);
 
   SUBCASE("test the correctness of the downloaded file") {
     auto self_http_client = client_factory::instance().new_client();

@@ -173,6 +173,11 @@ class coro_http_client {
     co_return data;
   }
 
+  async_simple::coro::Lazy<resp_data> async_send_ws_close(
+      std::string msg = "") {
+    return async_send_ws(std::move(msg), false, opcode::close);
+  }
+
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
     on_ws_msg_ = std::move(on_ws_msg);
   }
@@ -870,16 +875,8 @@ class coro_http_client {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
-        payload_len -= 2;
-        if (payload_len > 0) {
-          data_ptr += sizeof(uint16_t);
-          std::string out;
-          //          if (header->mask) {
-          //            std::string out;
-          //            ws.parse_payload(data_ptr, payload_len, out);
-          //            data_ptr = out.data();
-          //          }
-        }
+        payload_len -= 4;
+        data_ptr += sizeof(uint16_t);
       }
 
       data.status = 200;
