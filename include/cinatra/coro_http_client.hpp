@@ -11,6 +11,8 @@
 #include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio_util/asio_coro_util.hpp"
+#include "async_simple/Future.h"
+#include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/define.h"
 #include "cinatra/utils.hpp"
@@ -45,7 +47,7 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_) {
+  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -354,6 +356,10 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
+    async_simple::Promise<async_simple::Unit> promise;
+    asio_util::period_timer timer(io_ctx_);
+    timeout(timer, promise, "connect timer canceled").via(&executor_).detach();
+
     do {
       auto [ok, u] = handle_uri(data, uri);
       if (!ok) {
@@ -397,6 +403,15 @@ class coro_http_client {
 
       data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
+
+    std::error_code err_code;
+    timer.cancel(err_code);
+    co_await promise.getFuture();
+    if (is_timeout_) {
+      data.net_err = std::make_error_code(std::errc::timed_out);
+      co_return data;
+    }
+
     handle_result(data, ec, is_keep_alive);
     co_return data;
   }
@@ -426,6 +441,11 @@ class coro_http_client {
     if (data.status > 299 && data.status <= 399)
       return true;
     return false;
+  }
+
+  inline void set_timeout(std::size_t timeout_sec) {
+    enable_timeout_ = true;
+    timeout_seconds_ = timeout_sec;
   }
 
  private:
@@ -960,8 +980,29 @@ class coro_http_client {
     has_closed_ = true;
   }
 
+  async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
+                                         std::string err_msg) {
+    if (!enable_timeout_) {
+      is_timeout_ = false;
+      promise.setValue(async_simple::Unit());
+      co_return false;
+    }
+    else {
+      timer.expires_after(std::chrono::seconds(timeout_seconds_));
+      is_timeout_ = co_await timer.async_await();
+      if (!is_timeout_) {
+        promise.setValue(async_simple::Unit());
+        co_return false;
+      }
+      close_socket();
+      promise.setValue(async_simple::Unit());
+      co_return true;
+    }
+  }
+
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
+  asio_util::AsioExecutor executor_;
   std::unique_ptr<asio::io_context::work> work_;
   std::thread io_thd_;
 
@@ -994,5 +1035,9 @@ class coro_http_client {
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
+
+  bool is_timeout_ = false;
+  bool enable_timeout_ = false;
+  std::size_t timeout_seconds_ = 60;
 };
 }  // namespace cinatra
