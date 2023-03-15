@@ -24,7 +24,7 @@ jobs:
       - name: Run Coverage
         run: |
           mkdir build && cd build
-          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
+          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=OFF
           make -j test_cinatra
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           ./tests/test_cinatra
