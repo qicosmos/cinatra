@@ -216,16 +216,20 @@ TEST_CASE("test send after server stop") {
   f.wait();
 
   coro_http_client client;
+  std::promise<void> promise;
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  client.on_ws_msg([&client](resp_data data) {
+  client.on_ws_msg([&client, &promise](resp_data data) {
     if (data.net_err) {
       client.close();
     }
+    promise.set_value();
   });
 
   server.stop();
+
+  promise.get_future().wait();
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
   CHECK(result.net_err);
