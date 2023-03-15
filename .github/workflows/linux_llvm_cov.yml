@@ -30,7 +30,7 @@ jobs:
           cd tests
           ./test_cinatra
           llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
-          llvm-cov show ./test_cinatra -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util|logging|struct_pack" -show-instantiations=false
+          llvm-cov show ./test_cinatra -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
