@@ -395,8 +395,8 @@ class coro_http_client {
           ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
         std::cout << "handle failed " << ec.message() << "\n";
-        return ec;
       }
+      return ec;
     }
 #else
     // please open CINATRA_ENABLE_SSL before request https!
