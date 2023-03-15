@@ -227,7 +227,7 @@ TEST_CASE("test send after server stop") {
 
   server.stop();
 
-  auto result = async_simple::coro::syncAwait(client.async_send_ws("nullptr"));
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
   CHECK(result.net_err);
 
   server_thread.join();
