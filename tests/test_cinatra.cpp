@@ -449,12 +449,11 @@ TEST_CASE("test basic http request") {
   server_thread.join();
 }
 
-#if ENABLE_TEST_PROXY_REQUEST
 TEST_CASE("test coro http proxy request") {
   coro_http_client client{};
   std::string uri = "http://www.baidu.com";
   // Make sure the host and port are matching with your proxy server
-  client.set_proxy("192.168.102.1", 7890);
+  client.set_proxy("106.14.255.124", "80");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
   CHECK(result.status == 200);
@@ -464,12 +463,11 @@ TEST_CASE("test coro http proxy request with port") {
   coro_http_client client{};
   std::string uri = "http://www.baidu.com:80";
   // Make sure the host and port are matching with your proxy server
-  client.set_proxy("192.168.102.1", 7890);
+  client.set_proxy("106.14.255.124", "80");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
   CHECK(result.status == 200);
 }
-#endif
 
 TEST_CASE("test coro http basic auth request") {
   coro_http_client client{};
