@@ -360,7 +360,7 @@ class coro_http_client {
 
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(io_ctx_);
-    timeout(timer, promise, "connect timer canceled").via(&executor_).detach();
+    timeout(timer, promise, "request timer canceled").via(&executor_).detach();
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -454,9 +454,9 @@ class coro_http_client {
     return false;
   }
 
-  inline void set_timeout(std::size_t timeout_sec) {
+  inline void set_timeout(std::size_t timeout_millisec) {
     enable_timeout_ = true;
-    timeout_seconds_ = timeout_sec;
+    timeout_miliseconds_ = timeout_millisec;
   }
 
  private:
@@ -973,14 +973,14 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
-                                         std::string err_msg) {
+                                         std::string /*err_msg*/) {
     if (!enable_timeout_) {
       is_timeout_ = false;
       promise.setValue(async_simple::Unit());
       co_return false;
     }
     else {
-      timer.expires_after(std::chrono::seconds(timeout_seconds_));
+      timer.expires_after(std::chrono::milliseconds(timeout_miliseconds_));
       is_timeout_ = co_await timer.async_await();
       if (!is_timeout_) {
         promise.setValue(async_simple::Unit());
@@ -1030,6 +1030,6 @@ class coro_http_client {
 
   bool is_timeout_ = false;
   bool enable_timeout_ = false;
-  std::size_t timeout_seconds_ = 60;
+  std::size_t timeout_miliseconds_ = 60;
 };
 }  // namespace cinatra

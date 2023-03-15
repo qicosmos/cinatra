@@ -6,6 +6,7 @@
 #include "cinatra/client_factory.hpp"
 #include "cinatra/http_client.hpp"
 #include "doctest.h"
+using namespace std::chrono_literals;
 
 using namespace cinatra;
 
@@ -494,7 +495,7 @@ TEST_CASE("test coro http request timeout") {
   }
   server.set_http_handler<GET, POST>(
       "/", [&server](request &, response &res) mutable {
-        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         res.set_status_and_content(status_type::ok, "hello world");
       });
 
@@ -512,13 +513,16 @@ TEST_CASE("test coro http request timeout") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.status == 200);
 
-  client.set_timeout(1);
+  client.set_timeout(500);  // ms
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.net_err == std::errc::timed_out);
 
-  result = async_simple::coro::syncAwait(client.async_post(
+  // after timeout, the socket in client has been closed, so use a new client
+  // to test.
+  coro_http_client client1{};
+  result = async_simple::coro::syncAwait(client1.async_post(
       uri, "async post hello coro_http_client", req_content_type::string));
-  CHECK(result.net_err == std::errc::timed_out);
+  CHECK(!result.net_err);
 
   server.stop();
   server_thread.join();
