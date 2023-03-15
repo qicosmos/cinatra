@@ -484,3 +484,42 @@ TEST_CASE("test coro http redirect request") {
   if (result.status != 502)
     CHECK(result.status == 200);
 }
+
+TEST_CASE("test coro http request timeout") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+  server.set_http_handler<GET, POST>(
+      "/", [&server](request &, response &res) mutable {
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090";
+
+  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(result.status == 200);
+
+  client.set_timeout(1);
+  result = async_simple::coro::syncAwait(client.async_get(uri));
+  CHECK(result.net_err == std::errc::timed_out);
+
+  result = async_simple::coro::syncAwait(client.async_post(
+      uri, "async post hello coro_http_client", req_content_type::string));
+  CHECK(result.net_err == std::errc::timed_out);
+
+  server.stop();
+  server_thread.join();
+}
