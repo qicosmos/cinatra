@@ -126,6 +126,11 @@ TEST_CASE("test upload file") {
     CHECK(result.resp_body == "multipart finished");
   }
 
+  client.add_str_part("hello", "world");
+  result =
+      async_simple::coro::syncAwait(client.async_upload("http//badurl.com"));
+  CHECK(result.status == 404);
+
   client.set_max_single_part_size(1024);
   std::string test_file_name = "test1.txt";
   std::ofstream test_file;
@@ -153,6 +158,31 @@ TEST_CASE("test upload file") {
 
   server.stop();
   server_thread.join();
+}
+
+TEST_CASE("test bad uri") {
+  coro_http_client client{};
+  client.add_str_part("hello", "world");
+  auto result = async_simple::coro::syncAwait(
+      client.async_upload("http://www.badurlrandom.org"));
+  CHECK(result.status == 404);
+}
+
+TEST_CASE("test ssl without init ssl") {
+  {
+    coro_http_client client{};
+    client.add_str_part("hello", "world");
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload("https://www.bing.com"));
+    CHECK(result.status == 404);
+  }
+
+  {
+    coro_http_client client{};
+    auto result =
+        async_simple::coro::syncAwait(client.async_get("https://www.bing.com"));
+    CHECK(result.status == 404);
+  }
 }
 
 TEST_CASE("test multiple ranges download") {

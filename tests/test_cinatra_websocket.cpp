@@ -67,6 +67,7 @@ TEST_CASE("test wss client") {
 async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
+    CHECK(reason == "ws close");
   });
   client.on_ws_msg([](resp_data data) {
     if (data.net_err) {
@@ -88,6 +89,9 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
   auto result = co_await client.async_send_ws("hello websocket");
   std::cout << result.net_err << "\n";
   result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  std::cout << result.net_err << "\n";
+  result = co_await client.async_send_ws("ws close", /*need_mask = */ false,
+                                         opcode::close);
   std::cout << result.net_err << "\n";
 }
 
@@ -130,6 +134,7 @@ TEST_CASE("test websocket") {
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   coro_http_client client;
+  client.set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
   async_simple::coro::syncAwait(test_websocket(client));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
