@@ -367,7 +367,7 @@ class coro_http_client {
         }
 
         if (u.is_ssl) {
-          if (ec = handle_shake(); ec) {
+          if (ec = co_await handle_shake(); ec) {
             break;
           }
         }
@@ -387,7 +387,7 @@ class coro_http_client {
     co_return data;
   }
 
-  std::error_code handle_shake() {
+  async_simple::coro::Lazy<std::error_code> handle_shake() {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       assert(ssl_stream_);
@@ -396,11 +396,11 @@ class coro_http_client {
       if (ec) {
         std::cout << "handle failed " << ec.message() << "\n";
       }
-      return ec;
+      co_return ec;
     }
 #else
     // please open CINATRA_ENABLE_SSL before request https!
-    return std::make_error_code(std::errc::protocol_error);
+    co_return std::make_error_code(std::errc::protocol_error);
 #endif
   }
 
@@ -722,7 +722,7 @@ class coro_http_client {
       }
 
       if (u.is_ssl) {
-        if (auto ec = handle_shake(); ec) {
+        if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
         }
       }
