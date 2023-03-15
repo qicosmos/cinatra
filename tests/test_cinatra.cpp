@@ -98,6 +98,7 @@ TEST_CASE("test ssl client") {
     // Make sure the host and port are matching with your proxy server
     client.set_proxy("106.14.255.124", "80");
     resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+    CHECK(result.status == 200);
   }
 }
 #endif
