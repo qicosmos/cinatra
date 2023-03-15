@@ -24,6 +24,7 @@ class base_connection {
 struct ssl_configure {
   std::string cert_file;
   std::string key_file;
+  std::string pwd = "test";
 };
 
 template <typename SocketType>
@@ -59,8 +60,8 @@ class connection : public base_connection,
     try {
       asio::ssl::context ssl_context(asio::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
-      ssl_context.set_password_callback([](auto, auto) {
-        return "test";
+      ssl_context.set_password_callback([pwd = ssl_conf.pwd](auto, auto) {
+        return pwd;
       });
 
       std::error_code ec;
@@ -176,7 +177,7 @@ class connection : public base_connection,
         return;
       }
 
-      self->close(false);
+      self->close();
     });
   }
 
@@ -317,9 +318,6 @@ class connection : public base_connection,
 
   response &get_res() { return res_; }
 
-  //~connection() {
-  //	close();
-  //}
   void async_close() {
     asio::dispatch(socket_.get_executor(), [this] {
       close();
@@ -598,6 +596,9 @@ class connection : public base_connection,
   }
 
   void do_write() {
+    if (res_.need_delay())
+      return;
+
     reset_timer();
 
     std::string &rep_str = res_.response_str();
@@ -635,7 +636,7 @@ class connection : public base_connection,
       reset();
       cancel_timer();  // avoid close two times
       shutdown();
-      close(false);
+      close();
     }
   }
 
@@ -672,15 +673,7 @@ class connection : public base_connection,
     return content_type::unknown;
   }
 
-  void close(bool close_ssl = true) {
-#ifdef CINATRA_ENABLE_SSL
-    // if (close_ssl && ssl_stream_) {
-    //   std::error_code ec;
-    //   ssl_stream_->shutdown(ec);
-    //   ssl_stream_ = nullptr;
-    // }
-#endif
-    (void)close_ssl;
+  void close() {
     if (has_closed_) {
       return;
     }
@@ -823,8 +816,7 @@ class connection : public base_connection,
     }
 
     call_back();
-    if (!res_.need_delay())
-      do_write();
+    do_write();
   }
 
   void do_read_form_urlencoded() {
@@ -1012,8 +1004,7 @@ class connection : public base_connection,
           reset_timer();
           if (req_.body_finished()) {
             call_back();
-            if (!res_.need_delay())
-              do_write();
+            do_write();
             return;
           }
 
@@ -1077,15 +1068,14 @@ class connection : public base_connection,
       return;
     }
 
-    if (!res_.need_delay())
-      do_write();
+    do_write();
   }
 
   //-------------web socket----------------//
   void response_handshake() {
     std::vector<asio::const_buffer> buffers = res_.to_buffers();
     if (buffers.empty()) {
-      close(false);
+      close();
       return;
     }
 
@@ -1093,7 +1083,7 @@ class connection : public base_connection,
     asio::async_write(socket(), buffers,
                       [this, self](const std::error_code &ec, std::size_t) {
                         if (ec) {
-                          close(false);
+                          close();
                           return;
                         }
 
@@ -1239,7 +1229,7 @@ class connection : public base_connection,
     timer_.async_wait(
         [self = this->shared_from_this()](std::error_code const &ec) {
           if (ec) {
-            self->close(false);
+            self->close();
             return;
           }
 
@@ -1300,8 +1290,7 @@ class connection : public base_connection,
 
     call_back();
 
-    if (!res_.need_delay())
-      do_write();
+    do_write();
   }
 
   bool handle_gzip() {
@@ -1398,7 +1387,7 @@ class connection : public base_connection,
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
             call_back();
-            close(false);
+            close();
           }
         });
   }
