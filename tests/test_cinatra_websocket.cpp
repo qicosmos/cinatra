@@ -216,20 +216,18 @@ TEST_CASE("test send after server stop") {
   f.wait();
 
   coro_http_client client;
-  std::promise<void> promise;
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  client.on_ws_msg([&client, &promise](resp_data data) {
+  client.on_ws_msg([&client](resp_data data) {
     if (data.net_err) {
       client.close();
     }
-    promise.set_value();
   });
 
   server.stop();
 
-  promise.get_future().wait();
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
   CHECK(result.net_err);
@@ -247,7 +245,7 @@ TEST_CASE("test send opcode::close") {
     req.on(ws_close, [](request &req) {
       auto part_data = req.get_part_data();
       req.get_conn<cinatra::NonSSL>()->send_ws_string(
-          std::string(part_data.data(), part_data.length()), opcode::close);
+          std::string(part_data.data(), part_data.length()));
     });
   });
 
