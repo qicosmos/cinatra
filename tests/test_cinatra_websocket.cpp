@@ -202,3 +202,80 @@ TEST_CASE("test websocket content ge 65535") {
   test_websocket_content(65535);
   test_websocket_content(65536);
 }
+
+TEST_CASE("test send after server stop") {
+  http_server server(std::thread::hardware_concurrency());
+  REQUIRE(server.listen("0.0.0.0", "8090"));
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("ws://localhost:8090")));
+
+  client.on_ws_msg([&client](resp_data data) {
+    if (data.net_err) {
+      client.close();
+    }
+  });
+
+  server.stop();
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws("nullptr"));
+  CHECK(result.net_err);
+
+  server_thread.join();
+}
+
+TEST_CASE("test send opcode::close") {
+  http_server server(std::thread::hardware_concurrency());
+  REQUIRE(server.listen("0.0.0.0", "8090"));
+
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::websocket);
+
+    req.on(ws_close, [](request &req) {
+      auto part_data = req.get_part_data();
+      req.get_conn<cinatra::NonSSL>()->send_ws_string(
+          std::string(part_data.data(), part_data.length()), opcode::close);
+    });
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  std::promise<void> promise;
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("ws://localhost:8090")));
+
+  client.on_ws_msg([&promise](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+
+    CHECK(data.status == 200);
+    promise.set_value();
+  });
+
+  auto result = async_simple::coro::syncAwait(
+      client.async_send_ws("", true, opcode::close));
+  CHECK(!result.net_err);
+
+  promise.get_future().wait();
+
+  server.stop();
+  server_thread.join();
+}
