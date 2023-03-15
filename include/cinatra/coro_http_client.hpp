@@ -11,6 +11,8 @@
 #include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio_util/asio_coro_util.hpp"
+#include "async_simple/Future.h"
+#include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/define.h"
 #include "cinatra/utils.hpp"
@@ -45,7 +47,7 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_) {
+  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -53,7 +55,7 @@ class coro_http_client {
   }
 
   ~coro_http_client() {
-    close();
+    async_close();
     work_ = nullptr;
     if (io_thd_.joinable()) {
       io_thd_.join();
@@ -62,7 +64,7 @@ class coro_http_client {
     std::cout << "client quit\n";
   }
 
-  void close() {
+  void async_close() {
     if (has_closed_)
       return;
 
@@ -173,6 +175,11 @@ class coro_http_client {
     co_return data;
   }
 
+  async_simple::coro::Lazy<resp_data> async_send_ws_close(
+      std::string msg = "") {
+    return async_send_ws(std::move(msg), false, opcode::close);
+  }
+
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
     on_ws_msg_ = std::move(on_ws_msg);
   }
@@ -239,10 +246,7 @@ class coro_http_client {
     return true;
   }
 
-  void set_max_single_part_size(size_t size) {
-    assert(size > 0);
-    max_single_part_size_ = size;
-  }
+  void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
@@ -354,6 +358,10 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
+    async_simple::Promise<async_simple::Unit> promise;
+    asio_util::period_timer timer(io_ctx_);
+    timeout(timer, promise, "connect timer canceled").via(&executor_).detach();
+
     do {
       auto [ok, u] = handle_uri(data, uri);
       if (!ok) {
@@ -370,20 +378,9 @@ class coro_http_client {
         }
 
         if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-          if (use_ssl_) {
-            assert(ssl_stream_);
-            auto ec = co_await asio_util::async_handshake(
-                ssl_stream_, asio::ssl::stream_base::client);
-            if (ec) {
-              std::cout << "handle failed " << ec.message() << "\n";
-              break;
-            }
+          if (ec = co_await handle_shake(); ec) {
+            break;
           }
-#else
-          // please open CINATRA_ENABLE_SSL before request https!
-          assert(false);
-#endif
         }
         has_closed_ = false;
       }
@@ -397,8 +394,37 @@ class coro_http_client {
 
       data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
+
+    std::error_code err_code;
+    timer.cancel(err_code);
+    co_await promise.getFuture();
+    if (is_timeout_) {
+      data.net_err = std::make_error_code(std::errc::timed_out);
+      co_return data;
+    }
+
     handle_result(data, ec, is_keep_alive);
     co_return data;
+  }
+
+  async_simple::coro::Lazy<std::error_code> handle_shake() {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      assert(ssl_stream_);
+      auto ec = co_await asio_util::async_handshake(
+          ssl_stream_, asio::ssl::stream_base::client);
+      if (ec) {
+        std::cout << "handle failed " << ec.message() << "\n";
+      }
+      co_return ec;
+    }
+    else {
+      co_return std::error_code{};
+    }
+#else
+    // please open CINATRA_ENABLE_SSL before request https!
+    co_return std::make_error_code(std::errc::protocol_error);
+#endif
   }
 
   inline void set_proxy(const std::string &host, const std::string &port) {
@@ -426,6 +452,11 @@ class coro_http_client {
     if (data.status > 299 && data.status <= 399)
       return true;
     return false;
+  }
+
+  inline void set_timeout(std::size_t timeout_sec) {
+    enable_timeout_ = true;
+    timeout_seconds_ = timeout_sec;
   }
 
  private:
@@ -719,20 +750,9 @@ class coro_http_client {
       }
 
       if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-        if (use_ssl_) {
-          assert(ssl_stream_);
-          auto ec = co_await asio_util::async_handshake(
-              ssl_stream_, asio::ssl::stream_base::client);
-          if (ec) {
-            std::cout << "handle failed " << ec.message() << "\n";
-            co_return resp_data{ec, 404};
-          }
+        if (auto ec = co_await handle_shake(); ec) {
+          co_return resp_data{ec, 404};
         }
-#else
-        // please open CINATRA_ENABLE_SSL before request https!
-        assert(false);
-#endif
       }
       has_closed_ = false;
     }
@@ -875,16 +895,8 @@ class coro_http_client {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
-        payload_len -= 2;
-        if (payload_len > 0) {
-          data_ptr += sizeof(uint16_t);
-          std::string out;
-          //          if (header->mask) {
-          //            std::string out;
-          //            ws.parse_payload(data_ptr, payload_len, out);
-          //            data_ptr = out.data();
-          //          }
-        }
+        payload_len -= 4;
+        data_ptr += sizeof(uint16_t);
       }
 
       data.status = 200;
@@ -897,7 +909,7 @@ class coro_http_client {
         if (on_ws_close_)
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
-        close();
+        async_close();
         co_return;
       }
       if (on_ws_msg_)
@@ -960,8 +972,29 @@ class coro_http_client {
     has_closed_ = true;
   }
 
+  async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
+                                         std::string err_msg) {
+    if (!enable_timeout_) {
+      is_timeout_ = false;
+      promise.setValue(async_simple::Unit());
+      co_return false;
+    }
+    else {
+      timer.expires_after(std::chrono::seconds(timeout_seconds_));
+      is_timeout_ = co_await timer.async_await();
+      if (!is_timeout_) {
+        promise.setValue(async_simple::Unit());
+        co_return false;
+      }
+      close_socket();
+      promise.setValue(async_simple::Unit());
+      co_return true;
+    }
+  }
+
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
+  asio_util::AsioExecutor executor_;
   std::unique_ptr<asio::io_context::work> work_;
   std::thread io_thd_;
 
@@ -994,5 +1027,9 @@ class coro_http_client {
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
+
+  bool is_timeout_ = false;
+  bool enable_timeout_ = false;
+  std::size_t timeout_seconds_ = 60;
 };
 }  // namespace cinatra
