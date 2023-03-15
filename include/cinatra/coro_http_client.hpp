@@ -398,6 +398,9 @@ class coro_http_client {
       }
       co_return ec;
     }
+    else {
+      co_return std::error_code{};
+    }
 #else
     // please open CINATRA_ENABLE_SSL before request https!
     co_return std::make_error_code(std::errc::protocol_error);

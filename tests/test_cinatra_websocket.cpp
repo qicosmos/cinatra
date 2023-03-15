@@ -57,7 +57,7 @@ TEST_CASE("test wss client") {
 
   promise.get_future().wait();
 
-  client.close();
+  client.async_close();
 
   server.stop();
   server_thread.join();
