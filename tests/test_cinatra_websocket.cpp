@@ -225,7 +225,7 @@ TEST_CASE("test send after server stop") {
 
   client.on_ws_msg([&client](resp_data data) {
     if (data.net_err) {
-      client.close();
+      client.async_close();
     }
   });
 
