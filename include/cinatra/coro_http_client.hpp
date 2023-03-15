@@ -53,7 +53,7 @@ class coro_http_client {
   }
 
   ~coro_http_client() {
-    close();
+    async_close();
     work_ = nullptr;
     if (io_thd_.joinable()) {
       io_thd_.join();
@@ -62,7 +62,7 @@ class coro_http_client {
     std::cout << "client quit\n";
   }
 
-  void close() {
+  void async_close() {
     if (has_closed_)
       return;
 
@@ -173,6 +173,11 @@ class coro_http_client {
     co_return data;
   }
 
+  async_simple::coro::Lazy<resp_data> async_send_ws_close(
+      std::string msg = "") {
+    return async_send_ws(std::move(msg), false, opcode::close);
+  }
+
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
     on_ws_msg_ = std::move(on_ws_msg);
   }
@@ -239,10 +244,7 @@ class coro_http_client {
     return true;
   }
 
-  void set_max_single_part_size(size_t size) {
-    assert(size > 0);
-    max_single_part_size_ = size;
-  }
+  void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
@@ -370,20 +372,9 @@ class coro_http_client {
         }
 
         if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-          if (use_ssl_) {
-            assert(ssl_stream_);
-            auto ec = co_await asio_util::async_handshake(
-                ssl_stream_, asio::ssl::stream_base::client);
-            if (ec) {
-              std::cout << "handle failed " << ec.message() << "\n";
-              break;
-            }
+          if (ec = co_await handle_shake(); ec) {
+            break;
           }
-#else
-          // please open CINATRA_ENABLE_SSL before request https!
-          assert(false);
-#endif
         }
         has_closed_ = false;
       }
@@ -399,6 +390,26 @@ class coro_http_client {
     } while (0);
     handle_result(data, ec, is_keep_alive);
     co_return data;
+  }
+
+  async_simple::coro::Lazy<std::error_code> handle_shake() {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      assert(ssl_stream_);
+      auto ec = co_await asio_util::async_handshake(
+          ssl_stream_, asio::ssl::stream_base::client);
+      if (ec) {
+        std::cout << "handle failed " << ec.message() << "\n";
+      }
+      co_return ec;
+    }
+    else {
+      co_return std::error_code{};
+    }
+#else
+    // please open CINATRA_ENABLE_SSL before request https!
+    co_return std::make_error_code(std::errc::protocol_error);
+#endif
   }
 
   inline void set_proxy(const std::string &host, const std::string &port) {
@@ -719,20 +730,9 @@ class coro_http_client {
       }
 
       if (u.is_ssl) {
-#ifdef CINATRA_ENABLE_SSL
-        if (use_ssl_) {
-          assert(ssl_stream_);
-          auto ec = co_await asio_util::async_handshake(
-              ssl_stream_, asio::ssl::stream_base::client);
-          if (ec) {
-            std::cout << "handle failed " << ec.message() << "\n";
-            co_return resp_data{ec, 404};
-          }
+        if (auto ec = co_await handle_shake(); ec) {
+          co_return resp_data{ec, 404};
         }
-#else
-        // please open CINATRA_ENABLE_SSL before request https!
-        assert(false);
-#endif
       }
       has_closed_ = false;
     }
@@ -875,16 +875,8 @@ class coro_http_client {
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       if (is_close_frame) {
-        payload_len -= 2;
-        if (payload_len > 0) {
-          data_ptr += sizeof(uint16_t);
-          std::string out;
-          //          if (header->mask) {
-          //            std::string out;
-          //            ws.parse_payload(data_ptr, payload_len, out);
-          //            data_ptr = out.data();
-          //          }
-        }
+        payload_len -= 4;
+        data_ptr += sizeof(uint16_t);
       }
 
       data.status = 200;
@@ -897,7 +889,7 @@ class coro_http_client {
         if (on_ws_close_)
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
-        close();
+        async_close();
         co_return;
       }
       if (on_ws_msg_)
