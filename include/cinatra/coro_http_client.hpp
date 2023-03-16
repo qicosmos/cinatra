@@ -988,6 +988,7 @@ class coro_http_client {
         std::cout << msg << '\n';
         co_return false;
       }
+      std::cout << "request timeout\n";
       close_socket();
       promise.setValue(async_simple::Unit());
       co_return true;

@@ -1,7 +1,7 @@
 #include <filesystem>
 #include <future>
-#include <system_error>
 #include <memory>
+#include <system_error>
 
 #include "cinatra.hpp"
 #include "cinatra/client_factory.hpp"
@@ -217,7 +217,7 @@ TEST_CASE("test websocket content ge 65535") {
 
 TEST_CASE("test send after server stop") {
   http_server server(std::thread::hardware_concurrency());
-  server.enable_timeout(false);
+  // server.enable_timeout(false);
   REQUIRE(server.listen("0.0.0.0", "8090"));
 
   std::promise<void> pr;
