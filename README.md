@@ -372,7 +372,7 @@ async_simple::coro::Lazy<void> test_upload() {
 
   client.add_str_part("hello", "coro_http_client");
   client.add_file_part("test", "yourfile.jpg");
-  result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  result = co_await client.async_upload(uri);
   print(result.status);
   std::cout << "upload finished\n";
 }
