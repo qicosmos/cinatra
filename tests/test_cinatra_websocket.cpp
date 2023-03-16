@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <future>
 #include <system_error>
+#include <memory>
 
 #include "cinatra.hpp"
 #include "cinatra/client_factory.hpp"
@@ -169,14 +170,15 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  std::promise<void> promise;
-  std::atomic_bool has_retrieved = false;
+  auto promise = std::make_shared<std::promise<void>>();
+  std::weak_ptr<std::promise<void>> weak = promise;
+
   std::string str(len, '\0');
-  client.on_ws_msg([&str, &promise, &has_retrieved](resp_data data) {
+  client.on_ws_msg([&str, weak](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      if (!has_retrieved) {
-        promise.set_value();
+      if (auto p = weak.lock(); p) {
+        p->set_value();
       }
       return;
     }
@@ -184,15 +186,15 @@ void test_websocket_content(size_t len) {
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
-    if (!has_retrieved) {
-      promise.set_value();
+    if (auto p = weak.lock(); p) {
+      p->set_value();
     }
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
   CHECK(!result.net_err);
 
-  promise.get_future().wait();
+  promise->get_future().wait();
 
   server.stop();
   server_thread.join();
