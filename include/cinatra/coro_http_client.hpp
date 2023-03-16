@@ -274,6 +274,14 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
+    async_simple::Promise<async_simple::Unit> promise;
+    asio_util::period_timer timer(io_ctx_);
+    if (enable_timeout_) {
+      timeout(timer, promise, "request timer canceled")
+          .via(&executor_)
+          .detach();
+    }
+
     data = co_await connect(u);
     if (data.net_err) {
       co_return data;
@@ -302,6 +310,16 @@ class coro_http_client {
 
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+    if (enable_timeout_) {
+      std::error_code err_code;
+      timer.cancel(err_code);
+      co_await promise.getFuture();
+      if (is_timeout_) {
+        data.net_err = std::make_error_code(std::errc::timed_out);
+        co_return data;
+      }
+    }
+
     handle_result(data, ec, is_keep_alive);
     co_return data;
   }
