@@ -68,7 +68,7 @@ class coro_http_client {
     if (has_closed_)
       return;
 
-    io_ctx_.post([this] {
+    io_ctx_.dispatch([this] {
       close_socket();
     });
   }
