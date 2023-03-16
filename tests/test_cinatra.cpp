@@ -3,8 +3,6 @@
 #include <system_error>
 
 #include "cinatra.hpp"
-#include "cinatra/client_factory.hpp"
-#include "cinatra/http_client.hpp"
 #include "doctest.h"
 using namespace std::chrono_literals;
 
