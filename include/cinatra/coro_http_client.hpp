@@ -55,7 +55,7 @@ class coro_http_client {
   }
 
   ~coro_http_client() {
-    async_close();
+    sync_close();
     work_ = nullptr;
     if (io_thd_.joinable()) {
       io_thd_.join();
@@ -64,14 +64,11 @@ class coro_http_client {
     std::cout << "client quit\n";
   }
 
-  void async_close() {
-    if (has_closed_)
-      return;
-
-    io_ctx_.dispatch([this] {
-      close_socket();
-    });
+  async_simple::coro::Lazy<void> async_close() {
+    co_await asio_util::async_close(socket_).via(&executor_);
   }
+
+  void sync_close() { async_simple::coro::syncAwait(async_close()); }
 
 #ifdef CINATRA_ENABLE_SSL
   [[nodiscard]] bool init_ssl(const std::string &base_path,
@@ -910,7 +907,7 @@ class coro_http_client {
         if (on_ws_close_)
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
-        async_close();
+        close_socket();
         co_return;
       }
       if (on_ws_msg_)
