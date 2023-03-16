@@ -45,7 +45,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report ./test_cinatra -instr-profile=test_cinatra.profdata -ignore-filename-regex="thirdparty|tests" -show-region-summary=false >> tmp.log
+          llvm-cov report ./tests/test_cinatra -instr-profile=test_cinatra.profdata -ignore-filename-regex="thirdparty|tests" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
