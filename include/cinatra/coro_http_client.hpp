@@ -68,7 +68,7 @@ class coro_http_client {
     if (has_closed_)
       return;
 
-    io_ctx_.post([this] {
+    io_ctx_.dispatch([this] {
       close_socket();
     });
   }
@@ -991,6 +991,7 @@ class coro_http_client {
         std::cout << msg << '\n';
         co_return false;
       }
+      std::cout << "request timeout\n";
       close_socket();
       promise.setValue(async_simple::Unit());
       co_return true;

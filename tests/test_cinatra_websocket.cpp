@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <future>
+#include <memory>
 #include <system_error>
 
 #include "cinatra.hpp"
@@ -167,24 +168,31 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 
-  std::promise<void> promise;
+  auto promise = std::make_shared<std::promise<void>>();
+  std::weak_ptr<std::promise<void>> weak = promise;
+
   std::string str(len, '\0');
-  client.on_ws_msg([&str, &promise](resp_data data) {
+  client.on_ws_msg([&str, weak](resp_data data) {
     if (data.net_err) {
-      std::cout << data.net_err.message() << "\n";
+      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+      if (auto p = weak.lock(); p) {
+        p->set_value();
+      }
       return;
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == str.size());
     CHECK(data.resp_body == str);
-    promise.set_value();
+    if (auto p = weak.lock(); p) {
+      p->set_value();
+    }
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
   CHECK(!result.net_err);
 
-  promise.get_future().wait();
+  promise->get_future().wait();
 
   server.stop();
   server_thread.join();
@@ -205,34 +213,35 @@ TEST_CASE("test websocket content ge 65535") {
   test_websocket_content(65536);
 }
 
-// TEST_CASE("test send after server stop") {
-//   http_server server(std::thread::hardware_concurrency());
-//   REQUIRE(server.listen("0.0.0.0", "8090"));
-//
-//   std::promise<void> pr;
-//   std::future<void> f = pr.get_future();
-//   std::thread server_thread([&server, &pr]() {
-//     pr.set_value();
-//     server.run();
-//   });
-//   f.wait();
-//
-//   coro_http_client client;
-//   REQUIRE(async_simple::coro::syncAwait(
-//       client.async_connect("ws://localhost:8090")));
-//
-//   client.on_ws_msg([&client](resp_data data) {
-//     if (data.net_err) {
-//       client.async_close();
-//     }
-//   });
-//
-//   server.stop();
-//
-//   std::this_thread::sleep_for(std::chrono::milliseconds(600));
-//
-//   auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
-//   CHECK(result.net_err);
-//
-//   server_thread.join();
-// }
+TEST_CASE("test send after server stop") {
+  http_server server(std::thread::hardware_concurrency());
+  // server.enable_timeout(false);
+  REQUIRE(server.listen("0.0.0.0", "8090"));
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  coro_http_client client;
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_connect("ws://localhost:8090")));
+
+  client.on_ws_msg([&client](resp_data data) {
+    if (data.net_err) {
+      client.async_close();
+    }
+  });
+
+  server.stop();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
+  CHECK(result.net_err);
+
+  server_thread.join();
+}
