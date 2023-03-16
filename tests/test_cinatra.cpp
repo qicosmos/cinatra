@@ -3,8 +3,6 @@
 #include <system_error>
 
 #include "cinatra.hpp"
-#include "cinatra/client_factory.hpp"
-#include "cinatra/http_client.hpp"
 #include "doctest.h"
 using namespace std::chrono_literals;
 
@@ -290,52 +288,6 @@ TEST_CASE("test coro_http_client chunked download") {
   auto r = client.download(uri, filename);
   CHECK(!r.net_err);
   CHECK(r.status == 200);
-
-  //  filename = "test2.jpg";
-  //  std::filesystem::remove(filename, ec);
-  //  r = client.download(uri, filename);
-  //  CHECK(!r.net_err);
-  //  CHECK(r.status == 200);
-
-  SUBCASE("test the correctness of the downloaded file") {
-    auto self_http_client = client_factory::instance().new_client();
-    std::string self_filename = "_" + filename;
-
-    std::promise<bool> pro;
-    auto fu = pro.get_future();
-
-    std::error_code ec;
-    std::filesystem::remove(self_filename, ec);
-    self_http_client->download(uri, self_filename, [&](response_data data) {
-      if (data.ec) {
-        std::cout << data.ec.message() << "\n";
-        pro.set_value(false);
-        return;
-      }
-
-      std::cout << "finished download\n";
-      pro.set_value(true);
-    });
-
-    REQUIRE(fu.get());
-
-    auto read_file = [](const std::string &filename) {
-      std::string file_content;
-      std::ifstream ifs(filename, std::ios::binary);
-      std::array<char, 1024> buff;
-      while (ifs.read(buff.data(), buff.size())) {
-        file_content.append(std::string_view{
-            buff.data(),
-            static_cast<std::string_view::size_type>(ifs.gcount())});
-      }
-      return file_content;
-    };
-    auto f1 = read_file(filename);
-    auto f2 = read_file(self_filename);
-
-    REQUIRE(f1.size() == f2.size());
-    CHECK(f1 == f2);
-  }
 }
 
 TEST_CASE("test coro_http_client get") {
