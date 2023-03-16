@@ -360,7 +360,11 @@ class coro_http_client {
 
     async_simple::Promise<async_simple::Unit> promise;
     asio_util::period_timer timer(io_ctx_);
-    timeout(timer, promise, "request timer canceled").via(&executor_).detach();
+    if (enable_timeout_) {
+      timeout(timer, promise, "request timer canceled")
+          .via(&executor_)
+          .detach();
+    }
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -395,12 +399,14 @@ class coro_http_client {
       data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
 
-    std::error_code err_code;
-    timer.cancel(err_code);
-    co_await promise.getFuture();
-    if (is_timeout_) {
-      data.net_err = std::make_error_code(std::errc::timed_out);
-      co_return data;
+    if (enable_timeout_) {
+      std::error_code err_code;
+      timer.cancel(err_code);
+      co_await promise.getFuture();
+      if (is_timeout_) {
+        data.net_err = std::make_error_code(std::errc::timed_out);
+        co_return data;
+      }
     }
 
     handle_result(data, ec, is_keep_alive);
@@ -660,16 +666,13 @@ class coro_http_client {
                           std::remove_cvref_t<decltype(ctx.stream)>>) {
           ctx.stream.write(data_ptr, content_len);
         }
-        else {
-          ctx.stream.append(data_ptr, content_len);
-        }
       }
-      else {
-        assert(content_len <= read_buf_.size());
-        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-        std::string_view reply(data_ptr, content_len);
-        data.resp_body = reply;
-      }
+
+      assert(content_len <= read_buf_.size());
+      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      std::string_view reply(data_ptr, content_len);
+      data.resp_body = reply;
+
       read_buf_.consume(content_len);
     }
     data.eof = (read_buf_.size() == 0);

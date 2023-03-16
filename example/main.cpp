@@ -51,15 +51,11 @@ void test_ssl_server() {
 #endif
 }
 
-void print(const response_data &result) {
-  print(result.ec, result.status, result.resp_body, result.resp_headers.second);
-}
-
 #ifdef CINATRA_ENABLE_SSL
 void test_coro_http_client() {
   using namespace cinatra;
   coro_http_client client{};
-  client.init_ssl("../include/cinatra", "server.crt");
+  client.init_ssl("../../include/cinatra", "server.crt");
   auto data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
   data = client.get("https://www.bing.com");
@@ -68,149 +64,110 @@ void test_coro_http_client() {
 #endif
 
 void test_sync_client() {
-  auto client = cinatra::client_factory::instance().new_client();
-  std::string uri = "http://www.baidu.com";
-  std::string uri1 = "http://cn.bing.com";
-  std::string uri2 = "https://www.baidu.com";
-  std::string uri3 = "https://cn.bing.com";
+  {
+    std::string uri = "http://www.baidu.com";
+    coro_http_client client{};
+    auto result = client.get(uri);
+    assert(!result.net_err);
+    print(result.resp_body);
 
-  response_data result = client->get(uri);
-  print(result);
+    result = client.post(uri, "hello", req_content_type::json);
+    print(result.resp_body);
+  }
 
-  response_data result1 = client->get(uri1);
-  print(result1);
+  {
+    coro_http_client client{};
+    std::string uri = "http://cn.bing.com";
+    auto result = client.get(uri);
+    assert(!result.net_err);
+    print(result.resp_body);
 
-  print(client->post(uri, "hello", req_content_type::json));
-  print(client->post(uri1, "hello"));
-
-#ifdef CINATRA_ENABLE_SSL
-  response_data result2 = client->get(uri2);
-  ////if you need to verify peer
-  // client->set_ssl_context_callback([](asio::ssl::context& ctx) {
-  //    ctx.set_verify_mode(asio::ssl::context::verify_peer);
-  //    ctx.load_verify_file("server.crt");
-
-  //    //ctx.set_options(
-  //    //    asio::ssl::context::default_workarounds
-  //    //    | asio::ssl::context::no_sslv2
-  //    //    | asio::ssl::context::single_dh_use);
-
-  //    //ctx.use_certificate_chain_file("server.crt");
-  //    //ctx.use_private_key_file("server.key",
-  //    asio::ssl::context::pem);
-  //    //ctx.use_tmp_dh_file("dh512.pem");
-  //});
-
-  print(result2);
-
-  response_data result3 = client->get(uri3);
-  print(result3);
-
-  response_data result33 = client->get(uri);
-  print(result33);
-
-  response_data result4 = client->get(uri3);
-  print(result4);
-
-  response_data result5 = client->get(uri2);
-  print(result5);
-#endif
+    result = client.post(uri, "hello", req_content_type::json);
+    print(result.resp_body);
+  }
 }
 
-void test_async_client() {
+async_simple::coro::Lazy<void> test_async_client() {
   std::string uri = "http://www.baidu.com";
-  std::string uri1 = "http://cn.bing.com";
-  std::string uri2 = "https://www.baidu.com";
-  std::string uri3 = "https://cn.bing.com";
 
   {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri, [](response_data data) {
-      print(data);
-    });
-  }
+    coro_http_client client{};
+    auto data = co_await client.async_get(uri);
+    print(data.status);
 
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri1, [](response_data data) {
-      print(data);
-    });
-  }
+    data = co_await client.async_get(uri);
+    print(data.status);
 
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->async_post(uri, "hello", [](response_data data) {
-      print(data);
-    });
+    data = co_await client.async_post(uri, "hello", req_content_type::string);
+    print(data.status);
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri2, [](response_data data) {
-      print(data);
-    });
-  }
+  std::string uri2 = "https://www.baidu.com";
+  std::string uri3 = "https://cn.bing.com";
+  coro_http_client client{};
+  client.init_ssl("../../include/cinatra", "server.crt");
+  data = co_await client.async_get(uri2);
+  print(data.status);
 
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->async_get(uri3, [](response_data data) {
-      print(data);
-    });
-  }
+  data = co_await client.async_get(uri3);
+  print(data.status);
 #endif
 }
 
-void test_download() {
+async_simple::coro::Lazy<void> test_download() {
+  coro_http_client client{};
   std::string uri =
       "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  std::string filename = "test.jpg";
 
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    // Note: if the dest file has already exist, the file will be appened.
-    // If you want to download a new file, make sure no such a file with the
-    // same name. You could set the start position of the download file, eg:
-    // int64_t start_pos = 100;
-    // client->download(uri, "test1.jpg", start_pos, [](response_data data)...
-    client->download(uri, "test1.jpg", [](response_data data) {
-      if (data.ec) {
-        std::cout << data.ec.message() << "\n";
-        return;
-      }
-
-      std::cout << "finished download\n";
-    });
-  }
-
-  {
-    auto client = cinatra::client_factory::instance().new_client();
-    client->download(uri, [](auto ec, auto data) {
-      if (ec) {
-        std::cout << ec.message() << "\n";
-        return;
-      }
-
-      if (data.empty()) {
-        std::cout << "finished all \n";
-      }
-      else {
-        std::cout << data.size() << "\n";
-      }
-    });
-  }
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  auto r = co_await client.async_download(uri, filename);
+  assert(!r.net_err);
+  assert(r.status == 200);
+  std::cout << "download finished\n";
 }
 
-void test_upload() {
-  std::string uri = "http://cn.bing.com/";
-  auto client = cinatra::client_factory::instance().new_client();
-  client->sync_upload(uri, "boost_1_72_0.7z", [](response_data data) {
-    if (data.ec) {
-      std::cout << data.ec.message() << "\n";
+async_simple::coro::Lazy<void> test_upload() {
+  std::string uri = "http://example.com/";
+  coro_http_client client{};
+  auto result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  print(result.status);
+  std::cout << "upload finished\n";
+
+  client.add_str_part("hello", "coro_http_client");
+  client.add_file_part("test", "yourfile.jpg");
+  result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  print(result.status);
+  std::cout << "upload finished\n";
+}
+
+async_simple::coro::Lazy<void> test_websocket() {
+  coro_http_client client{};
+  client.on_ws_close([](std::string_view reason) {
+    std::cout << "web socket close " << reason << std::endl;
+  });
+  client.on_ws_msg([](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
       return;
     }
-
-    std::cout << data.resp_body << "\n";  // finished upload
+    std::cout << data.resp_body << std::endl;
   });
+
+  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  if (!r) {
+    co_return;
+  }
+
+  auto result =
+      co_await client.async_send_ws("hello websocket");  // mask as default.
+  std::cout << result.status << "\n";
+  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  std::cout << result.status << "\n";
+  result = co_await client.async_send_ws_close("ws close");
+  std::cout << result.status << "\n";
 }
 
 void test_smtp_client() {
@@ -272,9 +229,8 @@ class qps {
 int main() {
   // test_coro_http_client();
   // test_smtp_client();
-  // test_download();
-  // test_sync_client();
-  // test_async_client();
+  test_sync_client();
+  async_simple::coro::syncAwait(test_async_client());
   // test_ssl_server();
   // test_download();
   http_server server(std::thread::hardware_concurrency());
