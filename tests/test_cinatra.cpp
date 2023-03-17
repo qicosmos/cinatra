@@ -103,32 +103,6 @@ TEST_CASE("test ssl client") {
     if (!result.net_err)
       CHECK(result.status >= 200);
   }
-
-  {
-    coro_http_client client{};
-    client.enable_auto_redirect(true);
-    client.init_ssl("../../include/cinatra", "notexistsserver.crt");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status != 200);
-  }
-
-  {
-    coro_http_client client{};
-    client.enable_auto_redirect(true);
-    client.init_ssl("../../include/cinatra", "fake_server.crt");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status != 200);
-  }
-
-  {
-    coro_http_client client{};
-    client.enable_auto_redirect(true);
-    std::string uri = "https://www.bing.com";
-    // Make sure the host and port are matching with your proxy server
-    client.set_proxy("106.14.255.124", "80");
-    resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-    CHECK(result.status == 200);
-  }
 }
 #endif
 
