@@ -226,7 +226,7 @@ TEST_CASE("test send after server stop") {
   });
   f.wait();
 
-  coro_http_client client;
+  coro_http_client client{};
   REQUIRE(async_simple::coro::syncAwait(
       client.async_connect("ws://localhost:8090")));
 

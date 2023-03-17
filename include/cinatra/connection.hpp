@@ -596,8 +596,9 @@ class connection : public base_connection,
   }
 
   void do_write() {
-    if (res_.need_delay())
+    if (res_.need_delay()) {
       return;
+    }
 
     reset_timer();
 
@@ -658,7 +659,7 @@ class connection : public base_connection,
           bd = bd.substr(1, bd.length() - 2);
         }
         std::string boundary(bd.data(), bd.length());
-        multipart_parser_.set_boundary("\r\n--" + std::move(boundary));
+        multipart_parser_.set_boundary("--" + std::move(boundary));
         return content_type::multipart;
       }
       else if (content_type.find("application/octet-stream") !=

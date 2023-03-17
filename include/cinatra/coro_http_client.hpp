@@ -18,6 +18,22 @@
 #include "websocket.hpp"
 
 namespace cinatra {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+enum class ClientInjectAction {
+  none,
+  response_error,
+  header_error,
+  chunk_error,
+  write_failed,
+  read_failed,
+};
+inline ClientInjectAction inject_response_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_header_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
+inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
+#endif
+
 struct resp_data {
   std::error_code net_err;
   int status;
@@ -311,8 +327,16 @@ class coro_http_client {
       co_return data;
     }
 
-    if (std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-        ec) {
+    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (inject_write_failed == ClientInjectAction::write_failed) {
+      ec = std::make_error_code(std::errc::not_connected);
+    }
+#endif
+    if (ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      inject_write_failed = ClientInjectAction::none;
+#endif
       std::cout << ec.message() << "\n";
       co_return resp_data{ec, 404};
     }
@@ -623,7 +647,15 @@ class coro_http_client {
     const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (inject_response_valid == ClientInjectAction::response_error) {
+      parse_ret = -1;
+    }
+#endif
     if (parse_ret < 0) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      inject_response_valid = ClientInjectAction::none;
+#endif
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
@@ -644,7 +676,16 @@ class coro_http_client {
       }
 
       http_parser parser;
-      if (ec = handle_header(data, parser, size); ec) {
+      ec = handle_header(data, parser, size);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_header_valid == ClientInjectAction::header_error) {
+        ec = std::make_error_code(std::errc::protocol_error);
+      }
+#endif
+      if (ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+        inject_header_valid = ClientInjectAction::none;
+#endif
         break;
       }
 
@@ -695,7 +736,6 @@ class coro_http_client {
         }
       }
 
-      assert(content_len <= read_buf_.size());
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view reply(data_ptr, content_len);
       data.resp_body = reply;
@@ -729,13 +769,31 @@ class coro_http_client {
         break;
       }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_read_failed == ClientInjectAction::read_failed) {
+        ec = std::make_error_code(std::errc::not_connected);
+      }
+      if (ec) {
+        inject_read_failed = ClientInjectAction::none;
+        break;
+      }
+#endif
+
       size_t buf_size = read_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       read_buf_.consume(size);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_chunk_valid == ClientInjectAction::chunk_error) {
+        chunk_size = -1;
+      }
+#endif
       if (chunk_size < 0) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+        inject_chunk_valid = ClientInjectAction::none;
+#endif
         std::cout << "bad chunked size\n";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
@@ -831,7 +889,10 @@ class coro_http_client {
       }
 
       std::error_code ec;
-      assert(std::filesystem::exists(part.filename, ec));
+      if (!std::filesystem::exists(part.filename, ec)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
     }
     part_content_head.append(TWO_CRCF);
     if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));
