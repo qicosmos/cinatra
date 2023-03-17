@@ -47,4 +47,4 @@ jobs:
         uses: peter-evans/create-or-update-comment@v2
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-file: '${{github.workspace}}/build/tmp.log'
+          body-file: '${{github.workspace}}/build/tests/tmp.log'
