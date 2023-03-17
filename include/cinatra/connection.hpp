@@ -198,17 +198,17 @@ class connection : public base_connection,
   bool get_keep_alive() { return keep_alive_; }
 
   template <typename... Fs>
-  void send_ws_string(std::string msg, Fs &&... fs) {
+  void send_ws_string(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
   }
 
   template <typename... Fs>
-  void send_ws_binary(std::string msg, Fs &&... fs) {
+  void send_ws_binary(std::string msg, Fs &&...fs) {
     send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
   }
 
   template <typename... Fs>
-  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&... fs) {
+  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&...fs) {
     constexpr const size_t size = sizeof...(Fs);
     static_assert(size != 0 || size != 2);
     if constexpr (size == 2) {
