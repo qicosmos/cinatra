@@ -289,152 +289,141 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 	}
 
 ## cinatra客户端使用
+### sync_send get/post message
 
-### 同步发get/post消息
-同步和异步发送接口都是返回response_data，它有4个字段分别是：网络错误码、http状态码、返回的消息、返回的header。
 ```
-void print(const response_data& result) {
-    print(result.ec, result.status, result.resp_body, result.resp_headers.second);
-}
-
 void test_sync_client() {
-    auto client = cinatra::client_factory::instance().new_client();
+  {
     std::string uri = "http://www.baidu.com";
-    std::string uri1 = "http://cn.bing.com";
-    std::string uri2 = "https://www.baidu.com";
-    std::string uri3 = "https://cn.bing.com";
-    
-    response_data result = client->get(uri);
-    print(result);
+    coro_http_client client{};
+    auto result = client.get(uri);
+    assert(!result.net_err);
+    print(result.resp_body);
 
-    response_data result1 = client->get(uri1);
-    print(result1);
+    result = client.post(uri, "hello", req_content_type::json);
+    print(result.resp_body);
+  }
 
-    print(client->post(uri, "hello"));
-    print(client->post(uri1, "hello"));
+  {
+    coro_http_client client{};
+    std::string uri = "http://cn.bing.com";
+    auto result = client.get(uri);
+    assert(!result.net_err);
+    print(result.resp_body);
+
+    result = client.post(uri, "hello", req_content_type::json);
+    print(result.resp_body);
+  }
+}
 
 #ifdef CINATRA_ENABLE_SSL
-    response_data result2 = client->get(uri2);
-    print(result2);
+void test_coro_http_client() {
+  using namespace cinatra;
+  coro_http_client client{};
+  client.init_ssl("../../include/cinatra", "server.crt");
+  auto data = client.get("https://www.bing.com");
+  std::cout << data.resp_body << "\n";
+  data = client.get("https://www.bing.com");
+  std::cout << data.resp_body << "\n";
+}
+#endif
+```
 
-    response_data result3 = client->get(uri3);
-    print(result3);
+### async get/post message
 
-    response_data result4 = client->get(uri3);
-    print(result4);
+```
+async_simple::coro::Lazy<void> test_async_client() {
+  std::string uri = "http://www.baidu.com";
 
-    response_data result5 = client->get(uri2);
-    print(result5);
+  {
+    coro_http_client client{};
+    auto data = co_await client.async_get(uri);
+    print(data.status);
+
+    data = co_await client.async_get(uri);
+    print(data.status);
+
+    data = co_await client.async_post(uri, "hello", req_content_type::string);
+    print(data.status);
+  }
+
+#ifdef CINATRA_ENABLE_SSL
+  std::string uri2 = "https://www.baidu.com";
+  std::string uri3 = "https://cn.bing.com";
+  coro_http_client client{};
+  client.init_ssl("../../include/cinatra", "server.crt");
+  data = co_await client.async_get(uri2);
+  print(data.status);
+
+  data = co_await client.async_get(uri3);
+  print(data.status);
 #endif
 }
 ```
 
-### 异步发get/post消息
-
+### upload(multipart) file
 ```
-void test_async_client() {
-    
-    std::string uri = "http://www.baidu.com";
-    std::string uri1 = "http://cn.bing.com";
-    std::string uri2 = "https://www.baidu.com";
-    std::string uri3 = "https://cn.bing.com";
+async_simple::coro::Lazy<void> test_upload() {
+  std::string uri = "http://example.com/";
+  coro_http_client client{};
+  auto result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  print(result.status);
+  std::cout << "upload finished\n";
 
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->async_get(uri, [](response_data data) {
-            print(data);
-        });
-    }
-    
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->async_get(uri1, [](response_data data) {
-            print(data);
-        });
-    }
-
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->async_post(uri, "hello", [](response_data data) {
-            print(data);
-        });
-    }
-
-#ifdef CINATRA_ENABLE_SSL
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->async_get(uri2, [](response_data data) {
-            print(data);
-        });
-    }
-
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->async_get(uri3, [](response_data data) {
-            print(data);
-        });
-    }
-#endif
+  client.add_str_part("hello", "coro_http_client");
+  client.add_file_part("test", "yourfile.jpg");
+  result = co_await client.async_upload(uri);
+  print(result.status);
+  std::cout << "upload finished\n";
 }
 ```
 
-### 文件上传
-
-异步multipart文件上传。
+### download file(ranges and chunked)
 
 ```
-void test_upload() {
-    std::string uri = "http://cn.bing.com/";
-    auto client = cinatra::client_factory::instance().new_client();
-    client->upload(uri, "boost_1_72_0.7z", [](response_data data) {
-        if (data.ec) {
-            std::cout << data.ec.message() << "\n";
-            return;
-        }
+async_simple::coro::Lazy<void> test_download() {
+  coro_http_client client{};
+  std::string uri =
+      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  std::string filename = "test.jpg";
 
-        std::cout << data.resp_body << "\n"; //finished upload
-    });
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  auto r = co_await client.async_download(uri, filename);
+  assert(!r.net_err);
+  assert(r.status == 200);
+  std::cout << "download finished\n";
 }
 ```
 
-
-### 文件下载
-
-提供了两个异步chunked下载接口，一个是直接下载到文件，一个是chunk回调给用户，由用户自己去处理下载的chunk数据
-```
-void test_download() {
-    std::string uri = "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->download(uri, "test.jpg", [](response_data data) {
-            if (data.ec) {
-                std::cout << data.ec.message() << "\n";
-                return;
-            }
-
-            std::cout << "finished download\n";
-        });
+### web socket
+```c++
+async_simple::coro::Lazy<void> test_websocket() {
+  coro_http_client client{};
+  client.on_ws_close([](std::string_view reason) {
+    std::cout << "web socket close " << reason << std::endl;
+  });
+  client.on_ws_msg([](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
     }
+    std::cout << data.resp_body << std::endl;
+  });
 
-    {
-        auto client = cinatra::client_factory::instance().new_client();
-        client->download(uri, [](auto ec, auto data) {
-            if (ec) {
-                std::cout << ec.message() << "\n";
-                return;
-            }
+  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  if (!r) {
+    co_return;
+  }
 
-            if (data.empty()) {
-                std::cout << "finished all \n";
-            }
-            else {
-                std::cout << data.size() << "\n";
-            }
-        });
-    }
+  auto result =
+      co_await client.async_send_ws("hello websocket");  // mask as default.
+  std::cout << result.status << "\n";
+  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  std::cout << result.status << "\n";
+  result = co_await client.async_send_ws_close("ws close");
+  std::cout << result.status << "\n";
 }
-
 ```
 
 
