@@ -42,7 +42,7 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_) {
+  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_), timer_(io_ctx_) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -252,6 +252,32 @@ class coro_http_client {
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
+  async_simple::Promise<async_simple::Unit> start_timer() {
+    async_simple::Promise<async_simple::Unit> promise;
+    if (enable_timeout_) {
+      timeout(timer_, promise, "request timer canceled")
+          .via(&executor_)
+          .detach();
+    }
+
+    return promise;
+  }
+
+  async_simple::coro::Lazy<std::error_code> wait_timer(
+      async_simple::Promise<async_simple::Unit> &promise) {
+    if (!enable_timeout_) {
+      co_return std::error_code{};
+    }
+    std::error_code err_code;
+    timer_.cancel(err_code);
+    co_await promise.getFuture();
+    if (is_timeout_) {
+      co_return std::make_error_code(std::errc::timed_out);
+    }
+
+    co_return std::error_code{};
+  }
+
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
@@ -278,13 +304,7 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(io_ctx_);
-    if (enable_timeout_) {
-      timeout(timer, promise, "request timer canceled")
-          .via(&executor_)
-          .detach();
-    }
+    auto promise = start_timer();
 
     data = co_await connect(u);
     if (data.net_err) {
@@ -314,14 +334,8 @@ class coro_http_client {
 
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
-    if (enable_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-      co_await promise.getFuture();
-      if (is_timeout_) {
-        data.net_err = std::make_error_code(std::errc::timed_out);
-        co_return data;
-      }
+    if (auto errc = co_await wait_timer(promise); errc) {
+      ec = errc;
     }
 
     handle_result(data, ec, is_keep_alive);
@@ -380,13 +394,7 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
-    async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(io_ctx_);
-    if (enable_timeout_) {
-      timeout(timer, promise, "request timer canceled")
-          .via(&executor_)
-          .detach();
-    }
+    auto promise = start_timer();
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -421,14 +429,8 @@ class coro_http_client {
       data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
 
-    if (enable_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-      co_await promise.getFuture();
-      if (is_timeout_) {
-        data.net_err = std::make_error_code(std::errc::timed_out);
-        co_return data;
-      }
+    if (auto errc = co_await wait_timer(promise); errc) {
+      ec = errc;
     }
 
     handle_result(data, ec, is_keep_alive);
@@ -1000,30 +1002,24 @@ class coro_http_client {
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
                                          std::string msg) {
-    if (!enable_timeout_) {
-      is_timeout_ = false;
+    timer.expires_after(timeout_duration_);
+    is_timeout_ = co_await timer.async_await();
+    if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
+      std::cout << msg << '\n';
       co_return false;
     }
-    else {
-      timer.expires_after(timeout_duration_);
-      is_timeout_ = co_await timer.async_await();
-      if (!is_timeout_) {
-        promise.setValue(async_simple::Unit());
-        std::cout << msg << '\n';
-        co_return false;
-      }
-      std::cout << "request timeout\n";
-      close_socket();
-      promise.setValue(async_simple::Unit());
-      co_return true;
-    }
+    std::cout << "request timeout\n";
+    close_socket();
+    promise.setValue(async_simple::Unit());
+    co_return true;
   }
 
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
   asio_util::AsioExecutor executor_;
   std::unique_ptr<asio::io_context::work> work_;
+  asio_util::period_timer timer_;
   std::thread io_thd_;
 
   std::atomic<bool> has_closed_ = true;

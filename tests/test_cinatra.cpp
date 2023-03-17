@@ -279,19 +279,19 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
-// TEST_CASE("test coro_http_client chunked download") {
-//  coro_http_client client{};
-//  client.set_timeout(10s);
-//  std::string uri =
-//      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-//  std::string filename = "test.jpg";
-//
-//  std::error_code ec{};
-//  std::filesystem::remove(filename, ec);
-//  auto r = client.download(uri, filename);
-//  CHECK(!r.net_err);
-//  CHECK(r.status == 200);
-//}
+TEST_CASE("test coro_http_client chunked download") {
+  coro_http_client client{};
+  client.set_timeout(10s);
+  std::string uri =
+      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  std::string filename = "test.jpg";
+
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  auto r = client.download(uri, filename);
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+}
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
