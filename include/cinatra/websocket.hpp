@@ -1,58 +1,13 @@
 #pragma once
-#include "request.hpp"
-#include "sha1.hpp"
 #include "utils.hpp"
 #include "ws_define.h"
 
 namespace cinatra {
 class websocket {
  public:
-  bool is_upgrade(const request &req) {
-    if (req.get_method() != "GET"sv)
-      return false;
+  void sec_ws_key(std::string_view sec_key) { sec_ws_key_ = sec_key; }
 
-    auto h = req.get_header_value("connection");
-    if (h.empty())
-      return false;
-
-    auto u = req.get_header_value("upgrade");
-    if (u.empty())
-      return false;
-
-    if (!find_strIC(h, UPGRADE))
-      return false;
-
-    if (!iequal(u.data(), u.length(), WEBSOCKET.data()))
-      return false;
-
-    sec_ws_key_ = req.get_header_value("sec-websocket-key");
-    if (sec_ws_key_.empty() || sec_ws_key_.size() != 24)
-      return false;
-
-    return true;
-  }
-
-  void upgrade_to_websocket(const request &req, response &res) {
-    uint8_t sha1buf[20], key_src[60];
-    char accept_key[29];
-
-    std::memcpy(key_src, sec_ws_key_.data(), 24);
-    std::memcpy(key_src + 24, ws_guid, 36);
-    SHA1(key_src, sizeof(key_src), sha1buf);
-    base64_encode(accept_key, sha1buf, sizeof(sha1buf), 0);
-
-    res.set_status(status_type::switching_protocols);
-
-    res.add_header("Upgrade", "WebSocket");
-    res.add_header("Connection", "Upgrade");
-    res.add_header("Sec-WebSocket-Accept", std::string(accept_key, 28));
-    // res.add_header("content-length", "0");
-    auto protocal_str = req.get_header_value("sec-websocket-protocol");
-    if (!protocal_str.empty()) {
-      res.add_header("Sec-WebSocket-Protocol",
-                     {protocal_str.data(), protocal_str.length()});
-    }
-  }
+  std::string_view get_sec_ws_key() { return sec_ws_key_; }
 
   /*
   0               1               2               3
@@ -299,13 +254,6 @@ class websocket {
     }
 
     return header_length;
-  }
-
-  void SHA1(uint8_t *key_src, size_t size, uint8_t *sha1buf) {
-    sha1_context ctx;
-    init(ctx);
-    update(ctx, key_src, size);
-    finish(ctx, sha1buf);
   }
 
   std::string_view sec_ws_key_;
