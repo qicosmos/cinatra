@@ -35,6 +35,8 @@
 cinatra目前支持了http1.1/1.0, ssl和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
 cinatra是世界上性能最好的http服务器之一，性能测试详见[性能测试](#性能测试)
 
+除了http server 之外还有基于C++20 协程的http client，也具备完善的功能，包括普通请求、文件上传下载和web socket，ssl之类的。
+
 ## 谁在用cinatra
 
 cinatra目前被很多公司在使用，在这里可以看到[谁在用cinatra](https://github.com/qicosmos/cinatra/wiki/%E8%B0%81%E5%9C%A8%E7%94%A8cinatra).
