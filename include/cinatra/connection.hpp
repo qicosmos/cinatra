@@ -198,17 +198,17 @@ class connection : public base_connection,
   bool get_keep_alive() { return keep_alive_; }
 
   template <typename... Fs>
-  void send_ws_string(std::string msg, Fs &&...fs) {
+  void send_ws_string(std::string msg, Fs &&... fs) {
     send_ws_msg(std::move(msg), opcode::text, std::forward<Fs>(fs)...);
   }
 
   template <typename... Fs>
-  void send_ws_binary(std::string msg, Fs &&...fs) {
+  void send_ws_binary(std::string msg, Fs &&... fs) {
     send_ws_msg(std::move(msg), opcode::binary, std::forward<Fs>(fs)...);
   }
 
   template <typename... Fs>
-  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&...fs) {
+  void send_ws_msg(std::string msg, opcode op = opcode::text, Fs &&... fs) {
     constexpr const size_t size = sizeof...(Fs);
     static_assert(size != 0 || size != 2);
     if constexpr (size == 2) {
@@ -596,8 +596,9 @@ class connection : public base_connection,
   }
 
   void do_write() {
-    if (res_.need_delay())
+    if (res_.need_delay()) {
       return;
+    }
 
     reset_timer();
 
@@ -658,7 +659,7 @@ class connection : public base_connection,
           bd = bd.substr(1, bd.length() - 2);
         }
         std::string boundary(bd.data(), bd.length());
-        multipart_parser_.set_boundary("\r\n--" + std::move(boundary));
+        multipart_parser_.set_boundary("--" + std::move(boundary));
         return content_type::multipart;
       }
       else if (content_type.find("application/octet-stream") !=

@@ -333,8 +333,7 @@ class coro_http_client {
       ec = std::make_error_code(std::errc::not_connected);
     }
 #endif
-    if (std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-        ec) {
+    if (ec) {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       inject_write_failed = ClientInjectAction::none;
 #endif
@@ -890,7 +889,10 @@ class coro_http_client {
       }
 
       std::error_code ec;
-      assert(std::filesystem::exists(part.filename, ec));
+      if (!std::filesystem::exists(part.filename, ec)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
     }
     part_content_head.append(TWO_CRCF);
     if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));

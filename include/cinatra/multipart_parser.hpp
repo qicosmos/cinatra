@@ -7,11 +7,11 @@
 
 namespace cinatra {
 class multipart_parser {
-public:
+ public:
   typedef void (*Callback)(const char *buffer, size_t start, size_t end,
                            void *userData);
 
-public:
+ public:
   Callback onPartBegin;
   Callback onHeaderField;
   Callback onHeaderValue;
@@ -81,112 +81,113 @@ public:
       c = buffer[i];
 
       switch (state) {
-      case PARSE_ERROR:
-        return i;
-      case START:
-        index = 0;
-        state = START_BOUNDARY;
-      case START_BOUNDARY:
-        if (index == boundarySize - 2) {
-          if (c != CR) {
-            setError("Malformed. Expected CR after boundary.");
+        case PARSE_ERROR:
+          return i;
+        case START:
+          index = 0;
+          state = START_BOUNDARY;
+        case START_BOUNDARY:
+          if (index == boundarySize) {
+            if (c != CR) {
+              setError("Malformed. Expected CR after boundary.");
+              return i;
+            }
+            index++;
+            break;
+          }
+          else if (index - 1 == boundarySize) {
+            if (c != LF) {
+              setError("Malformed. Expected LF after boundary CR.");
+              return i;
+            }
+            index = 0;
+            callback(onPartBegin);
+            state = HEADER_FIELD_START;
+            break;
+          }
+          if (c != boundary[index]) {
+            setError(
+                "Malformed. Found different boundary data than the given one.");
             return i;
           }
           index++;
           break;
-        } else if (index - 1 == boundarySize - 2) {
-          if (c != LF) {
-            setError("Malformed. Expected LF after boundary CR.");
+        case HEADER_FIELD_START:
+          state = HEADER_FIELD;
+          headerFieldMark = i;
+          index = 0;
+        case HEADER_FIELD:
+          if (c == CR) {
+            headerFieldMark = UNMARKED;
+            state = HEADERS_ALMOST_DONE;
+            break;
+          }
+
+          index++;
+          if (c == HYPHEN) {
+            break;
+          }
+
+          if (c == COLON) {
+            if (index == 1) {
+              // empty header field
+              setError("Malformed first header name character.");
+              return i;
+            }
+            dataCallback(onHeaderField, headerFieldMark, buffer, i, len, true);
+            state = HEADER_VALUE_START;
+            break;
+          }
+
+          cl = lower(c);
+          if (cl < 'a' || cl > 'z') {
+            setError("Malformed header name.");
             return i;
           }
-          index = 0;
-          callback(onPartBegin);
+          break;
+        case HEADER_VALUE_START:
+          if (c == SPACE) {
+            break;
+          }
+
+          headerValueMark = i;
+          state = HEADER_VALUE;
+        case HEADER_VALUE:
+          if (c == CR) {
+            dataCallback(onHeaderValue, headerValueMark, buffer, i, len, true,
+                         true);
+            callback(onHeaderEnd);
+            state = HEADER_VALUE_ALMOST_DONE;
+          }
+          break;
+        case HEADER_VALUE_ALMOST_DONE:
+          if (c != LF) {
+            setError("Malformed header value: LF expected after CR");
+            return i;
+          }
+
           state = HEADER_FIELD_START;
           break;
-        }
-        if (c != boundary[index + 2]) {
-          setError(
-              "Malformed. Found different boundary data than the given one.");
-          return i;
-        }
-        index++;
-        break;
-      case HEADER_FIELD_START:
-        state = HEADER_FIELD;
-        headerFieldMark = i;
-        index = 0;
-      case HEADER_FIELD:
-        if (c == CR) {
-          headerFieldMark = UNMARKED;
-          state = HEADERS_ALMOST_DONE;
-          break;
-        }
-
-        index++;
-        if (c == HYPHEN) {
-          break;
-        }
-
-        if (c == COLON) {
-          if (index == 1) {
-            // empty header field
-            setError("Malformed first header name character.");
+        case HEADERS_ALMOST_DONE:
+          if (c != LF) {
+            setError("Malformed header ending: LF expected after CR");
             return i;
           }
-          dataCallback(onHeaderField, headerFieldMark, buffer, i, len, true);
-          state = HEADER_VALUE_START;
+
+          callback(onHeadersEnd);
+          state = PART_DATA_START;
           break;
-        }
-
-        cl = lower(c);
-        if (cl < 'a' || cl > 'z') {
-          setError("Malformed header name.");
-          return i;
-        }
-        break;
-      case HEADER_VALUE_START:
-        if (c == SPACE) {
+        case PART_DATA_START:
+          state = PART_DATA;
+          partDataMark = i;
+        case PART_DATA:
+          processPartData(prevIndex, index, buffer, len, boundaryEnd, i, c,
+                          state, flags);
           break;
-        }
-
-        headerValueMark = i;
-        state = HEADER_VALUE;
-      case HEADER_VALUE:
-        if (c == CR) {
-          dataCallback(onHeaderValue, headerValueMark, buffer, i, len, true,
-                       true);
-          callback(onHeaderEnd);
-          state = HEADER_VALUE_ALMOST_DONE;
-        }
-        break;
-      case HEADER_VALUE_ALMOST_DONE:
-        if (c != LF) {
-          setError("Malformed header value: LF expected after CR");
+        case END:
+          break;
+        default:
           return i;
-        }
-
-        state = HEADER_FIELD_START;
-        break;
-      case HEADERS_ALMOST_DONE:
-        if (c != LF) {
-          setError("Malformed header ending: LF expected after CR");
-          return i;
-        }
-
-        callback(onHeadersEnd);
-        state = PART_DATA_START;
-        break;
-      case PART_DATA_START:
-        state = PART_DATA;
-        partDataMark = i;
-      case PART_DATA:
-        processPartData(prevIndex, index, buffer, len, boundaryEnd, i, c, state,
-                        flags);
-        break;
-      case END:
-        break;
-      default:
-        return i;
       }
     }
 
@@ -209,7 +210,7 @@ public:
 
   const char *get_error_message() const { return errorReason; }
 
-private:
+ private:
   static const char CR = 13;
   static const char LF = 10;
   static const char SPACE = 32;
@@ -278,7 +279,8 @@ private:
     if (!clear) {
       callback(cb, buffer, mark, bufferLen, allowEmpty);
       mark = 0;
-    } else {
+    }
+    else {
       callback(cb, buffer, mark, i, allowEmpty);
       mark = UNMARKED;
     }
@@ -325,21 +327,26 @@ private:
           dataCallback(onPartData, partDataMark, buffer, i, len, true);
         }
         index++;
-      } else {
+      }
+      else {
         index = 0;
       }
-    } else if (index == boundarySize) {
+    }
+    else if (index == boundarySize) {
       index++;
       if (c == CR) {
         // CR = part boundary
         flags |= PART_BOUNDARY;
-      } else if (c == HYPHEN) {
+      }
+      else if (c == HYPHEN) {
         // HYPHEN = end boundary
         flags |= LAST_BOUNDARY;
-      } else {
+      }
+      else {
         index = 0;
       }
-    } else if (index - 1 == boundarySize) {
+    }
+    else if (index - 1 == boundarySize) {
       if (flags & PART_BOUNDARY) {
         index = 0;
         if (c == LF) {
@@ -350,24 +357,30 @@ private:
           state = HEADER_FIELD_START;
           return;
         }
-      } else if (flags & LAST_BOUNDARY) {
+      }
+      else if (flags & LAST_BOUNDARY) {
         if (c == HYPHEN) {
           callback(onPartEnd);
           callback(onEnd);
           state = END;
-        } else {
+        }
+        else {
           index = 0;
         }
-      } else {
+      }
+      else {
         index = 0;
       }
-    } else if (index - 2 == boundarySize) {
+    }
+    else if (index - 2 == boundarySize) {
       if (c == CR) {
         index++;
-      } else {
+      }
+      else {
         index = 0;
       }
-    } else if (index - boundarySize == 3) {
+    }
+    else if (index - boundarySize == 3) {
       index = 0;
       if (c == LF) {
         callback(onPartEnd);
@@ -381,16 +394,20 @@ private:
       // when matching a possible boundary, keep a lookbehind reference
       // in case it turns out to be a false lead
       if (index - 1 >= lookbehindSize) {
-        setError("Parser bug: index overflows lookbehind buffer. "
-                 "Please send bug report with input file attached.");
+        setError(
+            "Parser bug: index overflows lookbehind buffer. "
+            "Please send bug report with input file attached.");
         throw std::out_of_range("index overflows lookbehind buffer");
-      } else if (index - 1 < 0) {
-        setError("Parser bug: index underflows lookbehind buffer. "
-                 "Please send bug report with input file attached.");
+      }
+      else if (index - 1 < 0) {
+        setError(
+            "Parser bug: index underflows lookbehind buffer. "
+            "Please send bug report with input file attached.");
         throw std::out_of_range("index underflows lookbehind buffer");
       }
       lookbehind[index - 1] = c;
-    } else if (prevIndex > 0) {
+    }
+    else if (prevIndex > 0) {
       // if our boundary turned out to be rubbish, the captured lookbehind
       // belongs to partData
       callback(onPartData, lookbehind, 0, prevIndex);
@@ -417,5 +434,5 @@ private:
   size_t partDataMark;
   const char *errorReason;
 };
-} // namespace cinatra
+}  // namespace cinatra
 #endif /* _MULTIPART_PARSER_H_ */
