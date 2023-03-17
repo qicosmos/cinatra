@@ -1,6 +1,11 @@
 name: Ubuntu 22.04 (llvm cov)
 
-on: [ push ]
+on:
+  pull_request_target:
+    branches:
+      - main
+      - master
+      - cpp20_base
 
 jobs:
   build:
