@@ -1,6 +1,6 @@
 name: Ubuntu 22.04 (llvm cov)
 
-on: [ push, pull_request ]
+on: [ push ]
 
 jobs:
   build:
