@@ -1048,7 +1048,7 @@ class connection : public base_connection,
     if (is_upgrade_) {  // websocket
       req_.set_http_type(content_type::websocket);
       // timer_.cancel();
-      ws_.upgrade_to_websocket(req_, res_);
+      upgrade_to_websocket(req_, res_);
       response_handshake();
       return;
     }
@@ -1072,6 +1072,28 @@ class connection : public base_connection,
   }
 
   //-------------web socket----------------//
+  void upgrade_to_websocket(const request &req, response &res) {
+    uint8_t sha1buf[20], key_src[60];
+    char accept_key[29];
+
+    std::memcpy(key_src, ws_.get_sec_ws_key().data(), 24);
+    std::memcpy(key_src + 24, ws_guid, 36);
+    SHA1(key_src, sizeof(key_src), sha1buf);
+    base64_encode(accept_key, sha1buf, sizeof(sha1buf), 0);
+
+    res.set_status(status_type::switching_protocols);
+
+    res.add_header("Upgrade", "WebSocket");
+    res.add_header("Connection", "Upgrade");
+    res.add_header("Sec-WebSocket-Accept", std::string(accept_key, 28));
+    // res.add_header("content-length", "0");
+    auto protocal_str = req.get_header_value("sec-websocket-protocol");
+    if (!protocal_str.empty()) {
+      res.add_header("Sec-WebSocket-Protocol",
+                     {protocal_str.data(), protocal_str.length()});
+    }
+  }
+
   void response_handshake() {
     std::vector<asio::const_buffer> buffers = res_.to_buffers();
     if (buffers.empty()) {
@@ -1330,7 +1352,9 @@ class connection : public base_connection,
     }
 
     if (keep_alive_) {
-      is_upgrade_ = ws_.is_upgrade(req_);
+      is_upgrade_ = req_.is_upgrade();
+      if (is_upgrade_)
+        ws_.sec_ws_key(req_.get_header_value("sec-websocket-key"));
     }
   }
 
