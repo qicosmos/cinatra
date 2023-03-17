@@ -107,14 +107,23 @@ class coro_http_client {
 
   bool has_closed() { return has_closed_; }
 
-  void add_header(std::string key, std::string val) {
+  bool add_header(std::string key, std::string val) {
     if (key.empty())
-      return;
+      return false;
 
     if (key == "Host")
-      return;
+      return false;
+
+    if (auto it = std::find_if(req_headers_.begin(), req_headers_.end(),
+                               [&key](auto &item) {
+                                 return item.first == key;
+                               });
+        it != req_headers_.end()) {
+      return false;
+    }
 
     req_headers_.emplace_back(std::move(key), std::move(val));
+    return true;
   }
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
@@ -429,7 +438,10 @@ class coro_http_client {
   async_simple::coro::Lazy<std::error_code> handle_shake() {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
+      if (ssl_stream_ == nullptr) {
+        co_return std::make_error_code(std::errc::not_a_stream);
+      }
+
       auto ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
@@ -939,7 +951,6 @@ class coro_http_client {
       AsioBuffer &buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_read(*ssl_stream_, buffer, size_to_read);
     }
     else {
@@ -955,7 +966,6 @@ class coro_http_client {
       AsioBuffer &&buffer) {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_write(*ssl_stream_, buffer);
     }
     else {
@@ -971,7 +981,6 @@ class coro_http_client {
       AsioBuffer &buffer, asio::string_view delim) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_read_until(*ssl_stream_, buffer, delim);
     }
     else {

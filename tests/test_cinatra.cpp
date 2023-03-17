@@ -144,6 +144,7 @@ TEST_CASE("test upload file") {
   client.add_str_part("key", "value");
   CHECK(!client.add_file_part("key", "value"));
   result = async_simple::coro::syncAwait(client.async_upload(uri));
+  CHECK(!client.is_redirect(result));
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
@@ -184,6 +185,10 @@ TEST_CASE("test upload file") {
 
 TEST_CASE("test bad uri") {
   coro_http_client client{};
+  CHECK(client.add_header("hello", "cinatra"));
+  CHECK(!client.add_header("hello", "cinatra"));
+  CHECK(!client.add_header("", "cinatra"));
+  CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
   auto result = async_simple::coro::syncAwait(
       client.async_upload("http://www.badurlrandom.org"));
