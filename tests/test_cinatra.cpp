@@ -144,6 +144,7 @@ TEST_CASE("test upload file") {
   client.add_str_part("key", "value");
   CHECK(!client.add_file_part("key", "value"));
   result = async_simple::coro::syncAwait(client.async_upload(uri));
+  CHECK(!client.is_redirect(result));
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
@@ -184,6 +185,10 @@ TEST_CASE("test upload file") {
 
 TEST_CASE("test bad uri") {
   coro_http_client client{};
+  CHECK(client.add_header("hello", "cinatra"));
+  CHECK(!client.add_header("hello", "cinatra"));
+  CHECK(!client.add_header("", "cinatra"));
+  CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
   auto result = async_simple::coro::syncAwait(
       client.async_upload("http://www.badurlrandom.org"));
@@ -274,19 +279,19 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
-// TEST_CASE("test coro_http_client chunked download") {
-//  coro_http_client client{};
-//  client.set_timeout(10s);
-//  std::string uri =
-//      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-//  std::string filename = "test.jpg";
-//
-//  std::error_code ec{};
-//  std::filesystem::remove(filename, ec);
-//  auto r = client.download(uri, filename);
-//  CHECK(!r.net_err);
-//  CHECK(r.status == 200);
-//}
+TEST_CASE("test coro_http_client chunked download") {
+  coro_http_client client{};
+  client.set_timeout(10s);
+  std::string uri =
+      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  std::string filename = "test.jpg";
+
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+  auto r = client.download(uri, filename);
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+}
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
