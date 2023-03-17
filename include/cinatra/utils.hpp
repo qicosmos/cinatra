@@ -6,14 +6,10 @@
 #define CINATRA_UTILS_HPP
 
 #pragma once
-#include "define.h"
 #include <algorithm>
 #include <array>
-#if defined(ASIO_STANDALONE)
-#include "use_asio.hpp"
-#endif
 #include <cctype>
-#include <cstddef> //std::byte
+#include <cstddef>  //std::byte
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -22,6 +18,9 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+
+#include "define.h"
+#include "sha1.hpp"
 
 namespace cinatra {
 struct ci_less {
@@ -33,31 +32,32 @@ struct ci_less {
   };
 
   bool operator()(const std::string &s1, const std::string &s2) const {
-    return std::lexicographical_compare(s1.begin(), s1.end(), // source range
-                                        s2.begin(), s2.end(), // dest range
-                                        nocase_compare());    // comparison
+    return std::lexicographical_compare(s1.begin(), s1.end(),  // source range
+                                        s2.begin(), s2.end(),  // dest range
+                                        nocase_compare());     // comparison
   }
 
   bool operator()(std::string_view s1, std::string_view s2) const {
-    return std::lexicographical_compare(s1.begin(), s1.end(), // source range
-                                        s2.begin(), s2.end(), // dest range
-                                        nocase_compare());    // comparison
+    return std::lexicographical_compare(s1.begin(), s1.end(),  // source range
+                                        s2.begin(), s2.end(),  // dest range
+                                        nocase_compare());     // comparison
   }
 };
 
 class noncopyable {
-public:
+ public:
   noncopyable() = default;
   ~noncopyable() = default;
 
-private:
+ private:
   noncopyable(const noncopyable &) = delete;
   noncopyable &operator=(const noncopyable &) = delete;
 };
 
 using namespace std::string_view_literals;
 
-template <class T> struct sv_char_trait : std::char_traits<T> {
+template <class T>
+struct sv_char_trait : std::char_traits<T> {
   using base_t = std::char_traits<T>;
   using char_type = typename base_t::char_type;
 
@@ -105,8 +105,8 @@ inline std::string_view trim(std::string_view v) {
   return v;
 }
 
-inline std::pair<std::string_view, std::string_view>
-get_domain_url(std::string_view path) {
+inline std::pair<std::string_view, std::string_view> get_domain_url(
+    std::string_view path) {
   size_t size = path.size();
   size_t pos = std::string_view::npos;
   for (size_t i = 0; i < size; i++) {
@@ -119,7 +119,8 @@ get_domain_url(std::string_view path) {
       if (i + 1 < size - 1 && path[i + 1] == '/') {
         i++;
         continue;
-      } else {
+      }
+      else {
         pos = i;
         break;
       }
@@ -176,11 +177,19 @@ inline std::pair<std::string, std::string> get_host_port(std::string_view path,
 
   if (old_path[pos - 1] == 'p') {
     return {std::string(remove_www(path)), "http"};
-  } else if (old_path[pos - 1] == 's') {
+  }
+  else if (old_path[pos - 1] == 's') {
     return {std::string(remove_www(path)), "https"};
   }
 
   return {std::string(path.substr(0, pos)), std::string(path.substr(pos + 1))};
+}
+
+inline void SHA1(uint8_t *key_src, size_t size, uint8_t *sha1buf) {
+  sha1_context ctx;
+  init(ctx);
+  update(ctx, key_src, size);
+  finish(ctx, sha1buf);
 }
 
 template <typename T>
@@ -214,78 +223,78 @@ enum class transfer_type { CHUNKED, ACCEPT_RANGES };
 
 inline constexpr std::string_view method_name(http_method mthd) {
   switch (mthd) {
-  case cinatra::http_method::DEL:
-    return "DELETE"sv;
-    break;
-  case cinatra::http_method::GET:
-    return "GET"sv;
-    break;
-  case cinatra::http_method::HEAD:
-    return "HEAD"sv;
-    break;
-  case cinatra::http_method::POST:
-    return "POST"sv;
-    break;
-  case cinatra::http_method::PUT:
-    return "PUT"sv;
-    break;
-  case cinatra::http_method::CONNECT:
-    return "CONNECT"sv;
-    break;
-  case cinatra::http_method::OPTIONS:
-    return "OPTIONS"sv;
-    break;
-  case cinatra::http_method::TRACE:
-    return "TRACE"sv;
-    break;
-  default:
-    return "UNKONWN"sv;
-    break;
+    case cinatra::http_method::DEL:
+      return "DELETE"sv;
+      break;
+    case cinatra::http_method::GET:
+      return "GET"sv;
+      break;
+    case cinatra::http_method::HEAD:
+      return "HEAD"sv;
+      break;
+    case cinatra::http_method::POST:
+      return "POST"sv;
+      break;
+    case cinatra::http_method::PUT:
+      return "PUT"sv;
+      break;
+    case cinatra::http_method::CONNECT:
+      return "CONNECT"sv;
+      break;
+    case cinatra::http_method::OPTIONS:
+      return "OPTIONS"sv;
+      break;
+    case cinatra::http_method::TRACE:
+      return "TRACE"sv;
+      break;
+    default:
+      return "UNKONWN"sv;
+      break;
   }
 }
 
 inline std::string get_content_type_str(req_content_type type) {
   std::string str;
   switch (type) {
-  case req_content_type::html:
-    str = "text/html; charset=UTF-8";
-    break;
-  case req_content_type::json:
-    str = "application/json; charset=UTF-8";
-    break;
-  case req_content_type::string:
-    str = "text/html; charset=UTF-8";
-    break;
-  case req_content_type::multipart:
-    str = "multipart/form-data; boundary=";
-    break;
-  case req_content_type::none:
-  default:
-    break;
+    case req_content_type::html:
+      str = "text/html; charset=UTF-8";
+      break;
+    case req_content_type::json:
+      str = "application/json; charset=UTF-8";
+      break;
+    case req_content_type::string:
+      str = "text/html; charset=UTF-8";
+      break;
+    case req_content_type::multipart:
+      str = "multipart/form-data; boundary=";
+      break;
+    case req_content_type::none:
+    default:
+      break;
   }
 
   return str;
 }
 
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::DEL>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::DEL>) noexcept {
   return "DELETE"sv;
 }
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::GET>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::GET>) noexcept {
   return "GET"sv;
 }
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::HEAD>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::HEAD>) noexcept {
   return "HEAD"sv;
 }
 
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::POST>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::POST>) noexcept {
   return "POST"sv;
 }
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::PUT>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::PUT>) noexcept {
   return "PUT"sv;
 }
 
@@ -297,8 +306,8 @@ constexpr auto type_to_name(
     std::integral_constant<http_method, http_method::OPTIONS>) noexcept {
   return "OPTIONS"sv;
 }
-constexpr auto
-type_to_name(std::integral_constant<http_method, http_method::TRACE>) noexcept {
+constexpr auto type_to_name(
+    std::integral_constant<http_method, http_method::TRACE>) noexcept {
   return "TRACE"sv;
 }
 
@@ -326,7 +335,8 @@ inline bool iequal(const char *s, size_t l, const char *t, size_t size) {
   return true;
 }
 
-template <typename T> inline bool find_strIC(const T &src, const T &dest) {
+template <typename T>
+inline bool find_strIC(const T &src, const T &dest) {
   auto it = std::search(src.begin(), src.end(), dest.begin(), dest.end(),
                         [](char ch1, char ch2) {
                           return std::toupper(ch1) == std::toupper(ch2);
@@ -358,7 +368,8 @@ inline void remove_char(std::string &str, const char ch) {
   str.erase(std::remove(str.begin(), str.end(), ch), str.end());
 }
 
-template <typename... Args> inline void print(Args... args) {
+template <typename... Args>
+inline void print(Args... args) {
   ((std::cout << args << ' '), ...);
   std::cout << "\n";
 }
@@ -433,7 +444,8 @@ inline std::string form_urldecode(const std::string &src) {
       ch = static_cast<char>(ii);
       ret += ch;
       i = i + 2;
-    } else {
+    }
+    else {
       ret += src[i];
     }
   }
@@ -477,9 +489,10 @@ inline int64_t hex_to_int(std::string_view s) {
   return n;
 }
 
-static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                        "abcdefghijklmnopqrstuvwxyz"
-                                        "0123456789+/";
+static const std::string base64_chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
 
 static inline bool is_base64(char c) {
   return (isalnum(c) || (c == '+') || (c == '/'));
@@ -504,15 +517,13 @@ inline std::string base64_encode(const std::string &str) {
           ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
       char_array_4[3] = char_array_3[2] & 0x3f;
 
-      for (i = 0; (i < 4); i++)
-        ret += base64_chars[char_array_4[i]];
+      for (i = 0; (i < 4); i++) ret += base64_chars[char_array_4[i]];
       i = 0;
     }
   }
 
   if (i) {
-    for (j = i; j < 3; j++)
-      char_array_3[j] = '\0';
+    for (j = i; j < 3; j++) char_array_3[j] = '\0';
 
     char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
     char_array_4[1] =
@@ -521,11 +532,9 @@ inline std::string base64_encode(const std::string &str) {
         ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
     char_array_4[3] = char_array_3[2] & 0x3f;
 
-    for (j = 0; (j < i + 1); j++)
-      ret += base64_chars[char_array_4[j]];
+    for (j = 0; (j < i + 1); j++) ret += base64_chars[char_array_4[j]];
 
-    while ((i++ < 3))
-      ret += '=';
+    while ((i++ < 3)) ret += '=';
   }
 
   return ret;
@@ -545,7 +554,8 @@ inline std::string base64_decode(std::string const &encoded_string) {
     in_++;
     if (i == 4) {
       for (i = 0; i < 4; i++)
-        char_array_4[i] = static_cast<unsigned char>(base64_chars.find(char_array_4[i]));
+        char_array_4[i] =
+            static_cast<unsigned char>(base64_chars.find(char_array_4[i]));
 
       char_array_3[0] =
           (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
@@ -553,39 +563,39 @@ inline std::string base64_decode(std::string const &encoded_string) {
           ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
       char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-      for (i = 0; (i < 3); i++)
-        ret += char_array_3[i];
+      for (i = 0; (i < 3); i++) ret += char_array_3[i];
       i = 0;
     }
   }
 
   if (i) {
-    for (j = i; j < 4; j++)
-      char_array_4[j] = 0;
+    for (j = i; j < 4; j++) char_array_4[j] = 0;
 
     for (j = 0; j < 4; j++)
-      char_array_4[j] = static_cast<unsigned char>(base64_chars.find(char_array_4[j]));
+      char_array_4[j] =
+          static_cast<unsigned char>(base64_chars.find(char_array_4[j]));
 
     char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
     char_array_3[1] =
         ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
     char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-    for (j = 0; (j < i - 1); j++)
-      ret += char_array_3[j];
+    for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
   }
 
   return ret;
 }
 
 // from h2o
-inline const char *MAP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                         "abcdefghijklmnopqrstuvwxyz"
-                         "0123456789+/";
+inline const char *MAP =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
 
-inline const char *MAP_URL_ENCODED = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                     "abcdefghijklmnopqrstuvwxyz"
-                                     "0123456789-_";
+inline const char *MAP_URL_ENCODED =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789-_";
 inline size_t base64_encode(char *_dst, const void *_src, size_t len,
                             int url_encoded) {
   char *dst = _dst;
@@ -609,7 +619,8 @@ inline size_t base64_encode(char *_dst, const void *_src, size_t len,
       *dst++ = map[(quad >> 6) & 63];
       if (!url_encoded)
         *dst++ = '=';
-    } else {
+    }
+    else {
       *dst++ = map[(quad >> 12) & 63];
       if (!url_encoded) {
         *dst++ = '=';
@@ -626,7 +637,8 @@ inline bool is_valid_utf8(unsigned char *s, size_t length) {
   for (unsigned char *e = s + length; s != e;) {
     if (s + 4 <= e && ((*(uint32_t *)s) & 0x80808080) == 0) {
       s += 4;
-    } else {
+    }
+    else {
       while (!(*s & 0x80)) {
         if (++s == e) {
           return true;
@@ -638,21 +650,24 @@ inline bool is_valid_utf8(unsigned char *s, size_t length) {
           return false;
         }
         s += 2;
-      } else if ((s[0] & 0xf0) == 0xe0) {
+      }
+      else if ((s[0] & 0xf0) == 0xe0) {
         if (s + 2 >= e || (s[1] & 0xc0) != 0x80 || (s[2] & 0xc0) != 0x80 ||
             (s[0] == 0xe0 && (s[1] & 0xe0) == 0x80) ||
             (s[0] == 0xed && (s[1] & 0xe0) == 0xa0)) {
           return false;
         }
         s += 3;
-      } else if ((s[0] & 0xf8) == 0xf0) {
+      }
+      else if ((s[0] & 0xf8) == 0xf0) {
         if (s + 3 >= e || (s[1] & 0xc0) != 0x80 || (s[2] & 0xc0) != 0x80 ||
             (s[3] & 0xc0) != 0x80 || (s[0] == 0xf0 && (s[1] & 0xf0) == 0x80) ||
             (s[0] == 0xf4 && s[1] > 0x8f) || s[0] > 0xf4) {
           return false;
         }
         s += 4;
-      } else {
+      }
+      else {
         return false;
       }
     }
@@ -660,24 +675,29 @@ inline bool is_valid_utf8(unsigned char *s, size_t length) {
   return true;
 }
 
-template <typename T> inline std::string to_str(T &&value) {
+template <typename T>
+inline std::string to_str(T &&value) {
   using U = std::remove_const_t<std::remove_reference_t<T>>;
   if constexpr (std::is_integral_v<U> && !is_int64_v<U>) {
     std::vector<char> temp(20, '\0');
     itoa_fwd(value, temp.data());
     return std::string(temp.data());
-  } else if constexpr (is_int64_v<U>) {
+  }
+  else if constexpr (is_int64_v<U>) {
     std::vector<char> temp(65, '\0');
     xtoa(value, temp.data(), 10, std::is_signed_v<U>);
     return std::string(temp.data());
-  } else if constexpr (std::is_floating_point_v<U>) {
+  }
+  else if constexpr (std::is_floating_point_v<U>) {
     std::vector<char> temp(20, '\0');
     sprintf(temp.data(), "%f", value);
     return std::string(temp.data());
-  } else if constexpr (std::is_same_v<std::string, U> ||
-                       std::is_same_v<const char *, U>) {
+  }
+  else if constexpr (std::is_same_v<std::string, U> ||
+                     std::is_same_v<const char *, U>) {
     return value;
-  } else {
+  }
+  else {
     std::cout << "this type has not supported yet" << std::endl;
   }
 }
@@ -716,7 +736,7 @@ using has_before_t =
 
 template <class T, typename... Args>
 using has_after_t = decltype(std::declval<T>().after(std::declval<Args>()...));
-} // namespace
+}  // namespace
 
 template <typename T, typename... Args>
 using has_before = is_detected<has_before_t, T, Args...>;
@@ -743,7 +763,8 @@ constexpr void get_str(std::string &s, std::string_view name) {
   s += std::string(name.data(), name.length());
 }
 
-template <http_method... Is> constexpr auto get_arr(std::string_view name) {
+template <http_method... Is>
+constexpr auto get_arr(std::string_view name) {
   std::array<std::string, sizeof...(Is)> arr = {};
   size_t index = 0;
   (get_str<Is>(arr[index++], name), ...);
@@ -751,7 +772,8 @@ template <http_method... Is> constexpr auto get_arr(std::string_view name) {
   return arr;
 }
 
-template <http_method... Is> constexpr auto get_method_arr() {
+template <http_method... Is>
+constexpr auto get_method_arr() {
   std::array<char, 26> arr{0};
   std::string_view s;
   ((s = type_to_name(std::integral_constant<http_method, Is>{}),
@@ -778,8 +800,8 @@ inline std::string get_cur_time_str() {
   return get_time_str(std::time(nullptr));
 }
 
-inline const std::map<std::string_view, std::string_view>
-get_cookies_map(std::string_view cookies_str) {
+inline const std::map<std::string_view, std::string_view> get_cookies_map(
+    std::string_view cookies_str) {
   std::map<std::string_view, std::string_view> cookies;
   auto cookies_vec = split(cookies_str, "; ");
   for (auto iter : cookies_vec) {
@@ -791,16 +813,19 @@ get_cookies_map(std::string_view cookies_str) {
   return cookies;
 };
 
-template <typename T, typename Tuple> struct has_type;
+template <typename T, typename Tuple>
+struct has_type;
 
 template <typename T, typename... Us>
 struct has_type<T, std::tuple<Us...>>
     : std::disjunction<std::is_same<T, Us>...> {};
 
-template <typename T> struct filter_helper {
+template <typename T>
+struct filter_helper {
   static constexpr auto func() { return std::tuple<>(); }
 
-  template <class... Args> static constexpr auto func(T &&, Args &&...args) {
+  template <class... Args>
+  static constexpr auto func(T &&, Args &&...args) {
     return filter_helper::func(std::forward<Args>(args)...);
   }
 
@@ -811,9 +836,10 @@ template <typename T> struct filter_helper {
   }
 };
 
-template <typename T, typename... Args> inline auto filter(Args &&...args) {
+template <typename T, typename... Args>
+inline auto filter(Args &&...args) {
   return filter_helper<T>::func(std::forward<Args>(args)...);
 }
-} // namespace cinatra
+}  // namespace cinatra
 
-#endif // CINATRA_UTILS_HPP
+#endif  // CINATRA_UTILS_HPP
