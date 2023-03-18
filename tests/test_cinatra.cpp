@@ -574,3 +574,75 @@ TEST_CASE("test coro http request timeout") {
   server.stop();
   server_thread.join();
 }
+
+TEST_CASE("coro http upload file progress") {
+  http_server server(std::thread::hardware_concurrency());
+  //  server.enable_timeout(false);
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<POST>("/multipart", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::multipart);
+    auto &files = req.get_upload_files();
+    for (auto &file : files) {
+      std::cout << file.get_file_path() << " " << file.get_file_size()
+                << std::endl;
+    }
+    res.render_string("multipart finished");
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/multipart";
+  client.set_max_single_part_size(1024);
+  std::string test_file_name = "test1.txt";
+  std::ofstream test_file;
+  test_file.open(test_file_name,
+                 std::ios::binary | std::ios::out | std::ios::trunc);
+  std::vector<char> test_file_data(100 * 1024 * 1024, '0');
+  test_file.write(test_file_data.data(), test_file_data.size());
+  test_file.close();
+
+  bool stop_upload_timer = false;
+  client.set_upload_progress(true);
+
+  std::thread timer_upload_progress([&]() {
+    while (1) {
+      if (stop_upload_timer) {
+        break;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::cout << "upload progress: " << client.get_upload_progress()
+                << std::endl;
+    }
+  });
+
+  timer_upload_progress.detach();
+
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_upload(uri, "test", test_file_name));
+
+  if (result.status == 200) {
+    CHECK(result.resp_body == "multipart finished");
+    CHECK(client.get_upload_progress() == "100%");
+  }
+
+  stop_upload_timer = true;
+  std::filesystem::remove(std::filesystem::path(test_file_name));
+
+  server.stop();
+  server_thread.join();
+}

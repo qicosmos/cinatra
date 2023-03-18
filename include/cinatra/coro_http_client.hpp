@@ -315,9 +315,9 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    size_t content_len = multipart_content_len();
+    upload_packet_length_ = multipart_content_len();
 
-    add_header("Content-Length", std::to_string(content_len));
+    add_header("Content-Length", std::to_string(upload_packet_length_));
 
     std::string header_str = build_request_header(u, http_method::POST, ctx);
 
@@ -519,6 +519,22 @@ class coro_http_client {
       std::chrono::steady_clock::duration timeout_duration) {
     enable_timeout_ = true;
     timeout_duration_ = timeout_duration;
+  }
+
+  inline void set_upload_progress(bool enable_upload_progress) {
+    enable_upload_progress_ = enable_upload_progress;
+  }
+
+  std::string get_upload_progress() {
+    if (current_upload_size_ >= upload_packet_length_) {
+      return "100%";
+    }
+    else {
+      uint8_t upload_progress =
+          (current_upload_size_ / upload_packet_length_) * 100;
+      std::string progress_string = std::to_string(upload_progress) + "%";
+      return progress_string;
+    }
   }
 
  private:
@@ -919,6 +935,10 @@ class coro_http_client {
             ec) {
           co_return resp_data{ec, 404};
         }
+
+        if (enable_upload_progress_) {
+          current_upload_size_ += size_to_read;
+        }
       }
     }
     else {
@@ -1121,5 +1141,9 @@ class coro_http_client {
   bool enable_timeout_ = false;
   std::chrono::steady_clock::duration timeout_duration_ =
       std::chrono::seconds(60);
+
+  double upload_packet_length_ = 0.0;
+  double current_upload_size_ = 0.0;
+  bool enable_upload_progress_ = false;
 };
 }  // namespace cinatra
