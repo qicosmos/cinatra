@@ -15,6 +15,8 @@
 #include "session_manager.hpp"
 #include "upload_file.hpp"
 #include "url_encode_decode.hpp"
+#include "ws_define.h"
+
 namespace cinatra {
 enum class data_proc_state : int8_t {
   data_begin,
@@ -76,6 +78,31 @@ class request {
   bool is_conn_alive() {
     auto base_conn = conn_.lock();
     return base_conn != nullptr;
+  }
+
+  bool is_upgrade() {
+    if (get_method() != "GET"sv)
+      return false;
+
+    auto h = get_header_value("connection");
+    if (h.empty())
+      return false;
+
+    auto u = get_header_value("upgrade");
+    if (u.empty())
+      return false;
+
+    if (!find_strIC(h, UPGRADE))
+      return false;
+
+    if (!iequal(u.data(), u.length(), WEBSOCKET.data()))
+      return false;
+
+    auto sec_ws_key = get_header_value("sec-websocket-key");
+    if (sec_ws_key.empty() || sec_ws_key.size() != 24)
+      return false;
+
+    return true;
   }
 
   conn_type get_weak_base_conn() { return conn_; }

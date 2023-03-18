@@ -1,4 +1,5 @@
 #pragma once
+#include <asio/streambuf.hpp>
 #include <atomic>
 #include <charconv>
 #include <filesystem>
@@ -8,21 +9,32 @@
 #include <thread>
 #include <unordered_map>
 
-#include "asio/io_context.hpp"
-#include "asio/ip/tcp.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
-#include "cinatra/define.h"
-#include "cinatra/utils.hpp"
 #include "http_parser.hpp"
-#include "modern_callback.h"
 #include "response_cv.hpp"
 #include "uri.hpp"
 #include "websocket.hpp"
 
 namespace cinatra {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+enum class ClientInjectAction {
+  none,
+  response_error,
+  header_error,
+  chunk_error,
+  write_failed,
+  read_failed,
+};
+inline ClientInjectAction inject_response_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_header_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
+inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
+inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
+#endif
+
 struct resp_data {
   std::error_code net_err;
   int status;
@@ -47,7 +59,10 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_) {
+  coro_http_client()
+      : socket_(io_ctx_),
+        executor_(io_ctx_.get_executor()),
+        timer_(io_ctx_.get_executor()) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -112,14 +127,23 @@ class coro_http_client {
 
   bool has_closed() { return has_closed_; }
 
-  void add_header(std::string key, std::string val) {
+  bool add_header(std::string key, std::string val) {
     if (key.empty())
-      return;
+      return false;
 
     if (key == "Host")
-      return;
+      return false;
+
+    if (auto it = std::find_if(req_headers_.begin(), req_headers_.end(),
+                               [&key](auto &item) {
+                                 return item.first == key;
+                               });
+        it != req_headers_.end()) {
+      return false;
+    }
 
     req_headers_.emplace_back(std::move(key), std::move(val));
+    return true;
   }
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
@@ -248,6 +272,32 @@ class coro_http_client {
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
+  async_simple::Promise<async_simple::Unit> start_timer() {
+    async_simple::Promise<async_simple::Unit> promise;
+    if (enable_timeout_) {
+      timeout(timer_, promise, "request timer canceled")
+          .via(&executor_)
+          .detach();
+    }
+
+    return promise;
+  }
+
+  async_simple::coro::Lazy<std::error_code> wait_timer(
+      async_simple::Promise<async_simple::Unit> &promise) {
+    if (!enable_timeout_) {
+      co_return std::error_code{};
+    }
+    std::error_code err_code;
+    timer_.cancel(err_code);
+    co_await promise.getFuture();
+    if (is_timeout_) {
+      co_return std::make_error_code(std::errc::timed_out);
+    }
+
+    co_return std::error_code{};
+  }
+
   async_simple::coro::Lazy<resp_data> async_upload(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
@@ -274,21 +324,23 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(io_ctx_);
-    if (enable_timeout_) {
-      timeout(timer, promise, "request timer canceled")
-          .via(&executor_)
-          .detach();
-    }
+    auto promise = start_timer();
 
     data = co_await connect(u);
     if (data.net_err) {
       co_return data;
     }
 
-    if (std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
-        ec) {
+    std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (inject_write_failed == ClientInjectAction::write_failed) {
+      ec = std::make_error_code(std::errc::not_connected);
+    }
+#endif
+    if (ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      inject_write_failed = ClientInjectAction::none;
+#endif
       std::cout << ec.message() << "\n";
       co_return resp_data{ec, 404};
     }
@@ -310,14 +362,8 @@ class coro_http_client {
 
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
-    if (enable_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-      co_await promise.getFuture();
-      if (is_timeout_) {
-        data.net_err = std::make_error_code(std::errc::timed_out);
-        co_return data;
-      }
+    if (auto errc = co_await wait_timer(promise); errc) {
+      ec = errc;
     }
 
     handle_result(data, ec, is_keep_alive);
@@ -376,13 +422,7 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
-    async_simple::Promise<async_simple::Unit> promise;
-    asio_util::period_timer timer(io_ctx_);
-    if (enable_timeout_) {
-      timeout(timer, promise, "request timer canceled")
-          .via(&executor_)
-          .detach();
-    }
+    auto promise = start_timer();
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -393,8 +433,8 @@ class coro_http_client {
       if (has_closed_) {
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        if (ec =
-                co_await asio_util::async_connect(io_ctx_, socket_, host, port);
+        if (ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
+                                                   socket_, host, port);
             ec) {
           break;
         }
@@ -417,14 +457,8 @@ class coro_http_client {
       data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
     } while (0);
 
-    if (enable_timeout_) {
-      std::error_code err_code;
-      timer.cancel(err_code);
-      co_await promise.getFuture();
-      if (is_timeout_) {
-        data.net_err = std::make_error_code(std::errc::timed_out);
-        co_return data;
-      }
+    if (auto errc = co_await wait_timer(promise); errc) {
+      ec = errc;
     }
 
     handle_result(data, ec, is_keep_alive);
@@ -434,7 +468,10 @@ class coro_http_client {
   async_simple::coro::Lazy<std::error_code> handle_shake() {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
+      if (ssl_stream_ == nullptr) {
+        co_return std::make_error_code(std::errc::not_a_stream);
+      }
+
       auto ec = co_await asio_util::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
@@ -614,7 +651,15 @@ class coro_http_client {
     const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+    if (inject_response_valid == ClientInjectAction::response_error) {
+      parse_ret = -1;
+    }
+#endif
     if (parse_ret < 0) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      inject_response_valid = ClientInjectAction::none;
+#endif
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
@@ -635,7 +680,16 @@ class coro_http_client {
       }
 
       http_parser parser;
-      if (ec = handle_header(data, parser, size); ec) {
+      ec = handle_header(data, parser, size);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_header_valid == ClientInjectAction::header_error) {
+        ec = std::make_error_code(std::errc::protocol_error);
+      }
+#endif
+      if (ec) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+        inject_header_valid = ClientInjectAction::none;
+#endif
         break;
       }
 
@@ -686,7 +740,6 @@ class coro_http_client {
         }
       }
 
-      assert(content_len <= read_buf_.size());
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view reply(data_ptr, content_len);
       data.resp_body = reply;
@@ -720,13 +773,31 @@ class coro_http_client {
         break;
       }
 
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_read_failed == ClientInjectAction::read_failed) {
+        ec = std::make_error_code(std::errc::not_connected);
+      }
+      if (ec) {
+        inject_read_failed = ClientInjectAction::none;
+        break;
+      }
+#endif
+
       size_t buf_size = read_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       read_buf_.consume(size);
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+      if (inject_chunk_valid == ClientInjectAction::chunk_error) {
+        chunk_size = -1;
+      }
+#endif
       if (chunk_size < 0) {
+#ifdef INJECT_FOR_HTTP_CLIENT_TEST
+        inject_chunk_valid = ClientInjectAction::none;
+#endif
         std::cout << "bad chunked size\n";
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
@@ -765,8 +836,8 @@ class coro_http_client {
     if (has_closed_) {
       std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
       std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec =
-              co_await asio_util::async_connect(io_ctx_, socket_, host, port);
+      if (auto ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
+                                                      socket_, host, port);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -822,7 +893,10 @@ class coro_http_client {
       }
 
       std::error_code ec;
-      assert(std::filesystem::exists(part.filename, ec));
+      if (!std::filesystem::exists(part.filename, ec)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
     }
     part_content_head.append(TWO_CRCF);
     if (auto [ec, size] = co_await async_write(asio::buffer(part_content_head));
@@ -944,7 +1018,6 @@ class coro_http_client {
       AsioBuffer &buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_read(*ssl_stream_, buffer, size_to_read);
     }
     else {
@@ -960,7 +1033,6 @@ class coro_http_client {
       AsioBuffer &&buffer) {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_write(*ssl_stream_, buffer);
     }
     else {
@@ -976,7 +1048,6 @@ class coro_http_client {
       AsioBuffer &buffer, asio::string_view delim) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      assert(ssl_stream_);
       return asio_util::async_read_until(*ssl_stream_, buffer, delim);
     }
     else {
@@ -996,30 +1067,24 @@ class coro_http_client {
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
                                          std::string msg) {
-    if (!enable_timeout_) {
-      is_timeout_ = false;
+    timer.expires_after(timeout_duration_);
+    is_timeout_ = co_await timer.async_await();
+    if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
+      std::cout << msg << '\n';
       co_return false;
     }
-    else {
-      timer.expires_after(timeout_duration_);
-      is_timeout_ = co_await timer.async_await();
-      if (!is_timeout_) {
-        promise.setValue(async_simple::Unit());
-        std::cout << msg << '\n';
-        co_return false;
-      }
-      std::cout << "request timeout\n";
-      close_socket();
-      promise.setValue(async_simple::Unit());
-      co_return true;
-    }
+    std::cout << "request timeout\n";
+    close_socket();
+    promise.setValue(async_simple::Unit());
+    co_return true;
   }
 
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
-  asio_util::AsioExecutor executor_;
+  asio_util::ExecutorWrapper<> executor_;
   std::unique_ptr<asio::io_context::work> work_;
+  asio_util::period_timer timer_;
   std::thread io_thd_;
 
   std::atomic<bool> has_closed_ = true;

@@ -24,6 +24,8 @@ Cinatra is a high-performance, easy-to-use http framework developed in Modern C+
 
 Cinatra currently supports HTTP 1.1/1.0, TLS/SSL and [WebSocket](https://www.wikiwand.com/en/WebSocket) protocols. You can use it to easily develop an HTTP server, such as a common database access server, a file upload/download server, real-time message push server, as well as a [MQTT](https://www.wikiwand.com/en/MQTT) server.
 
+Cinatra also provides a C++ 20 coroutine http(https) client, include such functions: get/post, upload(multipart), download(chunked and ranges), websocket, redirect, proxy etc.
+
 ## Usage
 
 Cinatra is a header-only library. So you can immediately use it in your code with a simple `#include` directive.
