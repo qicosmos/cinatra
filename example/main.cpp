@@ -110,6 +110,7 @@ async_simple::coro::Lazy<void> test_async_ssl_client(coro_http_client &client) {
   data = co_await client.async_get(uri3);
   print(data.status);
 #endif
+  co_return;
 }
 
 async_simple::coro::Lazy<void> test_download() {
