@@ -237,7 +237,7 @@ inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   });
 }
 
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
 inline async_simple::coro::Lazy<std::error_code> async_handshake(
     auto &ssl_stream, asio::ssl::stream_base::handshake_type type) noexcept {
   callback_awaitor<std::error_code> awaitor;
