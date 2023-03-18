@@ -1,4 +1,5 @@
 #pragma once
+#include <asio/streambuf.hpp>
 #include <atomic>
 #include <charconv>
 #include <filesystem>
@@ -58,7 +59,10 @@ struct multipart_t {
 
 class coro_http_client {
  public:
-  coro_http_client() : socket_(io_ctx_), executor_(io_ctx_), timer_(io_ctx_) {
+  coro_http_client()
+      : socket_(io_ctx_),
+        executor_(io_ctx_.get_executor()),
+        timer_(io_ctx_.get_executor()) {
     work_ = std::make_unique<asio::io_context::work>(io_ctx_);
     io_thd_ = std::thread([this] {
       io_ctx_.run();
@@ -429,8 +433,8 @@ class coro_http_client {
       if (has_closed_) {
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        if (ec =
-                co_await asio_util::async_connect(io_ctx_, socket_, host, port);
+        if (ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
+                                                   socket_, host, port);
             ec) {
           break;
         }
@@ -832,8 +836,8 @@ class coro_http_client {
     if (has_closed_) {
       std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
       std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec =
-              co_await asio_util::async_connect(io_ctx_, socket_, host, port);
+      if (auto ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
+                                                      socket_, host, port);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -1078,7 +1082,7 @@ class coro_http_client {
 
   asio::io_context io_ctx_;
   asio::ip::tcp::socket socket_;
-  asio_util::AsioExecutor executor_;
+  asio_util::ExecutorWrapper<> executor_;
   std::unique_ptr<asio::io_context::work> work_;
   asio_util::period_timer timer_;
   std::thread io_thd_;

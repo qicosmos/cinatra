@@ -87,23 +87,20 @@ void test_sync_client() {
   }
 }
 
-async_simple::coro::Lazy<void> test_async_client() {
+async_simple::coro::Lazy<void> test_async_client(coro_http_client &client) {
   std::string uri = "http://www.baidu.com";
+  auto data = co_await client.async_get(uri);
+  print(data.status);
 
-  {
-    coro_http_client client{};
-    auto data = co_await client.async_get(uri);
-    print(data.status);
+  data = co_await client.async_get(uri);
+  print(data.status);
 
-    data = co_await client.async_get(uri);
-    print(data.status);
+  data = co_await client.async_post(uri, "hello", req_content_type::string);
+  print(data.status);
+}
 
-    data = co_await client.async_post(uri, "hello", req_content_type::string);
-    print(data.status);
-  }
-
-#ifdef CINATRA_ENABLE_SSL
-  std::string uri2 = "https://www.baidu.com";
+async_simple::coro::Lazy<void> test_async_ssl_client(coro_http_client &client) {
+#ifdef CINATRA_ENABLE_SSL std::string uri2 = "https://www.baidu.com";
   std::string uri3 = "https://cn.bing.com";
   coro_http_client client{};
   client.init_ssl("../../include/cinatra", "server.crt");
@@ -229,8 +226,15 @@ class qps {
 int main() {
   // test_coro_http_client();
   // test_smtp_client();
-  test_sync_client();
-  async_simple::coro::syncAwait(test_async_client());
+  {
+    test_sync_client();
+    coro_http_client client{};
+    async_simple::coro::syncAwait(test_async_client(client));
+
+    coro_http_client ssl_client{};
+    async_simple::coro::syncAwait(test_async_ssl_client(ssl_client));
+  }
+
   // test_ssl_server();
   // test_download();
   http_server server(std::thread::hardware_concurrency());

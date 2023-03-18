@@ -1,53 +1,59 @@
-/*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 #pragma once
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
-#include <async_simple/executors/SimpleExecutor.h>
 
-#include <asio.hpp>
 #include <chrono>
+#include <deque>
 
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
 
+#include <asio/connect.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/read.hpp>
+#include <asio/read_until.hpp>
+#include <asio/write.hpp>
+
 namespace asio_util {
 
-class AsioExecutor : public async_simple::Executor {
+template <typename ExecutorImpl = asio::io_context::executor_type>
+class ExecutorWrapper : public async_simple::Executor {
+ private:
+  ExecutorImpl executor_;
+
  public:
-  AsioExecutor(asio::io_context &io_context) : io_context_(io_context) {}
+  ExecutorWrapper(ExecutorImpl executor) : executor_(executor) {}
+
+  using context_t = std::remove_cvref_t<decltype(executor_.context())>;
 
   virtual bool schedule(Func func) override {
-    asio::post(io_context_, std::move(func));
+    asio::post(executor_, std::move(func));
     return true;
   }
+
+  virtual bool checkin(Func func, void *ctx) override {
+    using context_t = std::remove_cvref_t<decltype(executor_.context())>;
+    asio::post(*(context_t *)ctx, func);
+    return true;
+  }
+  virtual void *checkout() override { return &executor_.context(); }
 
   bool currentThreadInExecutor() const override { return false; }
 
   async_simple::ExecutorStat stat() const override { return {}; }
 
+  context_t &context() { return executor_.context(); }
+
+  auto get_executor() { return executor_; }
+
  private:
   void schedule(Func func, Duration dur) override {
-    auto timer = std::make_shared<asio::steady_timer>(io_context_, dur);
+    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
     timer->async_wait([fn = std::move(func), timer](auto ec) {
       fn();
     });
   }
-  asio::io_context &io_context_;
 };
 
 template <typename Arg, typename Derived>
@@ -143,6 +149,7 @@ async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
     });
   });
 }
+
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
@@ -156,9 +163,9 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
 
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-    Socket &socket, AsioBuffer &&buffer, size_t size_to_read) noexcept {
+    Socket &socket, AsioBuffer &buffer, size_t size_to_read) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-  co_return co_await awaitor.await_resume([&, size_to_read](auto handler) {
+  co_return co_await awaitor.await_resume([&](auto handler) {
     asio::async_read(socket, buffer, asio::transfer_exactly(size_to_read),
                      [&, handler](const auto &ec, auto size) {
                        handler.set_value_then_resume(ec, size);
@@ -190,11 +197,12 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
   });
 }
 
+template <typename executor_t>
 inline async_simple::coro::Lazy<std::error_code> async_connect(
-    asio::io_context &io_context, asio::ip::tcp::socket &socket,
+    const executor_t &executor, asio::ip::tcp::socket &socket,
     const std::string &host, const std::string &port) noexcept {
   callback_awaitor<std::error_code> awaitor;
-  asio::ip::tcp::resolver resolver(io_context);
+  asio::ip::tcp::resolver resolver(executor);
   asio::ip::tcp::resolver::iterator iterator;
   auto ec = co_await awaitor.await_resume([&](auto handler) {
     resolver.async_resolve(host, port, [&, handler](auto ec, auto it) {
@@ -218,10 +226,9 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
-  asio::io_context &io_context =
-      static_cast<asio::io_context &>(socket.get_executor().context());
+  auto &executor = socket.get_executor();
   co_return co_await awaitor.await_resume([&](auto handler) {
-    asio::post(io_context, [&, handler]() {
+    asio::post(executor, [&, handler]() {
       asio::error_code ignored_ec;
       socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket.close(ignored_ec);
@@ -230,7 +237,7 @@ inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   });
 }
 
-#ifdef CINATRA_ENABLE_SSL
+#ifdef ENABLE_SSL
 inline async_simple::coro::Lazy<std::error_code> async_handshake(
     auto &ssl_stream, asio::ssl::stream_base::handshake_type type) noexcept {
   callback_awaitor<std::error_code> awaitor;
@@ -244,11 +251,12 @@ inline async_simple::coro::Lazy<std::error_code> async_handshake(
 
 class period_timer : public asio::steady_timer {
  public:
-  period_timer(asio::io_context &ctx) : asio::steady_timer(ctx) {}
-  template <class Rep, class Period>
-  period_timer(asio::io_context &ctx,
+  template <typename executor_t>
+  period_timer(const executor_t &executor) : asio::steady_timer(executor) {}
+  template <typename executor_t, typename Rep, typename Period>
+  period_timer(const executor_t &executor,
                const std::chrono::duration<Rep, Period> &timeout_duration)
-      : asio::steady_timer(ctx, timeout_duration) {}
+      : asio::steady_timer(executor, timeout_duration) {}
   async_simple::coro::Lazy<bool> async_await() noexcept {
     callback_awaitor<bool> awaitor;
     co_return co_await awaitor.await_resume([&](auto handler) {
