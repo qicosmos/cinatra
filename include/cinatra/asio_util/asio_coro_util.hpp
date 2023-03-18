@@ -5,7 +5,7 @@
 #include <chrono>
 #include <deque>
 
-#ifdef ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
 #include <asio/ssl.hpp>
 #endif
 
