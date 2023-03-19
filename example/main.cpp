@@ -69,10 +69,10 @@ void test_sync_client() {
     coro_http_client client{};
     auto result = client.get(uri);
     assert(!result.net_err);
-    print(result.resp_body);
+    print(result.status);
 
     result = client.post(uri, "hello", req_content_type::json);
-    print(result.resp_body);
+    print(result.status);
   }
 
   {
@@ -80,10 +80,10 @@ void test_sync_client() {
     std::string uri = "http://cn.bing.com";
     auto result = client.get(uri);
     assert(!result.net_err);
-    print(result.resp_body);
+    print(result.status);
 
     result = client.post(uri, "hello", req_content_type::json);
-    print(result.resp_body);
+    print(result.status);
   }
 }
 
@@ -431,17 +431,17 @@ int main() {
   // response& res) { 		res.render_raw_view("./www/dist/index.html");
   //	});
   //
-  //	//http upload(multipart)
-  // server.set_http_handler<GET, POST>("/upload_multipart", [](request& req,
-  // response& res) { 	assert(req.get_content_type() ==
-  // content_type::multipart);
-  //	auto& files = req.get_upload_files();
-  //	for (auto& file : files) {
-  //		std::cout << file.get_file_path() << " " << file.get_file_size()
-  //<< std::endl;
-  //	}
-  //	res.render_string("multipart finished");
-  //});
+  // http upload(multipart)
+  server.set_http_handler<GET, POST>(
+      "/upload_multipart", [](request &req, response &res) {
+        assert(req.get_content_type() == content_type::multipart);
+        auto &files = req.get_upload_files();
+        for (auto &file : files) {
+          std::cout << file.get_file_path() << " " << file.get_file_size()
+                    << std::endl;
+        }
+        res.render_string("multipart finished");
+      });
   //
   //	//http upload(octet-stream)
   //	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request&
