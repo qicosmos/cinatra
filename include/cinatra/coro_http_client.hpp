@@ -4,11 +4,11 @@
 #include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
-#include <future>
 
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
@@ -17,8 +17,8 @@
 #include "http_parser.hpp"
 #include "response_cv.hpp"
 #include "uri.hpp"
-#include "websocket.hpp"
 #include "use_asio.hpp"
+#include "websocket.hpp"
 
 namespace cinatra {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
@@ -77,9 +77,7 @@ class coro_http_client {
   }
 
   coro_http_client(asio::io_context::executor_type executor)
-      : socket_(executor),
-        executor_wrapper_(executor),
-        timer_(executor) {}
+      : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
 
   ~coro_http_client() {
     async_close();
@@ -89,7 +87,8 @@ class coro_http_client {
         std::thread thrd{[io_thd = std::move(io_thd_)]() mutable {
           io_thd.join();
         }};
-      } else {
+      }
+      else {
         io_thd_.join();
       }
     }
@@ -451,8 +450,8 @@ class coro_http_client {
       if (has_closed_) {
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        if (ec = co_await asio_util::async_connect(executor_wrapper_.get_executor(),
-                                                   socket_, host, port);
+        if (ec = co_await asio_util::async_connect(
+                executor_wrapper_.get_executor(), socket_, host, port);
             ec) {
           break;
         }
@@ -854,8 +853,8 @@ class coro_http_client {
     if (has_closed_) {
       std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
       std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec = co_await asio_util::async_connect(executor_wrapper_.get_executor(),
-                                                      socket_, host, port);
+      if (auto ec = co_await asio_util::async_connect(
+              executor_wrapper_.get_executor(), socket_, host, port);
           ec) {
         co_return resp_data{ec, 404};
       }

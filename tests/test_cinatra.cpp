@@ -596,7 +596,8 @@ TEST_CASE("test coro_http_client using external io_context") {
     std::thread thrd{[io_thd = std::move(thd)]() mutable {
       io_thd.join();
     }};
-  } else {
+  }
+  else {
     thd.join();
   }
 }
