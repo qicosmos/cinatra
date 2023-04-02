@@ -574,3 +574,29 @@ TEST_CASE("test coro http request timeout") {
   server.stop();
   server_thread.join();
 }
+
+TEST_CASE("test coro_http_client using external io_context") {
+  asio::io_context io_context;
+  std::promise<void> promise;
+  auto future = promise.get_future();
+  std::thread thd([&io_context, &promise] {
+    asio::io_context::work work(io_context);
+    promise.set_value();
+    io_context.run();
+  });
+  future.wait();
+
+  coro_http_client client(io_context.get_executor());
+  auto r =
+      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+  io_context.stop();
+  if (thd.get_id() == std::this_thread::get_id()) {
+    std::thread thrd{[io_thd = std::move(thd)]() mutable {
+      io_thd.join();
+    }};
+  } else {
+    thd.join();
+  }
+}
