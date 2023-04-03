@@ -62,16 +62,17 @@ struct multipart_t {
 class coro_http_client {
  public:
   coro_http_client()
-      : socket_(io_ctx_),
-        executor_wrapper_(io_ctx_.get_executor()),
-        timer_(io_ctx_.get_executor()) {
+      : io_ctx_(std::make_unique<asio::io_context>()),
+        socket_(io_ctx_->get_executor()),
+        executor_wrapper_(io_ctx_->get_executor()),
+        timer_(io_ctx_->get_executor()) {
     std::promise<void> promise;
     io_thd_ = std::thread([this, &promise] {
-      work_ = std::make_unique<asio::io_context::work>(io_ctx_);
+      work_ = std::make_unique<asio::io_context::work>(*io_ctx_);
       asio::post(executor_wrapper_.get_executor(), [&] {
         promise.set_value();
       });
-      io_ctx_.run();
+      io_ctx_->run();
     });
     promise.get_future().wait();
   }
@@ -81,12 +82,14 @@ class coro_http_client {
 
   ~coro_http_client() {
     async_close();
-    work_ = nullptr;
     if (io_thd_.joinable()) {
+      work_ = nullptr;
       if (io_thd_.get_id() == std::this_thread::get_id()) {
-        std::thread thrd{[io_thd = std::move(io_thd_)]() mutable {
+        std::thread thrd{[io_ctx = std::move(io_ctx_),
+                          io_thd = std::move(io_thd_)]() mutable {
           io_thd.join();
         }};
+        thrd.detach();
       }
       else {
         io_thd_.join();
@@ -1097,7 +1100,7 @@ class coro_http_client {
     co_return true;
   }
 
-  asio::io_context io_ctx_;
+  std::unique_ptr<asio::io_context> io_ctx_;
   asio::ip::tcp::socket socket_;
   asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
   std::unique_ptr<asio::io_context::work> work_;
