@@ -1,11 +1,11 @@
-set(project_name cinatra_wrk)
+set(project_name cinatra_press_tool)
 project(${project_name})
 
-set(CINATRA_WRK
+set(cinatra_press_tool
 	main.cpp
 	)
 
-add_executable(${project_name} ${CINATRA_WRK})
+add_executable(${project_name} ${cinatra_press_tool})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
