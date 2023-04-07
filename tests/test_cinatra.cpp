@@ -1,6 +1,9 @@
+#include <async_simple/coro/Collect.h>
+
 #include <filesystem>
 #include <future>
 #include <system_error>
+#include <vector>
 
 #include "cinatra.hpp"
 #include "doctest.h"
@@ -105,6 +108,32 @@ TEST_CASE("test ssl client") {
   }
 }
 #endif
+
+async_simple::coro::Lazy<void> test_collect_all() {
+  asio::io_context ioc;
+  std::thread thd([&] {
+    ioc.run();
+  });
+  std::vector<std::shared_ptr<coro_http_client>> v;
+  std::vector<async_simple::coro::Lazy<resp_data>> futures;
+  for (int i = 0; i < 2; ++i) {
+    auto client = std::make_shared<coro_http_client>();
+    v.push_back(client);
+    futures.push_back(client->async_get("http://www.baidu.com/"));
+  }
+
+  auto out = co_await async_simple::coro::collectAll(std::move(futures));
+
+  for (auto &item : out) {
+    auto result = item.value();
+    CHECK(result.status >= 200);
+  }
+  thd.join();
+}
+
+TEST_CASE("test collect all") {
+  async_simple::coro::syncAwait(test_collect_all());
+}
 
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
