@@ -27,7 +27,9 @@
 
 #pragma once
 
+#ifndef _MSC_VER
 #include <cxxabi.h>
+#endif
 
 #include <algorithm>
 #include <cstdlib>
@@ -101,6 +103,7 @@ Target lexical_cast(const Source &arg) {
                         detail::is_same<Target, Source>::value>::cast(arg);
 }
 
+#ifndef _MSC_VER
 static inline std::string demangle(const std::string &name) {
   int status = 0;
   char *p = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
@@ -108,6 +111,9 @@ static inline std::string demangle(const std::string &name) {
   free(p);
   return ret;
 }
+#else
+static inline std::string demangle(const std::string &name) { return name; }
+#endif
 
 template <class T>
 std::string readable_typename() {
