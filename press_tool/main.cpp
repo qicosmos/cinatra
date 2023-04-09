@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -145,9 +146,25 @@ int main(int argc, char* argv[]) {
   timer_thd.join();
 
   // statistic
+  auto seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(conf.press_interval)
+          .count();
+  std::cout << "Running "
+            << std::chrono::duration_cast<std::chrono::seconds>(
+                   conf.press_interval)
+                   .count()
+            << "s "
+            << "test @ " << conf.url << "\n";
+  std::cout << "  " << conf.threads_num << " threads and " << conf.connections
+            << " connections\n";
+
+  uint64_t complete = 0;
   for (auto& counter : v) {
-    std::cout << counter.complete << ", " << counter.requests << "\n";
+    complete += counter.requests;
   }
+  std::cout << "  " << complete << " requests in " << seconds << "s\n";
+  std::cout << "Requests/sec:     " << std::setprecision(9)
+            << double(complete) / seconds << "\n";
 
   // stop and clean
   works.clear();
