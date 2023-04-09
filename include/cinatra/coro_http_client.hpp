@@ -715,6 +715,9 @@ class coro_http_client {
 
       is_keep_alive = parser.keep_alive();
       bool is_ranges = parser.is_ranges();
+      if (is_ranges) {
+        is_keep_alive = true;
+      }
       if (parser.is_chunked()) {
         is_keep_alive = true;
         ec = co_await handle_chunked(data, std::move(ctx));
