@@ -84,6 +84,11 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
       }
     }
   }
+
+  for (auto& conn : counter.conns) {
+    conn->set_bench_stop();
+    conn->async_close();
+  }
 }
 
 /*
@@ -162,9 +167,10 @@ int main(int argc, char* argv[]) {
   for (auto& counter : v) {
     complete += counter.requests;
   }
+
+  double qps = double(complete) / seconds;
   std::cout << "  " << complete << " requests in " << seconds << "s\n";
-  std::cout << "Requests/sec:     " << std::setprecision(9)
-            << double(complete) / seconds << "\n";
+  std::cout << "Requests/sec:     " << qps << "\n";
 
   // stop and clean
   works.clear();
