@@ -231,9 +231,48 @@ class coro_http_client {
     on_ws_close_ = std::move(on_ws_close);
   }
 
+#ifdef BENCHMAEK_TEST
+  void set_bench_stop() { stop_bench_ = true; }
+  async_simple::coro::Lazy<void> do_bench_read() {
+    while (true) {
+      auto [ec, size] = co_await async_read(read_buf_, total_len_);
+
+      if (ec) {
+        if (!stop_bench_)
+          std::cout << "do_bench_read error:" << ec.message() << "\n";
+        break;
+      }
+      read_buf_.consume(total_len_);
+    }
+  }
+#endif
+
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
-    req_context<std::string> ctx{};
     resp_data data{};
+#ifdef BENCHMAEK_TEST
+    if (!req_str_.empty()) {
+      std::error_code ec{};
+      size_t size = 0;
+      if (std::tie(ec, size) = co_await async_write(asio::buffer(req_str_));
+          ec) {
+        data.net_err = ec;
+        data.status = 404;
+      }
+
+      if (!star_read_) {
+        do_bench_read().start([](auto &&) {
+        });
+        star_read_ = true;
+      }
+
+      if (!ec)
+        data.status = 200;
+
+      co_return data;
+    }
+#endif
+
+    req_context<std::string> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 
@@ -468,6 +507,9 @@ class coro_http_client {
       }
 
       std::string write_msg = prepare_request_str(u, method, ctx);
+#ifdef BENCHMAEK_TEST
+      req_str_ = write_msg;
+#endif
 
       if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
           ec) {
@@ -715,6 +757,9 @@ class coro_http_client {
 
       is_keep_alive = parser.keep_alive();
       bool is_ranges = parser.is_ranges();
+      if (is_ranges) {
+        is_keep_alive = true;
+      }
       if (parser.is_chunked()) {
         is_keep_alive = true;
         ec = co_await handle_chunked(data, std::move(ctx));
@@ -727,6 +772,9 @@ class coro_http_client {
         redirect_uri_ = parser.get_header_value("Location");
 
       size_t content_len = (size_t)parser.body_len();
+#ifdef BENCHMAEK_TEST
+      total_len_ = parser.total_len();
+#endif
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
@@ -1141,5 +1189,12 @@ class coro_http_client {
   bool enable_timeout_ = false;
   std::chrono::steady_clock::duration timeout_duration_ =
       std::chrono::seconds(60);
+
+#ifdef BENCHMAEK_TEST
+  std::string req_str_;
+  size_t total_len_ = 0;
+  bool star_read_ = false;
+  bool stop_bench_ = false;
+#endif
 };
 }  // namespace cinatra
