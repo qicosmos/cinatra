@@ -236,18 +236,6 @@ class coro_http_client {
 
 #ifdef BENCHMAEK_TEST
   void set_bench_stop() { stop_bench_ = true; }
-  async_simple::coro::Lazy<void> do_bench_read() {
-    while (true) {
-      auto [ec, size] = co_await async_read(read_buf_, total_len_);
-
-      if (ec) {
-        if (!stop_bench_)
-          std::cout << "do_bench_read error:" << ec.message() << "\n";
-        break;
-      }
-      read_buf_.consume(total_len_);
-    }
-  }
 #endif
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
@@ -262,10 +250,14 @@ class coro_http_client {
         data.status = 404;
       }
 
-      if (!star_read_) {
-        do_bench_read().start([](auto &&) {
-        });
-        star_read_ = true;
+      std::tie(ec, size) = co_await async_read(read_buf_, total_len_);
+
+      if (ec) {
+        if (!stop_bench_)
+          std::cout << "do_bench_read error:" << ec.message() << "\n";
+      }
+      else {
+        read_buf_.consume(total_len_);
       }
 
       if (!ec) {
@@ -475,6 +467,19 @@ class coro_http_client {
                      std::string range = "") {
     return async_simple::coro::syncAwait(
         async_download(std::move(uri), std::move(filename), std::move(range)));
+  }
+
+  void reset() {
+    if (has_closed()) {
+      socket_ = decltype(socket_)(executor_wrapper_.context());
+      if (!socket_.is_open()) {
+        socket_.open(asio::ip::tcp::v4());
+      }
+#ifdef BENCHMAEK_TEST
+      req_str_.clear();
+      total_len_ = 0;
+#endif
+    }
   }
 
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
@@ -1198,7 +1203,6 @@ class coro_http_client {
 #ifdef BENCHMAEK_TEST
   std::string req_str_;
   size_t total_len_ = 0;
-  bool star_read_ = false;
   bool stop_bench_ = false;
 #endif
 };
