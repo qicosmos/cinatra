@@ -43,6 +43,9 @@ struct resp_data {
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
   bool eof;
+#ifdef BENCHMAEK_TEST
+  uint64_t total;
+#endif
 };
 
 template <typename Stream>
@@ -265,8 +268,10 @@ class coro_http_client {
         star_read_ = true;
       }
 
-      if (!ec)
+      if (!ec) {
         data.status = 200;
+        data.total = total_len_;
+      }
 
       co_return data;
     }

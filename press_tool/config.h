@@ -8,8 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "stats.h"
-
+namespace cinatra::press_tool {
 struct press_config {
   int connections;
   int threads_num;
@@ -25,10 +24,9 @@ struct thread_counter {
   uint64_t complete;
   uint64_t requests;
   uint64_t bytes;
-  uint64_t start;
 
   uint64_t errors;
   double max_request_time;
-  double min_request_time;
-
+  double min_request_time = INT32_MAX;
 };
+}  // namespace cinatra::press_tool

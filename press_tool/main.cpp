@@ -1,18 +1,20 @@
 #include <async_simple/coro/Collect.h>
 
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <thread>
 #include <vector>
-#include <cmath>
 
 #include "../include/cinatra.hpp"
 #include "async_simple/Try.h"
 #include "cmdline.h"
 #include "config.h"
 #include "util.h"
+
+using namespace cinatra::press_tool;
 
 press_config init_conf(const cmdline::parser& parser) {
   press_config conf{};
@@ -83,7 +85,7 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
       counter.requests++;
       if (result.status == 200) {
         counter.complete++;
-        counter.bytes += result.resp_body.size();
+        counter.bytes += result.total;
         if (counter.max_request_time <
             std::chrono::duration<double>(latency).count())
           counter.max_request_time =
@@ -96,7 +98,6 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
       else {
         counter.errors++;
         std::cerr << "request failed: " << result.net_err.message() << "\n";
-        //break;
       }
     }
   }
@@ -121,7 +122,8 @@ int main(int argc, char* argv[]) {
       "duration", 'd', "duration of the test, e.g. 2s, 2m, 2h", false, "15s");
   parser.add<int>("threads", 't', "total number of threads to use", false, 1);
   parser.add<std::string>(
-      "header", 'H', "HTTP header to add to request, e.g. \"User-Agent: wrk\"",
+      "header", 'H',
+      "HTTP header to add to request, e.g. \"User-Agent: coro_http_press\"",
       false, "");
 
   parser.parse_check(argc, argv);
@@ -137,10 +139,7 @@ int main(int argc, char* argv[]) {
     std::thread thd([ioc] {
       ioc->run();
     });
-    v.push_back({.thd = std::move(thd),
-                 .ioc = ioc,
-                 .max_request_time = 0.0,
-                 .min_request_time = 2147483647.0});
+    v.push_back({.thd = std::move(thd), .ioc = ioc});
   }
 
   // create clients
@@ -185,7 +184,7 @@ int main(int argc, char* argv[]) {
   uint64_t complete = 0;
   int64_t total_resp_size = 0;
   double max_latency = 0.0;
-  double min_latency = 2147483647.0;
+  double min_latency = INT32_MAX;
   uint64_t errors_requests = 0;
   for (auto& counter : v) {
     complete += counter.requests;
@@ -206,7 +205,7 @@ int main(int argc, char* argv[]) {
         (cur_avg_latency - avg_latency) * (cur_avg_latency - avg_latency);
   }
 
-  double stdev = std::sqrt(double(total_avg_latency / v.size()));
+  double stdev = std::sqrt(double(total_avg_latency) / v.size());
 
   double qps = double(complete) / seconds;
   std::cout << "Thread Status   Avg   Stdev   Max\n";
@@ -214,7 +213,7 @@ int main(int argc, char* argv[]) {
             << "     " << stdev << "ms"
             << "     " << max_latency << "ms\n";
   std::cout << "  " << complete << " requests in " << seconds << "s"
-            << "read: " << press_util::bytes_to_string(total_resp_size) << "\n";
+            << " read: " << bytes_to_string(total_resp_size) << "\n";
   std::cout << "Requests/sec:     " << qps << "\n";
 
   // stop and clean
