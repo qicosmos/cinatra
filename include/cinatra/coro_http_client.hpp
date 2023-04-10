@@ -257,6 +257,13 @@ class coro_http_client {
           std::cout << "do_bench_read error:" << ec.message() << "\n";
       }
       else {
+        const char *data_ptr =
+            asio::buffer_cast<const char *>(read_buf_.data());
+        // check status
+        if (data_ptr[9] > '3') {
+          data.status = 404;
+          co_return data;
+        }
         read_buf_.consume(total_len_);
       }
 
