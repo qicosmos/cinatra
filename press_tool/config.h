@@ -26,4 +26,9 @@ struct thread_counter {
   uint64_t requests;
   uint64_t bytes;
   uint64_t start;
+
+  uint64_t errors;
+  double max_request_time;
+  double min_request_time;
+
 };

@@ -6,11 +6,13 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#include <cmath>
 
 #include "../include/cinatra.hpp"
 #include "async_simple/Try.h"
 #include "cmdline.h"
 #include "config.h"
+#include "util.h"
 
 press_config init_conf(const cmdline::parser& parser) {
   press_config conf{};
@@ -73,14 +75,28 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
                                      std::atomic_bool& stop) {
   while (!stop) {
     for (auto& conn : counter.conns) {
+      auto start = std::chrono::steady_clock::now();
       cinatra::resp_data result = co_await conn->async_get(url);
+      auto elasped = std::chrono::steady_clock::now() - start;
+      auto latency =
+          std::chrono::duration_cast<std::chrono::milliseconds>(elasped);
       counter.requests++;
       if (result.status == 200) {
         counter.complete++;
+        counter.bytes += result.resp_body.size();
+        if (counter.max_request_time <
+            std::chrono::duration<double>(latency).count())
+          counter.max_request_time =
+              std::chrono::duration<double>(latency).count();
+        if (counter.min_request_time >
+            std::chrono::duration<double>(latency).count())
+          counter.min_request_time =
+              std::chrono::duration<double>(latency).count();
       }
       else {
+        counter.errors++;
         std::cerr << "request failed: " << result.net_err.message() << "\n";
-        break;
+        //break;
       }
     }
   }
@@ -121,7 +137,10 @@ int main(int argc, char* argv[]) {
     std::thread thd([ioc] {
       ioc->run();
     });
-    v.push_back({.thd = std::move(thd), .ioc = ioc});
+    v.push_back({.thd = std::move(thd),
+                 .ioc = ioc,
+                 .max_request_time = 0.0,
+                 .min_request_time = 2147483647.0});
   }
 
   // create clients
@@ -164,12 +183,38 @@ int main(int argc, char* argv[]) {
             << " connections\n";
 
   uint64_t complete = 0;
+  int64_t total_resp_size = 0;
+  double max_latency = 0.0;
+  double min_latency = 2147483647.0;
+  uint64_t errors_requests = 0;
   for (auto& counter : v) {
     complete += counter.requests;
+    total_resp_size += counter.bytes;
+    errors_requests += counter.errors;
+    if (max_latency < counter.max_request_time)
+      max_latency = counter.max_request_time;
+    if (min_latency > counter.min_request_time)
+      min_latency = counter.min_request_time;
   }
 
+  double total_avg_latency = 0;
+  double avg_latency = (max_latency + min_latency) / 2;
+  for (auto& counter : v) {
+    double cur_avg_latency =
+        (counter.max_request_time + counter.max_request_time) / 2;
+    total_avg_latency +=
+        (cur_avg_latency - avg_latency) * (cur_avg_latency - avg_latency);
+  }
+
+  double stdev = std::sqrt(double(total_avg_latency / v.size()));
+
   double qps = double(complete) / seconds;
-  std::cout << "  " << complete << " requests in " << seconds << "s\n";
+  std::cout << "Thread Status   Avg   Stdev   Max\n";
+  std::cout << "Latency   " << avg_latency << "ms"
+            << "     " << stdev << "ms"
+            << "     " << max_latency << "ms\n";
+  std::cout << "  " << complete << " requests in " << seconds << "s"
+            << "read: " << press_util::bytes_to_string(total_resp_size) << "\n";
   std::cout << "Requests/sec:     " << qps << "\n";
 
   // stop and clean
