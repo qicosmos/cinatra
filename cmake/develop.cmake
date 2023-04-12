@@ -10,6 +10,9 @@ if(BUILD_UNIT_TESTS)
     enable_testing()
 endif()
 
+# press tool
+option(BUILD_PRESS_TOOL "Build press tool" ON)
+
 # coverage test
 option(COVERAGE_TEST "Build with unit test coverage" OFF)
 if(COVERAGE_TEST)
