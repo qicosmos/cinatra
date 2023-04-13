@@ -29,7 +29,7 @@ inline std::string bytes_to_string(uint64_t bytes) {
   return (std::to_string(rt) + suffix);
 }
 
-std::vector<std::string> &split(std::string &str, const std::string &delimiter, std::vector<std::string> &elems) {
+inline std::vector<std::string> &split(std::string &str, const std::string &delimiter, std::vector<std::string> &elems) {
     size_t pos = 0;
     std::string token;
     while ((pos = str.find(delimiter)) != std::string::npos) {
