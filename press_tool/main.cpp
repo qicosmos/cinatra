@@ -97,7 +97,6 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
       auto elasped = std::chrono::steady_clock::now() - start;
       auto latency =
           std::chrono::duration_cast<std::chrono::nanoseconds>(elasped).count();
-      //      std::cout<<latency<<"ms\n";
       counter.requests++;
       if (result.status == 200) {
         counter.complete++;
