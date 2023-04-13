@@ -301,7 +301,10 @@ class connection : public base_connection,
                       });
   }
 
-  void response_now() { do_write(); }
+  void response_now() {
+    res_.set_delay(false);
+    do_write();
+  }
 
   void set_multipart_begin(
       std::function<void(request &, std::string &)> begin) {

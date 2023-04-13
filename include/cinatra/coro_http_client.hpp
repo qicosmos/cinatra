@@ -4,6 +4,7 @@
 #include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <string_view>
 #include <thread>
@@ -16,6 +17,7 @@
 #include "http_parser.hpp"
 #include "response_cv.hpp"
 #include "uri.hpp"
+#include "use_asio.hpp"
 #include "websocket.hpp"
 
 namespace cinatra {
@@ -60,20 +62,38 @@ struct multipart_t {
 class coro_http_client {
  public:
   coro_http_client()
-      : socket_(io_ctx_),
-        executor_(io_ctx_.get_executor()),
-        timer_(io_ctx_.get_executor()) {
-    work_ = std::make_unique<asio::io_context::work>(io_ctx_);
-    io_thd_ = std::thread([this] {
-      io_ctx_.run();
+      : io_ctx_(std::make_unique<asio::io_context>()),
+        socket_(io_ctx_->get_executor()),
+        executor_wrapper_(io_ctx_->get_executor()),
+        timer_(io_ctx_->get_executor()) {
+    std::promise<void> promise;
+    io_thd_ = std::thread([this, &promise] {
+      work_ = std::make_unique<asio::io_context::work>(*io_ctx_);
+      asio::post(executor_wrapper_.get_executor(), [&] {
+        promise.set_value();
+      });
+      io_ctx_->run();
     });
+    promise.get_future().wait();
   }
+
+  coro_http_client(asio::io_context::executor_type executor)
+      : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
 
   ~coro_http_client() {
     async_close();
-    work_ = nullptr;
     if (io_thd_.joinable()) {
-      io_thd_.join();
+      work_ = nullptr;
+      if (io_thd_.get_id() == std::this_thread::get_id()) {
+        std::thread thrd{[io_ctx = std::move(io_ctx_),
+                          io_thd = std::move(io_thd_)]() mutable {
+          io_thd.join();
+        }};
+        thrd.detach();
+      }
+      else {
+        io_thd_.join();
+      }
     }
 
     std::cout << "client quit\n";
@@ -83,7 +103,7 @@ class coro_http_client {
     if (has_closed_)
       return;
 
-    io_ctx_.dispatch([this] {
+    asio::dispatch(executor_wrapper_.get_executor(), [this] {
       close_socket();
     });
   }
@@ -276,7 +296,7 @@ class coro_http_client {
     async_simple::Promise<async_simple::Unit> promise;
     if (enable_timeout_) {
       timeout(timer_, promise, "request timer canceled")
-          .via(&executor_)
+          .via(&executor_wrapper_)
           .detach();
     }
 
@@ -433,8 +453,8 @@ class coro_http_client {
       if (has_closed_) {
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        if (ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
-                                                   socket_, host, port);
+        if (ec = co_await asio_util::async_connect(
+                executor_wrapper_.get_executor(), socket_, host, port);
             ec) {
           break;
         }
@@ -836,8 +856,8 @@ class coro_http_client {
     if (has_closed_) {
       std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
       std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec = co_await asio_util::async_connect(io_ctx_.get_executor(),
-                                                      socket_, host, port);
+      if (auto ec = co_await asio_util::async_connect(
+              executor_wrapper_.get_executor(), socket_, host, port);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -1080,9 +1100,9 @@ class coro_http_client {
     co_return true;
   }
 
-  asio::io_context io_ctx_;
+  std::unique_ptr<asio::io_context> io_ctx_;
   asio::ip::tcp::socket socket_;
-  asio_util::ExecutorWrapper<> executor_;
+  asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
   std::unique_ptr<asio::io_context::work> work_;
   asio_util::period_timer timer_;
   std::thread io_thd_;

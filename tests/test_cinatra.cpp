@@ -1,6 +1,9 @@
+#include <async_simple/coro/Collect.h>
+
 #include <filesystem>
 #include <future>
 #include <system_error>
+#include <vector>
 
 #include "cinatra.hpp"
 #include "doctest.h"
@@ -105,6 +108,32 @@ TEST_CASE("test ssl client") {
   }
 }
 #endif
+
+async_simple::coro::Lazy<void> test_collect_all() {
+  asio::io_context ioc;
+  std::thread thd([&] {
+    ioc.run();
+  });
+  std::vector<std::shared_ptr<coro_http_client>> v;
+  std::vector<async_simple::coro::Lazy<resp_data>> futures;
+  for (int i = 0; i < 2; ++i) {
+    auto client = std::make_shared<coro_http_client>();
+    v.push_back(client);
+    futures.push_back(client->async_get("http://www.baidu.com/"));
+  }
+
+  auto out = co_await async_simple::coro::collectAll(std::move(futures));
+
+  for (auto &item : out) {
+    auto result = item.value();
+    CHECK(result.status >= 200);
+  }
+  thd.join();
+}
+
+TEST_CASE("test collect all") {
+  async_simple::coro::syncAwait(test_collect_all());
+}
 
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
@@ -573,4 +602,35 @@ TEST_CASE("test coro http request timeout") {
 
   server.stop();
   server_thread.join();
+}
+
+TEST_CASE("test coro_http_client using external io_context") {
+  asio::io_context io_context;
+  std::promise<void> promise;
+  auto future = promise.get_future();
+  std::thread io_thd([&io_context, &promise] {
+    asio::io_context::work work(io_context);
+    promise.set_value();
+    io_context.run();
+  });
+  future.wait();
+
+  coro_http_client client(io_context.get_executor());
+  auto r =
+      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
+  io_context.stop();
+  io_thd.join();
+}
+
+async_simple::coro::Lazy<resp_data> simulate_self_join() {
+  coro_http_client client{};
+  co_return co_await client.async_get("http://www.purecpp.cn");
+}
+
+TEST_CASE("test coro_http_client dealing with self join") {
+  auto r = async_simple::coro::syncAwait(simulate_self_join());
+  CHECK(!r.net_err);
+  CHECK(r.status == 200);
 }
