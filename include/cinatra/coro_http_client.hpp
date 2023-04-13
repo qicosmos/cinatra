@@ -242,12 +242,20 @@ class coro_http_client {
     resp_data data{};
 #ifdef BENCHMAEK_TEST
     if (!req_str_.empty()) {
+      if (has_closed()) {
+        data.net_err = std::make_error_code(std::errc::not_connected);
+        data.status = 404;
+        co_return data;
+      }
+
       std::error_code ec{};
       size_t size = 0;
       if (std::tie(ec, size) = co_await async_write(asio::buffer(req_str_));
           ec) {
         data.net_err = ec;
         data.status = 404;
+        close_socket();
+        co_return data;
       }
 
       std::tie(ec, size) = co_await async_read(read_buf_, total_len_);
@@ -255,15 +263,16 @@ class coro_http_client {
       if (ec) {
         if (!stop_bench_)
           std::cout << "do_bench_read error:" << ec.message() << "\n";
-      }
-      else {
-        read_buf_.consume(total_len_);
+
+        data.net_err = ec;
+        data.status = 404;
+        close_socket();
+        co_return data;
       }
 
-      if (!ec) {
-        data.status = 200;
-        data.total = total_len_;
-      }
+      read_buf_.consume(total_len_);
+      data.status = 200;
+      data.total = total_len_;
 
       co_return data;
     }
