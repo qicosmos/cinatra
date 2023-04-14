@@ -99,7 +99,9 @@ class coro_http_client {
       }
     }
 
+#ifndef BENCHMARK_CACHE
     std::cout << "client quit\n";
+#endif
   }
 
   void async_close() {
@@ -236,6 +238,7 @@ class coro_http_client {
 
 #ifdef BENCHMARK_CACHE
   void set_bench_stop() { stop_bench_ = true; }
+  void set_read_fix() { read_fix_ = 1; }
 #endif
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
@@ -255,6 +258,26 @@ class coro_http_client {
         data.net_err = ec;
         data.status = 404;
         close_socket();
+        co_return data;
+      }
+
+      if (read_fix_ == 0) {
+        req_context<std::string> ctx{};
+        bool is_keep_alive = true;
+        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+        handle_result(data, ec, is_keep_alive);
+        if (ec) {
+          if (!stop_bench_)
+            std::cout << "do_bench_read error:" << ec.message() << "\n";
+
+          data.net_err = ec;
+          data.status = 404;
+        }
+        else {
+          data.status = 200;
+          data.total = total_len_;
+        }
+
         co_return data;
       }
 
@@ -1226,6 +1249,7 @@ class coro_http_client {
   std::string req_str_;
   bool stop_bench_ = false;
   size_t total_len_ = 0;
+  int read_fix_ = 0;
 #endif
 };
 }  // namespace cinatra

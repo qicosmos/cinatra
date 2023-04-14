@@ -14,6 +14,7 @@ struct press_config {
   int threads_num;
   std::chrono::steady_clock::duration press_interval;
   std::string url;
+  int read_fix = 0;
 };
 
 struct thread_counter {

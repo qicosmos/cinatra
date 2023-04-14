@@ -20,6 +20,11 @@ press_config init_conf(const cmdline::parser& parser) {
   press_config conf{};
   conf.connections = parser.get<int>("connections");
   conf.threads_num = parser.get<int>("threads");
+  if (conf.threads_num > conf.connections) {
+    std::cerr << "number of connections must be >= threads\n";
+    exit(1);
+  }
+  conf.read_fix = parser.get<int>("readfix");
 
   std::string duration_str = parser.get<std::string>("duration");
   if (duration_str.size() < 2) {
@@ -74,7 +79,12 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
         continue;
       }
 
-      std::cout << "create client " << i + 1 << " successfully\n";
+      std::cout << "create client " << i + 1 << " successfully";
+      if (conf.read_fix > 0) {
+        client->set_read_fix();
+        std::cout << " , will read fixed len response";
+      }
+      std::cout << "\n";
       break;
     }
 
@@ -150,6 +160,7 @@ int main(int argc, char* argv[]) {
       "header", 'H',
       "HTTP header to add to request, e.g. \"User-Agent: coro_http_press\"",
       false, "");
+  parser.add<int>("readfix", 'r', "read fixed response", false, 0);
 
   parser.parse_check(argc, argv);
 
@@ -200,6 +211,13 @@ int main(int argc, char* argv[]) {
   });
 
   // wait finish
+  auto seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(conf.press_interval)
+          .count();
+  std::cout << "Running " << seconds << "s "
+            << "test @ " << conf.url << "\n";
+  std::cout << "  " << conf.threads_num << " threads and " << conf.connections
+            << " connections\n";
   auto beg = std::chrono::steady_clock::now();
   async_simple::coro::syncAwait(
       async_simple::coro::collectAll(std::move(futures)));
@@ -214,16 +232,9 @@ int main(int argc, char* argv[]) {
   auto end = std::chrono::steady_clock::now();
   auto dur =
       std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count();
+  double dur_s = double(dur) / 1000000000;
 
   // statistic
-  auto seconds =
-      std::chrono::duration_cast<std::chrono::seconds>(conf.press_interval)
-          .count();
-  std::cout << "Running " << double(dur) / 1000000000 << "s "
-            << "test @ " << conf.url << "\n";
-  std::cout << "  " << conf.threads_num << " threads and " << conf.connections
-            << " connections\n";
-
   uint64_t total = 0;
   uint64_t complete = 0;
   uint64_t errors = 0;
@@ -246,15 +257,17 @@ int main(int argc, char* argv[]) {
   uint64_t avg_latency = (max_latency + min_latency) / 2;
 
   double qps = double(complete) / seconds;
-  std::cout << "Thread Status   Avg   Max\n";
-  std::cout << "Latency   " << std::setprecision(3)
+  std::cout << "  Thread Status   Avg   Max\n";
+  std::cout << "    Latency   " << std::setprecision(3)
             << double(avg_latency) / 1000000 << "ms"
             << "     " << std::setprecision(3) << double(max_latency) / 1000000
             << "ms\n";
-  std::cout << "  " << complete << " requests in " << seconds << "s"
-            << " read: " << bytes_to_string(total_resp_size)
+  std::cout << "  " << complete << " requests in " << dur_s << "s"
+            << ", " << bytes_to_string(total_resp_size) << " read"
             << ", total: " << total << ", errors: " << errors << "\n";
   std::cout << "Requests/sec:     " << std::setprecision(8) << qps << "\n";
+  std::cout << "Transfer/sec:     " << std::setprecision(2)
+            << bytes_to_string(total_resp_size / dur_s) << "\n";
 
   // stop and clean
   works.clear();
