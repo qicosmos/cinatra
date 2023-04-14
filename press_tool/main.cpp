@@ -90,8 +90,17 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
 async_simple::coro::Lazy<void> press(thread_counter& counter,
                                      const std::string& url,
                                      std::atomic_bool& stop) {
+  size_t err_count = 0;
+  size_t conn_num = counter.conns.size();
   while (!stop) {
     for (auto& conn : counter.conns) {
+      if (err_count == conn_num) {
+        co_return;
+      }
+      if (counter.has_net_err) {
+        continue;
+      }
+
       auto start = std::chrono::steady_clock::now();
       cinatra::resp_data result = co_await conn->async_get(url);
       auto elasped = std::chrono::steady_clock::now() - start;
@@ -113,6 +122,11 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
         }
         else {
           counter.errors++;
+        }
+
+        counter.has_net_err = bool(result.net_err);
+        if (counter.has_net_err) {
+          err_count++;
         }
       }
     }
@@ -164,9 +178,15 @@ int main(int argc, char* argv[]) {
   }
 
   // start timer
+  bool has_timeout = false;
   asio::io_context timer_ioc;
   asio::steady_timer timer(timer_ioc, conf.press_interval);
-  timer.async_wait([&stop, &v](std::error_code ec) {
+  timer.async_wait([&stop, &v, &has_timeout](std::error_code ec) {
+    if (ec) {
+      return;
+    }
+
+    has_timeout = true;
     stop = true;
     for (auto& counter : v) {
       for (auto& conn : counter.conns) {
@@ -180,20 +200,26 @@ int main(int argc, char* argv[]) {
   });
 
   // wait finish
+  auto beg = std::chrono::steady_clock::now();
   async_simple::coro::syncAwait(
       async_simple::coro::collectAll(std::move(futures)));
+  if (!has_timeout) {
+    timer_ioc.post([&timer] {
+      asio::error_code ec;
+      timer.cancel(ec);
+    });
+  }
 
   timer_thd.join();
+  auto end = std::chrono::steady_clock::now();
+  auto dur =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count();
 
   // statistic
   auto seconds =
       std::chrono::duration_cast<std::chrono::seconds>(conf.press_interval)
           .count();
-  std::cout << "Running "
-            << std::chrono::duration_cast<std::chrono::seconds>(
-                   conf.press_interval)
-                   .count()
-            << "s "
+  std::cout << "Running " << double(dur) / 1000000000 << "s "
             << "test @ " << conf.url << "\n";
   std::cout << "  " << conf.threads_num << " threads and " << conf.connections
             << " connections\n";

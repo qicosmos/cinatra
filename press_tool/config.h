@@ -28,5 +28,6 @@ struct thread_counter {
   uint64_t errors;
   uint64_t max_request_time;
   uint64_t min_request_time = UINT32_MAX;
+  bool has_net_err = false;
 };
 }  // namespace cinatra::press_tool

@@ -5,7 +5,7 @@ set(cinatra_press_tool
 	main.cpp
 	)
 
-add_definitions(-DBENCHMAEK_TEST)
+add_definitions(-DBENCHMARK_CACHE)
 add_executable(${project_name} ${cinatra_press_tool})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 target_include_directories(${project_name} PRIVATE
