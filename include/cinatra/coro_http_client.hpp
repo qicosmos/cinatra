@@ -43,7 +43,7 @@ struct resp_data {
   std::string_view resp_body;
   std::vector<std::pair<std::string, std::string>> resp_headers;
   bool eof;
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
   uint64_t total;
 #endif
 };
@@ -99,7 +99,7 @@ class coro_http_client {
       }
     }
 
-#ifndef BENCHMARK_CACHE
+#ifndef BENCHMARK_TEST
     std::cout << "client quit\n";
 #endif
   }
@@ -236,14 +236,14 @@ class coro_http_client {
     on_ws_close_ = std::move(on_ws_close);
   }
 
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
   void set_bench_stop() { stop_bench_ = true; }
   void set_read_fix() { read_fix_ = 1; }
 #endif
 
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
     resp_data data{};
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
     if (!req_str_.empty()) {
       if (has_closed()) {
         data.net_err = std::make_error_code(std::errc::not_connected);
@@ -314,7 +314,7 @@ class coro_http_client {
     req_context<std::string> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
     data.total = total_len_;
 #endif
     if (redirect_uri_.empty() || !is_redirect(data)) {
@@ -519,7 +519,7 @@ class coro_http_client {
       if (!socket_.is_open()) {
         socket_.open(asio::ip::tcp::v4());
       }
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
       req_str_.clear();
       total_len_ = 0;
 #endif
@@ -561,7 +561,7 @@ class coro_http_client {
       }
 
       std::string write_msg = prepare_request_str(u, method, ctx);
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
       req_str_ = write_msg;
 #endif
 
@@ -826,7 +826,7 @@ class coro_http_client {
         redirect_uri_ = parser.get_header_value("Location");
 
       size_t content_len = (size_t)parser.body_len();
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
       total_len_ = parser.total_len();
 #endif
 
@@ -876,7 +876,9 @@ class coro_http_client {
       close_socket();
       data.net_err = ec;
       data.status = 404;
+#ifdef BENCHMARK_TEST
       if (!stop_bench_)
+#endif
         std::cout << ec.message() << "\n";
     }
     else {
@@ -1245,7 +1247,7 @@ class coro_http_client {
   std::chrono::steady_clock::duration timeout_duration_ =
       std::chrono::seconds(60);
 
-#ifdef BENCHMARK_CACHE
+#ifdef BENCHMARK_TEST
   std::string req_str_;
   bool stop_bench_ = false;
   size_t total_len_ = 0;
