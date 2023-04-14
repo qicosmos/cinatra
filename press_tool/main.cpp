@@ -58,11 +58,11 @@ press_config init_conf(const cmdline::parser& parser) {
     std::vector<std::string> header_lists;
     split(headers, " && ", header_lists);
 
-    for (auto &header : header_lists) {
+    for (auto& header : header_lists) {
       std::vector<std::string> header_pair;
       split(header, ": ", header_pair);
       if (header_pair.size() == 2)
-        conf.add_headers[header_pair[0]] = header_pair[1]; 
+        conf.add_headers[header_pair[0]] = header_pair[1];
     }
   }
 
@@ -85,7 +85,7 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
     int j = 0;
     for (j = 0; j < retry_times; ++j) {
       if (conf.add_headers.begin() != conf.add_headers.end()) {
-        for (auto &single_header : conf.add_headers)
+        for (auto& single_header : conf.add_headers)
           client->add_header(single_header.first, single_header.second);
       }
       result = co_await client->async_get(conf.url);
@@ -99,7 +99,7 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
       std::cout << "create client " << i + 1 << " successfully";
       if (conf.read_fix > 0) {
         client->set_read_fix();
-        std::cout << " , will read fixed len response";
+        std::cout << ", will read fixed len response";
       }
       std::cout << "\n";
       break;
@@ -176,8 +176,10 @@ int main(int argc, char* argv[]) {
   parser.add<std::string>(
       "headers", 'H',
       "HTTP headers to add to request, e.g. \"User-Agent: coro_http_press\"\n"
-      "            add multiple http headers in a request need to be separated by ' && '\n"
-      "            e.g. \"User-Agent: coro_http_press && x-frame-options: SAMEORIGIN\"",
+      "            add multiple http headers in a request need to be separated "
+      "by ' && '\n"
+      "            e.g. \"User-Agent: coro_http_press && x-frame-options: "
+      "SAMEORIGIN\"",
       false, "");
   parser.add<int>("readfix", 'r', "read fixed response", false, 0);
 
