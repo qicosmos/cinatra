@@ -53,6 +53,19 @@ press_config init_conf(const cmdline::parser& parser) {
     exit(1);
   }
 
+  std::string headers = parser.get<std::string>("headers");
+  if (!headers.empty()) {
+    std::vector<std::string> header_lists;
+    split(headers, " && ", header_lists);
+
+    for (auto &header : header_lists) {
+      std::vector<std::string> header_pair;
+      split(header, ": ", header_pair);
+      if (header_pair.size() == 2)
+        conf.add_headers[header_pair[0]] = header_pair[1]; 
+    }
+  }
+
   conf.url = parser.rest().back();
 
   return conf;
@@ -71,6 +84,10 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
 
     int j = 0;
     for (j = 0; j < retry_times; ++j) {
+      if (conf.add_headers.begin() != conf.add_headers.end()) {
+        for (auto &single_header : conf.add_headers)
+          client->add_header(single_header.first, single_header.second);
+      }
       result = co_await client->async_get(conf.url);
       if (result.status != 200) {
         client->reset();
@@ -157,8 +174,10 @@ int main(int argc, char* argv[]) {
       "duration", 'd', "duration of the test, e.g. 2s, 2m, 2h", false, "15s");
   parser.add<int>("threads", 't', "total number of threads to use", false, 1);
   parser.add<std::string>(
-      "header", 'H',
-      "HTTP header to add to request, e.g. \"User-Agent: coro_http_press\"",
+      "headers", 'H',
+      "HTTP headers to add to request, e.g. \"User-Agent: coro_http_press\"\n"
+      "            add multiple http headers in a request need to be separated by ' && '\n"
+      "            e.g. \"User-Agent: coro_http_press && x-frame-options: SAMEORIGIN\"",
       false, "");
   parser.add<int>("readfix", 'r', "read fixed response", false, 0);
 

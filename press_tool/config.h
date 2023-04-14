@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <map>
 
 namespace cinatra::press_tool {
 struct press_config {
@@ -15,6 +16,7 @@ struct press_config {
   std::chrono::steady_clock::duration press_interval;
   std::string url;
   int read_fix = 0;
+  std::map<std::string, std::string> add_headers;
 };
 
 struct thread_counter {
