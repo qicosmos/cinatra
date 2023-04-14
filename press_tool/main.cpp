@@ -119,6 +119,7 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
                                      std::atomic_bool& stop) {
   size_t err_count = 0;
   size_t conn_num = counter.conns.size();
+  std::vector<async_simple::coro::Lazy<cinatra::resp_data>> futures;
   while (!stop) {
     for (auto& conn : counter.conns) {
       if (err_count == conn_num) {
@@ -128,11 +129,18 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
         continue;
       }
 
-      auto start = std::chrono::steady_clock::now();
-      cinatra::resp_data result = co_await conn->async_get(url);
-      auto elasped = std::chrono::steady_clock::now() - start;
-      auto latency =
-          std::chrono::duration_cast<std::chrono::nanoseconds>(elasped).count();
+      futures.push_back(conn->async_get(url));
+    }
+
+    auto start = std::chrono::steady_clock::now();
+    auto results = co_await async_simple::coro::collectAll(std::move(futures));
+    auto elasped = std::chrono::steady_clock::now() - start;
+    auto latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(elasped).count() /
+        conn_num;
+
+    for (auto& item : results) {
+      auto& result = item.value();
       counter.requests++;
       if (result.status == 200) {
         counter.complete++;
@@ -157,6 +165,8 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
         }
       }
     }
+
+    futures.clear();
   }
 }
 
