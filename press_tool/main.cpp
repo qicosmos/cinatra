@@ -286,13 +286,27 @@ int main(int argc, char* argv[]) {
   }
 
   uint64_t avg_latency = (max_latency + min_latency) / 2;
+  double variation = 0.0;
+  double avg_latency_ms = (double)avg_latency / 1000000;
+  for (auto& counter : v) {
+    double counter_avg =
+        (counter.max_request_time + counter.min_request_time) / 2000000;
+    double counter_pow = pow(avg_latency_ms - counter_avg, 2);
+    variation += counter_pow;
+  }
+
+  variation /= v.size();
+  double stdev = sqrt(variation);
 
   double qps = double(complete) / seconds;
-  std::cout << "  Thread Status   Avg   Max\n";
+  std::cout << "  Thread Status   Avg   Max   Variation   Stdev\n";
   std::cout << "    Latency   " << std::setprecision(3)
             << double(avg_latency) / 1000000 << "ms"
             << "     " << std::setprecision(3) << double(max_latency) / 1000000
-            << "ms\n";
+            << "ms"
+            << "     " << std::fixed << std::setprecision(3) << variation
+            << "ms"
+            << "     " << std::fixed << std::setprecision(3) << stdev << "ms\n";
   std::cout << "  " << complete << " requests in " << dur_s << "s"
             << ", " << bytes_to_string(total_resp_size) << " read"
             << ", total: " << total << ", errors: " << errors << "\n";
