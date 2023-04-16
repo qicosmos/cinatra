@@ -73,7 +73,7 @@ class http_router {
       return true;
     }
     else {
-      bool is_wild_card = get_wildcard_function(url, req, res);
+      bool is_wild_card = get_wildcard_function(key, req, res);
       if (!is_wild_card) {
         return route(method, STATIC_RESOURCE, req, res, true);
       }
