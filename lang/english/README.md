@@ -434,6 +434,50 @@ async_simple::coro::Lazy<void> test_websocket() {
 }
 ```
 
+### press tool usage
+
+cinatra_press_tool is a modern HTTP benchmarking tool capable of generating significant load when run on a single multi-core CPU. It combines a multithreaded design with coroutine.
+
+#### Basic Usage
+
+```shell
+./cinatra_press_tool -t 4 -c 40 -d 30s http://127.0.0.1
+```
+
+This runs a benchmark for 30 seconds, using 4 threads, and keeping 40 HTTP connections open(each connection corresponds to a coroutine).
+
+Output:
+
+```
+Running 30s test @ http://127.0.0.1
+  4 threads and 40 connections
+  Thread Status   Avg   Max   Variation   Stdev
+    Latency   4.12ms     8.15ms     3.367ms     1.835ms
+  462716 requests in 30.001s, 592.198250MB read, total: 462716, errors: 0
+Requests/sec:     15423.86666667
+Transfer/sec:     19.739390MB
+```
+
+#### Command Line Options
+```
+ -c, --connections    total number of HTTP connections to keep open with 
+ 					  each thread handling N = connections/threads (int)
+ -d, --duration       duration of the test, e.g. 2s, 2m, 2h (string [=15s])
+ -t, --threads        total number of threads to use (int [=1])
+ -H, --headers        HTTP headers to add to request, e.g. "User-Agent: coro_http_press"
+            		  add multiple http headers in a request need to be separated by ' && '
+            		  e.g. "User-Agent: coro_http_press && x-frame-options: SAMEORIGIN" (string [=])
+ -r, --readfix        read fixed response (int [=0])
+ -?, --help           print this message.
+```
+
+There are two parameters here that are different from wrk.
+
+The `-H` parameter means adding an http header to the http request. This parameter can add one http header or use the ` && ` symbol (4 characters) as a separator to add multiple http headers to the request.st.
+e.g. `-H User-Agent: coro_http_press` is to add an http header, and `-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN` is to add two http headers which is `User-Agent: coro_http_press` and `x-frame-options: same origin`.Adding three or more are all similar.
+
+
+`-r `parameter, which indicates whether to read a fixed-length response, this parameter can avoid frequent parsing of the response to optimize performance, some servers may return different lengths for the same request, in this case, do not set -r to 1, In this case, do not set this parameter.
 
 ## Performance
 
