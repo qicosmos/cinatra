@@ -1,6 +1,7 @@
 #pragma once
 #include <asio/streambuf.hpp>
 #include <atomic>
+#include <cassert>
 #include <charconv>
 #include <filesystem>
 #include <fstream>
