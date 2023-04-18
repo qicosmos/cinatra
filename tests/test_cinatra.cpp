@@ -546,20 +546,22 @@ TEST_CASE("test coro http redirect request") {
   client.set_timeout(8s);
   std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(!result.net_err);
-  if (result.status != 502)
-    CHECK(result.status == 302);
-
-  if (client.is_redirect(result)) {
-    std::string redirect_uri = client.get_redirect_uri();
-    result = async_simple::coro::syncAwait(client.async_get(redirect_uri));
+  if (result.status != 404) {
+    CHECK(!result.net_err);
     if (result.status != 502)
-      CHECK(result.status == 200);
-  }
+      CHECK(result.status == 302);
 
-  client.enable_auto_redirect(true);
-  result = async_simple::coro::syncAwait(client.async_get(uri));
-  CHECK(result.status >= 200);
+    if (client.is_redirect(result)) {
+      std::string redirect_uri = client.get_redirect_uri();
+      result = async_simple::coro::syncAwait(client.async_get(redirect_uri));
+      if (result.status != 502 && result.status != 404)
+        CHECK(result.status == 200);
+    }
+
+    client.enable_auto_redirect(true);
+    result = async_simple::coro::syncAwait(client.async_get(uri));
+    CHECK(result.status >= 200);
+  }
 }
 
 TEST_CASE("test coro http request timeout") {
