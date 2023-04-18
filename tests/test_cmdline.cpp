@@ -23,7 +23,7 @@ TEST_CASE("simple test cmd line options") {
 }
 
 // ./cinatra_press_tool -c100 -t4 -d10s --headers=HTTPheaders -r7
-TEST_CASE("test cinatra_press_tool cmd line options") {
+TEST_CASE("test cinatra_press_tool cmd line options without spaces") {
   const char* argv[] = {"cinatra_press_tool",    "-c100", "-vt4", "-d10s",
                         "--headers=HTTPheaders", "-r7"};
   int argc = sizeof(argv) / sizeof(argv[0]);
@@ -57,7 +57,7 @@ TEST_CASE("test cinatra_press_tool cmd line options") {
 }
 
 // ./cinatra_press_tool -c 100 -t 4 -d 10s --headers=HTTPheaders -r 7
-TEST_CASE("test cinatra_press_tool cmd line options") {
+TEST_CASE("test cinatra_press_tool cmd line options with spaces") {
   const char* argv[] = {
       "cinatra_press_tool",    "-c", "100", "-v", "-t", "4", "-d", "10s",
       "--headers=HTTPheaders", "-r", "7"};
