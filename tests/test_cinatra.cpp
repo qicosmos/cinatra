@@ -546,7 +546,7 @@ TEST_CASE("test coro http redirect request") {
   client.set_timeout(8s);
   std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  if (result.status != 404) {
+  if (result.status != 404 && !result.net_err) {
     CHECK(!result.net_err);
     if (result.status != 502)
       CHECK(result.status == 302);
