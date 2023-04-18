@@ -5,7 +5,9 @@
 
 // ./simple_test -i input.txt --output=output.txt -vt100
 TEST_CASE("simple test cmd line options") {
-  const char* argv[] = { "simple_test", "-i", "input.txt", "--output=output.txt", "-t4", };
+  const char* argv[] = {
+      "simple_test", "-i", "input.txt", "--output=output.txt", "-t4",
+  };
   int argc = sizeof(argv) / sizeof(argv[0]);
   cmdline::parser p;
 
@@ -13,27 +15,25 @@ TEST_CASE("simple test cmd line options") {
   p.add<std::string>("output", 'o', "output file");
   p.add<int>("threads", 't', "total number of threads to use", false, 1);
 
-  
   p.parse_check(argc, const_cast<char**>(argv));
 
   CHECK(p.get<std::string>("input") == "input.txt");
   CHECK(p.get<std::string>("output") == "output.txt");
   CHECK(p.get<int>("threads") == 4);
-
 }
 
 // ./cinatra_press_tool -c100 -t4 -d10s --headers=HTTPheaders -r7
 TEST_CASE("test cinatra_press_tool cmd line options") {
-  const char* argv[] = { "cinatra_press_tool", "-c100", "-vt4", "-d10s", "--headers=HTTPheaders", "-r7"};
+  const char* argv[] = {"cinatra_press_tool",    "-c100", "-vt4", "-d10s",
+                        "--headers=HTTPheaders", "-r",    "7"};
   int argc = sizeof(argv) / sizeof(argv[0]);
   cmdline::parser p;
 
-  p.add<int>(
-      "connections", 'c',
-      "total number of HTTP connections to keep open with"
-      "                   each thread handling N = connections/threads");
-  p.add<std::string>(
-      "duration", 'd', "duration of the test, e.g. 2s, 2m, 2h", false, "15s");
+  p.add<int>("connections", 'c',
+             "total number of HTTP connections to keep open with"
+             "                   each thread handling N = connections/threads");
+  p.add<std::string>("duration", 'd', "duration of the test, e.g. 2s, 2m, 2h",
+                     false, "15s");
   p.add<int>("threads", 't', "total number of threads to use", false, 1);
   p.add<std::string>(
       "headers", 'H',
