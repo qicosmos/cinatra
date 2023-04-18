@@ -470,9 +470,10 @@ class parser {
         if (!argv[i][1])
           continue;
         char last = argv[i][1];
-        bool jump_next = false;   
+        bool jump_next = false;
         for (int j = 2; argv[i][j]; j++) {
-          if (argv[i][j] >= '0' && argv[i][j] <= '9' && options[lookup[last]]->has_value()) {
+          if (argv[i][j] >= '0' && argv[i][j] <= '9' &&
+              options[lookup[last]]->has_value()) {
             set_option(lookup[last], &argv[i][j]);
             jump_next = true;
             break;
