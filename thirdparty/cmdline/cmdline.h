@@ -470,7 +470,14 @@ class parser {
         if (!argv[i][1])
           continue;
         char last = argv[i][1];
+        bool jump_next = false;
         for (int j = 2; argv[i][j]; j++) {
+          if (argv[i][j] >= '0' && argv[i][j] <= '9' &&
+              options[lookup[last]]->has_value()) {
+            set_option(lookup[last], &argv[i][j]);
+            jump_next = true;
+            break;
+          }
           last = argv[i][j];
           if (lookup.count(argv[i][j - 1]) == 0) {
             errors.push_back(std::string("undefined short option: -") +
@@ -493,7 +500,9 @@ class parser {
           errors.push_back(std::string("ambiguous short option: -") + last);
           continue;
         }
-
+        if (jump_next) {
+          continue;
+        }
         if (i + 1 < argc && options[lookup[last]]->has_value()) {
           set_option(lookup[last], argv[i + 1]);
           i++;

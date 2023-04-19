@@ -3,12 +3,14 @@ set(project_name test_cinatra)
 add_executable(${project_name}
         test_cinatra.cpp
         test_cinatra_websocket.cpp
+        test_cmdline.cpp
         main.cpp
         )
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO INJECT_FOR_HTTP_CLIENT_TEST)
 target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
         ${cinatra_SOURCE_DIR}/thirdparty/async_simple
+        ${cinatra_SOURCE_DIR}/thirdparty/cmdline
 )
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
