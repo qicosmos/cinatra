@@ -428,6 +428,51 @@ async_simple::coro::Lazy<void> test_websocket() {
 }
 ```
 
+## 基于cinatra客户端的http/https压测工具使用
+
+cinatra现在附带一个现代http基准测试工具,能够在单个多核cpu上运行时发送大量请求以此来测试服务器性能。它将协程与多线程紧密结合起来达到高效率。
+
+### 基础使用
+
+```shell
+./cinatra_press_tool -t 4 -c 40 -d 30s http://127.0.0.1
+```
+
+上面的命令代表使用4个线程并且保持40个连接打开(协程)对网址`http://127.0.0.1`进行30s的基准测试。
+
+输出如下:
+```
+Running 30s test @ http://127.0.0.1
+  4 threads and 40 connections
+  Thread Status   Avg   Max   Variation   Stdev
+    Latency   4.12ms     8.15ms     3.367ms     1.835ms
+  462716 requests in 30.001s, 592.198250MB read, total: 462716, errors: 0
+Requests/sec:     15423.86666667
+Transfer/sec:     19.739390MB
+```
+
+### 命令行参数选项
+
+```
+ -c, --connections    total number of HTTP connections to keep open with 
+ 					  each thread handling N = connections/threads (int)
+ -d, --duration       duration of the test, e.g. 2s, 2m, 2h (string [=15s])
+ -t, --threads        total number of threads to use (int [=1])
+ -H, --headers        HTTP headers to add to request, e.g. "User-Agent: coro_http_press"
+            		  add multiple http headers in a request need to be separated by ' && '
+            		  e.g. "User-Agent: coro_http_press && x-frame-options: SAMEORIGIN" (string [=])
+ -r, --readfix        read fixed response (int [=0])
+ -?, --help           print this message
+```
+
+这里有两个参数与wrk不同
+
+`-H`参数，它表示添加http头到http请求中，该参数不止可以添加一个http头还可以以` && `符号(4个字符)为分隔符来组装多个http头到http请求。
+比如`-H User-Agent: coro_http_press`就是添加一个http头，而`-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN`则为添加`User-Agent: coro_http_press`和`x-frame-options: SAMEORIGIN`两个http头到http请求。添加三个以及多个http头的方法和上述方法相同。
+
+
+`-r`参数，它表示是否读固定长度的response，这个参数可以避免频繁的解析response优化性能，有些服务器对于相同的请求返回的长度可能不同，这种情况下就不要设置-r 为1了，这种情况下不设置这个参数即可。
+
 
 # 性能测试
 ## 测试用例：
