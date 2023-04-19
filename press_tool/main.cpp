@@ -102,12 +102,6 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
         continue;
       }
 
-      std::cout << "create client " << i + 1 << " successfully";
-      if (conf.read_fix > 0) {
-        client->set_read_fix();
-        std::cout << ", will read fixed len response";
-      }
-      std::cout << "\n";
       break;
     }
 
@@ -116,8 +110,20 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
                 << " failed: " << result.net_err.message() << "\n";
       exit(1);
     }
+
+    if (conf.read_fix > 0) {
+      client->set_read_fix();
+    }
+
     thd_counter.conns.push_back(std::move(client));
   }
+
+  std::cout << "create " << conf.connections << " connections"
+            << " successfully";
+  if (conf.read_fix > 0) {
+    std::cout << ", will read fixed len response";
+  }
+  std::cout << "\n";
 }
 
 async_simple::coro::Lazy<void> press(thread_counter& counter,
@@ -306,19 +312,17 @@ int main(int argc, char* argv[]) {
 
   double qps = double(complete) / seconds;
   std::cout << "  Thread Status   Avg   Max   Variation   Stdev\n";
-  std::cout << "    Latency   " << std::setprecision(3)
+  std::cout << "    Latency   " << std::fixed << std::setprecision(3)
             << double(avg_latency) / 1000000 << "ms"
-            << "     " << std::setprecision(3) << double(max_latency) / 1000000
-            << "ms"
-            << "     " << std::fixed << std::setprecision(3) << variation
-            << "ms"
-            << "     " << std::fixed << std::setprecision(3) << stdev << "ms\n";
+            << "     " << double(max_latency) / 1000000 << "ms"
+            << "     " << variation << "ms"
+            << "     " << stdev << "ms\n";
   std::cout << "  " << complete << " requests in " << dur_s << "s"
             << ", " << bytes_to_string(total_resp_size) << " read"
             << ", total: " << total << ", errors: " << errors << "\n";
-  std::cout << "Requests/sec:     " << std::setprecision(8) << qps << "\n";
-  std::cout << "Transfer/sec:     " << std::setprecision(2)
-            << bytes_to_string(total_resp_size / dur_s) << "\n";
+  std::cout << "Requests/sec:     " << qps << "\n";
+  std::cout << "Transfer/sec:     " << bytes_to_string(total_resp_size / dur_s)
+            << "\n";
 
   // stop and clean
   works.clear();
