@@ -436,7 +436,7 @@ async_simple::coro::Lazy<void> test_websocket() {
 
 ### press tool usage
 
-cinatra_press_tool is a modern HTTP benchmarking tool capable of generating significant load when run on a single multi-core CPU. It combines a multithreaded design with coroutine.
+cinatra_press_tool is a modern HTTP benchmarking tool based on coro_http_client.
 
 #### Basic Usage
 
@@ -477,7 +477,7 @@ The `-H` parameter means adding an http header to the http request. This paramet
 e.g. `-H User-Agent: coro_http_press` is to add an http header, and `-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN` is to add two http headers which is `User-Agent: coro_http_press` and `x-frame-options: same origin`.Adding three or more are all similar.
 
 
-`-r `parameter, which indicates whether to read a fixed-length response, this parameter can avoid frequent parsing of the response to optimize performance, some servers may return different lengths for the same request, in this case, do not set -r to 1, In this case, do not set this parameter.
+`-r `parameter, which indicates whether to read a fixed-length response, this parameter can avoid frequent parsing of the response to optimize performance, some servers may return different lengths for the same request, in this case, do not set -r to 1, or do not set this parameter.
 
 ## Performance
 

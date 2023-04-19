@@ -430,7 +430,7 @@ async_simple::coro::Lazy<void> test_websocket() {
 
 ## 基于cinatra客户端的http/https压测工具使用
 
-cinatra现在附带一个现代http基准测试工具,能够在单个多核cpu上运行时发送大量请求以此来测试服务器性能。它将协程与多线程紧密结合起来达到高效率。
+cinatra提供了一个高性能的http1.1 压测工具, 它是基于coro_http_client 实现的，内部通过多线程和协程实现了高效的压测，能够在单核或多核cpu上发送大量请求以此来测试服务器性能。
 
 ### 基础使用
 
@@ -471,7 +471,7 @@ Transfer/sec:     19.739390MB
 比如`-H User-Agent: coro_http_press`就是添加一个http头，而`-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN`则为添加`User-Agent: coro_http_press`和`x-frame-options: SAMEORIGIN`两个http头到http请求。添加三个以及多个http头的方法和上述方法相同。
 
 
-`-r`参数，它表示是否读固定长度的response，这个参数可以避免频繁的解析response优化性能，有些服务器对于相同的请求返回的长度可能不同，这种情况下就不要设置-r 为1了，这种情况下不设置这个参数即可。
+`-r`参数，它表示是否读固定长度的response，这个参数可以避免频繁的解析response优化性能，有些服务器对于相同的请求返回的长度可能不同，这种情况下不设置这个参数或者将它设置为0。
 
 
 # 性能测试

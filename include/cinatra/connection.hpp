@@ -322,7 +322,8 @@ class connection : public base_connection,
   response &get_res() { return res_; }
 
   void async_close() {
-    asio::dispatch(socket_.get_executor(), [this] {
+    auto self = this->shared_from_this();
+    asio::dispatch(socket_.get_executor(), [this, self] {
       close();
     });
   }
