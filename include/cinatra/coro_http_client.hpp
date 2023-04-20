@@ -115,8 +115,8 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path,
-                              const std::string &cert_file,
+  [[nodiscard]] bool init_ssl(const std::string &base_path = "",
+                              const std::string &cert_file = "",
                               int verify_mode = asio::ssl::verify_none,
                               const std::string &domain = "localhost") {
     try {
