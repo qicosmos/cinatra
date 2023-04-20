@@ -131,14 +131,14 @@ class coro_http_client {
       }
       else {
         printf("no certificate file %s", full_cert_file.string().data());
-        return ssl_init_ret_;
       }
 
       ssl_ctx_.set_verify_mode(verify_mode);
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
+      if (!domain.empty())
+        ssl_ctx_.set_verify_callback(asio::ssl::host_name_verification(domain));
 
-      ssl_ctx_.set_verify_callback(asio::ssl::host_name_verification(domain));
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_, ssl_ctx_);
@@ -530,6 +530,9 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
                                                     http_method method,
                                                     auto ctx) {
+    if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.clear();
+    }
     resp_data data{};
 
     std::error_code ec{};
@@ -848,6 +851,11 @@ class coro_http_client {
       handle_entire_content(data, content_len, is_ranges, ctx);
     } while (0);
 
+    if (!resp_chunk_str_.empty()) {
+      data.resp_body =
+          std::string_view{resp_chunk_str_.data(), resp_chunk_str_.size()};
+    }
+
     co_return data;
   }
 
@@ -951,6 +959,9 @@ class coro_http_client {
       if constexpr (std::is_same_v<std::ofstream,
                                    std::remove_cvref_t<Stream>>) {
         ctx.stream.write(data_ptr, chunk_size);
+      }
+      else {
+        resp_chunk_str_.append(data_ptr, chunk_size);
       }
 
       read_buf_.consume(chunk_size + CRCF.size());
@@ -1247,7 +1258,7 @@ class coro_http_client {
   bool enable_timeout_ = false;
   std::chrono::steady_clock::duration timeout_duration_ =
       std::chrono::seconds(60);
-
+  std::string resp_chunk_str_;
 #ifdef BENCHMARK_TEST
   std::string req_str_;
   bool stop_bench_ = false;
