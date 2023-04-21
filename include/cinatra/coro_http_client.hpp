@@ -131,6 +131,8 @@ class coro_http_client {
       }
       else {
         printf("no certificate file %s", full_cert_file.string().data());
+        if (!base_path.empty() || !cert_file.empty())
+          return false;
       }
 
       ssl_ctx_.set_verify_mode(verify_mode);
