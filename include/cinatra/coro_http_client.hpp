@@ -1234,10 +1234,12 @@ class coro_http_client {
     size_t pos_http = url.find_first_of("http://");
     size_t pos_https = url.find_first_of("https://");
     size_t pos_ws = url.find_first_of("ws://");
+    size_t pos_wss = url.find_first_of("wss://");
     bool has_http_scheme =
         ((pos_http != std::string::npos) && pos_http == 0) ||
         ((pos_https != std::string::npos) && pos_https == 0) ||
-        ((pos_ws != std::string::npos) && pos_ws == 0);
+        ((pos_ws != std::string::npos) && pos_ws == 0) ||
+        ((pos_wss != std::string::npos) && pos_wss == 0);
 
     if (!has_http_scheme)
       url.insert(0, "http://");
