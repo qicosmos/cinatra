@@ -155,8 +155,16 @@ class coro_http_client {
   [[nodiscard]] bool init_ssl(std::string full_path = "",
                               int verify_mode = asio::ssl::verify_none,
                               const std::string &domain = "localhost") {
-    std::string base_path = full_path.substr(0, full_path.find_last_of('/'));
-    std::string cert_file = full_path.substr(full_path.find_last_of('/') + 1);
+    std::string base_path;
+    std::string cert_file;
+    if (full_path.empty()) {
+      base_path = "";
+      cert_file = "";
+    }
+    else {
+      base_path = full_path.substr(0, full_path.find_last_of('/'));
+      cert_file = full_path.substr(full_path.find_last_of('/') + 1);
+    }
     return init_ssl(base_path, cert_file, verify_mode, domain);
   }
 #endif
