@@ -115,8 +115,8 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path = "",
-                              const std::string &cert_file = "",
+  [[nodiscard]] bool init_ssl(const std::string &base_path,
+                              const std::string &cert_file,
                               int verify_mode = asio::ssl::verify_none,
                               const std::string &domain = "localhost") {
     try {
@@ -150,6 +150,22 @@ class coro_http_client {
       printf("init ssl failed: %s", e.what());
     }
     return ssl_init_ret_;
+  }
+
+  [[nodiscard]] bool init_ssl(std::string full_path = "",
+                              int verify_mode = asio::ssl::verify_none,
+                              const std::string &domain = "localhost") {
+    std::string base_path;
+    std::string cert_file;
+    if (full_path.empty()) {
+      base_path = "";
+      cert_file = "";
+    }
+    else {
+      base_path = full_path.substr(0, full_path.find_last_of('/'));
+      cert_file = full_path.substr(full_path.find_last_of('/') + 1);
+    }
+    return init_ssl(base_path, cert_file, verify_mode, domain);
   }
 #endif
 
@@ -535,6 +551,9 @@ class coro_http_client {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
+
+    check_scheme(uri);
+
     resp_data data{};
 
     std::error_code ec{};
@@ -1217,6 +1236,21 @@ class coro_http_client {
     close_socket();
     promise.setValue(async_simple::Unit());
     co_return true;
+  }
+
+  void check_scheme(std::string &url) {
+    size_t pos_http = url.find_first_of("http://");
+    size_t pos_https = url.find_first_of("https://");
+    size_t pos_ws = url.find_first_of("ws://");
+    size_t pos_wss = url.find_first_of("wss://");
+    bool has_http_scheme =
+        ((pos_http != std::string::npos) && pos_http == 0) ||
+        ((pos_https != std::string::npos) && pos_https == 0) ||
+        ((pos_ws != std::string::npos) && pos_ws == 0) ||
+        ((pos_wss != std::string::npos) && pos_wss == 0);
+
+    if (!has_http_scheme)
+      url.insert(0, "http://");
   }
 
   std::unique_ptr<asio::io_context> io_ctx_;

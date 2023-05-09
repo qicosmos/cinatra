@@ -106,6 +106,14 @@ TEST_CASE("test ssl client") {
     if (!result.net_err)
       CHECK(result.status >= 200);
   }
+
+  {
+    coro_http_client client{};
+    bool ok = client.init_ssl("../../include/cinatra/server.crt");
+    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    CHECK(result.status >= 200);
+  }
 }
 #endif
 
@@ -635,4 +643,39 @@ TEST_CASE("test coro_http_client dealing with self join") {
   auto r = async_simple::coro::syncAwait(simulate_self_join());
   CHECK(!r.net_err);
   CHECK(r.status == 200);
+}
+
+TEST_CASE("test coro_http_client no scheme still send request check") {
+  http_server server(std::thread::hardware_concurrency());
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+  server.set_http_handler<GET, POST>(
+      "/", [&server](request &, response &res) mutable {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  std::string uri = "http://127.0.0.1:8090";
+
+  coro_http_client client{};
+  auto resp = async_simple::coro::syncAwait(client.async_get("127.0.0.1:8090"));
+  CHECK(!resp.net_err);
+  CHECK(resp.status == 200);
+  resp = async_simple::coro::syncAwait(
+      client.async_get("127.0.0.1:8090/ref='http://www.baidu.com'"));
+  CHECK(resp.status == 404);
+
+  server.stop();
+  server_thread.join();
 }
