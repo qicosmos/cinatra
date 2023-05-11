@@ -548,9 +548,15 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
                                                     http_method method,
                                                     auto ctx) {
-    if (!resp_chunk_str_.empty()) {
-      resp_chunk_str_.clear();
-    }
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      if (!req_headers_.empty()) {
+        req_headers_.clear();
+      }
+
+      if (!resp_chunk_str_.empty()) {
+        resp_chunk_str_.clear();
+      }
+    });
 
     check_scheme(uri);
 
