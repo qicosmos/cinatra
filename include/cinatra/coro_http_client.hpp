@@ -363,6 +363,13 @@ class coro_http_client {
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
+  async_simple::coro::Lazy<resp_data> async_put(std::string uri,
+                                                std::string content,
+                                                req_content_type content_type) {
+    req_context<std::string> ctx{content_type, "", std::move(content)};
+    return async_request(std::move(uri), http_method::PUT, std::move(ctx));
+  }
+
   resp_data post(std::string uri, std::string content,
                  req_content_type content_type) {
     return async_simple::coro::syncAwait(

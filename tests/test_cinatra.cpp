@@ -143,11 +143,28 @@ TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
 
-TEST_CASE("test head request") {
+TEST_CASE("test head put request") {
   coro_http_client client{};
 
   auto f = client.async_head("http://httpbin.org/headers");
   auto result = async_simple::coro::syncAwait(f);
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v << "\n";
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+
+  std::string json = R"({
+"Id": 12345,
+"Customer": "John Smith",
+"Quantity": 1,
+"Price": 10.00
+})";
+
+  coro_http_client client1{};
+  result = async_simple::coro::syncAwait(client1.async_put(
+      "http://reqbin.com/echo/put/json", json, req_content_type::json));
   for (auto [k, v] : result.resp_headers) {
     std::cout << k << ": " << v << "\n";
   }
