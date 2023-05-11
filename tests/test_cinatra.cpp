@@ -143,6 +143,19 @@ TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
 
+TEST_CASE("test head request") {
+  coro_http_client client{};
+
+  auto f = client.async_head("http://httpbin.org/headers");
+  auto result = async_simple::coro::syncAwait(f);
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v << "\n";
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+}
+
 TEST_CASE("test upload file") {
   http_server server(std::thread::hardware_concurrency());
   //  server.enable_timeout(false);

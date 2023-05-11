@@ -49,7 +49,7 @@ struct resp_data {
 #endif
 };
 
-template <typename Stream>
+template <typename Stream = std::string>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_str;
@@ -260,6 +260,11 @@ class coro_http_client {
   void set_read_fix() { read_fix_ = 1; }
 #endif
 
+  async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::HEAD,
+                         cinatra::req_context<>{});
+  }
+
   async_simple::coro::Lazy<resp_data> async_get(std::string uri) {
     resp_data data{};
 #ifdef BENCHMARK_TEST
@@ -283,7 +288,8 @@ class coro_http_client {
       if (read_fix_ == 0) {
         req_context<std::string> ctx{};
         bool is_keep_alive = true;
-        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                    http_method::GET);
         handle_result(data, ec, is_keep_alive);
         if (ec) {
           if (!stop_bench_)
@@ -480,7 +486,8 @@ class coro_http_client {
     }
 
     bool is_keep_alive = true;
-    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+    data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                http_method::POST);
     if (auto errc = co_await wait_timer(promise); errc) {
       ec = errc;
     }
@@ -601,7 +608,8 @@ class coro_http_client {
         break;
       }
 
-      data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx));
+      data =
+          co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
     } while (0);
 
     if (auto errc = co_await wait_timer(promise); errc) {
@@ -821,8 +829,8 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> handle_read(std::error_code &ec,
                                                   size_t &size,
-                                                  bool &is_keep_alive,
-                                                  auto ctx) {
+                                                  bool &is_keep_alive, auto ctx,
+                                                  http_method method) {
     resp_data data{};
     do {
       if (std::tie(ec, size) = co_await async_read_until(read_buf_, TWO_CRCF);
@@ -842,6 +850,10 @@ class coro_http_client {
         inject_header_valid = ClientInjectAction::none;
 #endif
         break;
+      }
+
+      if (method == http_method::HEAD) {
+        co_return data;
       }
 
       is_keep_alive = parser.keep_alive();
