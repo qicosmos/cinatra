@@ -82,3 +82,5 @@ endif()
 if (ENABLE_GZIP)
 	find_package(ZLIB REQUIRED)
 endif()
+
+add_definitions(-DCORO_HTTP_PRINT_REQ_HEAD)

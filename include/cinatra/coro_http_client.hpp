@@ -786,6 +786,10 @@ class coro_http_client {
                                   const auto &ctx) {
     std::string req_str = build_request_header(u, method, ctx);
 
+#ifdef CORO_HTTP_PRINT_REQ_HEAD
+    std::cout << req_str << "\n";
+#endif
+
     if (!ctx.content.empty())
       req_str.append(std::move(ctx.content));
 
