@@ -260,6 +260,21 @@ class coro_http_client {
   void set_read_fix() { read_fix_ = 1; }
 #endif
 
+  async_simple::coro::Lazy<resp_data> async_patch(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::PATCH,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_options(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::OPTIONS,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_trace(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::TRACE,
+                         cinatra::req_context<>{});
+  }
+
   async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::HEAD,
                          cinatra::req_context<>{});
@@ -361,6 +376,12 @@ class coro_http_client {
       std::string uri, std::string content, req_content_type content_type) {
     req_context<std::string> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
+  }
+
+  async_simple::coro::Lazy<resp_data> async_delete(
+      std::string uri, std::string content, req_content_type content_type) {
+    req_context<std::string> ctx{content_type, "", std::move(content)};
+    return async_request(std::move(uri), http_method::DEL, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_put(std::string uri,

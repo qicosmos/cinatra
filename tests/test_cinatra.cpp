@@ -143,7 +143,7 @@ TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
 
-TEST_CASE("test head put request") {
+TEST_CASE("test head put and some other request") {
   coro_http_client client{};
 
   auto f = client.async_head("http://httpbin.org/headers");
@@ -166,11 +166,49 @@ TEST_CASE("test head put request") {
   result = async_simple::coro::syncAwait(client1.async_put(
       "http://reqbin.com/echo/put/json", json, req_content_type::json));
   for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v << "\n";
+    std::cout << k << ": " << v;
   }
   if (!result.net_err) {
     CHECK(result.status >= 200);
   }
+
+  result = async_simple::coro::syncAwait(client1.async_delete(
+      "http://reqbin.com/echo/delete/json.txt", json, req_content_type::json));
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v;
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+
+  coro_http_client client2{};
+  result = async_simple::coro::syncAwait(
+      client2.async_options("http://httpbin.org"));
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v << std::endl;
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+
+  result =
+      async_simple::coro::syncAwait(client2.async_patch("http://httpbin.org"));
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v;
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+
+  result =
+      async_simple::coro::syncAwait(client2.async_trace("http://httpbin.org"));
+  for (auto [k, v] : result.resp_headers) {
+    std::cout << k << ": " << v;
+  }
+  if (!result.net_err) {
+    CHECK(result.status >= 200);
+  }
+  std::cout << std::endl;
 }
 
 TEST_CASE("test upload file") {
