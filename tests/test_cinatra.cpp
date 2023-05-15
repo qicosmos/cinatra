@@ -139,6 +139,21 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test coro_http_client async_connect") {
+  coro_http_client client{};
+  auto r = async_simple::coro::syncAwait(
+      client.async_connect("http://www.baidu.com"));
+  CHECK(r.status >= 200);
+  for (auto [k, v] : r.resp_headers) {
+    std::cout << k << ", " << v << "\n";
+  }
+
+  coro_http_client client1{};
+  r = async_simple::coro::syncAwait(
+      client1.async_connect("http//www.badurl.com"));
+  CHECK(r.status != 200);
+}
+
 TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
@@ -454,17 +469,6 @@ TEST_CASE("test coro_http_client async_get") {
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CHECK(!r.net_err);
   CHECK(r.status == 200);
-}
-
-TEST_CASE("test coro_http_client async_connect") {
-  coro_http_client client{};
-  auto r = async_simple::coro::syncAwait(
-      client.async_connect("http://www.purecpp.cn"));
-  CHECK(r);
-
-  r = async_simple::coro::syncAwait(
-      client.async_connect("http//www.badurl.com"));
-  CHECK(!r);
 }
 
 TEST_CASE("test basic http request") {

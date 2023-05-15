@@ -192,7 +192,7 @@ class coro_http_client {
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
 
-  async_simple::coro::Lazy<bool> async_connect(std::string uri) {
+  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
@@ -277,6 +277,11 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_head(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::HEAD,
+                         cinatra::req_context<>{});
+  }
+
+  async_simple::coro::Lazy<resp_data> async_connect(std::string uri) {
+    return async_request(std::move(uri), cinatra::http_method::CONNECT,
                          cinatra::req_context<>{});
   }
 
