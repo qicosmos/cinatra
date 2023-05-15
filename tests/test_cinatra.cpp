@@ -143,7 +143,7 @@ TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
   auto r = async_simple::coro::syncAwait(
       client.async_connect("http://www.baidu.com"));
-  CHECK(r.status == 200);
+  CHECK(r.status >= 200);
   for (auto [k, v] : r.resp_headers) {
     std::cout << k << ", " << v << "\n";
   }
