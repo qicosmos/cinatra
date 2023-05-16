@@ -7,6 +7,7 @@
 #include <fstream>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
