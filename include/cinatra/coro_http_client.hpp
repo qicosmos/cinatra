@@ -11,6 +11,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "asio/dispatch.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
@@ -573,16 +574,21 @@ class coro_http_client {
   }
 
   void reset() {
-    if (has_closed()) {
-      socket_ = decltype(socket_)(executor_wrapper_.context());
-      if (!socket_.is_open()) {
-        socket_.open(asio::ip::tcp::v4());
-      }
-#ifdef BENCHMARK_TEST
-      req_str_.clear();
-      total_len_ = 0;
-#endif
+    if (!has_closed())
+      close_socket();
+    socket_ = decltype(socket_)(executor_wrapper_.context());
+    if (!socket_.is_open()) {
+      socket_.open(asio::ip::tcp::v4());
     }
+#ifdef BENCHMARK_TEST
+    req_str_.clear();
+    total_len_ = 0;
+#endif
+  }
+
+  async_simple::coro::Lazy<resp_data> async_reconnect(std::string uri) {
+    reset();
+    co_return co_await async_get(uri);
   }
 
   async_simple::coro::Lazy<resp_data> async_request(std::string uri,
