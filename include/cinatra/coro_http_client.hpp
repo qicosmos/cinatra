@@ -50,6 +50,12 @@ struct client_config {
   std::string proxy_auth_username;
   std::string proxy_auth_passwd;
   std::string proxy_auth_token;
+#ifdef CINATRA_ENABLE_SSL
+  std::string base_path;
+  std::string cert_file;
+  int verify_mode;
+  std::string domain;
+#endif
 };
 
 struct resp_data {
@@ -98,14 +104,14 @@ class coro_http_client {
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
 
-  void init_config(const client_config &conf) {
+  bool init_config(const client_config &conf) {
     if (conf.timeout_duration) {
       set_timeout(*conf.timeout_duration);
     }
     if (!conf.sec_key.empty()) {
       set_ws_sec_key(conf.sec_key);
     }
-    if (!conf.max_single_part_size > 0) {
+    if (conf.max_single_part_size > 0) {
       set_max_single_part_size(conf.max_single_part_size);
     }
     if (!conf.proxy_host.empty()) {
@@ -117,6 +123,11 @@ class coro_http_client {
     if (!conf.proxy_auth_token.empty()) {
       set_proxy_bearer_token_auth(conf.proxy_auth_token);
     }
+#ifdef CINATRA_ENABLE_SSL
+    return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
+                    conf.domain);
+#endif
+    return true;
   }
 
   ~coro_http_client() {
