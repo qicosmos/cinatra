@@ -141,6 +141,8 @@ async_simple::coro::Lazy<void> test_collect_all() {
 
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
+  cinatra::client_config conf{.timeout_duration = 60s};
+  client.init_config(conf);
   auto r = async_simple::coro::syncAwait(
       client.async_connect("http://www.baidu.com"));
   CHECK(r.status >= 200);
