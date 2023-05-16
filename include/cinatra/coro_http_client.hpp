@@ -39,6 +39,19 @@ inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
 
+constexpr inline bool connect_ok = true;
+
+struct client_config {
+  std::optional<std::chrono::steady_clock::duration> timeout_duration;
+  std::string sec_key;
+  size_t max_single_part_size;
+  std::string proxy_host;
+  std::string proxy_port;
+  std::string proxy_auth_username;
+  std::string proxy_auth_passwd;
+  std::string proxy_auth_token;
+};
+
 struct resp_data {
   std::error_code net_err;
   int status;
@@ -84,6 +97,27 @@ class coro_http_client {
 
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
+
+  void init_config(const client_config &conf) {
+    if (conf.timeout_duration) {
+      set_timeout(*conf.timeout_duration);
+    }
+    if (!conf.sec_key.empty()) {
+      set_ws_sec_key(conf.sec_key);
+    }
+    if (!conf.max_single_part_size > 0) {
+      set_max_single_part_size(conf.max_single_part_size);
+    }
+    if (!conf.proxy_host.empty()) {
+      set_proxy_basic_auth(conf.proxy_host, conf.proxy_port);
+    }
+    if (!conf.proxy_auth_username.empty()) {
+      set_proxy_basic_auth(conf.proxy_auth_username, conf.proxy_auth_passwd);
+    }
+    if (!conf.proxy_auth_token.empty()) {
+      set_proxy_bearer_token_auth(conf.proxy_auth_token);
+    }
+  }
 
   ~coro_http_client() {
     async_close();
