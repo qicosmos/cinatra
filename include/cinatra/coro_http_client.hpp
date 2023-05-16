@@ -105,7 +105,7 @@ class coro_http_client {
       : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
 
   bool init_config(const client_config &conf) {
-    if (conf.timeout_duration) {
+    if (conf.timeout_duration.has_value()) {
       set_timeout(*conf.timeout_duration);
     }
     if (!conf.sec_key.empty()) {
