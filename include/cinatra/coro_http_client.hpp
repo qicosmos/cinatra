@@ -11,6 +11,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "asio/dispatch.hpp"
 #include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
@@ -109,7 +110,7 @@ class coro_http_client {
     if (has_closed_)
       return;
 
-    asio::post(executor_wrapper_.get_executor(), [this] {
+    asio::dispatch(executor_wrapper_.get_executor(), [this] {
       close_socket();
     });
   }
