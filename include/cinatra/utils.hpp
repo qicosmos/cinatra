@@ -800,6 +800,185 @@ inline std::string get_gmt_time_str(std::time_t t) {
   return buff;
 }
 
+inline bool is_leap(int year) {
+  return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+inline int days_in(int m, int year) {
+  if (m == name_of_month["Feb"] && is_leap(year)) {
+    return 29;
+  }
+  return int(days_before[m + 1] - days_before[m]);
+}
+
+inline int lookup(std::unordered_map<std::string_view, int> &dictionary,
+                  std::string_view &sv) {
+  if (dictionary.count(sv) > 0) {
+    return dictionary[sv];
+  }
+  else {
+    return -1;
+  }
+}
+
+inline int get_digit(std::string_view &sv, int width) {
+  int num = 0;
+  for (int i = 0; i < width; i++) {
+    if ('0' <= sv[i] && sv[i] <= '9') {
+      num = num * 10 + (sv[i] - '0');
+    }
+    else {
+      return -1;
+    }
+  }
+  return num;
+}
+
+inline std::uint64_t days_since_epoch(int year) {
+  auto y = std::uint64_t(std::int64_t(year) - absolute_zero_year);
+
+  auto n = y / 400;
+  y -= 400 * n;
+  auto d = days_per_400_years * n;
+
+  n = y / 100;
+  y -= 100 * n;
+  d += days_per_100_years * n;
+
+  n = y / 4;
+  y -= 4 * n;
+  d += days_per_4_years * n;
+
+  n = y;
+  d += 365 * n;
+
+  return d;
+}
+
+inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
+                                                  int hour, int min, int sec,
+                                                  int day_of_week) {
+  auto d = days_since_epoch(year);
+  d += std::uint64_t(days_before[month]);
+  if (is_leap(year) && month >= name_of_month["Mar"]) {
+    d++;  // February 29
+  }
+  d += std::uint64_t(day - 1);
+  auto abs = d * seconds_per_day;
+  abs +=
+      std::uint64_t(hour * seconds_per_hour + min * seconds_per_minute + sec);
+  std::int64_t wday =
+      ((abs + std::uint64_t(name_of_day["Mon"]) * seconds_per_day) %
+       seconds_per_week) /
+      seconds_per_day;
+  if (wday != day_of_week) {
+    return {false, 0};
+  }
+  return {true, std::int64_t(abs) + (absolute_to_internal + internal_to_unix)};
+}
+
+inline std::pair<bool, std::time_t> get_timestamp(
+    const std::string &gmt_time_str) {
+  std::string_view sv;
+  int year, month, day, hour, min, sec, day_of_week;
+  int len_of_gmt_time_str = (int)gmt_time_str.length();
+  int len_of_processed_part = 0;
+  for (auto &comp : http_time_format) {
+    switch (comp) {
+      case component_of_time_format::colon:
+      case component_of_time_format::comma:
+      case component_of_time_format::SP:
+        len_of_processed_part += 1;
+        break;
+      case component_of_time_format::year:
+        if (len_of_gmt_time_str - len_of_processed_part < 4) {
+          return {false, 0};
+        }
+        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
+                              gmt_time_str.begin() + len_of_processed_part + 4);
+        if ((year = get_digit(sv, 4)) == -1) {
+          return {false, 0};
+        }
+        len_of_processed_part += 4;
+        break;
+      case component_of_time_format::month:
+        if (len_of_gmt_time_str - len_of_processed_part < 3) {
+          return {false, 0};
+        }
+        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
+                              gmt_time_str.begin() + len_of_processed_part + 3);
+        if ((month = lookup(name_of_month, sv)) == -1) {
+          return {false, 0};
+        }
+        len_of_processed_part += 3;
+        break;
+      case component_of_time_format::hour:
+      case component_of_time_format::minute:
+      case component_of_time_format::second:
+      case component_of_time_format::day:
+        if (len_of_gmt_time_str - len_of_processed_part < 2) {
+          return {false, 0};
+        }
+        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
+                              gmt_time_str.begin() + len_of_processed_part + 2);
+        int digit;
+        if ((digit = get_digit(sv, 2)) == -1) {
+          return {false, 0};
+        }
+        if (comp == component_of_time_format::hour) {
+          hour = digit;
+          if (hour < 0 || hour >= 24) {
+            return {false, 0};
+          }
+        }
+        else if (comp == component_of_time_format::minute) {
+          min = digit;
+          if (min < 0 || min >= 60) {
+            return {false, 0};
+          }
+        }
+        else if (comp == component_of_time_format::second) {
+          sec = digit;
+          if (sec < 0 || sec >= 60) {
+            return {false, 0};
+          }
+        }
+        else {
+          day = digit;
+        }
+        len_of_processed_part += 2;
+        break;
+      case component_of_time_format::day_name:
+        if (len_of_gmt_time_str - len_of_processed_part < 3) {
+          return {false, 0};
+        }
+        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
+                              gmt_time_str.begin() + len_of_processed_part + 3);
+        if ((day_of_week = lookup(name_of_day, sv)) < 0) {
+          return {false, 0};
+        }
+        len_of_processed_part += 3;
+        break;
+      case component_of_time_format::GMT:
+        if (len_of_gmt_time_str - len_of_processed_part < 3) {
+          return {false, 0};
+        }
+        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
+                              gmt_time_str.begin() + len_of_processed_part + 3);
+        if (sv != "GMT") {
+          return {false, 0};
+        }
+        len_of_processed_part += 3;
+        break;
+    }
+  }
+  if (len_of_processed_part != len_of_gmt_time_str || day < 1 ||
+      day > days_in(month, year)) {
+    return {false, 0};
+  }
+  return faster_mktime(year, month, day, hour, min, sec, day_of_week);
+}
+
 inline std::string get_cur_time_str() {
   return get_time_str(std::time(nullptr));
 }

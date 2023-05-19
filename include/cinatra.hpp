@@ -8,5 +8,6 @@
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/http_server.hpp"
 #include "cinatra/smtp_client.hpp"
+#include "date/date.h"
 
 #endif  // CINATRA_CINATRA_HPP

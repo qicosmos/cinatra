@@ -1,5 +1,6 @@
 #include <async_simple/coro/Collect.h>
 
+#include <chrono>
 #include <filesystem>
 #include <future>
 #include <system_error>
@@ -764,4 +765,55 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
 
   server.stop();
   server_thread.join();
+}
+
+std::pair<bool, std::time_t> get_timestamp_by_date(const std::string& gmtTime) {
+  std::tm gmTime = {};
+  std::istringstream in(gmtTime);
+
+  date::sys_seconds tp;
+  in >> date::parse("%a, %d %b %Y %H:%M:%S %Z", tp);
+
+  if (in.fail()) {
+    return {false, 0};
+  }
+  return {true, std::chrono::system_clock::to_time_t(tp)};
+}
+
+TEST_CASE("test conversion between unix time and gmt time") {
+  std::chrono::microseconds time_cost1{0}, time_cost2{0};
+  std::ifstream file("../../tests/http_times.txt");
+  if (!file) {
+    std::cout << "open file failed" << std::endl;
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    std::istringstream iss(line);
+    std::string httpTime;
+    if (std::getline(iss, httpTime)) {
+      std::pair<bool, std::time_t> result1, result2;
+
+      auto start = std::chrono::system_clock::now();
+      for (int i = 0; i < 100; i++) {
+        result1 = get_timestamp(httpTime);
+      }
+      auto end = std::chrono::system_clock::now();
+      auto duration1 = duration_cast<std::chrono::microseconds>(end - start);
+      time_cost1 += duration1;
+
+      start = std::chrono::system_clock::now();
+      for (int i = 0; i < 100; i++) {
+        result2 = get_timestamp_by_date(httpTime);
+      }
+      end = std::chrono::system_clock::now();
+      auto duration2 = duration_cast<std::chrono::microseconds>(end - start);
+      time_cost2 += duration2;
+
+      CHECK(result1.first == result2.first);
+      if (result1.first == true) {
+        CHECK(result1.second == result2.second);
+      }
+    }
+  }
+  file.close();
 }
