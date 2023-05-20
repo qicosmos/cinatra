@@ -964,7 +964,7 @@ inline std::pair<bool, std::time_t> get_timestamp(
         break;
     }
   }
-  if (len_of_processed_part != len_of_gmt_time_str || day < 1 ||
+  if (len_of_processed_part != len_of_http_format || day < 1 ||
       day > days_in(month, year)) {
     return {false, 0};
   }

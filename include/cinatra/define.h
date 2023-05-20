@@ -125,6 +125,8 @@ inline std::vector<component_of_time_format> http_time_format{
     component_of_time_format::colon,    component_of_time_format::minute,
     component_of_time_format::colon,    component_of_time_format::second,
     component_of_time_format::SP,       component_of_time_format::GMT};
+const inline int len_of_http_format =
+    3 + 1 + 1 + 2 + 1 + 3 + 1 + 4 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 3;
 inline std::unordered_map<std::string_view, int> name_of_day = {
     {"Sun", 0}, {"Mon", 1}, {"Tue", 2}, {"Wed", 3},
     {"Thu", 4}, {"Fri", 5}, {"Sat", 6}};
