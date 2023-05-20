@@ -141,7 +141,8 @@ const inline std::int64_t seconds_per_day = 24 * seconds_per_hour;
 const inline std::int64_t seconds_per_week = 7 * seconds_per_day;
 const inline std::int64_t internal_year = 1;
 const inline std::int64_t absolute_to_internal =
-    (absolute_zero_year - internal_year) * std::int64_t(365.2425 * seconds_per_day);
+    (absolute_zero_year - internal_year) *
+    std::int64_t(365.2425 * seconds_per_day);
 const inline std::int64_t unix_to_internal =
     (1969 * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * seconds_per_day;
 const inline std::int64_t internal_to_unix = -unix_to_internal;

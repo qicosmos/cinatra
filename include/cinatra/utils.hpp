@@ -812,7 +812,7 @@ inline int days_in(int m, int year) {
 }
 
 inline int lookup(std::unordered_map<std::string_view, int> &dictionary,
-                  std::string_view &sv) {
+                  const std::string_view &sv) {
   if (dictionary.count(sv) > 0) {
     return dictionary[sv];
   }
@@ -821,7 +821,7 @@ inline int lookup(std::unordered_map<std::string_view, int> &dictionary,
   }
 }
 
-inline int get_digit(std::string_view &sv, int width) {
+inline int get_digit(const std::string_view &sv, int width) {
   int num = 0;
   for (int i = 0; i < width; i++) {
     if ('0' <= sv[i] && sv[i] <= '9') {
@@ -879,7 +879,7 @@ inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
 
 inline std::pair<bool, std::time_t> get_timestamp(
     const std::string &gmt_time_str) {
-  std::string_view sv;
+  std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
   int len_of_gmt_time_str = (int)gmt_time_str.length();
   int len_of_processed_part = 0;
@@ -894,9 +894,7 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 4) {
           return {false, 0};
         }
-        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
-                              gmt_time_str.begin() + len_of_processed_part + 4);
-        if ((year = get_digit(sv, 4)) == -1) {
+        if ((year = get_digit(sv.substr(len_of_processed_part, 4), 4)) == -1) {
           return {false, 0};
         }
         len_of_processed_part += 4;
@@ -905,9 +903,8 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
-        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
-                              gmt_time_str.begin() + len_of_processed_part + 3);
-        if ((month = lookup(name_of_month, sv)) == -1) {
+        if ((month = lookup(name_of_month,
+                            sv.substr(len_of_processed_part, 3))) == -1) {
           return {false, 0};
         }
         len_of_processed_part += 3;
@@ -919,10 +916,8 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 2) {
           return {false, 0};
         }
-        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
-                              gmt_time_str.begin() + len_of_processed_part + 2);
         int digit;
-        if ((digit = get_digit(sv, 2)) == -1) {
+        if ((digit = get_digit(sv.substr(len_of_processed_part, 2), 2)) == -1) {
           return {false, 0};
         }
         if (comp == component_of_time_format::hour) {
@@ -952,9 +947,8 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
-        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
-                              gmt_time_str.begin() + len_of_processed_part + 3);
-        if ((day_of_week = lookup(name_of_day, sv)) < 0) {
+        if ((day_of_week = lookup(name_of_day,
+                                  sv.substr(len_of_processed_part, 3))) < 0) {
           return {false, 0};
         }
         len_of_processed_part += 3;
@@ -963,9 +957,7 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
-        sv = std::string_view(gmt_time_str.begin() + len_of_processed_part,
-                              gmt_time_str.begin() + len_of_processed_part + 3);
-        if (sv != "GMT") {
+        if (sv.substr(len_of_processed_part, 3) != "GMT") {
           return {false, 0};
         }
         len_of_processed_part += 3;

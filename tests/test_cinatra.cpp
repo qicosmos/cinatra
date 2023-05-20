@@ -767,7 +767,7 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
   server_thread.join();
 }
 
-std::pair<bool, std::time_t> get_timestamp_by_date(const std::string& gmtTime) {
+std::pair<bool, std::time_t> get_timestamp_by_date(const std::string &gmtTime) {
   std::tm gmTime = {};
   std::istringstream in(gmtTime);
 
