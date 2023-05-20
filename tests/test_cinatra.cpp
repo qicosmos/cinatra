@@ -784,7 +784,7 @@ TEST_CASE("test conversion between unix time and gmt time") {
       if (result.first == true) {
         CHECK(timestamp != "invalid");
         if (timestamp != "invalid") {
-          CHECK(result.second == std::stol(timestamp));
+          CHECK(result.second == std::stoll(timestamp));
         }
       }
       else {
