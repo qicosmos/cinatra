@@ -800,6 +800,7 @@ inline std::string get_gmt_time_str(std::time_t t) {
   return buff;
 }
 
+namespace time_util {
 inline bool is_leap(int year) {
   return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
@@ -876,9 +877,11 @@ inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
   }
   return {true, std::int64_t(abs) + (absolute_to_internal + internal_to_unix)};
 }
+}  // namespace time_util
 
 inline std::pair<bool, std::time_t> get_timestamp(
     const std::string &gmt_time_str) {
+  using namespace time_util;
   std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
   int len_of_gmt_time_str = (int)gmt_time_str.length();

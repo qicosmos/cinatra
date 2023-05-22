@@ -80,6 +80,7 @@ inline std::unordered_map<std::string, std::string> g_content_type_map = {
 struct NonSSL {};
 struct SSL {};
 
+namespace time_util {
 /*
   IMF-fixdate = day-name "," SP date1 SP time-of-day SP GMT
   day-name     = %s"Mon" / %s"Tue" / %s"Wed"
@@ -163,4 +164,5 @@ const inline std::vector<std::int32_t> days_before = {
     31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30,
     31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31,
 };
+}  // namespace time_util
 }  // namespace cinatra
