@@ -801,11 +801,11 @@ inline std::string get_gmt_time_str(std::time_t t) {
 }
 
 namespace time_util {
-inline bool is_leap(int year) {
+inline constexpr bool is_leap(int year) {
   return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
 
-inline int days_in(int m, int year) {
+inline constexpr int days_in(int m, int year) {
   if (m == name_of_month["Feb"] && is_leap(year)) {
     return 29;
   }
@@ -822,7 +822,7 @@ inline int lookup(std::unordered_map<std::string_view, int> &dictionary,
   }
 }
 
-inline int get_digit(const std::string_view &sv, int width) {
+inline constexpr int get_digit(std::string_view sv, int width) {
   int num = 0;
   for (int i = 0; i < width; i++) {
     if ('0' <= sv[i] && sv[i] <= '9') {
@@ -835,7 +835,7 @@ inline int get_digit(const std::string_view &sv, int width) {
   return num;
 }
 
-inline std::uint64_t days_since_epoch(int year) {
+inline constexpr std::uint64_t days_since_epoch(int year) {
   auto y = std::uint64_t(std::int64_t(year) - absolute_zero_year);
 
   auto n = y / 400;
