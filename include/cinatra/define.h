@@ -104,18 +104,26 @@ namespace time_util {
   minute       = 2DIGIT
   second       = 2DIGIT
 */
+enum time_format { http_format, utc_format, utc_without_punctuation_format };
 enum component_of_time_format {
   day_name,
   day,
+  month_name,
   month,
   year,
-  GMT,
   hour,
   minute,
   second,
+  second_decimal_part,
   SP,
   comma,
-  colon
+  colon,
+  hyphen,
+  dot,
+  GMT,
+  T,
+  Z,
+  ending
 };
 
 inline constexpr std::array<int, 17> month_table = {
@@ -124,17 +132,55 @@ inline constexpr std::array<int, 17> month_table = {
 inline constexpr std::array<int, 17> week_table = {
     2, 4, 3, 1, -1, -1, -1, 6, -1, -1, -1, -1, 0, -1, -1, 5, -1};
 
-inline constexpr std::array<component_of_time_format, 16> http_time_format{
+// Mon, 02 Jan 2006 15:04:05 GMT
+inline constexpr std::array<component_of_time_format, 32> http_time_format{
     component_of_time_format::day_name, component_of_time_format::comma,
     component_of_time_format::SP,       component_of_time_format::day,
-    component_of_time_format::SP,       component_of_time_format::month,
+    component_of_time_format::SP,       component_of_time_format::month_name,
     component_of_time_format::SP,       component_of_time_format::year,
     component_of_time_format::SP,       component_of_time_format::hour,
     component_of_time_format::colon,    component_of_time_format::minute,
     component_of_time_format::colon,    component_of_time_format::second,
-    component_of_time_format::SP,       component_of_time_format::GMT};
-constexpr inline int len_of_http_format =
+    component_of_time_format::SP,       component_of_time_format::GMT,
+    component_of_time_format::ending};
+// 2006-01-02T15:04:05.000Z
+inline constexpr std::array<component_of_time_format, 32> utc_time_format{
+    component_of_time_format::year,
+    component_of_time_format::hyphen,
+    component_of_time_format::month,
+    component_of_time_format::hyphen,
+    component_of_time_format::day,
+    component_of_time_format::T,
+    component_of_time_format::hour,
+    component_of_time_format::colon,
+    component_of_time_format::minute,
+    component_of_time_format::colon,
+    component_of_time_format::second,
+    component_of_time_format::dot,
+    component_of_time_format::second_decimal_part,
+    component_of_time_format::Z,
+    component_of_time_format::ending};
+// 20060102T150405000Z
+inline constexpr std::array<component_of_time_format, 32>
+    utc_time_without_punctuation_format{
+        component_of_time_format::year,
+        component_of_time_format::month,
+        component_of_time_format::day,
+        component_of_time_format::T,
+        component_of_time_format::hour,
+        component_of_time_format::minute,
+        component_of_time_format::second,
+        component_of_time_format::second_decimal_part,
+        component_of_time_format::Z,
+        component_of_time_format::ending};
+constexpr inline int len_of_http_time_format =
     3 + 1 + 1 + 2 + 1 + 3 + 1 + 4 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 3;
+// ignore second_decimal_part
+constexpr inline int len_of_utc_time_format =
+    4 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 0 + 1;
+// ignore second_decimal_part
+constexpr inline int len_of_utc_time_without_punctuation_format =
+    4 + 2 + 2 + 1 + 2 + 2 + 2 + 0 + 1;
 constexpr inline std::int64_t absolute_zero_year = -292277022399;
 constexpr inline std::int64_t days_per_100_years = 365 * 100 + 24;
 constexpr inline std::int64_t days_per_400_years = 365 * 400 + 97;

@@ -841,18 +841,14 @@ inline constexpr std::uint64_t days_since_epoch(int year) {
   auto n = y / 400;
   y -= 400 * n;
   auto d = days_per_400_years * n;
-
   n = y / 100;
   y -= 100 * n;
   d += days_per_100_years * n;
-
   n = y / 4;
   y -= 4 * n;
   d += days_per_4_years * n;
-
   n = y;
   d += 365 * n;
-
   return d;
 }
 
@@ -870,28 +866,64 @@ inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
   abs +=
       std::uint64_t(hour * seconds_per_hour + min * seconds_per_minute + sec);
   constexpr int day_index = get_day_index("Mon");
-  std::int64_t wday =
-      ((abs + std::uint64_t(day_index) * seconds_per_day) % seconds_per_week) /
-      seconds_per_day;
-  if (wday != day_of_week) {
-    return {false, 0};
+  if (day_of_week != -1) {
+    std::int64_t wday = ((abs + std::uint64_t(day_index) * seconds_per_day) %
+                         seconds_per_week) /
+                        seconds_per_day;
+    if (wday != day_of_week) {
+      return {false, 0};
+    }
   }
   return {true, std::int64_t(abs) + (absolute_to_internal + internal_to_unix)};
 }
 }  // namespace time_util
 
 inline std::pair<bool, std::time_t> get_timestamp(
-    const std::string &gmt_time_str) {
+    const std::string &gmt_time_str, time_util::time_format format) {
   using namespace time_util;
   std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
   int len_of_gmt_time_str = (int)gmt_time_str.length();
   int len_of_processed_part = 0;
-  for (auto &comp : http_time_format) {
+  int len_of_ignored_part = 0;  // second_decimal_part is ignored
+  char c;
+  std::array<component_of_time_format, 32> real_format;
+  if (format == time_format::http_format) {
+    real_format = http_time_format;
+  }
+  else if (format == time_format::utc_format) {
+    day_of_week = -1;
+    real_format = utc_time_format;
+  }
+  else if (format == time_format::utc_without_punctuation_format) {
+    day_of_week = -1;
+    real_format = utc_time_without_punctuation_format;
+  }
+  for (auto &comp : real_format) {
     switch (comp) {
+      case component_of_time_format::ending:
+        goto travel_done;
+        break;
       case component_of_time_format::colon:
       case component_of_time_format::comma:
       case component_of_time_format::SP:
+      case component_of_time_format::hyphen:
+      case component_of_time_format::dot:
+      case component_of_time_format::T:
+      case component_of_time_format::Z:
+        if (len_of_gmt_time_str - len_of_processed_part < 1) {
+          return {false, 0};
+        }
+        c = sv[len_of_processed_part];
+        if ((comp == component_of_time_format::Z && c != 'Z') ||
+            (comp == component_of_time_format::T && c != 'T') ||
+            (comp == component_of_time_format::dot && c != '.') ||
+            (comp == component_of_time_format::hyphen && c != '-') ||
+            (comp == component_of_time_format::SP && c != ' ') ||
+            (comp == component_of_time_format::colon && c != ':') ||
+            (comp == component_of_time_format::comma && c != ',')) {
+          return {false, 0};
+        }
         len_of_processed_part += 1;
         break;
       case component_of_time_format::year:
@@ -903,7 +935,7 @@ inline std::pair<bool, std::time_t> get_timestamp(
         }
         len_of_processed_part += 4;
         break;
-      case component_of_time_format::month:
+      case component_of_time_format::month_name:
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
@@ -916,6 +948,7 @@ inline std::pair<bool, std::time_t> get_timestamp(
       case component_of_time_format::hour:
       case component_of_time_format::minute:
       case component_of_time_format::second:
+      case component_of_time_format::month:
       case component_of_time_format::day:
         if (len_of_gmt_time_str - len_of_processed_part < 2) {
           return {false, 0};
@@ -935,6 +968,13 @@ inline std::pair<bool, std::time_t> get_timestamp(
           if (min < 0 || min >= 60) {
             return {false, 0};
           }
+        }
+        else if (comp == component_of_time_format::month) {
+          month = digit;
+          if (month < 1 || month > 12) {
+            return {false, 0};
+          }
+          month--;
         }
         else if (comp == component_of_time_format::second) {
           sec = digit;
@@ -966,10 +1006,30 @@ inline std::pair<bool, std::time_t> get_timestamp(
         }
         len_of_processed_part += 3;
         break;
+      case component_of_time_format::second_decimal_part:
+        int cur = len_of_processed_part;
+        while (cur < len_of_gmt_time_str &&
+               (sv[cur] >= '0' && sv[cur] <= '9')) {
+          len_of_ignored_part++;
+          cur++;
+        }
+        if (cur == len_of_processed_part) {
+          return {false, 0};
+        }
+        len_of_processed_part = cur;
+        break;
     }
   }
-  if (len_of_processed_part != len_of_http_format || day < 1 ||
-      day > days_in(month, year)) {
+travel_done:
+  if ((len_of_processed_part != len_of_gmt_time_str) ||
+      (len_of_processed_part != len_of_http_time_format &&
+       (len_of_processed_part - len_of_ignored_part) !=
+           len_of_utc_time_format) &&
+          (len_of_processed_part - len_of_ignored_part) !=
+              len_of_utc_time_without_punctuation_format) {
+    return {false, 0};
+  }
+  if (day < 1 || day > days_in(month, year)) {
     return {false, 0};
   }
   return faster_mktime(year, month, day, hour, min, sec, day_of_week);
