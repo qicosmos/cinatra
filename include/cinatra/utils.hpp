@@ -800,28 +800,29 @@ inline std::string get_gmt_time_str(std::time_t t) {
   return buff;
 }
 
-inline bool is_leap(int year) {
+namespace time_util {
+inline constexpr bool is_leap(int year) {
   return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
 
-inline int days_in(int m, int year) {
-  if (m == name_of_month["Feb"] && is_leap(year)) {
+inline constexpr int get_day_index(std::string_view str) {
+  return week_table[((str[0] & ~0x20) ^ (str[2] & ~0x20)) % week_table.size()];
+}
+
+inline constexpr int get_month_index(std::string_view str) {
+  return month_table[((str[1] & ~0x20) + (str[2] & ~0x20)) %
+                     month_table.size()];
+}
+
+inline constexpr int days_in(int m, int year) {
+  constexpr int index = get_month_index("Feb");
+  if (m == index && is_leap(year)) {
     return 29;
   }
   return int(days_before[m + 1] - days_before[m]);
 }
 
-inline int lookup(std::unordered_map<std::string_view, int> &dictionary,
-                  const std::string_view &sv) {
-  if (dictionary.count(sv) > 0) {
-    return dictionary[sv];
-  }
-  else {
-    return -1;
-  }
-}
-
-inline int get_digit(const std::string_view &sv, int width) {
+inline constexpr int get_digit(std::string_view sv, int width) {
   int num = 0;
   for (int i = 0; i < width; i++) {
     if ('0' <= sv[i] && sv[i] <= '9') {
@@ -834,7 +835,7 @@ inline int get_digit(const std::string_view &sv, int width) {
   return num;
 }
 
-inline std::uint64_t days_since_epoch(int year) {
+inline constexpr std::uint64_t days_since_epoch(int year) {
   auto y = std::uint64_t(std::int64_t(year) - absolute_zero_year);
 
   auto n = y / 400;
@@ -860,25 +861,28 @@ inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
                                                   int day_of_week) {
   auto d = days_since_epoch(year);
   d += std::uint64_t(days_before[month]);
-  if (is_leap(year) && month >= name_of_month["Mar"]) {
+  constexpr int index = get_month_index("Mar");
+  if (is_leap(year) && month >= index) {
     d++;  // February 29
   }
   d += std::uint64_t(day - 1);
   auto abs = d * seconds_per_day;
   abs +=
       std::uint64_t(hour * seconds_per_hour + min * seconds_per_minute + sec);
+  constexpr int day_index = get_day_index("Mon");
   std::int64_t wday =
-      ((abs + std::uint64_t(name_of_day["Mon"]) * seconds_per_day) %
-       seconds_per_week) /
+      ((abs + std::uint64_t(day_index) * seconds_per_day) % seconds_per_week) /
       seconds_per_day;
   if (wday != day_of_week) {
     return {false, 0};
   }
   return {true, std::int64_t(abs) + (absolute_to_internal + internal_to_unix)};
 }
+}  // namespace time_util
 
 inline std::pair<bool, std::time_t> get_timestamp(
     const std::string &gmt_time_str) {
+  using namespace time_util;
   std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
   int len_of_gmt_time_str = (int)gmt_time_str.length();
@@ -903,8 +907,8 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
-        if ((month = lookup(name_of_month,
-                            sv.substr(len_of_processed_part, 3))) == -1) {
+        if ((month = get_month_index(sv.substr(len_of_processed_part, 3))) ==
+            -1) {
           return {false, 0};
         }
         len_of_processed_part += 3;
@@ -947,8 +951,8 @@ inline std::pair<bool, std::time_t> get_timestamp(
         if (len_of_gmt_time_str - len_of_processed_part < 3) {
           return {false, 0};
         }
-        if ((day_of_week = lookup(name_of_day,
-                                  sv.substr(len_of_processed_part, 3))) < 0) {
+        if ((day_of_week = get_day_index(sv.substr(len_of_processed_part, 3))) <
+            0) {
           return {false, 0};
         }
         len_of_processed_part += 3;
