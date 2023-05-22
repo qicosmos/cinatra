@@ -117,6 +117,13 @@ enum component_of_time_format {
   comma,
   colon
 };
+
+inline constexpr std::array<int, 17> month_table = {
+    11, 4, -1, 7, -1, -1, -1, 0, 6, 3, 5, 2, 10, 8, -1, 9, 1};
+
+inline constexpr std::array<int, 17> week_table = {
+    2, 4, 3, 1, -1, -1, -1, 6, -1, -1, -1, -1, 0, -1, -1, 5, -1};
+
 inline constexpr std::array<component_of_time_format, 16> http_time_format{
     component_of_time_format::day_name, component_of_time_format::comma,
     component_of_time_format::SP,       component_of_time_format::day,
@@ -128,12 +135,6 @@ inline constexpr std::array<component_of_time_format, 16> http_time_format{
     component_of_time_format::SP,       component_of_time_format::GMT};
 constexpr inline int len_of_http_format =
     3 + 1 + 1 + 2 + 1 + 3 + 1 + 4 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 3;
-inline std::unordered_map<std::string_view, int> name_of_day = {
-    {"Sun", 0}, {"Mon", 1}, {"Tue", 2}, {"Wed", 3},
-    {"Thu", 4}, {"Fri", 5}, {"Sat", 6}};
-inline std::unordered_map<std::string_view, int> name_of_month = {
-    {"Jan", 0}, {"Feb", 1}, {"Mar", 2}, {"Apr", 3}, {"May", 4},  {"Jun", 5},
-    {"Jul", 6}, {"Aug", 7}, {"Sep", 8}, {"Oct", 9}, {"Nov", 10}, {"Dec", 11}};
 constexpr inline std::int64_t absolute_zero_year = -292277022399;
 constexpr inline std::int64_t days_per_100_years = 365 * 100 + 24;
 constexpr inline std::int64_t days_per_400_years = 365 * 400 + 97;
