@@ -1,5 +1,6 @@
 #include <async_simple/coro/Collect.h>
 
+#include <chrono>
 #include <filesystem>
 #include <future>
 #include <system_error>
@@ -764,4 +765,32 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
 
   server.stop();
   server_thread.join();
+}
+
+TEST_CASE("test conversion between unix time and gmt time") {
+  std::chrono::microseconds time_cost1{0}, time_cost2{0};
+  std::ifstream file("../../tests/http_times.txt");
+  if (!file) {
+    std::cout << "open file failed" << std::endl;
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    std::istringstream iss(line);
+    std::string httpTime;
+    std::string timestamp;
+    if (std::getline(iss, httpTime, '#') && std::getline(iss, timestamp)) {
+      std::pair<bool, std::time_t> result;
+      result = get_timestamp(httpTime);
+      if (result.first == true) {
+        CHECK(timestamp != "invalid");
+        if (timestamp != "invalid") {
+          CHECK(result.second == std::stoll(timestamp));
+        }
+      }
+      else {
+        CHECK(timestamp == "invalid");
+      }
+    }
+  }
+  file.close();
 }
