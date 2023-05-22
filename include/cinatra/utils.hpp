@@ -805,7 +805,7 @@ inline constexpr bool is_leap(int year) {
   return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
 
-inline constexpr int days_in(int m, int year) {
+inline int days_in(int m, int year) {
   if (m == name_of_month["Feb"] && is_leap(year)) {
     return 29;
   }
