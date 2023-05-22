@@ -782,7 +782,8 @@ TEST_CASE("test conversion between unix time and gmt time, http format") {
       std::pair<bool, std::time_t> result;
       auto start = std::chrono::system_clock::now();
       for (int i = 0; i < 100; i++) {
-        result = get_timestamp(time_to_parse, time_util::time_format::http_format);
+        result =
+            get_timestamp(time_to_parse, time_util::time_format::http_format);
       }
       auto end = std::chrono::system_clock::now();
       auto duration = duration_cast<std::chrono::microseconds>(end - start);
@@ -820,7 +821,8 @@ TEST_CASE("test conversion between unix time and gmt time, utc format") {
       std::pair<bool, std::time_t> result;
       auto start = std::chrono::system_clock::now();
       for (int i = 0; i < 100; i++) {
-        result = get_timestamp(time_to_parse, time_util::time_format::utc_format);
+        result =
+            get_timestamp(time_to_parse, time_util::time_format::utc_format);
       }
       auto end = std::chrono::system_clock::now();
       auto duration = duration_cast<std::chrono::microseconds>(end - start);
@@ -843,9 +845,13 @@ TEST_CASE("test conversion between unix time and gmt time, utc format") {
             << "s" << std::endl;
 }
 
-TEST_CASE("test conversion between unix time and gmt time, utc without punctuation format") {
+TEST_CASE(
+    "test conversion between unix time and gmt time, utc without punctuation "
+    "format") {
   std::chrono::microseconds time_cost{0};
-  std::ifstream file("../../tests/files_for_test_time_parse/utc_without_punctuation_times.txt");
+  std::ifstream file(
+      "../../tests/files_for_test_time_parse/"
+      "utc_without_punctuation_times.txt");
   if (!file) {
     std::cout << "open file failed" << std::endl;
   }
@@ -858,7 +864,9 @@ TEST_CASE("test conversion between unix time and gmt time, utc without punctuati
       std::pair<bool, std::time_t> result;
       auto start = std::chrono::system_clock::now();
       for (int i = 0; i < 100; i++) {
-        result = get_timestamp(time_to_parse, time_util::time_format::utc_without_punctuation_format);
+        result = get_timestamp(
+            time_to_parse,
+            time_util::time_format::utc_without_punctuation_format);
       }
       auto end = std::chrono::system_clock::now();
       auto duration = duration_cast<std::chrono::microseconds>(end - start);
