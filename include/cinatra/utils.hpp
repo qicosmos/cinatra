@@ -876,10 +876,24 @@ inline std::pair<bool, std::time_t> faster_mktime(int year, int month, int day,
   }
   return {true, std::int64_t(abs) + (absolute_to_internal + internal_to_unix)};
 }
+
+template <time_format Format>
+inline constexpr std::array<component_of_time_format, 32> get_format() {
+  if constexpr (Format == time_format::http_format) {
+    return http_time_format;
+  }
+  else if constexpr (Format == time_format::utc_format) {
+    return utc_time_format;
+  }
+  else {
+    return utc_time_without_punctuation_format;
+  }
+}
 }  // namespace time_util
 
+template <time_format Format = time_format::http_format>
 inline std::pair<bool, std::time_t> get_timestamp(
-    const std::string &gmt_time_str, time_util::time_format format) {
+    const std::string &gmt_time_str) {
   using namespace time_util;
   std::string_view sv(gmt_time_str);
   int year, month, day, hour, min, sec, day_of_week;
@@ -887,18 +901,15 @@ inline std::pair<bool, std::time_t> get_timestamp(
   int len_of_processed_part = 0;
   int len_of_ignored_part = 0;  // second_decimal_part is ignored
   char c;
-  std::array<component_of_time_format, 32> real_format;
-  if (format == time_format::http_format) {
-    real_format = http_time_format;
-  }
-  else if (format == time_format::utc_format) {
+  constexpr std::array<component_of_time_format, 32> real_format =
+      time_util::get_format<Format>();
+  if constexpr (Format == time_format::utc_format) {
     day_of_week = -1;
-    real_format = utc_time_format;
   }
-  else if (format == time_format::utc_without_punctuation_format) {
+  else if (Format == time_format::utc_without_punctuation_format) {
     day_of_week = -1;
-    real_format = utc_time_without_punctuation_format;
   }
+
   for (auto &comp : real_format) {
     switch (comp) {
       case component_of_time_format::ending:
