@@ -80,6 +80,11 @@ inline std::unordered_map<std::string, std::string> g_content_type_map = {
 struct NonSSL {};
 struct SSL {};
 
+enum class time_format {
+  http_format,
+  utc_format,
+  utc_without_punctuation_format
+};
 namespace time_util {
 /*
   IMF-fixdate = day-name "," SP date1 SP time-of-day SP GMT
@@ -104,7 +109,6 @@ namespace time_util {
   minute       = 2DIGIT
   second       = 2DIGIT
 */
-enum time_format { http_format, utc_format, utc_without_punctuation_format };
 enum component_of_time_format {
   day_name,
   day,
