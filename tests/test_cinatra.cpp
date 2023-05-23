@@ -767,20 +767,27 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
   server_thread.join();
 }
 
-TEST_CASE("test conversion between unix time and gmt time") {
-  std::chrono::microseconds time_cost1{0}, time_cost2{0};
-  std::ifstream file("../../tests/http_times.txt");
+TEST_CASE("test conversion between unix time and gmt time, http format") {
+  std::chrono::microseconds time_cost{0};
+  std::ifstream file("../../tests/files_for_test_time_parse/http_times.txt");
   if (!file) {
     std::cout << "open file failed" << std::endl;
   }
   std::string line;
   while (std::getline(file, line)) {
     std::istringstream iss(line);
-    std::string httpTime;
+    std::string time_to_parse;
     std::string timestamp;
-    if (std::getline(iss, httpTime, '#') && std::getline(iss, timestamp)) {
+    if (std::getline(iss, time_to_parse, '#') && std::getline(iss, timestamp)) {
       std::pair<bool, std::time_t> result;
-      result = get_timestamp(httpTime);
+      auto start = std::chrono::system_clock::now();
+      for (int i = 0; i < 100; i++) {
+        result =
+            get_timestamp(time_to_parse, time_util::time_format::http_format);
+      }
+      auto end = std::chrono::system_clock::now();
+      auto duration = duration_cast<std::chrono::microseconds>(end - start);
+      time_cost += duration;
       if (result.first == true) {
         CHECK(timestamp != "invalid");
         if (timestamp != "invalid") {
@@ -793,4 +800,91 @@ TEST_CASE("test conversion between unix time and gmt time") {
     }
   }
   file.close();
+  std::cout << double(time_cost.count()) *
+                   std::chrono::microseconds::period::num /
+                   std::chrono::microseconds::period::den
+            << "s" << std::endl;
+}
+
+TEST_CASE("test conversion between unix time and gmt time, utc format") {
+  std::chrono::microseconds time_cost{0};
+  std::ifstream file("../../tests/files_for_test_time_parse/utc_times.txt");
+  if (!file) {
+    std::cout << "open file failed" << std::endl;
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    std::istringstream iss(line);
+    std::string time_to_parse;
+    std::string timestamp;
+    if (std::getline(iss, time_to_parse, '#') && std::getline(iss, timestamp)) {
+      std::pair<bool, std::time_t> result;
+      auto start = std::chrono::system_clock::now();
+      for (int i = 0; i < 100; i++) {
+        result =
+            get_timestamp(time_to_parse, time_util::time_format::utc_format);
+      }
+      auto end = std::chrono::system_clock::now();
+      auto duration = duration_cast<std::chrono::microseconds>(end - start);
+      time_cost += duration;
+      if (result.first == true) {
+        CHECK(timestamp != "invalid");
+        if (timestamp != "invalid") {
+          CHECK(result.second == std::stoll(timestamp));
+        }
+      }
+      else {
+        CHECK(timestamp == "invalid");
+      }
+    }
+  }
+  file.close();
+  std::cout << double(time_cost.count()) *
+                   std::chrono::microseconds::period::num /
+                   std::chrono::microseconds::period::den
+            << "s" << std::endl;
+}
+
+TEST_CASE(
+    "test conversion between unix time and gmt time, utc without punctuation "
+    "format") {
+  std::chrono::microseconds time_cost{0};
+  std::ifstream file(
+      "../../tests/files_for_test_time_parse/"
+      "utc_without_punctuation_times.txt");
+  if (!file) {
+    std::cout << "open file failed" << std::endl;
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    std::istringstream iss(line);
+    std::string time_to_parse;
+    std::string timestamp;
+    if (std::getline(iss, time_to_parse, '#') && std::getline(iss, timestamp)) {
+      std::pair<bool, std::time_t> result;
+      auto start = std::chrono::system_clock::now();
+      for (int i = 0; i < 100; i++) {
+        result = get_timestamp(
+            time_to_parse,
+            time_util::time_format::utc_without_punctuation_format);
+      }
+      auto end = std::chrono::system_clock::now();
+      auto duration = duration_cast<std::chrono::microseconds>(end - start);
+      time_cost += duration;
+      if (result.first == true) {
+        CHECK(timestamp != "invalid");
+        if (timestamp != "invalid") {
+          CHECK(result.second == std::stoll(timestamp));
+        }
+      }
+      else {
+        CHECK(timestamp == "invalid");
+      }
+    }
+  }
+  file.close();
+  std::cout << double(time_cost.count()) *
+                   std::chrono::microseconds::period::num /
+                   std::chrono::microseconds::period::den
+            << "s" << std::endl;
 }
