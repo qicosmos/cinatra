@@ -1,6 +1,7 @@
 #pragma once
 #include <any>
 #include <fstream>
+#include <regex>
 
 #include "multipart_reader.hpp"
 #include "picohttpparser.h"
@@ -395,6 +396,8 @@ class request {
     auto key_name = val.substr(start, end - start);
     return key_name;
   }
+
+  std::smatch &get_matches() { return matches_; }
 
   void save_multipart_key_value(const std::string &key,
                                 const std::string &value) {
@@ -929,5 +932,6 @@ class request {
   std::unordered_map<std::string, std::any> aspect_data_;
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
+  std::smatch matches_;
 };
 }  // namespace cinatra

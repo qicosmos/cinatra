@@ -442,6 +442,19 @@ int main() {
         }
         res.render_string("multipart finished");
       });
+
+  server.set_http_handler<GET, POST>(
+      R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+        std::cout << " matches[1] is : " << req.get_matches()[1]
+                  << " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+
+  server.set_http_handler<GET, POST>(
+      "/string/{}/test/{}", [](request &req, response &res) {
+        res.set_status_and_content(status_type::ok, req.get_matches()[1]);
+      });
   //
   //	//http upload(octet-stream)
   //	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request&

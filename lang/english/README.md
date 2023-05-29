@@ -295,7 +295,40 @@ int main() {
 }
 ```
 
-### Example 8: cinatra client usage
+### Example 8: set RESTful API path parameters
+
+This code demonstrates how to use RESTful path parameters. Two RESTful APIs are set up below. When accessing the first API, such as the url `http://127.0.0.1:8080/numbers/1234/test/5678`, the server can get the two parameters of 1234 and 5678, the first RESTful API The parameter is `(\d+)`, which is a regex expression, which means that the parameter can only be a number. The code to get the first parameter is `req.get_matches ()[1]`. Because each req is different, each matched parameter is placed in the `request` structure.
+
+At the same time, it also supports RESTful API with any character, that is, the second RESTful API in the example, and the path parameter is set to `"/string/{}/test/{}"`. Use "{}" to represent any string. When accessing http://127.0.0.1:8080/string/params_1/test/api_test, the browser will return the params_1 string.
+
+```cpp
+#include "cinatra.hpp"
+using namespace cinatra;
+
+int main() {
+	int max_thread_num = std::thread::hardware_concurrency();
+	http_server server(max_thread_num);
+	server.listen("0.0.0.0", "8080");
+
+	server.set_http_handler<GET, POST>(
+		R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+			std::cout << " matches[1] is : " << req.get_matches()[1]
+					<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+			res.set_status_and_content(status_type::ok, "hello world");
+		});
+
+	server.set_http_handler<GET, POST>(
+		"/string/{}/test/{}", [](request &req, response &res) {
+			res.set_status_and_content(status_type::ok, req.get_matches()[1]);
+		});
+
+	server.run();
+	return 0;
+}
+```
+
+### Example 9: cinatra client usage
 
 #### sync_send get/post message
 

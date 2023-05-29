@@ -372,6 +372,17 @@ inline void remove_char(std::string &str, const char ch) {
   str.erase(std::remove(str.begin(), str.end(), ch), str.end());
 }
 
+inline void replace_all(std::string &out, const std::string &from,
+                        const std::string &to) {
+  if (from.empty())
+    return;
+  size_t start_pos = 0;
+  while ((start_pos = out.find(from, start_pos)) != std::string::npos) {
+    out.replace(start_pos, from.length(), to);
+    start_pos += to.length();
+  }
+}
+
 template <typename... Args>
 inline void print(Args... args) {
   ((std::cout << args << ' '), ...);

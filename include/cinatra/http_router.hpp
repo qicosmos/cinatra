@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "function_traits.hpp"
@@ -75,7 +76,11 @@ class http_router {
     else {
       bool is_wild_card = get_wildcard_function(key, req, res);
       if (!is_wild_card) {
-        return route(method, STATIC_RESOURCE, req, res, true);
+        bool is_regex = get_regex_function(std::string(key), req, res);
+        if (!is_regex)
+          return route(method, STATIC_RESOURCE, req, res, true);
+        else
+          return is_regex;
       }
 
       return is_wild_card;
@@ -88,6 +93,17 @@ class http_router {
     for (auto &pair : wildcard_invokers_) {
       if (key.find(pair.first) != std::string::npos) {
         auto &t = pair.second;
+        t.second(req, res);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool get_regex_function(const std::string &key, request &req, response &res) {
+    for (auto &pair : regex_invokers_) {
+      if (std::regex_match(key, req.get_matches(), std::get<0>(pair))) {
+        auto &t = std::get<1>(pair);
         t.second(req, res);
         return true;
       }
@@ -122,7 +138,19 @@ class http_router {
       key.append(methd_name).append(" ").append(raw_name);
     }
 
-    if (raw_name.back() == '*') {
+    if (raw_name.find("{}") != std::string::npos ||
+        raw_name.find(")") != std::string::npos) {
+      if (key.find("{}") != std::string::npos) {
+        replace_all(key, "{}", "([^/]+)");
+      }
+      this->regex_invokers_.emplace_back(
+          std::regex(key),
+          std::make_pair(arr,
+                         std::bind(&http_router::invoke<Function, AP...>, this,
+                                   std::placeholders::_1, std::placeholders::_2,
+                                   std::move(f), ap...)));
+    }
+    else if (raw_name.back() == '*') {
       this->wildcard_invokers_[key.substr(0, key.length() - 1)] = {
           arr, std::bind(&http_router::invoke<Function, AP...>, this,
                          std::placeholders::_1, std::placeholders::_2,
@@ -283,5 +311,6 @@ class http_router {
   std::unordered_map<std::string, invoker_function, string_hash,
                      std::equal_to<>>
       wildcard_invokers_;  // for url/*
+  std::vector<std::pair<std::regex, invoker_function>> regex_invokers_;
 };
 }  // namespace cinatra
