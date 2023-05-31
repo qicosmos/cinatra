@@ -477,10 +477,11 @@ class coro_http_client {
 
   void set_max_single_part_size(size_t size) { max_single_part_size_ = size; }
 
-  async_simple::Promise<async_simple::Unit> start_timer() {
+  async_simple::Promise<async_simple::Unit> start_timer(
+      std::chrono::steady_clock::duration duration, std::string msg) {
     async_simple::Promise<async_simple::Unit> promise;
     if (enable_timeout_) {
-      timeout(timer_, promise, "request timer canceled")
+      timeout(timer_, promise, duration, std::move(msg))
           .via(&executor_wrapper_)
           .detach();
     }
@@ -531,7 +532,7 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    auto promise = start_timer();
+    auto promise = start_timer(req_timeout_duration_, "upload timer");
 
     data = co_await connect(u);
     if (data.net_err) {
@@ -663,7 +664,7 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
-    auto promise = start_timer();
+    auto promise = start_timer(req_timeout_duration_, "request timer");
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -1363,17 +1364,18 @@ class coro_http_client {
     socket.has_closed_ = true;
   }
 
-  async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
-                                         std::string msg) {
-    timer.expires_after(req_timeout_duration_);
+  async_simple::coro::Lazy<bool> timeout(
+      auto &timer, auto &promise, std::chrono::steady_clock::duration duration,
+      std::string msg) {
+    timer.expires_after(duration);
     is_timeout_ = co_await timer.async_await();
     if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
 
-      std::cout << msg << '\n';
+      std::cout << msg << " canceled\n";
       co_return false;
     }
-    std::cout << "request timeout\n";
+    std::cout << msg << " timeout\n";
     close_socket(*socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
