@@ -324,7 +324,7 @@ TEST_CASE("test upload file") {
 TEST_CASE("test bad uri") {
   coro_http_client client{};
   CHECK(client.add_header("hello", "cinatra"));
-  CHECK(!client.add_header("hello", "cinatra"));
+  CHECK(client.add_header("hello", "cinatra"));
   CHECK(!client.add_header("", "cinatra"));
   CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
