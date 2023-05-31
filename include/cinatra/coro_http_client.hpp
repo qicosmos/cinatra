@@ -643,9 +643,9 @@ class coro_http_client {
     co_return co_await async_get(uri);
   }
 
-  async_simple::coro::Lazy<resp_data> async_request(std::string uri,
-                                                    http_method method,
-                                                    auto ctx) {
+  async_simple::coro::Lazy<resp_data> async_request(
+      std::string uri, http_method method, auto ctx,
+      std::unordered_map<std::string, std::string> headers = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
@@ -688,7 +688,8 @@ class coro_http_client {
         socket_->has_closed_ = false;
       }
 
-      std::string write_msg = prepare_request_str(u, method, ctx);
+      std::string write_msg =
+          prepare_request_str(u, method, ctx, std::move(headers));
 #ifdef BENCHMARK_TEST
       req_str_ = write_msg;
 #endif
@@ -818,13 +819,18 @@ class coro_http_client {
     }
   }
 
-  std::string build_request_header(const uri_t &u, http_method method,
-                                   const auto &ctx) {
+  std::string build_request_header(
+      const uri_t &u, http_method method, const auto &ctx,
+      std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str(method_name(method));
 
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
+    }
+
+    if (!headers.empty()) {
+      req_headers_ = std::move(headers);
     }
 
     req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
@@ -895,9 +901,11 @@ class coro_http_client {
     return req_str;
   }
 
-  std::string prepare_request_str(const uri_t &u, http_method method,
-                                  const auto &ctx) {
-    std::string req_str = build_request_header(u, method, ctx);
+  std::string prepare_request_str(
+      const uri_t &u, http_method method, const auto &ctx,
+      std::unordered_map<std::string, std::string> headers) {
+    std::string req_str =
+        build_request_header(u, method, ctx, std::move(headers));
 
 #ifdef CORO_HTTP_PRINT_REQ_HEAD
     std::cout << req_str << "\n";
