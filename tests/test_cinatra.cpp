@@ -140,6 +140,28 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test coro_http_client connect/request timeout") {
+  {
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    CHECK(r.net_err == std::errc::timed_out);
+  }
+
+  {
+    coro_http_client client{};
+    cinatra::coro_http_client::config conf{.conn_timeout_duration = 10s,
+                                           .req_timeout_duration = 1ms};
+    client.init_config(conf);
+    auto r =
+        async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.message() << "\n";
+    CHECK(r.net_err == std::errc::timed_out);
+  }
+}
+
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
   cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};

@@ -672,8 +672,6 @@ class coro_http_client {
     size_t size = 0;
     bool is_keep_alive = false;
 
-    auto promise = start_timer(req_timeout_duration_, "request timer");
-
     do {
       auto [ok, u] = handle_uri(data, uri);
       if (!ok) {
@@ -707,7 +705,7 @@ class coro_http_client {
 #ifdef BENCHMARK_TEST
       req_str_ = write_msg;
 #endif
-
+      auto promise = start_timer(req_timeout_duration_, "request timer");
       if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
           ec) {
         break;
@@ -715,11 +713,10 @@ class coro_http_client {
 
       data =
           co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
+      if (auto errc = co_await wait_timer(promise); errc) {
+        ec = errc;
+      }
     } while (0);
-
-    if (auto errc = co_await wait_timer(promise); errc) {
-      ec = errc;
-    }
 
     handle_result(data, ec, is_keep_alive);
     co_return data;
