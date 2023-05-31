@@ -56,12 +56,12 @@ struct resp_data {
 #endif
 };
 
-template <typename Stream = std::string>
+template <typename Stream = std::ofstream>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_str;
   std::string content;
-  Stream stream;
+  std::optional<Stream> stream;
 };
 
 struct multipart_t {
@@ -248,7 +248,7 @@ class coro_http_client {
       co_return false;
     }
 
-    req_context<std::string> ctx{};
+    req_context<> ctx{};
     if (u.is_websocket()) {
       // build websocket http header
       add_header("Upgrade", "websocket");
@@ -354,7 +354,7 @@ class coro_http_client {
       }
 
       if (read_fix_ == 0) {
-        req_context<std::string> ctx{};
+        req_context<> ctx{};
         bool is_keep_alive = true;
         data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                     http_method::GET);
@@ -406,7 +406,7 @@ class coro_http_client {
     }
 #endif
 
-    req_context<std::string> ctx{};
+    req_context<> ctx{};
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
 #ifdef BENCHMARK_TEST
@@ -429,20 +429,20 @@ class coro_http_client {
 
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
       std::string uri, std::string content, req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::DEL, std::move(ctx));
   }
 
   async_simple::coro::Lazy<resp_data> async_put(std::string uri,
                                                 std::string content,
                                                 req_content_type content_type) {
-    req_context<std::string> ctx{content_type, "", std::move(content)};
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::PUT, std::move(ctx));
   }
 
@@ -522,7 +522,7 @@ class coro_http_client {
       co_return resp_data{{}, 404};
     }
 
-    req_context<std::string> ctx{req_content_type::multipart, "", ""};
+    req_context<> ctx{req_content_type::multipart, "", ""};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
@@ -1019,10 +1019,11 @@ class coro_http_client {
     if (content_len > 0) {
       if (is_ranges) {
         auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-        if constexpr (std::is_same_v<
-                          std::ofstream,
-                          std::remove_cvref_t<decltype(ctx.stream)>>) {
-          ctx.stream.write(data_ptr, content_len);
+        if (ctx.stream) {
+          (*ctx.stream).write(data_ptr, content_len);
+        }
+        else {
+          resp_chunk_str_.append(data_ptr, content_len);
         }
       }
 
@@ -1041,10 +1042,11 @@ class coro_http_client {
       data.net_err = ec;
       data.status = 404;
 #ifdef BENCHMARK_TEST
-      if (!stop_bench_)
-#endif
+      if (!stop_bench_) {
 #ifndef NDEBUG
         std::cout << ec.message() << "\n";
+#endif
+      }
 #endif
     }
     else {
@@ -1115,9 +1117,8 @@ class coro_http_client {
       }
 
       data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      if constexpr (std::is_same_v<std::ofstream,
-                                   std::remove_cvref_t<Stream>>) {
-        ctx.stream.write(data_ptr, chunk_size);
+      if (ctx.stream) {
+        (*ctx.stream).write(data_ptr, chunk_size);
       }
       else {
         resp_chunk_str_.append(data_ptr, chunk_size);
