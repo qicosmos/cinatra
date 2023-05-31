@@ -98,7 +98,7 @@ TEST_CASE("test ssl client") {
 
   {
     coro_http_client client{};
-    client.set_timeout(8s);
+    client.set_req_timeout(8s);
     client.enable_auto_redirect(true);
     std::string uri = "https://www.bing.com";
     // Make sure the host and port are matching with your proxy server
@@ -142,7 +142,7 @@ async_simple::coro::Lazy<void> test_collect_all() {
 
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
-  cinatra::coro_http_client::config conf{.timeout_duration = 60s};
+  cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};
   client.init_config(conf);
   auto r = async_simple::coro::syncAwait(
       client.async_connect("http://www.baidu.com"));
@@ -366,7 +366,7 @@ TEST_CASE("test multiple ranges download") {
 
 TEST_CASE("test ranges download") {
   coro_http_client client{};
-  client.set_timeout(std::chrono::seconds(8));
+  client.set_req_timeout(std::chrono::seconds(8));
   std::string uri = "http://httpbin.org/range/32";
 
   std::string filename = "test1.txt";
@@ -419,7 +419,7 @@ TEST_CASE("test coro_http_client quit") {
 
 TEST_CASE("test coro_http_client chunked download") {
   coro_http_client client{};
-  client.set_timeout(10s);
+  client.set_req_timeout(10s);
   std::string uri =
       "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
   std::string filename = "test.jpg";
@@ -541,7 +541,7 @@ TEST_CASE("test inject failed") {
   {
     coro_http_client client{};
     inject_response_valid = ClientInjectAction::response_error;
-    client.set_timeout(8s);
+    client.set_req_timeout(8s);
     auto result = client.get("http://purecpp.cn");
     CHECK(result.net_err == std::errc::protocol_error);
 
@@ -552,7 +552,7 @@ TEST_CASE("test inject failed") {
 
   {
     coro_http_client client{};
-    client.set_timeout(10s);
+    client.set_req_timeout(10s);
     std::string uri =
         "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
     std::string filename = "test.jpg";
@@ -567,7 +567,7 @@ TEST_CASE("test inject failed") {
 
   {
     coro_http_client client{};
-    client.set_timeout(10s);
+    client.set_req_timeout(10s);
     std::string uri =
         "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
     std::string filename = "test.jpg";
@@ -593,7 +593,7 @@ TEST_CASE("test inject failed") {
 
 TEST_CASE("test coro http proxy request") {
   coro_http_client client{};
-  client.set_timeout(8s);
+  client.set_req_timeout(8s);
   std::string uri = "http://www.baidu.com";
   // Make sure the host and port are matching with your proxy server
   client.set_proxy("106.14.255.124", "80");
@@ -609,7 +609,7 @@ TEST_CASE("test coro http proxy request") {
 
 TEST_CASE("test coro http proxy request with port") {
   coro_http_client client{};
-  client.set_timeout(8s);
+  client.set_req_timeout(8s);
   std::string uri = "http://www.baidu.com:80";
   // Make sure the host and port are matching with your proxy server
   client.set_proxy("106.14.255.124", "80");
@@ -638,7 +638,7 @@ TEST_CASE("test coro http bearer token auth request") {
 
 TEST_CASE("test coro http redirect request") {
   coro_http_client client{};
-  client.set_timeout(8s);
+  client.set_req_timeout(8s);
   std::string uri = "http://httpbin.org/redirect-to?url=http://httpbin.org/get";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   if (result.status != 404 && !result.net_err) {
@@ -686,7 +686,7 @@ TEST_CASE("test coro http request timeout") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.status == 200);
 
-  client.set_timeout(500ms);
+  client.set_req_timeout(500ms);
   result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.net_err == std::errc::timed_out);
 

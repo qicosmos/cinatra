@@ -72,7 +72,7 @@ struct multipart_t {
 class coro_http_client {
  public:
   struct config {
-    std::optional<std::chrono::steady_clock::duration> timeout_duration;
+    std::optional<std::chrono::steady_clock::duration> req_timeout_duration;
     std::string sec_key;
     size_t max_single_part_size;
     std::string proxy_host;
@@ -109,8 +109,8 @@ class coro_http_client {
         timer_(&executor_wrapper_) {}
 
   bool init_config(const config &conf) {
-    if (conf.timeout_duration.has_value()) {
-      set_timeout(*conf.timeout_duration);
+    if (conf.req_timeout_duration.has_value()) {
+      set_req_timeout(*conf.req_timeout_duration);
     }
     if (!conf.sec_key.empty()) {
       set_ws_sec_key(conf.sec_key);
@@ -763,10 +763,10 @@ class coro_http_client {
     return false;
   }
 
-  inline void set_timeout(
+  inline void set_req_timeout(
       std::chrono::steady_clock::duration timeout_duration) {
     enable_timeout_ = true;
-    timeout_duration_ = timeout_duration;
+    req_timeout_duration_ = timeout_duration;
   }
 
   template <typename T, typename U>
@@ -1365,7 +1365,7 @@ class coro_http_client {
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
                                          std::string msg) {
-    timer.expires_after(timeout_duration_);
+    timer.expires_after(req_timeout_duration_);
     is_timeout_ = co_await timer.async_await();
     if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
@@ -1432,7 +1432,7 @@ class coro_http_client {
 
   bool is_timeout_ = false;
   bool enable_timeout_ = false;
-  std::chrono::steady_clock::duration timeout_duration_ =
+  std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
 #ifdef BENCHMARK_TEST
