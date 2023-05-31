@@ -72,6 +72,7 @@ struct multipart_t {
 class coro_http_client {
  public:
   struct config {
+    std::optional<std::chrono::steady_clock::duration> conn_timeout_duration;
     std::optional<std::chrono::steady_clock::duration> req_timeout_duration;
     std::string sec_key;
     size_t max_single_part_size;
@@ -109,6 +110,9 @@ class coro_http_client {
         timer_(&executor_wrapper_) {}
 
   bool init_config(const config &conf) {
+    if (conf.conn_timeout_duration.has_value()) {
+      set_conn_timeout(*conf.conn_timeout_duration);
+    }
     if (conf.req_timeout_duration.has_value()) {
       set_req_timeout(*conf.req_timeout_duration);
     }
@@ -532,13 +536,17 @@ class coro_http_client {
     std::error_code ec{};
     size_t size = 0;
 
-    auto promise = start_timer(req_timeout_duration_, "upload timer");
+    auto promise = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
+    if (ec = co_await wait_timer(promise); ec) {
+      co_return resp_data{{}, 404};
+    }
     if (data.net_err) {
       co_return data;
     }
 
+    promise = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (inject_write_failed == ClientInjectAction::write_failed) {
@@ -673,6 +681,8 @@ class coro_http_client {
       }
 
       if (socket_->has_closed_) {
+        auto conn_promise =
+            start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
         if (ec = co_await coro_io::async_connect(&executor_wrapper_,
@@ -687,6 +697,9 @@ class coro_http_client {
           }
         }
         socket_->has_closed_ = false;
+        if (ec = co_await wait_timer(conn_promise); ec) {
+          break;
+        }
       }
 
       std::string write_msg =
@@ -764,8 +777,12 @@ class coro_http_client {
     return false;
   }
 
-  inline void set_req_timeout(
-      std::chrono::steady_clock::duration timeout_duration) {
+  void set_conn_timeout(std::chrono::steady_clock::duration timeout_duration) {
+    enable_timeout_ = true;
+    conn_timeout_duration_ = timeout_duration;
+  }
+
+  void set_req_timeout(std::chrono::steady_clock::duration timeout_duration) {
     enable_timeout_ = true;
     req_timeout_duration_ = timeout_duration;
   }
@@ -1434,6 +1451,8 @@ class coro_http_client {
 
   bool is_timeout_ = false;
   bool enable_timeout_ = false;
+  std::chrono::steady_clock::duration conn_timeout_duration_ =
+      std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
