@@ -142,7 +142,7 @@ async_simple::coro::Lazy<void> test_collect_all() {
 
 TEST_CASE("test coro_http_client async_connect") {
   coro_http_client client{};
-  cinatra::client_config conf{.timeout_duration = 60s};
+  cinatra::coro_http_client::config conf{.timeout_duration = 60s};
   client.init_config(conf);
   auto r = async_simple::coro::syncAwait(
       client.async_connect("http://www.baidu.com"));
@@ -705,8 +705,8 @@ TEST_CASE("test coro_http_client using external io_context") {
   asio::io_context io_context;
   std::promise<void> promise;
   auto future = promise.get_future();
+  auto work = std::make_unique<asio::io_context::work>(io_context);
   std::thread io_thd([&io_context, &promise] {
-    asio::io_context::work work(io_context);
     promise.set_value();
     io_context.run();
   });
@@ -717,7 +717,8 @@ TEST_CASE("test coro_http_client using external io_context") {
       async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
   CHECK(!r.net_err);
   CHECK(r.status == 200);
-  io_context.stop();
+  work.reset();
+  io_context.run();
   io_thd.join();
 }
 

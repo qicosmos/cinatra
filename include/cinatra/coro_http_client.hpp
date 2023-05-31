@@ -9,20 +9,25 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 #include "asio/dispatch.hpp"
-#include "asio_util/asio_coro_util.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#include "coro_io/coro_io.hpp"
 #include "http_parser.hpp"
 #include "response_cv.hpp"
 #include "uri.hpp"
-#include "use_asio.hpp"
 #include "websocket.hpp"
 
+namespace coro_io {
+template <typename T, typename U>
+class client_pool;
+}
 namespace cinatra {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
 enum class ClientInjectAction {
@@ -39,25 +44,6 @@ inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
 inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
-
-constexpr inline bool connect_ok = true;
-
-struct client_config {
-  std::optional<std::chrono::steady_clock::duration> timeout_duration;
-  std::string sec_key;
-  size_t max_single_part_size;
-  std::string proxy_host;
-  std::string proxy_port;
-  std::string proxy_auth_username;
-  std::string proxy_auth_passwd;
-  std::string proxy_auth_token;
-#ifdef CINATRA_ENABLE_SSL
-  std::string base_path;
-  std::string cert_file;
-  int verify_mode;
-  std::string domain;
-#endif
-};
 
 struct resp_data {
   std::error_code net_err;
@@ -83,18 +69,33 @@ struct multipart_t {
   std::string content;
   size_t size = 0;
 };
-
 class coro_http_client {
  public:
+  struct config {
+    std::optional<std::chrono::steady_clock::duration> timeout_duration;
+    std::string sec_key;
+    size_t max_single_part_size;
+    std::string proxy_host;
+    std::string proxy_port;
+    std::string proxy_auth_username;
+    std::string proxy_auth_passwd;
+    std::string proxy_auth_token;
+#ifdef CINATRA_ENABLE_SSL
+    std::string base_path;
+    std::string cert_file;
+    int verify_mode;
+    std::string domain;
+#endif
+  };
   coro_http_client()
       : io_ctx_(std::make_unique<asio::io_context>()),
-        socket_(io_ctx_->get_executor()),
+        socket_(std::make_shared<socket_t>(io_ctx_->get_executor())),
         executor_wrapper_(io_ctx_->get_executor()),
-        timer_(io_ctx_->get_executor()) {
+        timer_(&executor_wrapper_) {
     std::promise<void> promise;
     io_thd_ = std::thread([this, &promise] {
       work_ = std::make_unique<asio::io_context::work>(*io_ctx_);
-      asio::post(executor_wrapper_.get_executor(), [&] {
+      executor_wrapper_.schedule([&] {
         promise.set_value();
       });
       io_ctx_->run();
@@ -103,9 +104,11 @@ class coro_http_client {
   }
 
   coro_http_client(asio::io_context::executor_type executor)
-      : socket_(executor), executor_wrapper_(executor), timer_(executor) {}
+      : socket_(std::make_shared<socket_t>(executor)),
+        executor_wrapper_(executor),
+        timer_(&executor_wrapper_) {}
 
-  bool init_config(const client_config &conf) {
+  bool init_config(const config &conf) {
     if (conf.timeout_duration.has_value()) {
       set_timeout(*conf.timeout_duration);
     }
@@ -146,18 +149,14 @@ class coro_http_client {
         io_thd_.join();
       }
     }
-
-#ifndef BENCHMARK_TEST
-    std::cout << "client quit\n";
-#endif
   }
 
   void async_close() {
-    if (has_closed_)
+    if (socket_->has_closed_)
       return;
 
-    asio::dispatch(executor_wrapper_.get_executor(), [this] {
-      close_socket();
+    asio::dispatch(executor_wrapper_.get_asio_executor(), [socket = socket_] {
+      close_socket(*socket);
     });
   }
 
@@ -190,7 +189,7 @@ class coro_http_client {
 
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_, ssl_ctx_);
+              socket_->impl_, ssl_ctx_);
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
@@ -216,7 +215,7 @@ class coro_http_client {
   }
 #endif
 
-  bool has_closed() { return has_closed_; }
+  bool has_closed() { return socket_->has_closed_; }
 
   bool add_header(std::string key, std::string val) {
     if (key.empty())
@@ -243,7 +242,9 @@ class coro_http_client {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
+#ifndef NDEBUG
       std::cout << "url error";
+#endif
       co_return false;
     }
 
@@ -348,7 +349,7 @@ class coro_http_client {
           ec) {
         data.net_err = ec;
         data.status = 404;
-        close_socket();
+        close_socket(*socket_);
         co_return data;
       }
 
@@ -360,8 +361,9 @@ class coro_http_client {
         handle_result(data, ec, is_keep_alive);
         if (ec) {
           if (!stop_bench_)
+#ifndef NDEBUG
             std::cout << "do_bench_read error:" << ec.message() << "\n";
-
+#endif
           data.net_err = ec;
           data.status = 404;
         }
@@ -377,11 +379,12 @@ class coro_http_client {
 
       if (ec) {
         if (!stop_bench_)
+#ifndef NDEBUG
           std::cout << "do_bench_read error:" << ec.message() << "\n";
-
+#endif
         data.net_err = ec;
         data.status = 404;
-        close_socket();
+        close_socket(*socket_);
         co_return data;
       }
       else {
@@ -458,14 +461,18 @@ class coro_http_client {
 
   bool add_file_part(std::string name, std::string filename) {
     if (form_data_.find(name) != form_data_.end()) {
+#ifndef NDEBUG
       std::cout << "name already exist\n";
+#endif
       return false;
     }
 
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
+#ifndef NDEBUG
       std::cout << "open file failed, "
                 << std::filesystem::current_path().string() << std::endl;
+#endif
       return false;
     }
 
@@ -509,7 +516,9 @@ class coro_http_client {
       form_data_.clear();
     });
     if (form_data_.empty()) {
+#ifndef NDEBUG
       std::cout << "no multipart\n";
+#endif
       co_return resp_data{{}, 404};
     }
 
@@ -546,7 +555,9 @@ class coro_http_client {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       inject_write_failed = ClientInjectAction::none;
 #endif
+#ifndef NDEBUG
       std::cout << ec.message() << "\n";
+#endif
       co_return resp_data{ec, 404};
     }
 
@@ -580,7 +591,9 @@ class coro_http_client {
                                                    std::string name,
                                                    std::string filename) {
     if (!add_file_part(std::move(name), std::move(filename))) {
+#ifndef NDEBUG
       std::cout << "open file failed or duplicate test names\n";
+#endif
       co_return resp_data{{}, 404};
     }
     co_return co_await async_upload(std::move(uri));
@@ -621,10 +634,10 @@ class coro_http_client {
 
   void reset() {
     if (!has_closed())
-      close_socket();
-    socket_ = decltype(socket_)(executor_wrapper_.context());
-    if (!socket_.is_open()) {
-      socket_.open(asio::ip::tcp::v4());
+      close_socket(*socket_);
+    socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
+    if (!socket_->impl_.is_open()) {
+      socket_->impl_.open(asio::ip::tcp::v4());
     }
 #ifdef BENCHMARK_TEST
     req_str_.clear();
@@ -665,11 +678,11 @@ class coro_http_client {
         break;
       }
 
-      if (has_closed_) {
+      if (socket_->has_closed_) {
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        if (ec = co_await asio_util::async_connect(
-                executor_wrapper_.get_executor(), socket_, host, port);
+        if (ec = co_await coro_io::async_connect(&executor_wrapper_,
+                                                 socket_->impl_, host, port);
             ec) {
           break;
         }
@@ -679,7 +692,7 @@ class coro_http_client {
             break;
           }
         }
-        has_closed_ = false;
+        socket_->has_closed_ = false;
       }
 
       std::string write_msg = prepare_request_str(u, method, ctx);
@@ -711,10 +724,12 @@ class coro_http_client {
         co_return std::make_error_code(std::errc::not_a_stream);
       }
 
-      auto ec = co_await asio_util::async_handshake(
+      auto ec = co_await coro_io::async_handshake(
           ssl_stream_, asio::ssl::stream_base::client);
       if (ec) {
+#ifndef NDEBUG
         std::cout << "handle failed " << ec.message() << "\n";
+#endif
       }
       co_return ec;
     }
@@ -760,7 +775,20 @@ class coro_http_client {
     timeout_duration_ = timeout_duration;
   }
 
+  template <typename T, typename U>
+  friend class coro_io::client_pool;
+
  private:
+  struct socket_t {
+    asio::ip::tcp::socket impl_;
+    std::atomic<bool> has_closed_ = true;
+    template <typename ioc_t>
+    socket_t(ioc_t &&ioc) : impl_(std::forward<ioc_t>(ioc)) {}
+  };
+  static bool is_ok(const resp_data &data) noexcept {
+    return data.net_err == std::error_code{};
+  }
+
   std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
@@ -1009,17 +1037,19 @@ class coro_http_client {
 
   void handle_result(resp_data &data, std::error_code ec, bool is_keep_alive) {
     if (ec) {
-      close_socket();
+      close_socket(*socket_);
       data.net_err = ec;
       data.status = 404;
 #ifdef BENCHMARK_TEST
       if (!stop_bench_)
 #endif
+#ifndef NDEBUG
         std::cout << ec.message() << "\n";
+#endif
     }
     else {
       if (!is_keep_alive) {
-        close_socket();
+        close_socket(*socket_);
       }
     }
   }
@@ -1059,7 +1089,9 @@ class coro_http_client {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
         inject_chunk_valid = ClientInjectAction::none;
 #endif
+#ifndef NDEBUG
         std::cout << "bad chunked size\n";
+#endif
         ec = asio::error::make_error_code(
             asio::error::basic_errors::invalid_argument);
         break;
@@ -1097,11 +1129,11 @@ class coro_http_client {
   }
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
-    if (has_closed_) {
+    if (socket_->has_closed_) {
       std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
       std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
-      if (auto ec = co_await asio_util::async_connect(
-              executor_wrapper_.get_executor(), socket_, host, port);
+      if (auto ec = co_await coro_io::async_connect(&executor_wrapper_,
+                                                    socket_->impl_, host, port);
           ec) {
         co_return resp_data{ec, 404};
       }
@@ -1111,7 +1143,7 @@ class coro_http_client {
           co_return resp_data{ec, 404};
         }
       }
-      has_closed_ = false;
+      socket_->has_closed_ = false;
     }
 
     co_return resp_data{};
@@ -1282,11 +1314,11 @@ class coro_http_client {
       AsioBuffer &buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return asio_util::async_read(*ssl_stream_, buffer, size_to_read);
+      return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
     }
     else {
 #endif
-      return asio_util::async_read(socket_, buffer, size_to_read);
+      return coro_io::async_read(socket_->impl_, buffer, size_to_read);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -1297,11 +1329,11 @@ class coro_http_client {
       AsioBuffer &&buffer) {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return asio_util::async_write(*ssl_stream_, buffer);
+      return coro_io::async_write(*ssl_stream_, buffer);
     }
     else {
 #endif
-      return asio_util::async_write(socket_, buffer);
+      return coro_io::async_write(socket_->impl_, buffer);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -1312,21 +1344,21 @@ class coro_http_client {
       AsioBuffer &buffer, asio::string_view delim) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
-      return asio_util::async_read_until(*ssl_stream_, buffer, delim);
+      return coro_io::async_read_until(*ssl_stream_, buffer, delim);
     }
     else {
 #endif
-      return asio_util::async_read_until(socket_, buffer, delim);
+      return coro_io::async_read_until(socket_->impl_, buffer, delim);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
   }
 
-  void close_socket() {
+  static void close_socket(socket_t &socket) {
     std::error_code ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-    socket_.close(ec);
-    has_closed_ = true;
+    socket.impl_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+    socket.impl_.close(ec);
+    socket.has_closed_ = true;
   }
 
   async_simple::coro::Lazy<bool> timeout(auto &timer, auto &promise,
@@ -1335,11 +1367,12 @@ class coro_http_client {
     is_timeout_ = co_await timer.async_await();
     if (!is_timeout_) {
       promise.setValue(async_simple::Unit());
+
       std::cout << msg << '\n';
       co_return false;
     }
     std::cout << "request timeout\n";
-    close_socket();
+    close_socket(*socket_);
     promise.setValue(async_simple::Unit());
     co_return true;
   }
@@ -1360,13 +1393,12 @@ class coro_http_client {
   }
 
   std::unique_ptr<asio::io_context> io_ctx_;
-  asio::ip::tcp::socket socket_;
-  asio_util::ExecutorWrapper<asio::io_context::executor_type> executor_wrapper_;
-  std::unique_ptr<asio::io_context::work> work_;
-  asio_util::period_timer timer_;
-  std::thread io_thd_;
 
-  std::atomic<bool> has_closed_ = true;
+  coro_io::ExecutorWrapper<> executor_wrapper_;
+  std::unique_ptr<asio::io_context::work> work_;
+  coro_io::period_timer timer_;
+  std::thread io_thd_;
+  std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
 
   std::vector<std::pair<std::string, std::string>> req_headers_;
