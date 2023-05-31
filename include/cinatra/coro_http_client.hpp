@@ -224,15 +224,8 @@ class coro_http_client {
     if (key == "Host")
       return false;
 
-    if (auto it = std::find_if(req_headers_.begin(), req_headers_.end(),
-                               [&key](auto &item) {
-                                 return item.first == key;
-                               });
-        it != req_headers_.end()) {
-      return false;
-    }
+    req_headers_[key] = std::move(val);
 
-    req_headers_.emplace_back(std::move(key), std::move(val));
     return true;
   }
 
@@ -840,7 +833,7 @@ class coro_http_client {
       if (ctx.content_type == req_content_type::multipart) {
         type_str.append(BOUNDARY);
       }
-      req_headers_.emplace_back("Content-Type", std::move(type_str));
+      req_headers_["Content-Type"] = std::move(type_str);
     }
 
     bool has_connection = false;
@@ -1402,7 +1395,7 @@ class coro_http_client {
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
 
-  std::vector<std::pair<std::string, std::string>> req_headers_;
+  std::unordered_map<std::string, std::string> req_headers_;
 
   std::string proxy_request_uri_ = "";
   std::string proxy_host_;
