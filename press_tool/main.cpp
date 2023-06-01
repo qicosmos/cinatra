@@ -262,8 +262,12 @@ int main(int argc, char* argv[]) {
   std::cout << "  " << conf.threads_num << " threads and " << conf.connections
             << " connections\n";
   auto beg = std::chrono::steady_clock::now();
-  async_simple::coro::syncAwait(
-      async_simple::coro::collectAll(std::move(futures)));
+  auto wait_finish =
+      [futures =
+           std::move(futures)]() mutable -> async_simple::coro::Lazy<void> {
+    co_await async_simple::coro::collectAll(std::move(futures));
+  };
+  async_simple::coro::syncAwait(wait_finish());
   if (!has_timeout) {
     timer_ioc.post([&timer] {
       asio::error_code ec;

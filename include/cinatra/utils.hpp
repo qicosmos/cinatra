@@ -272,6 +272,15 @@ inline std::string get_content_type_str(req_content_type type) {
     case req_content_type::multipart:
       str = "multipart/form-data; boundary=";
       break;
+    case req_content_type::form_url_encode:
+      str = "application/x-www-form-urlencoded";
+      break;
+    case req_content_type::octet_stream:
+      str = "application/octet-stream";
+      break;
+    case req_content_type::xml:
+      str = "application/xml";
+      break;
     case req_content_type::none:
     default:
       break;
