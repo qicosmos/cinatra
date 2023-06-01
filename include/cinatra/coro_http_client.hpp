@@ -483,6 +483,7 @@ class coro_http_client {
 
   async_simple::Promise<async_simple::Unit> start_timer(
       std::chrono::steady_clock::duration duration, std::string msg) {
+    is_timeout_ = false;
     async_simple::Promise<async_simple::Unit> promise;
     if (enable_timeout_) {
       timeout(timer_, promise, duration, std::move(msg))
