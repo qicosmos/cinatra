@@ -15,6 +15,15 @@ target_include_directories(${project_name} PRIVATE
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
+add_executable(test_coro_file test_coro_file.cpp)
+target_compile_definitions(test_coro_file PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+target_include_directories(test_coro_file PRIVATE
+        ${cinatra_SOURCE_DIR}/include/cinatra
+        ${cinatra_SOURCE_DIR}/thirdparty/asio
+        ${cinatra_SOURCE_DIR}/thirdparty/async_simple
+)
+target_link_libraries(test_coro_file doctest)
+
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
     message(STATUS "Use SSL")
