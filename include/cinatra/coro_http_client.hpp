@@ -82,6 +82,7 @@ class coro_http_client {
     std::string proxy_auth_passwd;
     std::string proxy_auth_token;
 #ifdef CINATRA_ENABLE_SSL
+    bool use_ssl = false;
     std::string base_path;
     std::string cert_file;
     int verify_mode;
@@ -132,8 +133,11 @@ class coro_http_client {
       set_proxy_bearer_token_auth(conf.proxy_auth_token);
     }
 #ifdef CINATRA_ENABLE_SSL
-    return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
-                    conf.domain);
+    if (conf.use_ssl) {
+      return init_ssl(conf.base_path, conf.cert_file, conf.verify_mode,
+                      conf.domain);
+    }
+    return true;
 #endif
     return true;
   }
