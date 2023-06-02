@@ -349,7 +349,8 @@ class coro_http_client {
                          cinatra::req_context<>{});
   }
 
-  async_simple::coro::Lazy<resp_data> async_connect(std::string uri) {
+  // CONNECT example.com HTTP/1.1
+  async_simple::coro::Lazy<resp_data> async_http_connect(std::string uri) {
     return async_request(std::move(uri), cinatra::http_method::CONNECT,
                          cinatra::req_context<>{});
   }

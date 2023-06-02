@@ -162,12 +162,12 @@ TEST_CASE("test coro_http_client connect/request timeout") {
   }
 }
 
-TEST_CASE("test coro_http_client async_connect") {
+TEST_CASE("test coro_http_client async_http_connect") {
   coro_http_client client{};
   cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};
   client.init_config(conf);
   auto r = async_simple::coro::syncAwait(
-      client.async_connect("http://www.baidu.com"));
+      client.async_http_connect("http://www.baidu.com"));
   CHECK(r.status >= 200);
   for (auto [k, v] : r.resp_headers) {
     std::cout << k << ", " << v << "\n";
@@ -175,7 +175,7 @@ TEST_CASE("test coro_http_client async_connect") {
 
   coro_http_client client1{};
   r = async_simple::coro::syncAwait(
-      client1.async_connect("http//www.badurl.com"));
+      client1.async_http_connect("http//www.badurl.com"));
   CHECK(r.status != 200);
 
   r = async_simple::coro::syncAwait(
