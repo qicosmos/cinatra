@@ -30,6 +30,9 @@ if (CINATRA_ENABLE_SSL)
     find_package(OpenSSL REQUIRED)
     target_compile_definitions(test_cinatra PRIVATE -DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
+
+    target_compile_definitions(test_coro_file PRIVATE -DCINATRA_ENABLE_SSL)
+    target_link_libraries(test_coro_file  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
 if (ENABLE_GZIP)
