@@ -12,7 +12,11 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/async_simple
 )
 
-if (ENABLE_SSL)
+option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
+if (CINATRA_ENABLE_SSL)
+	message(STATUS "Use SSL")
+	find_package(OpenSSL REQUIRED)
+	add_definitions(-DCINATRA_ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 

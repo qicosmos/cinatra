@@ -11,7 +11,7 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/thirdparty/asio
         ${cinatra_SOURCE_DIR}/thirdparty/async_simple
         ${cinatra_SOURCE_DIR}/thirdparty/cmdline
-)
+        )
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
@@ -21,7 +21,7 @@ target_include_directories(test_coro_file PRIVATE
         ${cinatra_SOURCE_DIR}/include/cinatra
         ${cinatra_SOURCE_DIR}/thirdparty/asio
         ${cinatra_SOURCE_DIR}/thirdparty/async_simple
-)
+        )
 target_link_libraries(test_coro_file doctest)
 
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
@@ -33,8 +33,7 @@ if (CINATRA_ENABLE_SSL)
 endif ()
 
 if (ENABLE_GZIP)
-	target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
+    target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
 else()
-        target_link_libraries(test_cinatra doctest)
+    target_link_libraries(test_cinatra doctest)
 endif()
-
