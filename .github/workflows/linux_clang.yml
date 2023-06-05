@@ -6,13 +6,11 @@ on:
       - main
       - master
       - cpp20_base
-      - add_coro_file1
   pull_request:
     branches:
       - main
       - master
       - cpp20_base
-      - add_coro_file1
 
 jobs:
   build_by_clang:
