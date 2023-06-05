@@ -15,14 +15,6 @@ target_include_directories(${project_name} PRIVATE
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
-option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
-if (CINATRA_ENABLE_SSL)
-    message(STATUS "Use SSL")
-    find_package(OpenSSL REQUIRED)
-    add_definitions(-DCINATRA_ENABLE_SSL)
-    target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
-endif ()
-
 if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
 else()
@@ -60,3 +52,14 @@ endif()
 else()
         target_link_libraries(test_corofile PRIVATE doctest)
 endif()
+
+add_test(NAME test_corofile COMMAND test_corofile)
+
+option(CINATRA_ENABLE_SSL "Enable ssl support" ON)
+if (CINATRA_ENABLE_SSL)
+    message(STATUS "Use SSL")
+    find_package(OpenSSL REQUIRED)
+    add_definitions(-DCINATRA_ENABLE_SSL)
+    target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_corofile  PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()
