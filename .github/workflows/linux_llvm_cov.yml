@@ -25,10 +25,10 @@ jobs:
         run: |
           mkdir build && cd build
           CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
-          make -j test_cinatra
+          make -j test_cinatra test_corofile
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           cd tests
-          ./test_cinatra
+          ./test_cinatra ./test_corofile
           llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
           llvm-cov show ./test_cinatra -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="async_simple|thirdparty|tests|asio|util" -show-instantiations=false
           echo "Done!"

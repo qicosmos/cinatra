@@ -15,17 +15,51 @@ target_include_directories(${project_name} PRIVATE
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
-option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
-if (CINATRA_ENABLE_SSL)
-    message(STATUS "Use SSL")
-    find_package(OpenSSL REQUIRED)
-    add_definitions(-DCINATRA_ENABLE_SSL)
-    target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
-endif ()
-
 if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
 else()
         target_link_libraries(test_cinatra doctest)
 endif()
 
+# test_coro_file
+option(ENABLE_FILE_IO_URING "enable io_uring" OFF)
+if(ENABLE_FILE_IO_URING)
+    message(STATUS "enable io_uring")
+    add_definitions(-DENABLE_FILE_IO_URING)
+    add_definitions(-DASIO_HAS_FILE)
+    add_definitions(-DASIO_HAS_IO_URING)
+endif()
+
+if (UNIX)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+endif()
+
+## manual import
+include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
+include_directories(${cinatra_SOURCE_DIR}/thirdparty/asio)
+include_directories(${cinatra_SOURCE_DIR}/thirdparty/async_simple)
+
+
+add_executable(test_corofile
+        test_corofile.cpp
+        # main.cpp
+        )
+
+if(ENABLE_FILE_IO_URING)
+if (UNIX)
+        target_link_libraries(test_corofile PRIVATE doctest uring)
+endif()
+else()
+        target_link_libraries(test_corofile PRIVATE doctest)
+endif()
+
+add_test(NAME test_corofile COMMAND test_corofile)
+
+option(CINATRA_ENABLE_SSL "Enable ssl support" ON)
+if (CINATRA_ENABLE_SSL)
+    message(STATUS "Use SSL")
+    find_package(OpenSSL REQUIRED)
+    add_definitions(-DCINATRA_ENABLE_SSL)
+    target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_corofile  PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()

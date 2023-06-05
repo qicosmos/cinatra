@@ -1,13 +1,14 @@
 #pragma once
-#include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
-#include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
 #include <chrono>
 #include <deque>
 
-#ifdef CINATRA_ENABLE_SSL
+#include "async_simple/Executor.h"
+#include "async_simple/coro/Sleep.h"
+
+#if defined(ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
 
@@ -161,6 +162,17 @@ inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
   co_return co_await awaitor.await_resume([&](auto handler) {
     asio::async_write(socket, buffer, [&, handler](const auto &ec, auto size) {
+      handler.set_value_then_resume(ec, size);
+    });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    socket.async_write_some(buffer, [&, handler](const auto &ec, auto size) {
       handler.set_value_then_resume(ec, size);
     });
   });
