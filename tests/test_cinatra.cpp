@@ -178,16 +178,13 @@ TEST_CASE("test coro_http_client async_http_connect") {
       client1.async_http_connect("http//www.badurl.com"));
   CHECK(r.status != 200);
 
-  r = async_simple::coro::syncAwait(
-      client1.async_reconnect("http://cn.bing.com"));
+  r = async_simple::coro::syncAwait(client1.reconnect("http://cn.bing.com"));
   CHECK(r.status >= 200);
 
-  r = async_simple::coro::syncAwait(
-      client1.async_reconnect("http://www.baidu.com"));
+  r = async_simple::coro::syncAwait(client1.reconnect("http://www.baidu.com"));
 
   CHECK(r.status >= 200);
-  r = async_simple::coro::syncAwait(
-      client1.async_reconnect("http://www.purecpp.cn"));
+  r = async_simple::coro::syncAwait(client1.reconnect("http://www.purecpp.cn"));
   CHECK(r.status == 200);
 }
 
