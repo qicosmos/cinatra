@@ -110,6 +110,9 @@ class coro_http_client {
         executor_wrapper_(executor),
         timer_(&executor_wrapper_) {}
 
+  coro_http_client(coro_io::ExecutorWrapper<> executor)
+      : coro_http_client(executor.get_asio_executor()) {}
+
   bool init_config(const config &conf) {
     if (conf.conn_timeout_duration.has_value()) {
       set_conn_timeout(*conf.conn_timeout_duration);
