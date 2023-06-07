@@ -90,7 +90,7 @@ TEST_CASE("multithread for balance") {
       [&ioc, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(ioc.get_executor(), filename,
+    coro_io::coro_file file(coro_io::ExecutorWrapper<>(ioc.get_executor()), filename,
                             coro_io::open_mode::write);
     CHECK(file.is_open());
 
@@ -120,7 +120,7 @@ TEST_CASE("multithread for balance") {
       [&ioc, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(ioc.get_executor(), filename);
+    coro_io::coro_file file(coro_io::ExecutorWrapper<>(ioc.get_executor()), filename);
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -183,7 +183,7 @@ TEST_CASE("read write 100 small files") {
       [&pool, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(*pool.get_executor(), filename,
+    coro_io::coro_file file(pool.get_executor(), filename,
                             coro_io::open_mode::write);
     CHECK(file.is_open());
 
