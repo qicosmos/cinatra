@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <asio/io_context.hpp>
+#include <filesystem>
 #include <fstream>
 
 #include "async_simple/Promise.h"
@@ -65,7 +66,7 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath, default_flags(), ec);
+    stream_file_->open(filepath.data(), default_flags(), ec);
     if (ec) {
       std::cout << ec.message() << "\n";
     }
@@ -82,7 +83,8 @@ class coro_file {
     std::ios::openmode open_flags = flags == open_mode::read
                                         ? std::ios::binary | std::ios::in
                                         : std::ios::out | std::ios::app;
-    stream_file_ = std::make_unique<std::fstream>(filepath, open_flags);
+    stream_file_ = std::make_unique<std::fstream>(
+        std::filesystem::path(filepath), open_flags);
     if (!stream_file_->is_open()) {
       std::cout << "open file " << filepath << " failed "
                 << "\n";
@@ -240,8 +242,9 @@ class coro_file {
   std::atomic<size_t> seek_offset_ = 0;
 #else
   std::unique_ptr<std::fstream> stream_file_;
-#endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
+#endif
+
   std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io
