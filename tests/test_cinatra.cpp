@@ -140,17 +140,6 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
-TEST_CASE("test chunked upload") {
-  coro_http_client client{};
-  auto req = client.async_upload_chunked("http://127.0.0.1:8080",
-                                         cinatra::http_method::PUT,
-                                         "/Users/chufeng.qy/temp/test.txt");
-  auto data = async_simple::coro::syncAwait(req);
-  if (data.net_err) {
-    std::cout << data.net_err << "\n";
-  }
-}
-
 TEST_CASE("test coro_http_client connect/request timeout") {
   {
     coro_http_client client{};
