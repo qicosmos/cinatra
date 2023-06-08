@@ -55,7 +55,7 @@ endif()
 
 add_test(NAME test_corofile COMMAND test_corofile)
 
-option(CINATRA_ENABLE_SSL "Enable ssl support" ON)
+option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
     message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)

@@ -77,7 +77,7 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+        run: cmake --build ${{github.workspace}}/build ${{matrix.case_name}} --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build
