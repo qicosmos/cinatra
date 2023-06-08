@@ -4,6 +4,11 @@
 
 #ifndef CINATRA_RESPONSE_HPP
 #define CINATRA_RESPONSE_HPP
+#include <chrono>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include "http_cache.hpp"
 #include "itoa.hpp"
 #include "mime_types.hpp"
@@ -11,13 +16,9 @@
 #include "session_manager.hpp"
 #include "use_asio.hpp"
 #include "utils.hpp"
-#include <chrono>
-#include <string>
-#include <string_view>
-#include <vector>
 namespace cinatra {
 class response {
-public:
+ public:
   response() {}
 
   std::string &response_str() { return rep_str_; }
@@ -34,9 +35,9 @@ public:
   }
 
   template <status_type status, req_content_type content_type, size_t N>
-  constexpr auto
-  set_status_and_content(const char (&content)[N],
-                         content_encoding encoding = content_encoding::none) {
+  constexpr auto set_status_and_content(
+      const char (&content)[N],
+      content_encoding encoding = content_encoding::none) {
     constexpr auto status_str = to_rep_string(status);
     constexpr auto type_str = to_content_type_str(content_type);
     constexpr auto len_str = num_to_string<N - 1>::value;
@@ -66,7 +67,8 @@ public:
       last_date_str_ = mbstr;
       rep_str_.append("Date: ").append(mbstr).append("\r\n\r\n");
       last_time_ = t;
-    } else {
+    }
+    else {
       rep_str_.append("Date: ").append(last_date_str_).append("\r\n\r\n");
     }
   }
@@ -132,16 +134,14 @@ public:
     buffers.push_back(asio::buffer(crlf));
 
     if (body_type_ == content_type::string) {
-      buffers.emplace_back(
-          asio::buffer(content_.data(), content_.size()));
+      buffers.emplace_back(asio::buffer(content_.data(), content_.size()));
     }
 
     if (http_cache::get().need_cache(raw_url_)) {
       cache_data.clear();
       for (auto &buf : buffers) {
-        cache_data.push_back(
-            std::string(asio::buffer_cast<const char *>(buf),
-                        asio::buffer_size(buf)));
+        cache_data.push_back(std::string(asio::buffer_cast<const char *>(buf),
+                                         asio::buffer_size(buf)));
       }
     }
 
@@ -166,10 +166,10 @@ public:
     build_response_str();
   }
 
-  void
-  set_status_and_content(status_type status, std::string &&content,
-                         req_content_type res_type = req_content_type::none,
-                         content_encoding encoding = content_encoding::none) {
+  void set_status_and_content(
+      status_type status, std::string &&content,
+      req_content_type res_type = req_content_type::none,
+      content_encoding encoding = content_encoding::none) {
     status_ = status;
     res_type_ = res_type;
 
@@ -181,11 +181,13 @@ public:
       if (!r) {
         set_status_and_content(status_type::internal_server_error,
                                "gzip compress error");
-      } else {
+      }
+      else {
         add_header("Content-Encoding", "gzip");
         set_content(std::move(encode_str));
       }
-    } else
+    }
+    else
 #endif
     {
       (void)encoding;
@@ -196,17 +198,17 @@ public:
 
   std::string_view get_content_type(req_content_type type) {
     switch (type) {
-    case cinatra::req_content_type::html:
-      return rep_html;
-    case cinatra::req_content_type::json:
-      return rep_json;
-    case cinatra::req_content_type::string:
-      return rep_string;
-    case cinatra::req_content_type::multipart:
-      return rep_multipart;
-    case cinatra::req_content_type::none:
-    default:
-      return "";
+      case cinatra::req_content_type::html:
+        return rep_html;
+      case cinatra::req_content_type::json:
+        return rep_json;
+      case cinatra::req_content_type::string:
+        return rep_string;
+      case cinatra::req_content_type::multipart:
+        return rep_multipart;
+      case cinatra::req_content_type::none:
+      default:
+        return "";
     }
   }
 
@@ -241,33 +243,9 @@ public:
     add_header("Transfer-Encoding", "chunked");
   }
 
-  std::vector<asio::const_buffer>
-  to_chunked_buffers(const char *chunk_data, size_t length, bool eof) {
-    std::vector<asio::const_buffer> buffers;
-
-    if (length > 0) {
-      // convert bytes transferred count to a hex string.
-      chunk_size_ = to_hex_string(length);
-
-      // Construct chunk based on rfc2616 section 3.6.1
-      buffers.push_back(asio::buffer(chunk_size_));
-      buffers.push_back(asio::buffer(crlf));
-      buffers.push_back(asio::buffer(chunk_data, length));
-      buffers.push_back(asio::buffer(crlf));
-    }
-
-    // append last-chunk
-    if (eof) {
-      buffers.push_back(asio::buffer(last_chunk));
-      buffers.push_back(asio::buffer(crlf));
-    }
-
-    return buffers;
-  }
-
-  std::shared_ptr<cinatra::session>
-  start_session(const std::string &name, std::time_t expire = -1,
-                std::string_view domain = "", const std::string &path = "/") {
+  std::shared_ptr<cinatra::session> start_session(
+      const std::string &name, std::time_t expire = -1,
+      std::string_view domain = "", const std::string &path = "/") {
     session_ =
         session_manager::get().create_session(domain, name, expire, path);
     return session_;
@@ -334,7 +312,7 @@ public:
     }
   }
 
-private:
+ private:
   std::string_view get_header_value(std::string_view key) const {
     phr_header *headers = req_headers_.first;
     size_t num_headers = req_headers_.second;
@@ -354,7 +332,6 @@ private:
   content_type body_type_ = content_type::unknown;
   status_type status_ = status_type::init;
   bool proc_continue_ = true;
-  std::string chunk_size_;
 
   bool delay_ = false;
 
@@ -369,5 +346,5 @@ private:
   req_content_type res_type_;
   bool need_response_time_ = false;
 };
-} // namespace cinatra
-#endif // CINATRA_RESPONSE_HPP
+}  // namespace cinatra
+#endif  // CINATRA_RESPONSE_HPP
