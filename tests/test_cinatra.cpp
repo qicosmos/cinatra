@@ -140,6 +140,17 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test chunked upload") {
+  coro_http_client client{};
+  auto req = client.async_upload_chunked("http://127.0.0.1:8080",
+                                         cinatra::http_method::PUT,
+                                         "/Users/chufeng.qy/temp/test.txt");
+  auto data = async_simple::coro::syncAwait(req);
+  if (data.net_err) {
+    std::cout << data.net_err << "\n";
+  }
+}
+
 TEST_CASE("test coro_http_client connect/request timeout") {
   {
     coro_http_client client{};
@@ -292,21 +303,22 @@ TEST_CASE("test upload file") {
 
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090/multipart";
-  resp_data result = async_simple::coro::syncAwait(client.async_upload(uri));
+  resp_data result =
+      async_simple::coro::syncAwait(client.async_upload_multipart(uri));
   CHECK(result.status == 404);
 
   client.add_str_part("hello", "world");
   client.add_str_part("key", "value");
   CHECK(!client.add_file_part("key", "value"));
-  result = async_simple::coro::syncAwait(client.async_upload(uri));
+  result = async_simple::coro::syncAwait(client.async_upload_multipart(uri));
   CHECK(!client.is_redirect(result));
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
   }
 
   client.add_str_part("hello", "world");
-  result =
-      async_simple::coro::syncAwait(client.async_upload("http//badurl.com"));
+  result = async_simple::coro::syncAwait(
+      client.async_upload_multipart("http//badurl.com"));
   CHECK(result.status == 404);
 
   client.set_max_single_part_size(1024);
@@ -318,7 +330,7 @@ TEST_CASE("test upload file") {
   test_file.write(test_file_data.data(), test_file_data.size());
   test_file.close();
   result = async_simple::coro::syncAwait(
-      client.async_upload(uri, "test", test_file_name));
+      client.async_upload_multipart(uri, "test", test_file_name));
 
   if (result.status == 200) {
     CHECK(result.resp_body == "multipart finished");
@@ -326,11 +338,11 @@ TEST_CASE("test upload file") {
   std::filesystem::remove(std::filesystem::path(test_file_name));
 
   std::string not_exist_file = "notexist.txt";
-  result = async_simple::coro::syncAwait(
-      client.async_upload(uri, "test_not_exist_file", not_exist_file));
+  result = async_simple::coro::syncAwait(client.async_upload_multipart(
+      uri, "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
-  result = async_simple::coro::syncAwait(client.async_upload(
+  result = async_simple::coro::syncAwait(client.async_upload_multipart(
       "http//badurl.com", "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
@@ -348,7 +360,7 @@ TEST_CASE("test bad uri") {
   CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
   auto result = async_simple::coro::syncAwait(
-      client.async_upload("http://www.badurlrandom.org"));
+      client.async_upload_multipart("http://www.badurlrandom.org"));
   CHECK(result.status == 404);
 }
 
@@ -357,7 +369,7 @@ TEST_CASE("test ssl without init ssl") {
     coro_http_client client{};
     client.add_str_part("hello", "world");
     auto result = async_simple::coro::syncAwait(
-        client.async_upload("https://www.bing.com"));
+        client.async_upload_multipart("https://www.bing.com"));
     CHECK(result.status == 404);
   }
 
@@ -604,7 +616,7 @@ TEST_CASE("test inject failed") {
     client.add_str_part("hello", "world");
     inject_write_failed = ClientInjectAction::write_failed;
     auto result = async_simple::coro::syncAwait(
-        client.async_upload("https://www.bing.com"));
+        client.async_upload_multipart("https://www.bing.com"));
     CHECK(result.status == 404);
   }
 }

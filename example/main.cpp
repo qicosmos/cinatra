@@ -130,13 +130,14 @@ async_simple::coro::Lazy<void> test_download() {
 async_simple::coro::Lazy<void> test_upload() {
   std::string uri = "http://example.com/";
   coro_http_client client{};
-  auto result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  auto result =
+      co_await client.async_upload_multipart(uri, "test", "yourfile.jpg");
   print(result.status);
   std::cout << "upload finished\n";
 
   client.add_str_part("hello", "coro_http_client");
   client.add_file_part("test", "yourfile.jpg");
-  result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  result = co_await client.async_upload_multipart(uri, "test", "yourfile.jpg");
   print(result.status);
   std::cout << "upload finished\n";
 }
