@@ -525,7 +525,7 @@ inline std::vector<asio::const_buffer> to_chunked_buffers(
 
   if (length > 0) {
     // convert bytes transferred count to a hex string.
-    std::string chunk_size = to_hex_string(length);
+    chunk_size = to_hex_string(length);
 
     // Construct chunk based on rfc2616 section 3.6.1
     buffers.push_back(asio::buffer(chunk_size));
