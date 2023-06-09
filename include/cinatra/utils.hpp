@@ -516,9 +516,6 @@ inline int64_t hex_to_int(std::string_view s) {
   return n;
 }
 
-constexpr std::string_view CRLF = "\r\n";
-constexpr std::string_view Last_Chunk = "0\r\n";
-
 inline std::vector<asio::const_buffer> to_chunked_buffers(
     const char *chunk_data, size_t length, std::string &chunk_size, bool eof) {
   std::vector<asio::const_buffer> buffers;

@@ -20,7 +20,6 @@ enum class req_content_type {
   json,
   text,
   string,
-  chunked,
   multipart,
   ranges,
   form_url_encode,
