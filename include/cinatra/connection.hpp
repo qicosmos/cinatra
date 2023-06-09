@@ -251,7 +251,8 @@ class connection : public base_connection,
     reset_timer();
 
     std::vector<asio::const_buffer> buffers =
-        to_chunked_buffers(buf.data(), buf.length(), chunk_size_str_, eof);
+        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
+                                               chunk_size_str_, eof);
     if (buffers.empty()) {
       handle_write(std::error_code{});
       return;
