@@ -105,7 +105,7 @@ class coro_file {
 
   void close() { stream_file_.reset(); }
 
-  size_t file_size(std::string_view filepath) {
+  static size_t file_size(std::string_view filepath) {
     std::error_code ec;
     size_t size = std::filesystem::file_size(filepath, ec);
     return size;
