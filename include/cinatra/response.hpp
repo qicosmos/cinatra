@@ -123,7 +123,7 @@ class response {
       session_->set_need_update(false);
     }
     buffers.reserve(headers_.size() * 4 + 5);
-    buffers.emplace_back(to_buffer(status_));
+    buffers.emplace_back(to_buffer<asio::const_buffer>(status_));
     for (auto const &h : headers_) {
       buffers.emplace_back(asio::buffer(h.first));
       buffers.emplace_back(asio::buffer(name_value_separator));
