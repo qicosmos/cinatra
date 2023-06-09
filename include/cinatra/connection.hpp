@@ -251,7 +251,7 @@ class connection : public base_connection,
     reset_timer();
 
     std::vector<asio::const_buffer> buffers =
-        to_chunked_buffers(buf.data(), buf.length(), eof);
+        to_chunked_buffers(buf.data(), buf.length(), chunk_size_str_, eof);
     if (buffers.empty()) {
       handle_write(std::error_code{});
       return;
@@ -1461,6 +1461,7 @@ class connection : public base_connection,
   std::string last_ws_str_;
 
   std::string chunked_header_;
+  std::string chunk_size_str_;
   multipart_reader multipart_parser_;
   bool is_multi_part_file_;
   // callback handler to application layer
