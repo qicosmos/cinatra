@@ -63,15 +63,6 @@ void create_file(std::string filename, size_t file_size,
 }
 
 TEST_CASE("multithread for balance") {
-  asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
-  std::vector<std::thread> vec;
-  for (int i = 0; i < 4; i++) {
-    vec.emplace_back([&ioc] {
-      ioc.run();
-    });
-  }
-
   size_t total = 100;
   std::vector<std::string> filenames;
   for (size_t i = 0; i < total; ++i) {
@@ -87,11 +78,11 @@ TEST_CASE("multithread for balance") {
 
   std::vector<async_simple::coro::Lazy<void>> write_vec;
   auto write_file_func =
-      [&ioc, &write_str_vec](
-          std::string filename,
-          int index) mutable -> async_simple::coro::Lazy<void> {
+      [&write_str_vec](std::string filename,
+                       int index) mutable -> async_simple::coro::Lazy<void> {
     coro_io::coro_file file(filename, coro_io::open_mode::write,
-                            coro_io::ExecutorWrapper<>(ioc.get_executor()));
+                            coro_io::get_global_block_executor<
+                                coro_io::multithread_context_pool>());
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -117,11 +108,11 @@ TEST_CASE("multithread for balance") {
   std::vector<async_simple::coro::Lazy<void>> read_vec;
 
   auto read_file_func =
-      [&ioc, &write_str_vec](
-          std::string filename,
-          int index) mutable -> async_simple::coro::Lazy<void> {
+      [&write_str_vec](std::string filename,
+                       int index) mutable -> async_simple::coro::Lazy<void> {
     coro_io::coro_file file(filename, coro_io::open_mode::read,
-                            coro_io::ExecutorWrapper<>(ioc.get_executor()));
+                            coro_io::get_global_block_executor<
+                                coro_io::multithread_context_pool>());
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -148,11 +139,6 @@ TEST_CASE("multithread for balance") {
   };
 
   async_simple::coro::syncAwait(wait_read_func());
-
-  work.reset();
-  for (auto& thd : vec) {
-    thd.join();
-  }
 
   for (auto& filename : filenames) {
     fs::remove(fs::path(filename));
