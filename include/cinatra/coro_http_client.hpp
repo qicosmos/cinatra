@@ -805,13 +805,26 @@ class coro_http_client {
         }
       }
 
-      std::string write_msg =
-          prepare_request_str(u, method, ctx, std::move(headers));
+      std::vector<asio::const_buffer> vec;
+      std::string req_head_str =
+          build_request_header(u, method, ctx, false, std::move(headers));
+
+      bool has_body = !ctx.content.empty();
+      if (has_body) {
+        vec.push_back(asio::buffer(req_head_str));
+        vec.push_back(asio::buffer(ctx.content));
+      }
+
 #ifdef BENCHMARK_TEST
-      req_str_ = write_msg;
+      req_str_ = req_head_str;
+#endif
+#ifdef CORO_HTTP_PRINT_REQ_HEAD
+      std::cout << req_head_str << "\n";
 #endif
       auto future = start_timer(req_timeout_duration_, "request timer");
-      if (std::tie(ec, size) = co_await async_write(asio::buffer(write_msg));
+      if (std::tie(ec, size) =
+              has_body ? co_await async_write(vec)
+                       : co_await async_write(asio::buffer(req_head_str));
           ec) {
         break;
       }
@@ -1024,22 +1037,6 @@ class coro_http_client {
     }
 
     req_str.append("\r\n");
-    return req_str;
-  }
-
-  std::string prepare_request_str(
-      const uri_t &u, http_method method, const auto &ctx,
-      std::unordered_map<std::string, std::string> headers) {
-    std::string req_str =
-        build_request_header(u, method, ctx, false, std::move(headers));
-
-#ifdef CORO_HTTP_PRINT_REQ_HEAD
-    std::cout << req_str << "\n";
-#endif
-
-    if (!ctx.content.empty())
-      req_str.append(std::move(ctx.content));
-
     return req_str;
   }
 
