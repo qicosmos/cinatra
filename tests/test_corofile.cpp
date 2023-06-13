@@ -90,8 +90,8 @@ TEST_CASE("multithread for balance") {
       [&ioc, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(coro_io::ExecutorWrapper<>(ioc.get_executor()),
-                            filename, coro_io::open_mode::write);
+    coro_io::coro_file file(filename, coro_io::open_mode::write,
+                            coro_io::ExecutorWrapper<>(ioc.get_executor()));
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -120,8 +120,8 @@ TEST_CASE("multithread for balance") {
       [&ioc, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(coro_io::ExecutorWrapper<>(ioc.get_executor()),
-                            filename);
+    coro_io::coro_file file(filename, coro_io::open_mode::read,
+                            coro_io::ExecutorWrapper<>(ioc.get_executor()));
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -184,8 +184,8 @@ TEST_CASE("read write 100 small files") {
       [&pool, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(pool.get_executor(), filename,
-                            coro_io::open_mode::write);
+    coro_io::coro_file file(filename, coro_io::open_mode::write,
+                            pool.get_executor());
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -214,7 +214,8 @@ TEST_CASE("read write 100 small files") {
       [&pool, &write_str_vec](
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
-    coro_io::coro_file file(*pool.get_executor(), filename);
+    coro_io::coro_file file(filename, coro_io::open_mode::read,
+                            pool.get_executor());
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -261,7 +262,8 @@ TEST_CASE("small_file_read_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   char buf[block_size]{};
@@ -296,7 +298,8 @@ TEST_CASE("large_file_read_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   char buf[block_size]{};
@@ -331,7 +334,8 @@ TEST_CASE("empty_file_read_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   char buf[block_size]{};
@@ -362,7 +366,8 @@ TEST_CASE("small_file_read_with_pool_test") {
     pool.run();
   });
 
-  coro_io::coro_file file(*pool.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          pool.get_executor());
   CHECK(file.is_open());
 
   char buf[block_size]{};
@@ -396,7 +401,8 @@ TEST_CASE("large_file_read_with_pool_test") {
     pool.run();
   });
 
-  coro_io::coro_file file(*pool.get_executor(), filename);
+  coro_io::coro_file file(filename, coro_io::open_mode::read,
+                          pool.get_executor());
   CHECK(file.is_open());
 
   char buf[block_size]{};
@@ -428,8 +434,8 @@ TEST_CASE("small_file_write_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -493,8 +499,8 @@ TEST_CASE("large_file_write_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_test");
@@ -546,8 +552,8 @@ TEST_CASE("empty_file_write_test") {
     ioc.run();
   });
 
-  coro_io::coro_file file(ioc.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          ioc.get_executor());
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -581,8 +587,8 @@ TEST_CASE("small_file_write_with_pool_test") {
     pool.run();
   });
 
-  coro_io::coro_file file(*pool.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          pool.get_executor());
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -645,8 +651,8 @@ TEST_CASE("large_file_write_with_pool_test") {
     pool.run();
   });
 
-  coro_io::coro_file file(*pool.get_executor(), filename,
-                          coro_io::open_mode::write);
+  coro_io::coro_file file(filename, coro_io::open_mode::write,
+                          pool.get_executor());
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_with_pool_test");
