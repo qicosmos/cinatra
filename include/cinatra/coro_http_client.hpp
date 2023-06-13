@@ -822,10 +822,13 @@ class coro_http_client {
       std::cout << req_head_str << "\n";
 #endif
       auto future = start_timer(req_timeout_duration_, "request timer");
-      if (std::tie(ec, size) =
-              has_body ? co_await async_write(vec)
-                       : co_await async_write(asio::buffer(req_head_str));
-          ec) {
+      if (has_body) {
+        std::tie(ec, size) = co_await async_write(vec);
+      }
+      else {
+        std::tie(ec, size) = co_await async_write(asio::buffer(req_head_str));
+      }
+      if (ec) {
         break;
       }
 
