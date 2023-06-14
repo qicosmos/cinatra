@@ -740,12 +740,14 @@ class coro_http_client {
 
     coro_io::coro_file file(filename, coro_io::open_mode::read,
                             &executor_wrapper_);
-    char buf[4096];
+    std::string file_data;
+    file_data.resize(max_single_part_size_);
     std::string chunk_size_str;
     while (!file.eof()) {
-      auto [rd_ec, rd_size] = co_await file.async_read(buf, 4096);
+      auto [rd_ec, rd_size] =
+          co_await file.async_read(file_data.data(), file_data.size());
       auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
-          buf, rd_size, chunk_size_str, file.eof());
+          file_data.data(), rd_size, chunk_size_str, file.eof());
       if (std::tie(ec, size) = co_await async_write(bufs); ec) {
         co_return resp_data{ec, 404};
       }
