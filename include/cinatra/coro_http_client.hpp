@@ -1184,9 +1184,6 @@ class coro_http_client {
             co_return;
           }
         }
-        else {
-          resp_chunk_str_.append(data_ptr, content_len);
-        }
       }
 
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
