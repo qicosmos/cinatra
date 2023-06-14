@@ -738,8 +738,7 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    coro_io::coro_file file(filename, coro_io::open_mode::read,
-                            &executor_wrapper_);
+    coro_io::coro_file file(filename, coro_io::open_mode::read);
     std::string file_data;
     file_data.resize(max_single_part_size_);
     std::string chunk_size_str;
@@ -1335,8 +1334,7 @@ class coro_http_client {
     }
 
     if (is_file) {
-      coro_io::coro_file file(part.filename, coro_io::open_mode::read,
-                              &executor_wrapper_);
+      coro_io::coro_file file(part.filename, coro_io::open_mode::read);
       assert(file.is_open());
       std::string file_data;
       file_data.resize(max_single_part_size_);
