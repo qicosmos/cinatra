@@ -164,6 +164,8 @@ class coro_http_client {
     }
   }
 
+  std::unique_ptr<char[]> release_body() { return std::move(body_); }
+
   void async_close() {
     if (socket_->has_closed_)
       return;
@@ -1121,15 +1123,22 @@ class coro_http_client {
       total_len_ = parser.total_len();
 #endif
 
+      if (content_len > 0)
+        body_ = std::make_unique<char[]>(content_len);
+
       if ((size_t)parser.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+        memcpy(body_.get(), data_ptr, content_len);
         handle_entire_content(data, content_len, is_ranges, ctx);
         break;
       }
 
       // read left part of content.
       size_t size_to_read = content_len - read_buf_.size();
-      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
+      if (std::tie(ec, size) = co_await async_read(
+              asio::buffer(body_.get() + read_buf_.size(), size_to_read),
+              size_to_read);
           ec) {
         break;
       }
@@ -1154,13 +1163,10 @@ class coro_http_client {
         if (ctx.stream) {
           (*ctx.stream).write(data_ptr, content_len);
         }
-        else {
-          resp_chunk_str_.append(data_ptr, content_len);
-        }
       }
 
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      std::string_view reply(data_ptr, content_len);
+      std::string_view reply(body_.get(), content_len);
       data.resp_body = reply;
 
       read_buf_.consume(content_len);
@@ -1442,7 +1448,7 @@ class coro_http_client {
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      AsioBuffer &buffer, size_t size_to_read) noexcept {
+      AsioBuffer &&buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
@@ -1532,6 +1538,7 @@ class coro_http_client {
   std::thread io_thd_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
+  std::unique_ptr<char[]> body_ = nullptr;
 
   std::unordered_map<std::string, std::string> req_headers_;
 
