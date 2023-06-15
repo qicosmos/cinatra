@@ -293,7 +293,7 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 ## 示例8：RESTful服务端路径参数设置
 本代码演示如何使用RESTful路径参数。下面设置了两个RESTful API。第一个API当访问，比如访问这样的url`http://127.0.0.1:8080/numbers/1234/test/5678`时服务器可以获取到1234和5678这两个参数，第一个RESTful API的参数是`(\d+)`是一个正则表达式表明只能参数只能为数字。获取第一个参数的代码是`req.get_matches()[1]`。因为每一个req不同所以每一个匹配到的参数都放在`request`结构体中。
 
-同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/{:id}/test/{:name}"`，要获取到对应的参数使用`req.get_value_by_name`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_value_by_name("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
+同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/{:id}/test/{:name}"`，要获取到对应的参数使用`req.get_query_value`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_query_value("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
 
 	#include "cinatra.hpp"
 	using namespace cinatra;
@@ -313,8 +313,10 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 
 		server.set_http_handler<GET, POST>(
 			"/string/{:id}/test/{:name}", [](request &req, response &res) {
-
-				res.set_status_and_content(status_type::ok, req.get_value_by_name("name"));
+				std::string id = req.get_query_value("id");
+				std::cout << "id value is: " << id << std::endl;
+				std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
+				res.set_status_and_content(status_type::ok, std::string(req.get_query_value("name")));
 			});
 
 		server.run();

@@ -453,12 +453,14 @@ int main() {
 
   server.set_http_handler<GET, POST>(
       "/string/{:id}/test/{:name}", [](request &req, response &res) {
-        std::cout << "id value is: " << req.get_value_by_name("id")
+        std::string id(req.get_query_value("id"));
+        std::cout << "id value is: " << id
                   << std::endl;
-        std::cout << "name value is: " << req.get_value_by_name("name")
+        std::cout << "name value is: "
+                  << std::string(req.get_query_value("name"))
                   << std::endl;
         res.set_status_and_content(status_type::ok,
-                                   req.get_value_by_name("name"));
+                                   std::string(req.get_query_value("name")));
       });
   //
   //	//http upload(octet-stream)
