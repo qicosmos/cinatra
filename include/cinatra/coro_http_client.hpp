@@ -1146,30 +1146,6 @@ class coro_http_client {
     co_return data;
   }
 
-  async_simple::coro::Lazy<void> handle_ranges(size_t content_len,
-                                               resp_data &data,
-                                               req_context &ctx) {
-    if (content_len > 0) {
-      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      if (ctx.stream == nullptr) {
-        resp_chunk_str_.append(data_ptr, content_len);
-      }
-      else {
-        auto ec = co_await ctx.stream->async_write(data_ptr, content_len);
-        if (ec) {
-          data.net_err = ec;
-          co_return;
-        }
-      }
-
-      std::string_view reply(data_ptr, content_len);
-      data.resp_body = reply;
-
-      read_buf_.consume(content_len);
-    }
-    data.eof = (read_buf_.size() == 0);
-  }
-
   async_simple::coro::Lazy<void> handle_entire_content(resp_data &data,
                                                        size_t content_len,
                                                        bool is_ranges,
