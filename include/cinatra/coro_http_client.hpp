@@ -781,7 +781,7 @@ class coro_http_client {
 
     std::error_code ec{};
     size_t size = 0;
-    bool is_keep_alive = false;
+    bool is_keep_alive = true;
 
     do {
       auto [ok, u] = handle_uri(data, uri);
@@ -1096,11 +1096,11 @@ class coro_http_client {
         break;
       }
 
+      is_keep_alive = parser.keep_alive();
       if (method == http_method::HEAD) {
         co_return data;
       }
 
-      is_keep_alive = parser.keep_alive();
       bool is_ranges = parser.is_ranges();
       if (is_ranges) {
         is_keep_alive = true;
@@ -1183,9 +1183,6 @@ class coro_http_client {
             data.net_err = ec;
             co_return;
           }
-        }
-        else {
-          resp_chunk_str_.append(data_ptr, content_len);
         }
       }
 
