@@ -399,6 +399,10 @@ class request {
 
   std::smatch &get_matches() { return matches_; }
 
+  void set_restful_params(std::unordered_map<std::string, int> params) {
+    restful_params_ = params;
+  }
+
   void save_multipart_key_value(const std::string &key,
                                 const std::string &value) {
     if (!key.empty())
@@ -631,6 +635,10 @@ class request {
     else {
       return get_val(queries_);
     }
+  }
+
+  std::string get_value_by_name(const std::string &name) {
+    return matches_[restful_params_.at(name)];
   }
 
   template <typename T>
@@ -933,5 +941,6 @@ class request {
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
   std::smatch matches_;
+  std::unordered_map<std::string, int> restful_params_;
 };
 }  // namespace cinatra
