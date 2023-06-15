@@ -454,11 +454,9 @@ int main() {
   server.set_http_handler<GET, POST>(
       "/string/{:id}/test/{:name}", [](request &req, response &res) {
         std::string id(req.get_query_value("id"));
-        std::cout << "id value is: " << id
-                  << std::endl;
+        std::cout << "id value is: " << id << std::endl;
         std::cout << "name value is: "
-                  << std::string(req.get_query_value("name"))
-                  << std::endl;
+                  << std::string(req.get_query_value("name")) << std::endl;
         res.set_status_and_content(status_type::ok,
                                    std::string(req.get_query_value("name")));
       });

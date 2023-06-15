@@ -707,7 +707,7 @@ class request {
     }
     else {
       std::string result(matches_[restful_params_.at(std::string(key))]);
-      return std::string_view(result.data(), result.size());  
+      return std::string_view(result.data(), result.size());
     }
   }
 
