@@ -454,31 +454,16 @@ class coro_http_client {
     return async_simple::coro::syncAwait(async_get(std::move(uri)));
   }
 
-  template <typename String>
-  resp_data post(std::string uri, String content,
+  resp_data post(std::string uri, std::string content,
                  req_content_type content_type) {
     return async_simple::coro::syncAwait(
         async_post(std::move(uri), std::move(content), content_type));
   }
 
-  template <size_t N>
-  resp_data post(std::string uri, const char (&content)[N],
-                 req_content_type content_type) {
-    return post(std::move(uri), std::string(content, N), content_type);
-  }
-
-  template <typename String>
   async_simple::coro::Lazy<resp_data> async_post(
-      std::string uri, String content, req_content_type content_type) {
-    req_context<String> ctx{content_type, "", std::move(content)};
+      std::string uri, std::string content, req_content_type content_type) {
+    req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
-  }
-
-  template <size_t N>
-  async_simple::coro::Lazy<resp_data> async_post(
-      std::string uri, const char (&content)[N],
-      req_content_type content_type) {
-    return async_post(std::move(uri), std::string(content, N), content_type);
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
@@ -781,7 +766,7 @@ class coro_http_client {
 
   template <typename String>
   async_simple::coro::Lazy<resp_data> async_request(
-      std::string uri, http_method method, req_context<String> ctx,
+      String uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
