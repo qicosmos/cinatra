@@ -399,6 +399,10 @@ class request {
 
   std::smatch &get_matches() { return matches_; }
 
+  void set_restful_params(std::unordered_map<std::string, int> params) {
+    restful_params_ = params;
+  }
+
   void save_multipart_key_value(const std::string &key,
                                 const std::string &value) {
     if (!key.empty())
@@ -672,33 +676,39 @@ class request {
   }
 
   std::string_view get_query_value(std::string_view key) {
-    auto url = get_url();
-    url = url.length() > 1 && url.back() == '/'
-              ? url.substr(0, url.length() - 1)
-              : url;
-    std::string map_key = std::string(url.data(), url.size()) +
-                          std::string(key.data(), key.size());
-    auto it = queries_.find(key);
-    if (it == queries_.end()) {
-      auto itf = form_url_map_.find(key);
-      if (itf == form_url_map_.end())
-        return {};
+    if (restful_params_.empty()) {
+      auto url = get_url();
+      url = url.length() > 1 && url.back() == '/'
+                ? url.substr(0, url.length() - 1)
+                : url;
+      std::string map_key = std::string(url.data(), url.size()) +
+                            std::string(key.data(), key.size());
+      auto it = queries_.find(key);
+      if (it == queries_.end()) {
+        auto itf = form_url_map_.find(key);
+        if (itf == form_url_map_.end())
+          return {};
 
-      if (code_utils::is_url_encode(itf->second)) {
+        if (code_utils::is_url_encode(itf->second)) {
+          auto ret = utf8_character_params_.emplace(
+              map_key, code_utils::get_string_by_urldecode(itf->second));
+          return std::string_view(ret.first->second.data(),
+                                  ret.first->second.size());
+        }
+        return itf->second;
+      }
+      if (code_utils::is_url_encode(it->second)) {
         auto ret = utf8_character_params_.emplace(
-            map_key, code_utils::get_string_by_urldecode(itf->second));
+            map_key, code_utils::get_string_by_urldecode(it->second));
         return std::string_view(ret.first->second.data(),
                                 ret.first->second.size());
       }
-      return itf->second;
+      return it->second;
     }
-    if (code_utils::is_url_encode(it->second)) {
-      auto ret = utf8_character_params_.emplace(
-          map_key, code_utils::get_string_by_urldecode(it->second));
-      return std::string_view(ret.first->second.data(),
-                              ret.first->second.size());
+    else {
+      std::string result(matches_[restful_params_.at(std::string(key))]);
+      return std::string_view(result.data(), result.size());
     }
-    return it->second;
   }
 
   bool uncompress(std::string_view str) {
@@ -933,5 +943,6 @@ class request {
   std::array<event_call_back, (size_t)data_proc_state::data_error + 1>
       event_call_backs_ = {};
   std::smatch matches_;
+  std::unordered_map<std::string, int> restful_params_;
 };
 }  // namespace cinatra
