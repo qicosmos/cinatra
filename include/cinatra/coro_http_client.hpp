@@ -454,10 +454,32 @@ class coro_http_client {
     return async_simple::coro::syncAwait(async_get(std::move(uri)));
   }
 
+  template <typename String>
+  resp_data post(std::string uri, String content,
+                 req_content_type content_type) {
+    return async_simple::coro::syncAwait(
+        async_post(std::move(uri), std::move(content), content_type));
+  }
+
+  template <size_t N>
+  resp_data post(std::string uri, const char (&content)[N],
+                 req_content_type content_type) {
+    return post(std::move(uri), std::string_view(content, N), content_type);
+  }
+
+  template <typename String>
   async_simple::coro::Lazy<resp_data> async_post(
-      std::string uri, std::string content, req_content_type content_type) {
-    req_context<> ctx{content_type, "", std::move(content)};
+      std::string uri, String content, req_content_type content_type) {
+    req_context<String> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::POST, std::move(ctx));
+  }
+
+  template <size_t N>
+  async_simple::coro::Lazy<resp_data> async_post(
+      std::string uri, const char (&content)[N],
+      req_content_type content_type) {
+    return async_post(std::move(uri), std::string_view(content, N),
+                      content_type);
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(
@@ -471,12 +493,6 @@ class coro_http_client {
                                                 req_content_type content_type) {
     req_context<> ctx{content_type, "", std::move(content)};
     return async_request(std::move(uri), http_method::PUT, std::move(ctx));
-  }
-
-  resp_data post(std::string uri, std::string content,
-                 req_content_type content_type) {
-    return async_simple::coro::syncAwait(
-        async_post(std::move(uri), std::move(content), content_type));
   }
 
   bool add_str_part(std::string name, std::string content) {
@@ -819,7 +835,7 @@ class coro_http_client {
       bool has_body = !ctx.content.empty();
       if (has_body) {
         vec.push_back(asio::buffer(req_head_str));
-        vec.push_back(asio::buffer(ctx.content));
+        vec.push_back(asio::buffer(ctx.content.data(), ctx.content.size()));
       }
 
 #ifdef BENCHMARK_TEST
@@ -1195,8 +1211,9 @@ class coro_http_client {
     }
   }
 
-  async_simple::coro::Lazy<std::error_code> handle_chunked(resp_data &data,
-                                                           req_context<> ctx) {
+  template <typename String>
+  async_simple::coro::Lazy<std::error_code> handle_chunked(
+      resp_data &data, req_context<String> ctx) {
     std::error_code ec{};
     size_t size = 0;
     while (true) {
