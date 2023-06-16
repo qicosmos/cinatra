@@ -764,9 +764,9 @@ class coro_http_client {
     co_return data;
   }
 
-  template <typename String>
+  template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_request(
-      String uri, http_method method, req_context<String> ctx,
+      S uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
