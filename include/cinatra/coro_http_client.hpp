@@ -693,8 +693,9 @@ class coro_http_client {
     co_return co_await connect(std::move(uri));
   }
 
+  template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
-      std::string uri, http_method method, std::string filename,
+      S uri, http_method method, String filename,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
