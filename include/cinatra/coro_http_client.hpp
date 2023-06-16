@@ -464,7 +464,7 @@ class coro_http_client {
   template <size_t N>
   resp_data post(std::string uri, const char (&content)[N],
                  req_content_type content_type) {
-    return post(std::move(uri), std::string_view(content, N), content_type);
+    return post(std::move(uri), std::string(content, N), content_type);
   }
 
   template <typename String>
@@ -478,8 +478,7 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_post(
       std::string uri, const char (&content)[N],
       req_content_type content_type) {
-    return async_post(std::move(uri), std::string_view(content, N),
-                      content_type);
+    return async_post(std::move(uri), std::string(content, N), content_type);
   }
 
   async_simple::coro::Lazy<resp_data> async_delete(

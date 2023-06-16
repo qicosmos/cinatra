@@ -540,14 +540,13 @@ TEST_CASE("test basic http request") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.resp_body == "hello world");
 
-  std::string_view post_str = "async post hello coro_http_client";
-  result = async_simple::coro::syncAwait(
-      client.async_post(uri, post_str, req_content_type::string));
+  result = async_simple::coro::syncAwait(client.async_post(
+      uri, "async post hello coro_http_client", req_content_type::string));
   CHECK(result.resp_body ==
         "async post hello coro_http_client reply from post");
 
-  post_str = "sync post hello coro_http_client";
-  result = client.post(uri, post_str, req_content_type::string);
+  result = client.post(uri, "sync post hello coro_http_client",
+                       req_content_type::string);
   CHECK(result.resp_body == "sync post hello coro_http_client reply from post");
 
   result = client.post(uri, "", req_content_type::string);
