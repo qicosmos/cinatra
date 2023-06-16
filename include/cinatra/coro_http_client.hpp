@@ -784,8 +784,12 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      auto [ok, u] = handle_uri(
-          data, has_schema(uri) ? uri : std::string("http://").append(uri));
+      bool no_schema = !has_schema(uri);
+      std::string append_uri;
+      if (no_schema) {
+        append_uri.append("http://").append(uri);
+      }
+      auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
       if (!ok) {
         break;
       }
