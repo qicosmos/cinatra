@@ -549,9 +549,16 @@ TEST_CASE("test basic http request") {
                        req_content_type::string);
   CHECK(result.resp_body == "sync post hello coro_http_client reply from post");
 
+  std::string_view uri1 = "http://127.0.0.1:8090";
   std::string_view post_str = "post hello coro_http_client";
+
   result = async_simple::coro::syncAwait(
       client.async_request(uri, http_method::POST,
+                           req_context<std::string_view>{.content = post_str}));
+  CHECK(result.resp_body == "post hello coro_http_client reply from post");
+
+  result = async_simple::coro::syncAwait(
+      client.async_request(uri1, http_method::POST,
                            req_context<std::string_view>{.content = post_str}));
   CHECK(result.resp_body == "post hello coro_http_client reply from post");
 

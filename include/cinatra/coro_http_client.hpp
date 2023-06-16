@@ -777,8 +777,6 @@ class coro_http_client {
       }
     });
 
-    check_scheme(uri);
-
     resp_data data{};
 
     std::error_code ec{};
@@ -786,7 +784,8 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      auto [ok, u] = handle_uri(data, uri);
+      auto [ok, u] = handle_uri(
+          data, has_schema(uri) ? uri : std::string("http://").append(uri));
       if (!ok) {
         break;
       }
@@ -926,7 +925,8 @@ class coro_http_client {
     return data.net_err == std::error_code{};
   }
 
-  std::pair<bool, uri_t> handle_uri(resp_data &data, const std::string &uri) {
+  template <typename S>
+  std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
       data.net_err = std::make_error_code(std::errc::protocol_error);
@@ -1516,7 +1516,8 @@ class coro_http_client {
     co_return true;
   }
 
-  void check_scheme(std::string &url) {
+  template <typename S>
+  bool has_schema(const S &url) {
     size_t pos_http = url.find_first_of("http://");
     size_t pos_https = url.find_first_of("https://");
     size_t pos_ws = url.find_first_of("ws://");
@@ -1526,9 +1527,7 @@ class coro_http_client {
         ((pos_https != std::string::npos) && pos_https == 0) ||
         ((pos_ws != std::string::npos) && pos_ws == 0) ||
         ((pos_wss != std::string::npos) && pos_wss == 0);
-
-    if (!has_http_scheme)
-      url.insert(0, "http://");
+    return has_http_scheme;
   }
 
   std::unique_ptr<asio::io_context> io_ctx_;
