@@ -1260,8 +1260,11 @@ class coro_http_client {
                                                        bool is_ranges,
                                                        auto &ctx) {
     if (content_len > 0) {
+      auto data_ptr = read_buf_.size() == 0
+                          ? body_.data()
+                          : asio::buffer_cast<const char *>(read_buf_.data());
+
       if (is_ranges) {
-        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
         if (ctx.stream) {
           auto ec = co_await ctx.stream->async_write(data_ptr, content_len);
           if (ec) {
@@ -1271,9 +1274,6 @@ class coro_http_client {
         }
       }
 
-      auto data_ptr = read_buf_.size() == 0
-                          ? body_.data()
-                          : asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view reply(data_ptr, content_len);
       data.resp_body = reply;
 
