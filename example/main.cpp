@@ -206,8 +206,9 @@ class qps {
   qps() : counter_(0) {
     thd_ = std::thread([this] {
       while (!stop_) {
-        std::cout << "qps: " << counter_.load(std::memory_order_acquire)
-                  << '\n';
+        size_t current = counter_.load(std::memory_order_acquire);
+        std::cout << "qps: " << current - last_ << '\n';
+        last_ = current;
         std::this_thread::sleep_for(std::chrono::seconds(1));
         // counter_.store(0, std::memory_order_release);
       }
@@ -223,6 +224,7 @@ class qps {
   bool stop_ = false;
   std::thread thd_;
   std::atomic<uint32_t> counter_;
+  uint32_t last_ = 0;
 };
 
 int main() {
