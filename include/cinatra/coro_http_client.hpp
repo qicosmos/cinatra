@@ -71,6 +71,95 @@ struct multipart_t {
   std::string content;
   size_t size = 0;
 };
+
+class simple_buffer {
+ public:
+  inline static constexpr size_t sbuf_init_size = 4096;
+  simple_buffer(size_t init_size = sbuf_init_size)
+      : size_(0), alloc_size_(init_size) {
+    if (init_size == 0) {
+      data_ = nullptr;
+    }
+    else {
+      data_ = (char *)::malloc(init_size);
+      if (!data_) {
+        throw std::bad_alloc();
+      }
+    }
+  }
+
+  ~simple_buffer() { ::free(data_); }
+
+  simple_buffer(const simple_buffer &) = delete;
+  simple_buffer &operator=(const simple_buffer &) = delete;
+
+  simple_buffer(simple_buffer &&other)
+      : size_(other.size_), data_(other.data_), alloc_size_(other.alloc_size_) {
+    other.size_ = other.alloc_size_ = 0;
+    other.data_ = nullptr;
+  }
+
+  simple_buffer &operator=(simple_buffer &&other) {
+    ::free(data_);
+
+    size_ = other.size_;
+    alloc_size_ = other.alloc_size_;
+    data_ = other.data_;
+
+    other.size_ = other.alloc_size_ = 0;
+    other.data_ = nullptr;
+
+    return *this;
+  }
+
+  char *data() { return data_; }
+
+  const char *data() const { return data_; }
+
+  size_t size() const { return size_; }
+  size_t alloc_size() const { return alloc_size_; }
+
+  char *release() {
+    char *tmp = data_;
+    size_ = 0;
+    data_ = nullptr;
+    alloc_size_ = 0;
+    return tmp;
+  }
+
+  void init(size_t len) {
+    if (alloc_size_ - size_ >= len) {
+      size_ = len;
+      return;
+    }
+
+    size_t nsize = (alloc_size_ > 0) ? alloc_size_ * 2 : sbuf_init_size;
+
+    while (nsize < size_ + len) {
+      size_t tmp_nsize = nsize * 2;
+      if (tmp_nsize <= nsize) {
+        nsize = size_ + len;
+        break;
+      }
+      nsize = tmp_nsize;
+    }
+
+    void *tmp = ::realloc(data_, nsize);
+    if (!tmp) {
+      throw std::bad_alloc();
+    }
+
+    data_ = static_cast<char *>(tmp);
+    alloc_size_ = nsize;
+    size_ = nsize;
+  }
+
+ private:
+  size_t size_;
+  size_t alloc_size_;
+  char *data_;
+};
+
 class coro_http_client {
  public:
   struct config {
@@ -227,6 +316,8 @@ class coro_http_client {
     return init_ssl(base_path, cert_file, verify_mode, domain);
   }
 #endif
+
+  char *release_buf() { return body_.release(); }
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
@@ -481,13 +572,13 @@ class coro_http_client {
 
   bool add_str_part(std::string name, std::string content) {
     size_t size = content.size();
-    return form_data_
+    return fordata__
         .emplace(std::move(name), multipart_t{"", std::move(content), size})
         .second;
   }
 
   bool add_file_part(std::string name, std::string filename) {
-    if (form_data_.find(name) != form_data_.end()) {
+    if (fordata__.find(name) != fordata__.end()) {
 #ifndef NDEBUG
       std::cout << "name already exist\n";
 #endif
@@ -508,8 +599,8 @@ class coro_http_client {
     }
 
     size_t file_size = std::filesystem::file_size(filename);
-    form_data_.emplace(std::move(name),
-                       multipart_t{std::move(filename), "", file_size});
+    fordata__.emplace(std::move(name),
+                      multipart_t{std::move(filename), "", file_size});
     return true;
   }
 
@@ -551,9 +642,9 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
-      form_data_.clear();
+      fordata__.clear();
     });
-    if (form_data_.empty()) {
+    if (fordata__.empty()) {
 #ifndef NDEBUG
       std::cout << "no multipart\n";
 #endif
@@ -603,7 +694,7 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    for (auto &[key, part] : form_data_) {
+    for (auto &[key, part] : fordata__) {
       data = co_await send_single_part(key, part);
 
       if (data.net_err) {
@@ -1137,8 +1228,17 @@ class coro_http_client {
       }
 
       // read left part of content.
-      size_t size_to_read = content_len - read_buf_.size();
-      if (std::tie(ec, size) = co_await async_read(read_buf_, size_to_read);
+      size_t part_size = read_buf_.size();
+      size_t size_to_read = content_len - part_size;
+
+      body_.init(content_len);
+      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      memcpy(body_.data(), data_ptr, part_size);
+      read_buf_.consume(part_size);
+
+      if (std::tie(ec, size) = co_await async_read(
+              asio::buffer(body_.data() + part_size, size_to_read),
+              size_to_read);
           ec) {
         break;
       }
@@ -1171,7 +1271,9 @@ class coro_http_client {
         }
       }
 
-      auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      auto data_ptr = read_buf_.size() == 0
+                          ? body_.data()
+                          : asio::buffer_cast<const char *>(read_buf_.data());
       std::string_view reply(data_ptr, content_len);
       data.resp_body = reply;
 
@@ -1296,7 +1398,7 @@ class coro_http_client {
 
   size_t multipart_content_len() {
     size_t content_len = 0;
-    for (auto &[key, part] : form_data_) {
+    for (auto &[key, part] : fordata__) {
       content_len += 75;
       content_len += key.size() + 1;
       if (!part.filename.empty()) {
@@ -1454,7 +1556,7 @@ class coro_http_client {
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
-      AsioBuffer &buffer, size_t size_to_read) noexcept {
+      AsioBuffer &&buffer, size_t size_to_read) noexcept {
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
@@ -1543,6 +1645,7 @@ class coro_http_client {
   std::thread io_thd_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
+  simple_buffer body_{};
 
   std::unordered_map<std::string, std::string> req_headers_;
 
@@ -1555,7 +1658,7 @@ class coro_http_client {
 
   std::string proxy_bearer_token_auth_token_;
 
-  std::map<std::string, multipart_t> form_data_;
+  std::map<std::string, multipart_t> fordata__;
   size_t max_single_part_size_ = 1024 * 1024;
 
   std::function<void(resp_data)> on_ws_msg_;
