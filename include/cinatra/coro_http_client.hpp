@@ -572,13 +572,13 @@ class coro_http_client {
 
   bool add_str_part(std::string name, std::string content) {
     size_t size = content.size();
-    return fordata__
+    return fordata_
         .emplace(std::move(name), multipart_t{"", std::move(content), size})
         .second;
   }
 
   bool add_file_part(std::string name, std::string filename) {
-    if (fordata__.find(name) != fordata__.end()) {
+    if (fordata_.find(name) != fordata_.end()) {
 #ifndef NDEBUG
       std::cout << "name already exist\n";
 #endif
@@ -599,8 +599,8 @@ class coro_http_client {
     }
 
     size_t file_size = std::filesystem::file_size(filename);
-    fordata__.emplace(std::move(name),
-                      multipart_t{std::move(filename), "", file_size});
+    fordata_.emplace(std::move(name),
+                     multipart_t{std::move(filename), "", file_size});
     return true;
   }
 
@@ -642,9 +642,9 @@ class coro_http_client {
   async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
-      fordata__.clear();
+      fordata_.clear();
     });
-    if (fordata__.empty()) {
+    if (fordata_.empty()) {
 #ifndef NDEBUG
       std::cout << "no multipart\n";
 #endif
@@ -694,7 +694,7 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    for (auto &[key, part] : fordata__) {
+    for (auto &[key, part] : fordata_) {
       data = co_await send_single_part(key, part);
 
       if (data.net_err) {
@@ -1398,7 +1398,7 @@ class coro_http_client {
 
   size_t multipart_content_len() {
     size_t content_len = 0;
-    for (auto &[key, part] : fordata__) {
+    for (auto &[key, part] : fordata_) {
       content_len += 75;
       content_len += key.size() + 1;
       if (!part.filename.empty()) {
@@ -1658,7 +1658,7 @@ class coro_http_client {
 
   std::string proxy_bearer_token_auth_token_;
 
-  std::map<std::string, multipart_t> fordata__;
+  std::map<std::string, multipart_t> fordata_;
   size_t max_single_part_size_ = 1024 * 1024;
 
   std::function<void(resp_data)> on_ws_msg_;
