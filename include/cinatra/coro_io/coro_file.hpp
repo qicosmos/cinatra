@@ -191,20 +191,20 @@ class coro_file {
 #else
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
-    callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
-    co_return co_await awaitor.await_resume([&](auto handler) {
-      async_read_impl(data, size)
-          .via(&executor_wrapper_)
-          .start([handler = std::move(handler)](auto&& t) {
-            if (t.hasError()) {
-              handler.set_value_then_resume(
-                  std::make_pair(std::make_error_code(std::errc::io_error), 0));
-            }
-            else {
-              handler.set_value_then_resume(t.value());
-            }
-          });
-    });
+    async_simple::Promise<std::pair<std::error_code, size_t>> promise;
+    async_read_impl(data, size)
+        .via(&executor_wrapper_)
+        .start([&promise](auto&& t) {
+          if (t.available()) {
+            promise.setValue(t.value());
+          }
+          else {
+            promise.setValue(std::make_pair(
+                std::make_error_code(std::errc::io_error), size_t(0)));
+          }
+        });
+
+    co_return co_await promise.getFuture();
   }
 
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
