@@ -96,11 +96,16 @@ class coro_file {
   }
 #endif
 
-  bool is_open() {
+  bool is_open() { return stream_file_ && stream_file_->is_open(); }
+
+  void flush() {
 #if defined(ENABLE_FILE_IO_URING)
-    return stream_file_ && stream_file_->is_open();
+
 #else
-    return stream_file_ && stream_file_->is_open();
+    if (stream_file_) {
+      stream_file_->flush();
+      stream_file_->sync();
+    }
 #endif
   }
 
@@ -215,7 +220,6 @@ class coro_file {
             promise.setValue(std::make_error_code(std::errc::io_error));
           }
         });
-
     co_return co_await promise.getFuture();
   }
 
@@ -234,7 +238,6 @@ class coro_file {
   async_simple::coro::Lazy<std::error_code> async_write_impl(const char* data,
                                                              size_t size) {
     stream_file_->write(data, size);
-    stream_file_->flush();
     co_return std::error_code{};
   }
 #endif
