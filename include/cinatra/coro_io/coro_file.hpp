@@ -214,7 +214,6 @@ class coro_file {
   async_simple::coro::Lazy<std::error_code> async_write_impl(const char* data,
                                                              size_t size) {
     stream_file_->write(data, size);
-    stream_file_->flush();
     co_return std::error_code{};
   }
 #endif

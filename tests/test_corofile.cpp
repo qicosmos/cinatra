@@ -434,6 +434,8 @@ TEST_CASE("small_file_write_test") {
     std::cout << ec.message() << "\n";
   }
 
+  file.flush();
+
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
     std::cout << "Failed to open file: " << filename << "\n";
@@ -456,6 +458,7 @@ TEST_CASE("small_file_write_test") {
   if (ec) {
     std::cout << ec.message() << "\n";
   }
+  file.flush();
   is.open(filename, std::ios::binary);
   if (!is.is_open()) {
     std::cout << "Failed to open file: " << filename << "\n";
@@ -507,6 +510,7 @@ TEST_CASE("large_file_write_test") {
       std::cout << ec.message() << "\n";
     }
   }
+  file.flush();
   CHECK(fs::file_size(filename) == file_size);
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
@@ -551,7 +555,7 @@ TEST_CASE("empty_file_write_test") {
   if (ec) {
     std::cout << ec.message() << "\n";
   }
-
+  file.flush();
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
     std::cout << "Failed to open file: " << filename << "\n";
@@ -586,6 +590,7 @@ TEST_CASE("small_file_write_with_pool_test") {
   if (ec) {
     std::cout << ec.message() << "\n";
   }
+  file.flush();
 
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
@@ -609,6 +614,7 @@ TEST_CASE("small_file_write_with_pool_test") {
   if (ec) {
     std::cout << ec.message() << "\n";
   }
+  file.flush();
   is.open(filename, std::ios::binary);
   if (!is.is_open()) {
     std::cout << "Failed to open file: " << filename << "\n";
@@ -659,7 +665,9 @@ TEST_CASE("large_file_write_with_pool_test") {
       std::cout << ec.message() << "\n";
     }
   }
-  CHECK(fs::file_size(filename) == file_size);
+  file.flush();
+  size_t sz = fs::file_size(filename);
+  CHECK(sz == file_size);
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
     std::cout << "Failed to open file: " << filename << "\n";
