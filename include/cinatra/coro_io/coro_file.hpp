@@ -96,11 +96,16 @@ class coro_file {
   }
 #endif
 
-  bool is_open() {
+  bool is_open() { return stream_file_ && stream_file_->is_open(); }
+
+  void flush() {
 #if defined(ENABLE_FILE_IO_URING)
-    return stream_file_ && stream_file_->is_open();
+
 #else
-    return stream_file_ && stream_file_->is_open();
+    if (stream_file_) {
+      stream_file_->flush();
+      stream_file_->sync();
+    }
 #endif
   }
 
@@ -186,37 +191,12 @@ class coro_file {
 #else
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
-    async_simple::Promise<std::pair<std::error_code, size_t>> promise;
-    async_read_impl(data, size)
-        .via(&executor_wrapper_)
-        .start([&promise](auto&& t) {
-          if (t.available()) {
-            promise.setValue(t.value());
-          }
-          else {
-            promise.setValue(std::make_pair(
-                std::make_error_code(std::errc::io_error), size_t(0)));
-          }
-        });
-
-    co_return co_await promise.getFuture();
+    co_return co_await async_read_impl(data, size).via(&executor_wrapper_);
   }
 
   async_simple::coro::Lazy<std::error_code> async_write(const char* data,
                                                         size_t size) {
-    async_simple::Promise<std::error_code> promise;
-    async_write_impl(data, size)
-        .via(&executor_wrapper_)
-        .start([&promise](auto&& t) {
-          if (t.available()) {
-            promise.setValue(t.value());
-          }
-          else {
-            promise.setValue(std::make_error_code(std::errc::io_error));
-          }
-        });
-
-    co_return co_await promise.getFuture();
+    co_return co_await async_write_impl(data, size).via(&executor_wrapper_);
   }
 
  private:
