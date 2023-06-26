@@ -317,8 +317,7 @@ class coro_http_client {
   }
 #endif
 
-  // it may return nullptr, because maybe no body_ allocated, the read_buf_ may
-  // read all head and body, at that time the body_ is nullptr.
+  // return body_, the user will own body's lifetime.
   std::unique_ptr<char[]> release_buf() {
     return std::unique_ptr<char[]>(body_.release());
   }
@@ -1227,6 +1226,12 @@ class coro_http_client {
 
       if ((size_t)parser.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
+        // copy body.
+        body_.init(content_len);
+        auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data() +
+                                                        parser.header_len());
+        memcpy(body_.data(), data_ptr, content_len);
+        read_buf_.consume(read_buf_.size());
         co_await handle_entire_content(data, content_len, is_ranges, ctx);
         break;
       }
