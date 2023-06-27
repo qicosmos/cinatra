@@ -1074,7 +1074,14 @@ class coro_http_client {
       req_headers_ = std::move(headers);
     }
 
-    req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+    if (!headers.empty()) {
+      req_headers_ = std::move(headers);
+      req_str.append(" HTTP/1.1\r\n");
+    }
+    else {
+      req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+    }
+
     auto type_str = get_content_type_str(ctx.content_type);
     if (!type_str.empty()) {
       if (ctx.content_type == req_content_type::multipart) {
