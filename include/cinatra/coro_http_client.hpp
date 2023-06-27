@@ -1072,10 +1072,6 @@ class coro_http_client {
 
     if (!headers.empty()) {
       req_headers_ = std::move(headers);
-    }
-
-    if (!headers.empty()) {
-      req_headers_ = std::move(headers);
       req_str.append(" HTTP/1.1\r\n");
     }
     else {
