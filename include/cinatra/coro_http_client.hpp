@@ -811,7 +811,6 @@ class coro_http_client {
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
-    std::cout << header_str;
 
     std::error_code ec{};
     size_t size = 0;
