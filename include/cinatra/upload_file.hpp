@@ -1,10 +1,11 @@
 #pragma once
-#include "utils.hpp"
 #include <fstream>
 #include <string>
+
+#include "utils.hpp"
 namespace cinatra {
 class upload_file {
-public:
+ public:
   void write(const char *data, size_t size) {
     file_size_ += size;
     file_.write(data, size);
@@ -16,6 +17,7 @@ public:
     if (r)
       file_path_ = std::string(&file_name[0], file_name.length());
 
+    parant_path_ = fs::path(file_path_).parent_path();
     return r;
   }
 
@@ -73,11 +75,22 @@ public:
 
   size_t get_file_size() const { return file_size_; }
 
-  std::string get_file_path() const { return file_path_; }
+  std::string get_file_path() {
+    if (file_path_.find(fs::path::preferred_separator) == std::string::npos) {
+      file_path_ = parant_path_.append(file_path_).string();
+    }
+    return file_path_;
+  }
 
   bool is_open() const { return file_.is_open(); }
 
-private:
+  void set_origin_filename(std::string filename) {
+    origin_filename_ = std::move(filename);
+  }
+
+  const std::string &get_origin_filename() const { return origin_filename_; }
+
+ private:
   void check_and_create_directory(const std::string &direcotry_path) const {
     auto vec = cinatra::split(
         std::string_view(direcotry_path.data(), direcotry_path.size()), "/");
@@ -94,10 +107,12 @@ private:
     }
   }
 
-private:
+ private:
   // std::string file_name_;
   std::string file_path_;
   std::ofstream file_;
   size_t file_size_ = 0;
+  std::string origin_filename_;
+  fs::path parant_path_;
 };
-} // namespace cinatra
+}  // namespace cinatra

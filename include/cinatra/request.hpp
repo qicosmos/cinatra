@@ -733,12 +733,14 @@ class request {
     return r;
   }
 
-  bool open_upload_file(const std::string &filename) {
+  bool open_upload_file(const std::string &filename,
+                        std::string origin_filename = "") {
     upload_file file;
     bool r = file.open(filename);
     if (!r)
       return false;
 
+    file.set_origin_filename(std::move(origin_filename));
     files_.push_back(std::move(file));
     return true;
   }
@@ -760,6 +762,7 @@ class request {
   }
 
   const std::vector<upload_file> &get_upload_files() const { return files_; }
+  std::vector<upload_file> &get_upload_files() { return files_; }
 
   upload_file *get_file() {
     if (!files_.empty())
