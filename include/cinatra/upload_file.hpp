@@ -17,6 +17,7 @@ class upload_file {
     if (r)
       file_path_ = std::string(&file_name[0], file_name.length());
 
+    parant_path_ = fs::path(file_path_).parent_path();
     return r;
   }
 
@@ -74,7 +75,12 @@ class upload_file {
 
   size_t get_file_size() const { return file_size_; }
 
-  std::string get_file_path() const { return file_path_; }
+  std::string get_file_path() {
+    if (file_path_.find(fs::path::preferred_separator) == std::string::npos) {
+      file_path_ = parant_path_.append(file_path_).string();
+    }
+    return file_path_;
+  }
 
   bool is_open() const { return file_.is_open(); }
 
@@ -107,5 +113,6 @@ class upload_file {
   std::ofstream file_;
   size_t file_size_ = 0;
   std::string origin_filename_;
+  fs::path parant_path_;
 };
 }  // namespace cinatra
