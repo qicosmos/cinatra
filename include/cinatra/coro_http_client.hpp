@@ -289,7 +289,7 @@ class coro_http_client {
               socket_->impl_, ssl_ctx_);
       // Set SNI Hostname (many hosts need this to handshake successfully)
       if (!sni_hostname_.empty()) {
-        SSL_set_tlsext_host_name(ssl_stream_.native_handle(),
+        SSL_set_tlsext_host_name(ssl_stream_->native_handle(),
                                  sni_hostname_.c_str());
       }
       use_ssl_ = true;
