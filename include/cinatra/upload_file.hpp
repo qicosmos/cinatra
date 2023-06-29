@@ -1,10 +1,11 @@
 #pragma once
-#include "utils.hpp"
 #include <fstream>
 #include <string>
+
+#include "utils.hpp"
 namespace cinatra {
 class upload_file {
-public:
+ public:
   void write(const char *data, size_t size) {
     file_size_ += size;
     file_.write(data, size);
@@ -77,7 +78,13 @@ public:
 
   bool is_open() const { return file_.is_open(); }
 
-private:
+  void set_origin_filename(std::string filename) {
+    origin_filename_ = std::move(filename);
+  }
+
+  const std::string &get_origin_filename() const { return origin_filename_; }
+
+ private:
   void check_and_create_directory(const std::string &direcotry_path) const {
     auto vec = cinatra::split(
         std::string_view(direcotry_path.data(), direcotry_path.size()), "/");
@@ -94,10 +101,11 @@ private:
     }
   }
 
-private:
+ private:
   // std::string file_name_;
   std::string file_path_;
   std::ofstream file_;
   size_t file_size_ = 0;
+  std::string origin_filename_;
 };
-} // namespace cinatra
+}  // namespace cinatra

@@ -441,6 +441,7 @@ int main() {
         for (auto &file : files) {
           std::cout << file.get_file_path() << " " << file.get_file_size()
                     << std::endl;
+          std::cout << file.get_origin_filename() << "\n";
         }
         res.render_string("multipart finished");
       });

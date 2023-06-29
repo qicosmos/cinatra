@@ -884,7 +884,7 @@ class connection : public base_connection,
             name = static_dir_ + "/" + name;
           }
 
-          req_.open_upload_file(name);
+          req_.open_upload_file(name, std::move(filename));
         } catch (const std::exception &ex) {
           req_.set_state(data_proc_state::data_error);
           res_.set_status_and_content(status_type::internal_server_error,
