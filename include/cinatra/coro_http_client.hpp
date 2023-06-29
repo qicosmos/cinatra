@@ -287,6 +287,11 @@ class coro_http_client {
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, ssl_ctx_);
+      // Set SNI Hostname (many hosts need this to handshake successfully)
+      if (!sni_hostname_.empty()) {
+        SSL_set_tlsext_host_name(ssl_stream_.native_handle(),
+                                 sni_hostname_.c_str());
+      }
       use_ssl_ = true;
       ssl_init_ret_ = true;
     } catch (std::exception &e) {
@@ -1007,6 +1012,10 @@ class coro_http_client {
     req_timeout_duration_ = timeout_duration;
   }
 
+#ifdef CINATRA_ENABLE_SSL
+  void set_sni_hostname(const std::string &host) { sni_hostname_ = host; }
+#endif
+
   template <typename T, typename U>
   friend class coro_io::client_pool;
 
@@ -1680,6 +1689,7 @@ class coro_http_client {
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
   bool use_ssl_ = false;
+  std::string sni_hostname_ = "";
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
