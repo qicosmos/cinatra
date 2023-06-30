@@ -116,6 +116,15 @@ TEST_CASE("test ssl client") {
     CHECK(result.status >= 200);
   }
 }
+
+TEST_CASE("test ssl client") {
+  coro_http_client client{};
+  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+  REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+  client.set_sni_hostname("https://www.bing.com");
+  auto result = client.get("https://www.bing.com");
+  CHECK(result.status >= 200);
+}
 #endif
 
 async_simple::coro::Lazy<void> test_collect_all() {
