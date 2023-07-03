@@ -32,9 +32,6 @@ endif()
 
 ## manual import
 include_directories(${cinatra_SOURCE_DIR}/include)
-#include_directories(${cinatra_SOURCE_DIR}/thirdparty/asio)
-#include_directories(${cinatra_SOURCE_DIR}/thirdparty/async_simple)
-
 
 add_executable(test_corofile
         test_corofile.cpp
