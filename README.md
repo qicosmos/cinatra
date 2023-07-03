@@ -48,8 +48,17 @@ cinatra目前被很多公司在使用，在这里可以看到[谁在用cinatra](
 1. C++20 编译器 (gcc 10.2, clang 13, Visual Studio 2022,或者更高的版本)
 
 ## 使用
-cinatra是header-only的，直接引用头文件既可。
+cinatra是header-only的，引用include头文件目录，并设置如下编译选项：
 
+add_definitions(-DASIO_STANDALONE)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
+
+如果是gcc 编译，再设置：
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 
 # 快速示例
 

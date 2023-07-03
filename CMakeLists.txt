@@ -7,7 +7,6 @@ include_directories(include)
 find_package(Threads REQUIRED)
 
 include(cmake/build.cmake)
-include(cmake/platform.cmake)
 include(cmake/develop.cmake)
 
 if (BUILD_UNIT_TESTS)
