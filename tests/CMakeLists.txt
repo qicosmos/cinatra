@@ -8,17 +8,13 @@ add_executable(${project_name}
         )
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO INJECT_FOR_HTTP_CLIENT_TEST)
 target_include_directories(${project_name} PRIVATE
-        ${cinatra_SOURCE_DIR}/thirdparty/asio
-        ${cinatra_SOURCE_DIR}/thirdparty/async_simple
-        ${cinatra_SOURCE_DIR}/thirdparty/cmdline
+        ${cinatra_SOURCE_DIR}/include
 )
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
 if (ENABLE_GZIP)
-	target_link_libraries(${project_name} ${ZLIB_LIBRARIES} doctest)
-else()
-        target_link_libraries(test_cinatra doctest)
+	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
 
 # test_coro_file
@@ -35,10 +31,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
 
 ## manual import
-include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
-include_directories(${cinatra_SOURCE_DIR}/thirdparty/asio)
-include_directories(${cinatra_SOURCE_DIR}/thirdparty/async_simple)
-
+include_directories(${cinatra_SOURCE_DIR}/include)
 
 add_executable(test_corofile
         test_corofile.cpp
@@ -47,10 +40,10 @@ add_executable(test_corofile
 
 if(ENABLE_FILE_IO_URING)
 if (UNIX)
-        target_link_libraries(test_corofile PRIVATE doctest uring)
+        target_link_libraries(test_corofile PRIVATE uring)
 endif()
 else()
-        target_link_libraries(test_corofile PRIVATE doctest)
+        target_link_libraries(test_corofile PRIVATE)
 endif()
 
 add_test(NAME test_corofile COMMAND test_corofile)

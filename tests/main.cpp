@@ -1,6 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 
-#include "doctest.h"
+#include "doctest/doctest.h"
 
 // doctest comments
 // 'function' : must be 'attribute' - see issue #182
