@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "cinatra.hpp"
-#include "doctest.h"
+#include "doctest/doctest.h"
 using namespace std::chrono_literals;
 
 using namespace cinatra;

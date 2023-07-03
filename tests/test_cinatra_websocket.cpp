@@ -5,7 +5,7 @@
 
 #include "cinatra.hpp"
 #include "cinatra/websocket.hpp"
-#include "doctest.h"
+#include "doctest/doctest.h"
 
 using namespace cinatra;
 

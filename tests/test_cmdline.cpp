@@ -1,7 +1,7 @@
 #include <string>
 
-#include "cmdline.h"
-#include "doctest.h"
+#include "cmdline/cmdline.h"
+#include "doctest/doctest.h"
 
 // ./simple_test -i input.txt --output=output.txt -vt100
 TEST_CASE("simple test cmd line options") {
