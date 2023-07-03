@@ -518,6 +518,10 @@ Transfer/sec:     19.739390MB
 
 websocket的业务函数是会多次进入的，因此写业务逻辑的时候需要注意，推荐按照示例中的方式去做。
 
+# deps
+cinatra depends on asio and async_simple.
+
+press_tool depends on cinatra and cmdline.
 
 # 联系方式
 
