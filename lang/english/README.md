@@ -32,6 +32,16 @@ Cinatra is a header-only library. So you can immediately use it in your code wit
 
 To compile your code with Cinatra, you need the following:
 
+if linux, setting:
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
+
+if use g++, setting:
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
+
 1. C++20 compiler (gcc 10.2, clang 13, Visual Studio 2022, or later versions)
 
 ## Examples

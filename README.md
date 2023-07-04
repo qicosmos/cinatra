@@ -50,11 +50,11 @@ cinatra目前被很多公司在使用，在这里可以看到[谁在用cinatra](
 ## 使用
 cinatra是header-only的，引用include头文件目录，并设置如下编译选项：
 
-add_definitions(-DASIO_STANDALONE)
+如果 linux， 设置:
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
 
-如果是gcc 编译，再设置：
+如果 g++ 编译，再设置：
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 
