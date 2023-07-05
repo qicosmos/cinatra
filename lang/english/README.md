@@ -32,6 +32,16 @@ Cinatra is a header-only library. So you can immediately use it in your code wit
 
 To compile your code with Cinatra, you need the following:
 
+if linux, setting:
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
+
+if use g++, setting:
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
+
 1. C++20 compiler (gcc 10.2, clang 13, Visual Studio 2022, or later versions)
 
 ## Examples
@@ -295,7 +305,43 @@ int main() {
 }
 ```
 
-### Example 8: cinatra client usage
+### Example 8: set RESTful API path parameters
+
+This code demonstrates how to use RESTful path parameters. Two RESTful APIs are set up below. When accessing the first API, such as the url `http://127.0.0.1:8080/numbers/1234/test/5678`, the server can get the two parameters of 1234 and 5678, the first RESTful API The parameter is `(\d+)`, which is a regex expression, which means that the parameter can only be a number. The code to get the first parameter is `req.get_matches ()[1]`. Because each req is different, each matched parameter is placed in the `request` structure.
+
+At the same time, it also supports RESTful API with any character, that is, the second RESTful API in the example, and the path parameter is set to `"/string/{:id}/test/{:name}"`. To get the corresponding parameters, use the `req.get_query_value` function. The parameters can only be registered variables (if you access non-registered variables, it will run but report an error). In the example, the parameter names are id and name. To get the id parameter, call `req.get_query_value("id")` will do. After the sample code is displayed, when accessing `http://127.0.0.1:8080/string/params_1/test/api_test`, the browser will return the `api_test` string.
+
+```cpp
+#include "cinatra.hpp"
+using namespace cinatra;
+
+int main() {
+	int max_thread_num = std::thread::hardware_concurrency();
+	http_server server(max_thread_num);
+	server.listen("0.0.0.0", "8080");
+
+	server.set_http_handler<GET, POST>(
+		R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+			std::cout << " matches[1] is : " << req.get_matches()[1]
+					<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+			res.set_status_and_content(status_type::ok, "hello world");
+		});
+
+	server.set_http_handler<GET, POST>(
+		"/string/{:id}/test/{:name}", [](request &req, response &res) {
+			std::string id = req.get_query_value("id");
+			std::cout << "id value is: " << id << std::endl;
+			std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
+			res.set_status_and_content(status_type::ok, std::string(req.get_query_value("name")));
+		});
+
+	server.run();
+	return 0;
+}
+```
+
+### Example 9: cinatra client usage
 
 #### sync_send get/post message
 
@@ -419,7 +465,7 @@ async_simple::coro::Lazy<void> test_websocket() {
     std::cout << data.resp_body << std::endl;
   });
 
-  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
   if (!r) {
     co_return;
   }
@@ -434,6 +480,50 @@ async_simple::coro::Lazy<void> test_websocket() {
 }
 ```
 
+### press tool usage
+
+cinatra_press_tool is a modern HTTP benchmarking tool based on coro_http_client.
+
+#### Basic Usage
+
+```shell
+./cinatra_press_tool -t 4 -c 40 -d 30s http://127.0.0.1
+```
+
+This runs a benchmark for 30 seconds, using 4 threads, and keeping 40 HTTP connections open(each connection corresponds to a coroutine).
+
+Output:
+
+```
+Running 30s test @ http://127.0.0.1
+  4 threads and 40 connections
+  Thread Status   Avg   Max   Variation   Stdev
+    Latency   4.12ms     8.15ms     3.367ms     1.835ms
+  462716 requests in 30.001s, 592.198250MB read, total: 462716, errors: 0
+Requests/sec:     15423.86666667
+Transfer/sec:     19.739390MB
+```
+
+#### Command Line Options
+```
+ -c, --connections    total number of HTTP connections to keep open with 
+ 					  each thread handling N = connections/threads (int)
+ -d, --duration       duration of the test, e.g. 2s, 2m, 2h (string [=15s])
+ -t, --threads        total number of threads to use (int [=1])
+ -H, --headers        HTTP headers to add to request, e.g. "User-Agent: coro_http_press"
+            		  add multiple http headers in a request need to be separated by ' && '
+            		  e.g. "User-Agent: coro_http_press && x-frame-options: SAMEORIGIN" (string [=])
+ -r, --readfix        read fixed response (int [=0])
+ -?, --help           print this message.
+```
+
+There are two parameters here that are different from wrk.
+
+The `-H` parameter means adding an http header to the http request. This parameter can add one http header or use the ` && ` symbol (4 characters) as a separator to add multiple http headers to the request.st.
+e.g. `-H User-Agent: coro_http_press` is to add an http header, and `-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN` is to add two http headers which is `User-Agent: coro_http_press` and `x-frame-options: same origin`.Adding three or more are all similar.
+
+
+`-r `parameter, which indicates whether to read a fixed-length response, this parameter can avoid frequent parsing of the response to optimize performance, some servers may return different lengths for the same request, in this case, do not set -r to 1, or do not set this parameter.
 
 ## Performance
 

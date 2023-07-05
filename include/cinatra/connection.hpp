@@ -251,7 +251,8 @@ class connection : public base_connection,
     reset_timer();
 
     std::vector<asio::const_buffer> buffers =
-        res_.to_chunked_buffers(buf.data(), buf.length(), eof);
+        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
+                                               chunk_size_str_, eof);
     if (buffers.empty()) {
       handle_write(std::error_code{});
       return;
@@ -322,7 +323,8 @@ class connection : public base_connection,
   response &get_res() { return res_; }
 
   void async_close() {
-    asio::dispatch(socket_.get_executor(), [this] {
+    auto self = this->shared_from_this();
+    asio::dispatch(socket_.get_executor(), [this, self] {
       close();
     });
   }
@@ -882,7 +884,7 @@ class connection : public base_connection,
             name = static_dir_ + "/" + name;
           }
 
-          req_.open_upload_file(name);
+          req_.open_upload_file(name, std::move(filename));
         } catch (const std::exception &ex) {
           req_.set_state(data_proc_state::data_error);
           res_.set_status_and_content(status_type::internal_server_error,
@@ -1460,6 +1462,7 @@ class connection : public base_connection,
   std::string last_ws_str_;
 
   std::string chunked_header_;
+  std::string chunk_size_str_;
   multipart_reader multipart_parser_;
   bool is_multi_part_file_;
   // callback handler to application layer

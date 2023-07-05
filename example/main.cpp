@@ -103,9 +103,8 @@ async_simple::coro::Lazy<void> test_async_ssl_client(coro_http_client &client) {
 #ifdef CINATRA_ENABLE_SSL
   std::string uri2 = "https://www.baidu.com";
   std::string uri3 = "https://cn.bing.com";
-  coro_http_client client{};
   client.init_ssl("../../include/cinatra", "server.crt");
-  data = co_await client.async_get(uri2);
+  auto data = co_await client.async_get(uri2);
   print(data.status);
 
   data = co_await client.async_get(uri3);
@@ -131,13 +130,14 @@ async_simple::coro::Lazy<void> test_download() {
 async_simple::coro::Lazy<void> test_upload() {
   std::string uri = "http://example.com/";
   coro_http_client client{};
-  auto result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  auto result =
+      co_await client.async_upload_multipart(uri, "test", "yourfile.jpg");
   print(result.status);
   std::cout << "upload finished\n";
 
   client.add_str_part("hello", "coro_http_client");
   client.add_file_part("test", "yourfile.jpg");
-  result = co_await client.async_upload(uri, "test", "yourfile.jpg");
+  result = co_await client.async_upload_multipart(uri, "test", "yourfile.jpg");
   print(result.status);
   std::cout << "upload finished\n";
 }
@@ -155,7 +155,7 @@ async_simple::coro::Lazy<void> test_websocket() {
     std::cout << data.resp_body << std::endl;
   });
 
-  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
   if (!r) {
     co_return;
   }
@@ -206,8 +206,9 @@ class qps {
   qps() : counter_(0) {
     thd_ = std::thread([this] {
       while (!stop_) {
-        std::cout << "qps: " << counter_.load(std::memory_order_acquire)
-                  << '\n';
+        size_t current = counter_.load(std::memory_order_acquire);
+        std::cout << "qps: " << current - last_ << '\n';
+        last_ = current;
         std::this_thread::sleep_for(std::chrono::seconds(1));
         // counter_.store(0, std::memory_order_release);
       }
@@ -223,6 +224,7 @@ class qps {
   bool stop_ = false;
   std::thread thd_;
   std::atomic<uint32_t> counter_;
+  uint32_t last_ = 0;
 };
 
 int main() {
@@ -439,8 +441,30 @@ int main() {
         for (auto &file : files) {
           std::cout << file.get_file_path() << " " << file.get_file_size()
                     << std::endl;
+          std::cout << file.get_origin_filename() << "\n";
+          file.rename_file(file.get_origin_filename());
+          std::cout << file.get_file_path() << " " << file.get_file_size()
+                    << std::endl;
         }
         res.render_string("multipart finished");
+      });
+
+  server.set_http_handler<GET, POST>(
+      R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+        std::cout << " matches[1] is : " << req.get_matches()[1]
+                  << " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+        res.set_status_and_content(status_type::ok, "hello world");
+      });
+
+  server.set_http_handler<GET, POST>(
+      "/string/{:id}/test/{:name}", [](request &req, response &res) {
+        std::string id(req.get_query_value("id"));
+        std::cout << "id value is: " << id << std::endl;
+        std::cout << "name value is: "
+                  << std::string(req.get_query_value("name")) << std::endl;
+        res.set_status_and_content(status_type::ok,
+                                   std::string(req.get_query_value("name")));
       });
   //
   //	//http upload(octet-stream)

@@ -19,11 +19,11 @@ jobs:
         mode: [Debug, Release]
         ssl: [ON, OFF]
 
-    runs-on: macos-12
+    runs-on: macos-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@master
 
       - name: SetUp HomeBrew
         id: set-up-homebrew

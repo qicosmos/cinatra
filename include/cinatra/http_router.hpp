@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "function_traits.hpp"
@@ -75,7 +76,11 @@ class http_router {
     else {
       bool is_wild_card = get_wildcard_function(key, req, res);
       if (!is_wild_card) {
-        return route(method, STATIC_RESOURCE, req, res, true);
+        bool is_regex = get_regex_function(std::string(key), req, res);
+        if (!is_regex)
+          return route(method, STATIC_RESOURCE, req, res, true);
+        else
+          return is_regex;
       }
 
       return is_wild_card;
@@ -93,6 +98,42 @@ class http_router {
       }
     }
     return false;
+  }
+
+  bool get_regex_function(const std::string &key, request &req, response &res) {
+    for (auto &pair : regex_invokers_) {
+      if (std::regex_match(key, req.get_matches(), std::get<0>(pair))) {
+        auto &t = std::get<1>(pair);
+        req.set_restful_params(std::get<2>(pair));
+        t.second(req, res);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline bool generate_regex_pattern(
+      std::string raw_string, std::string &pattern,
+      std::unordered_map<std::string, int> &rest_params) {
+    int count = 0;
+    while (raw_string.find("{:") != std::string::npos) {
+      unsigned first = raw_string.find("{:");
+      unsigned last = raw_string.find("}");
+      pattern += raw_string.substr(0, first);
+      pattern += "{}";
+      unsigned last_pos = last - first;
+      std::string param_val = raw_string.substr(first + 2, last_pos - 2);
+      if (param_val.empty())
+        return false;
+      raw_string = raw_string.substr(last + 1);
+      last = raw_string.find("}");
+      count++;
+      rest_params[param_val] = count;
+      if (count > 10) {  // only allow 9 restful param
+        return false;
+      }
+    }
+    return true;
   }
 
   template <http_method... Is, class T, class Type, typename T1, typename... Ap>
@@ -122,7 +163,36 @@ class http_router {
       key.append(methd_name).append(" ").append(raw_name);
     }
 
-    if (raw_name.back() == '*') {
+    if (raw_name.find("{:") != std::string::npos ||
+        raw_name.find(")") != std::string::npos) {
+      std::string pattern;
+      std::unordered_map<std::string, int> restful_params;
+      restful_params.clear();
+      if (raw_name.find(")") == std::string::npos) {
+        bool is_correct_pattern =
+            generate_regex_pattern(key, pattern, restful_params);
+        if (!is_correct_pattern) {
+          std::cout << "register_nonmember_func in regex route  has "
+                       "encountered an unexpected error.\n";
+          return;
+        }
+        if (pattern.find("{}") != std::string::npos) {
+          replace_all(pattern, "{}", "([^/]+)");
+        }
+      }
+      else {
+        pattern = key;
+      }
+
+      this->regex_invokers_.emplace_back(
+          std::regex(pattern),
+          std::make_pair(arr,
+                         std::bind(&http_router::invoke<Function, AP...>, this,
+                                   std::placeholders::_1, std::placeholders::_2,
+                                   std::move(f), ap...)),
+          restful_params);
+    }
+    else if (raw_name.back() == '*') {
       this->wildcard_invokers_[key.substr(0, key.length() - 1)] = {
           arr, std::bind(&http_router::invoke<Function, AP...>, this,
                          std::placeholders::_1, std::placeholders::_2,
@@ -283,5 +353,8 @@ class http_router {
   std::unordered_map<std::string, invoker_function, string_hash,
                      std::equal_to<>>
       wildcard_invokers_;  // for url/*
+  std::vector<std::tuple<std::regex, invoker_function,
+                         std::unordered_map<std::string, int>>>
+      regex_invokers_;
 };
 }  // namespace cinatra

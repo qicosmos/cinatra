@@ -5,7 +5,7 @@
 
 #include "cinatra.hpp"
 #include "cinatra/websocket.hpp"
-#include "doctest.h"
+#include "doctest/doctest.h"
 
 using namespace cinatra;
 
@@ -38,7 +38,7 @@ TEST_CASE("test wss client") {
   bool ok = client.init_ssl("../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
   REQUIRE(async_simple::coro::syncAwait(
-      client.async_connect("wss://localhost:9001")));
+      client.async_ws_connect("wss://localhost:9001")));
 
   std::promise<void> promise;
   client.on_ws_msg([&promise](resp_data data) {
@@ -80,7 +80,7 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
 
     std::cout << data.resp_body << std::endl;
   });
-  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
   if (!r) {
     co_return;
   }
@@ -166,7 +166,7 @@ void test_websocket_content(size_t len) {
 
   coro_http_client client;
   REQUIRE(async_simple::coro::syncAwait(
-      client.async_connect("ws://localhost:8090")));
+      client.async_ws_connect("ws://localhost:8090")));
 
   auto promise = std::make_shared<std::promise<void>>();
   std::weak_ptr<std::promise<void>> weak = promise;
@@ -228,7 +228,7 @@ TEST_CASE("test send after server stop") {
 
   coro_http_client client{};
   REQUIRE(async_simple::coro::syncAwait(
-      client.async_connect("ws://localhost:8090")));
+      client.async_ws_connect("ws://localhost:8090")));
 
   client.on_ws_msg([&client](resp_data data) {
     if (data.net_err) {

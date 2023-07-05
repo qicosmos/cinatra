@@ -1,4 +1,5 @@
 #include <async_simple/coro/Collect.h>
+#include <stdint.h>
 
 #include <chrono>
 #include <cmath>
@@ -10,9 +11,14 @@
 
 #include "../include/cinatra.hpp"
 #include "async_simple/Try.h"
-#include "cmdline.h"
+#include "cmdline/cmdline.h"
 #include "config.h"
 #include "util.h"
+
+#ifdef PRESS_TOOL_UNITTESTS
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
+#endif
 
 using namespace cinatra::press_tool;
 
@@ -96,12 +102,6 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
         continue;
       }
 
-      std::cout << "create client " << i + 1 << " successfully";
-      if (conf.read_fix > 0) {
-        client->set_read_fix();
-        std::cout << ", will read fixed len response";
-      }
-      std::cout << "\n";
       break;
     }
 
@@ -110,8 +110,20 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
                 << " failed: " << result.net_err.message() << "\n";
       exit(1);
     }
+
+    if (conf.read_fix > 0) {
+      client->set_read_fix();
+    }
+
     thd_counter.conns.push_back(std::move(client));
   }
+
+  std::cout << "create " << conf.connections << " connections"
+            << " successfully";
+  if (conf.read_fix > 0) {
+    std::cout << ", will read fixed len response";
+  }
+  std::cout << "\n";
 }
 
 async_simple::coro::Lazy<void> press(thread_counter& counter,
@@ -169,7 +181,7 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
     futures.clear();
   }
 }
-
+#ifndef PRESS_TOOL_UNITTESTS
 /*
  * eg: -c 1 -d 15s -t 1 http://localhost/
  */
@@ -250,8 +262,12 @@ int main(int argc, char* argv[]) {
   std::cout << "  " << conf.threads_num << " threads and " << conf.connections
             << " connections\n";
   auto beg = std::chrono::steady_clock::now();
-  async_simple::coro::syncAwait(
-      async_simple::coro::collectAll(std::move(futures)));
+  auto wait_finish =
+      [futures =
+           std::move(futures)]() mutable -> async_simple::coro::Lazy<void> {
+    co_await async_simple::coro::collectAll(std::move(futures));
+  };
+  async_simple::coro::syncAwait(wait_finish());
   if (!has_timeout) {
     timer_ioc.post([&timer] {
       asio::error_code ec;
@@ -300,19 +316,17 @@ int main(int argc, char* argv[]) {
 
   double qps = double(complete) / seconds;
   std::cout << "  Thread Status   Avg   Max   Variation   Stdev\n";
-  std::cout << "    Latency   " << std::setprecision(3)
+  std::cout << "    Latency   " << std::fixed << std::setprecision(3)
             << double(avg_latency) / 1000000 << "ms"
-            << "     " << std::setprecision(3) << double(max_latency) / 1000000
-            << "ms"
-            << "     " << std::fixed << std::setprecision(3) << variation
-            << "ms"
-            << "     " << std::fixed << std::setprecision(3) << stdev << "ms\n";
+            << "     " << double(max_latency) / 1000000 << "ms"
+            << "     " << variation << "ms"
+            << "     " << stdev << "ms\n";
   std::cout << "  " << complete << " requests in " << dur_s << "s"
             << ", " << bytes_to_string(total_resp_size) << " read"
             << ", total: " << total << ", errors: " << errors << "\n";
-  std::cout << "Requests/sec:     " << std::setprecision(8) << qps << "\n";
-  std::cout << "Transfer/sec:     " << std::setprecision(2)
-            << bytes_to_string(total_resp_size / dur_s) << "\n";
+  std::cout << "Requests/sec:     " << qps << "\n";
+  std::cout << "Transfer/sec:     " << bytes_to_string(total_resp_size / dur_s)
+            << "\n";
 
   // stop and clean
   works.clear();
@@ -322,3 +336,61 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
+#endif
+
+#ifdef PRESS_TOOL_UNITTESTS
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+
+std::string last_n(std::string input, int n) {
+  return input.substr(input.size() - n);
+}
+
+TEST_CASE("test bytes_to_string function") {
+  uint64_t bytes = 1023;
+  std::string result = bytes_to_string(bytes);
+  CHECK(result == "1023.000000bytes");
+
+  bytes = 1024;
+  result = bytes_to_string(bytes);
+  CHECK(result == "1024.000000bytes");
+
+  bytes = 1025;
+  result = bytes_to_string(bytes);
+  CHECK(last_n(result, 2) == "KB");
+
+  bytes = 3 * 1024 * 1024;
+  result = bytes_to_string(bytes);
+  CHECK(result == "3.000000MB");
+
+  bytes = (uint64_t)(3 * GB_BYTE);
+  result = bytes_to_string(bytes);
+  CHECK(result == "3.000000GB");
+}
+
+TEST_CASE("test multiple delimiters split function") {
+  std::string headers = "User-Agent: coro_http_press";
+  std::vector<std::string> header_lists;
+  split(headers, " && ", header_lists);
+  CHECK(header_lists.size() == 1);
+  CHECK(header_lists[0] == "User-Agent: coro_http_press");
+
+  header_lists.clear();
+  headers = "User-Agent: coro_http_press && Connection: keep-alive";
+  split(headers, " && ", header_lists);
+  CHECK(header_lists.size() == 2);
+  CHECK(header_lists[0] == "User-Agent: coro_http_press");
+  CHECK(header_lists[1] == "Connection: keep-alive");
+
+  header_lists.clear();
+  headers = "User-Agent: coro_http_press&& Connection: keep-alive";
+  split(headers, " && ", header_lists);
+  CHECK(header_lists.size() != 2);
+  CHECK(header_lists[0] ==
+        "User-Agent: coro_http_press&& Connection: keep-alive");
+}
+// doctest comments
+// 'function' : must be 'attribute' - see issue #182
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
+int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
+DOCTEST_MSVC_SUPPRESS_WARNING_POP
+#endif

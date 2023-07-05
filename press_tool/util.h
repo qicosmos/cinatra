@@ -26,7 +26,9 @@ inline std::string bytes_to_string(uint64_t bytes) {
     suffix = "bytes";
     rt = (double)bytes;
   }
-  return (std::to_string(rt) + suffix);
+  std::stringstream ss;
+  ss << std::fixed << std::setprecision(3) << rt << suffix;
+  return ss.str();
 }
 
 inline std::vector<std::string> &split(std::string &str,

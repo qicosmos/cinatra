@@ -48,8 +48,17 @@ cinatra目前被很多公司在使用，在这里可以看到[谁在用cinatra](
 1. C++20 编译器 (gcc 10.2, clang 13, Visual Studio 2022,或者更高的版本)
 
 ## 使用
-cinatra是header-only的，直接引用头文件既可。
+cinatra是header-only的，引用include头文件目录，并设置如下编译选项：
 
+如果 linux， 设置:
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
+
+如果 g++ 编译，再设置：
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 
 # 快速示例
 
@@ -290,6 +299,39 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 		return 0;
 	}
 
+## 示例8：RESTful服务端路径参数设置
+本代码演示如何使用RESTful路径参数。下面设置了两个RESTful API。第一个API当访问，比如访问这样的url`http://127.0.0.1:8080/numbers/1234/test/5678`时服务器可以获取到1234和5678这两个参数，第一个RESTful API的参数是`(\d+)`是一个正则表达式表明只能参数只能为数字。获取第一个参数的代码是`req.get_matches()[1]`。因为每一个req不同所以每一个匹配到的参数都放在`request`结构体中。
+
+同时还支持任意字符的RESTful API，即示例的第二种RESTful API`"/string/{:id}/test/{:name}"`，要获取到对应的参数使用`req.get_query_value`函数即可，其参数只能为注册的变量(如果不为依然运行但是有报错)，例子中参数名是id和name，要获取id参数调用`req.get_query_value("id")`即可。示例代码运行后，当访问`http://127.0.0.1:8080/string/params_1/test/api_test`时，浏览器会返回`api_test`字符串。
+
+	#include "cinatra.hpp"
+	using namespace cinatra;
+	
+	int main() {
+		int max_thread_num = std::thread::hardware_concurrency();
+		http_server server(max_thread_num);
+		server.listen("0.0.0.0", "8080");
+
+		server.set_http_handler<GET, POST>(
+			R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
+				std::cout << " matches[1] is : " << req.get_matches()[1]
+						<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+
+				res.set_status_and_content(status_type::ok, "hello world");
+			});
+
+		server.set_http_handler<GET, POST>(
+			"/string/{:id}/test/{:name}", [](request &req, response &res) {
+				std::string id = req.get_query_value("id");
+				std::cout << "id value is: " << id << std::endl;
+				std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
+				res.set_status_and_content(status_type::ok, std::string(req.get_query_value("name")));
+			});
+
+		server.run();
+		return 0;
+	}
+
 ## cinatra客户端使用
 ### sync_send get/post message
 
@@ -413,7 +455,7 @@ async_simple::coro::Lazy<void> test_websocket() {
     std::cout << data.resp_body << std::endl;
   });
 
-  bool r = co_await client.async_connect("ws://localhost:8090/ws");
+  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
   if (!r) {
     co_return;
   }
@@ -428,6 +470,51 @@ async_simple::coro::Lazy<void> test_websocket() {
 }
 ```
 
+## 基于cinatra客户端的http/https压测工具使用
+
+cinatra提供了一个高性能的http1.1 压测工具, 它是基于coro_http_client 实现的，内部通过多线程和协程实现了高效的压测，能够在单核或多核cpu上发送大量请求以此来测试服务器性能。
+
+### 基础使用
+
+```shell
+./cinatra_press_tool -t 4 -c 40 -d 30s http://127.0.0.1
+```
+
+上面的命令代表使用4个线程并且保持40个连接打开(协程)对网址`http://127.0.0.1`进行30s的基准测试。
+
+输出如下:
+```
+Running 30s test @ http://127.0.0.1
+  4 threads and 40 connections
+  Thread Status   Avg   Max   Variation   Stdev
+    Latency   4.12ms     8.15ms     3.367ms     1.835ms
+  462716 requests in 30.001s, 592.198250MB read, total: 462716, errors: 0
+Requests/sec:     15423.86666667
+Transfer/sec:     19.739390MB
+```
+
+### 命令行参数选项
+
+```
+ -c, --connections    total number of HTTP connections to keep open with 
+ 					  each thread handling N = connections/threads (int)
+ -d, --duration       duration of the test, e.g. 2s, 2m, 2h (string [=15s])
+ -t, --threads        total number of threads to use (int [=1])
+ -H, --headers        HTTP headers to add to request, e.g. "User-Agent: coro_http_press"
+            		  add multiple http headers in a request need to be separated by ' && '
+            		  e.g. "User-Agent: coro_http_press && x-frame-options: SAMEORIGIN" (string [=])
+ -r, --readfix        read fixed response (int [=0])
+ -?, --help           print this message
+```
+
+这里有两个参数与wrk不同
+
+`-H`参数，它表示添加http头到http请求中，该参数不止可以添加一个http头还可以以` && `符号(4个字符)为分隔符来组装多个http头到http请求。
+比如`-H User-Agent: coro_http_press`就是添加一个http头，而`-H User-Agent: coro_http_press && x-frame-options: SAMEORIGIN`则为添加`User-Agent: coro_http_press`和`x-frame-options: SAMEORIGIN`两个http头到http请求。添加三个以及多个http头的方法和上述方法相同。
+
+
+`-r`参数，它表示是否读固定长度的response，这个参数可以避免频繁的解析response优化性能，有些服务器对于相同的请求返回的长度可能不同，这种情况下不设置这个参数或者将它设置为0。
+
 
 # 性能测试
 ## 测试用例：
@@ -440,6 +527,10 @@ async_simple::coro::Lazy<void> test_websocket() {
 
 websocket的业务函数是会多次进入的，因此写业务逻辑的时候需要注意，推荐按照示例中的方式去做。
 
+# deps
+cinatra depends on asio and async_simple.
+
+press_tool depends on cinatra and cmdline.
 
 # 联系方式
 
