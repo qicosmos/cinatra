@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <string_view>
 
@@ -255,6 +256,11 @@ travel_done:
 }
 
 constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+constexpr std::string_view WDAY[7] = {"Sun", "Mon", "Tue", "Wed",
+                                      "Thu", "Fri", "Sat"};
+constexpr std::string_view YMON[12] = {"Jan", "Feb", "Mar", "Apr",
+                                       "May", "Jun", "Jul", "Aug",
+                                       "Sep", "Oct", "Nov", "Dec"};
 
 template <size_t N>
 inline void to_int(int num, char c, char *p) {
@@ -273,7 +279,7 @@ inline void to_hour(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 inline void to_min(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 inline void to_sec(char *buf, int day, char c) { to_int<2>(day, c, buf); }
 
-template <size_t N, size_t Hour = 8>
+template <size_t Hour = 8, size_t N>
 inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
                                            std::string_view format) {
   static_assert(N >= 20, "wrong buf");
@@ -309,6 +315,18 @@ inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
         to_sec(p, loc_time->tm_sec, c);
         p += 3;
       }
+      else if (format[i] == 'a') {
+        memcpy(p, WDAY[loc_time->tm_wday].data(), 3);
+        p += 3;
+        *p++ = c;
+        *p++ = ' ';
+      }
+      else if (format[i] == 'b') {
+        memcpy(p, YMON[loc_time->tm_mon].data(), 3);
+        p += 3;
+        *p = c;
+        p += 1;
+      }
     }
   }
 
@@ -335,10 +353,22 @@ inline std::string get_local_time_str() {
   return get_local_time_str(std::time(nullptr));
 }
 
-inline std::string get_gmt_time_str(std::time_t t) {
-  struct tm *gmt_time = gmtime(&t);
-  char buff[64] = {0};
-  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S GMT", gmt_time);
-  return buff;
+// template <size_t N>
+// inline std::string_view get_gmt_time_str(char (&buf)[N], std::time_t t) {
+//   static_assert(N >= 29, "wrong buf");
+//   struct tm *gmt_time = gmtime(&t);
+//   size_t n = strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT",
+//   gmt_time); return {buf, n};
+// }
+
+template <size_t N>
+inline std::string_view get_gmt_time_str(char (&buf)[N], std::time_t t) {
+  static_assert(N >= 29, "wrong buf");
+  auto s = get_local_time_str<0>(buf, t, "%a, %d %b %Y %H:%M:%S");
+  size_t size = s.size();
+  memcpy(buf + size, " GMT", 4);
+
+  return {s.data(), size + 4};
 }
+
 }  // namespace cinatra
