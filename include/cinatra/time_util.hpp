@@ -354,7 +354,7 @@ inline std::string get_local_time_str() {
 }
 
 // template <size_t N>
-// inline std::string_view get_gmt_time_str(char (&buf)[N], std::time_t t) {
+// inline std::string_view get_gmt_time_str2(char (&buf)[N], std::time_t t) {
 //   static_assert(N >= 29, "wrong buf");
 //   struct tm *gmt_time = gmtime(&t);
 //   size_t n = strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT",
@@ -369,6 +369,31 @@ inline std::string_view get_gmt_time_str(char (&buf)[N], std::time_t t) {
   memcpy(buf + size, " GMT", 4);
 
   return {s.data(), size + 4};
+}
+
+inline std::string_view get_gmt_time_str(
+    std::chrono::system_clock::time_point t) {
+  static thread_local char buf[32];
+  static thread_local std::chrono::seconds last_sec{};
+  static thread_local size_t last_size{};
+
+  std::chrono::system_clock::duration d = t.time_since_epoch();
+  std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(d);
+  if (last_sec == s) {
+    return {buf, last_size};
+  }
+
+  auto tm = std::chrono::system_clock::to_time_t(t);
+
+  auto str = get_gmt_time_str(buf, tm);
+  last_size = str.size();
+  last_sec = s;
+
+  return str;
+}
+
+inline std::string_view get_gmt_time_str() {
+  return get_gmt_time_str(std::chrono::system_clock::now());
 }
 
 }  // namespace cinatra

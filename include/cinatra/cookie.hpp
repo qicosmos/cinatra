@@ -53,7 +53,8 @@ class cookie {
       }
       if (max_age_ != -1) {
         result.append("; expires=");
-        result.append(get_gmt_time_str(max_age_));
+        result.append(
+            get_gmt_time_str(std::chrono::system_clock::from_time_t(max_age_)));
       }
       if (secure_) {
         result.append("; secure");
