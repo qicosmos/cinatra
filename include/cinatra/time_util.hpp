@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cassert>
 #include <chrono>
+#include <ctime>
 #include <string_view>
 
 #include "define.h"
@@ -252,20 +254,91 @@ travel_done:
   return faster_mktime(year, month, day, hour, min, sec, day_of_week);
 }
 
-inline std::string get_time_str(std::time_t t) {
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
-  return ss.str();
+constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+template <size_t N>
+inline void to_int(int num, char c, char *p) {
+  for (int i = 0; i < N; i++) {
+    p[N - 1 - i] = digits[num % 10];
+    num = num / 10;
+  }
+
+  p[N] = c;
+}
+
+inline void to_year(char *buf, int year, char c) { to_int<4>(year, c, buf); }
+inline void to_month(char *buf, int month, char c) { to_int<2>(month, c, buf); }
+inline void to_day(char *buf, int day, char c) { to_int<2>(day, c, buf); }
+inline void to_hour(char *buf, int day, char c) { to_int<2>(day, c, buf); }
+inline void to_min(char *buf, int day, char c) { to_int<2>(day, c, buf); }
+inline void to_sec(char *buf, int day, char c) { to_int<2>(day, c, buf); }
+
+template <size_t N, size_t Hour = 8>
+inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
+                                           std::string_view format) {
+  static_assert(N >= 20, "wrong buf");
+  struct tm *loc_time = gmtime(&t);
+
+  char *p = buf;
+
+  for (int i = 0; i < format.size(); ++i) {
+    if (format[i] == '%') {
+      char c = format[i + 2];
+      i++;
+      if (format[i] == 'Y') {
+        to_year(p, loc_time->tm_year + 1900, c);
+        p += 5;
+      }
+      else if (format[i] == 'm') {
+        to_month(p, loc_time->tm_mon + 1, c);
+        p += 3;
+      }
+      else if (format[i] == 'd') {
+        to_day(p, loc_time->tm_mday, c);
+        p += 3;
+      }
+      else if (format[i] == 'H') {
+        to_hour(p, loc_time->tm_hour + Hour, c);
+        p += 3;
+      }
+      else if (format[i] == 'M') {
+        to_min(p, loc_time->tm_min, c);
+        p += 3;
+      }
+      else if (format[i] == 'S') {
+        to_sec(p, loc_time->tm_sec, c);
+        p += 3;
+      }
+    }
+  }
+
+  size_t n = p - buf - 1;
+
+  return {buf, n};
+}
+
+// template <size_t N>
+// inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t) {
+//   struct tm *loc_time = localtime(&t);
+//   size_t n = strftime(buf, N, "%Y-%m-%d %H:%M:%S", loc_time);
+//   return {buf, n};
+// }
+
+inline std::string get_local_time_str(std::time_t t) {
+  char buf[32];
+  auto s = get_local_time_str(buf, t, "%Y-%m-%d %H:%M:%S");
+
+  return {s.data(), s.size()};
+}
+
+inline std::string get_local_time_str() {
+  return get_local_time_str(std::time(nullptr));
 }
 
 inline std::string get_gmt_time_str(std::time_t t) {
-  struct tm *GMTime = gmtime(&t);
-  char buff[512] = {0};
-  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S GMT", GMTime);
+  struct tm *gmt_time = gmtime(&t);
+  char buff[64] = {0};
+  strftime(buff, sizeof(buff), "%a, %d %b %Y %H:%M:%S GMT", gmt_time);
   return buff;
-}
-
-inline std::string get_cur_time_str() {
-  return get_time_str(std::time(nullptr));
 }
 }  // namespace cinatra
