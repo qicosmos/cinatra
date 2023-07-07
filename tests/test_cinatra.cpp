@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cinatra.hpp"
+#include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
 using namespace std::chrono_literals;
 

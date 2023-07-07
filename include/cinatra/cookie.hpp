@@ -1,10 +1,12 @@
 #pragma once
-#include "utils.hpp"
 #include <string>
+
+#include "time_util.hpp"
+#include "utils.hpp"
 
 namespace cinatra {
 class cookie {
-public:
+ public:
   cookie() = default;
   cookie(const std::string &name, const std::string &value)
       : name_(name), value_(value) {}
@@ -59,7 +61,8 @@ public:
       if (http_only_) {
         result.append("; HttpOnly");
       }
-    } else {
+    }
+    else {
       // RFC 2109 cookie
       result.append("\"");
       result.append(value_);
@@ -96,7 +99,7 @@ public:
     return result;
   }
 
-private:
+ private:
   int version_ = 0;
   std::string name_ = "";
   std::string value_ = "";
@@ -108,4 +111,4 @@ private:
   std::time_t max_age_ = -1;
   bool http_only_ = false;
 };
-} // namespace cinatra
+}  // namespace cinatra
