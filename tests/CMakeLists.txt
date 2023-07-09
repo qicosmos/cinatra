@@ -35,7 +35,6 @@ include_directories(${cinatra_SOURCE_DIR}/include)
 
 add_executable(test_corofile
         test_corofile.cpp
-        # main.cpp
         )
 
 if(ENABLE_FILE_IO_URING)
@@ -47,6 +46,11 @@ else()
 endif()
 
 add_test(NAME test_corofile COMMAND test_corofile)
+
+add_executable(test_time_util
+        test_time_util.cpp
+        )
+add_test(NAME test_time_util COMMAND test_time_util)
 
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
