@@ -289,7 +289,7 @@ inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
 
   for (int i = 0; i < format.size(); ++i) {
     if (format[i] == '%') {
-      char c = format[i + 2];
+      char c = i + 2 < format.size() ? format[i + 2] : '0';
       i++;
       if (format[i] == 'Y') {
         to_year(p, loc_time->tm_year + 1900, c);
