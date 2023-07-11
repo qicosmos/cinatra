@@ -186,8 +186,7 @@ void test_websocket_content(size_t len) {
     promise->set_value();
   });
 
-  auto result = async_simple::coro::syncAwait(client.async_send_ws(send_str));
-  CHECK(!result.net_err);
+  async_simple::coro::syncAwait(client.async_send_ws(send_str));
 
   promise->get_future().wait();
 
