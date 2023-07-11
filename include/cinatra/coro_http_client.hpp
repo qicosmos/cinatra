@@ -1,5 +1,4 @@
 #pragma once
-#include <asio/streambuf.hpp>
 #include <atomic>
 #include <cassert>
 #include <charconv>
@@ -14,6 +13,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "asio/dispatch.hpp"
+#include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
@@ -234,10 +235,9 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path,
-                              const std::string &cert_file,
-                              int verify_mode = asio::ssl::verify_none,
-                              const std::string &domain = "localhost") {
+  bool init_ssl(const std::string &base_path, const std::string &cert_file,
+                int verify_mode = asio::ssl::verify_none,
+                const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
