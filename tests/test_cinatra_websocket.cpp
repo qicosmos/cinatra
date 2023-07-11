@@ -172,21 +172,17 @@ void test_websocket_content(size_t len) {
   std::weak_ptr<std::promise<void>> weak = promise;
 
   std::string send_str(len, 'a');
-  client.on_ws_msg([send_str, weak](resp_data data) {
+  client.on_ws_msg([send_str, promise](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      if (auto p = weak.lock(); p) {
-        p->set_value();
-      }
+      promise->set_value();
       return;
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == send_str.size());
     CHECK(data.resp_body == send_str);
-    if (auto p = weak.lock(); p) {
-      p->set_value();
-    }
+    promise->set_value();
   });
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws(send_str));
