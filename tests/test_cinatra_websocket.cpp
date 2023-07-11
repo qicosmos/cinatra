@@ -171,8 +171,8 @@ void test_websocket_content(size_t len) {
   auto promise = std::make_shared<std::promise<void>>();
   std::weak_ptr<std::promise<void>> weak = promise;
 
-  std::string str(len, '\0');
-  client.on_ws_msg([&str, weak](resp_data data) {
+  std::string send_str(len, 'a');
+  client.on_ws_msg([send_str, weak](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
       if (auto p = weak.lock(); p) {
@@ -182,14 +182,14 @@ void test_websocket_content(size_t len) {
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    REQUIRE(data.resp_body.size() == str.size());
-    CHECK(data.resp_body == str);
+    REQUIRE(data.resp_body.size() == send_str.size());
+    CHECK(data.resp_body == send_str);
     if (auto p = weak.lock(); p) {
       p->set_value();
     }
   });
 
-  auto result = async_simple::coro::syncAwait(client.async_send_ws(str));
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(send_str));
   CHECK(!result.net_err);
 
   promise->get_future().wait();
