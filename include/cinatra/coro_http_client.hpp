@@ -229,7 +229,7 @@ class coro_http_client {
     if (socket_->has_closed_)
       return;
 
-    asio::post(executor_wrapper_.get_asio_executor(), [socket = socket_] {
+    asio::dispatch(executor_wrapper_.get_asio_executor(), [socket = socket_] {
       close_socket(*socket);
     });
   }
