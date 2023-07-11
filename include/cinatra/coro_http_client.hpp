@@ -1,5 +1,4 @@
 #pragma once
-#include <asio/dispatch.hpp>
 #include <asio/streambuf.hpp>
 #include <atomic>
 #include <cassert>
@@ -229,7 +228,7 @@ class coro_http_client {
     if (socket_->has_closed_)
       return;
 
-    asio::dispatch(executor_wrapper_.get_asio_executor(), [socket = socket_] {
+    asio::post(executor_wrapper_.get_asio_executor(), [socket = socket_] {
       close_socket(*socket);
     });
   }
