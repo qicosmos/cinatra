@@ -170,7 +170,6 @@ void test_websocket_content(size_t len) {
       client.async_ws_connect("ws://localhost:8090")));
 
   auto promise = std::make_shared<std::promise<void>>();
-  std::weak_ptr<std::promise<void>> weak = promise;
 
   std::string send_str(len, 'a');
   client.on_ws_msg([send_str, promise](resp_data data) {
@@ -222,13 +221,13 @@ TEST_CASE("test send after server stop") {
   });
   f.wait();
 
-  coro_http_client client{};
+  auto client = std::make_shared<coro_http_client>();
   REQUIRE(async_simple::coro::syncAwait(
-      client.async_ws_connect("ws://localhost:8090")));
+      client->async_ws_connect("ws://localhost:8090")));
 
-  client.on_ws_msg([&client](resp_data data) {
+  client->on_ws_msg([client](resp_data data) {
     if (data.net_err) {
-      client.async_close();
+      client->async_close();
     }
   });
 
@@ -236,7 +235,7 @@ TEST_CASE("test send after server stop") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
-  auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
+  auto result = async_simple::coro::syncAwait(client->async_send_ws(""));
   CHECK(result.net_err);
 
   server_thread.join();
