@@ -64,14 +64,16 @@ TEST_CASE("test wss client") {
 }
 #endif
 
-async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
+async_simple::coro::Lazy<void> test_websocket(coro_http_client &client,
+                                              std::promise<void> &promise) {
   client.on_ws_close([](std::string_view reason) {
     std::cout << "web socket close " << reason << std::endl;
     CHECK(reason == "ws close");
   });
-  client.on_ws_msg([](resp_data data) {
+  client.on_ws_msg([&](resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
+      promise.set_value();
       return;
     }
 
@@ -134,7 +136,12 @@ TEST_CASE("test websocket") {
 
   coro_http_client client;
   client.set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
-  async_simple::coro::syncAwait(test_websocket(client));
+
+  std::promise<void> promise;
+  async_simple::coro::syncAwait(test_websocket(client, promise));
+
+  client.async_close();
+  promise.get_future().wait();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
@@ -225,10 +232,12 @@ TEST_CASE("test send after server stop") {
   REQUIRE(async_simple::coro::syncAwait(
       client->async_ws_connect("ws://localhost:8090")));
 
-  client->on_ws_msg([client](resp_data data) {
+  std::promise<void> promise;
+  client->on_ws_msg([&client, &promise](resp_data data) {
     if (data.net_err) {
       client->async_close();
     }
+    promise.set_value();
   });
 
   server.stop();
@@ -239,4 +248,5 @@ TEST_CASE("test send after server stop") {
   CHECK(result.net_err);
 
   server_thread.join();
+  promise.get_future().wait();
 }

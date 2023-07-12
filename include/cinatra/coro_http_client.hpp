@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "asio/dispatch.hpp"
+#include "asio/error.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
@@ -1537,6 +1538,11 @@ class coro_http_client {
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
         async_close();
+
+        data.net_err = asio::error::eof;
+        data.status = 404;
+        if (on_ws_msg_)
+          on_ws_msg_(data);
         co_return;
       }
       if (on_ws_msg_)
