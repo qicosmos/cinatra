@@ -176,27 +176,37 @@ void test_websocket_content(size_t len) {
   REQUIRE(async_simple::coro::syncAwait(
       client.async_ws_connect("ws://localhost:8090")));
 
-  auto promise = std::make_shared<std::promise<void>>();
+  std::pair<std::promise<void>, bool> msg_pair_promise{};
 
   std::string send_str(len, 'a');
-  client.on_ws_msg([send_str, promise](resp_data data) {
+
+  std::promise<void> quit_promise{};
+
+  client.on_ws_msg([&, send_str](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      promise->set_value();
+      quit_promise.set_value();
+      if (!msg_pair_promise.second) {
+        msg_pair_promise.first.set_value();
+      }
+
       return;
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     REQUIRE(data.resp_body.size() == send_str.size());
     CHECK(data.resp_body == send_str);
-    promise->set_value();
+    msg_pair_promise.first.set_value();
+    msg_pair_promise.second = true;
   });
 
   async_simple::coro::syncAwait(client.async_send_ws(send_str));
+  msg_pair_promise.first.get_future().wait();
 
   server.stop();
   server_thread.join();
-  promise->get_future().wait();
+
+  quit_promise.get_future().wait();
 }
 
 TEST_CASE("test websocket content lt 126") {

@@ -1492,6 +1492,7 @@ class coro_http_client {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
+        close_socket(*socket_);
         if (on_ws_msg_)
           on_ws_msg_(data);
         co_return;
@@ -1515,6 +1516,7 @@ class coro_http_client {
             ec) {
           data.net_err = ec;
           data.status = 404;
+          close_socket(*socket_);
           if (on_ws_msg_)
             on_ws_msg_(data);
           co_return;
