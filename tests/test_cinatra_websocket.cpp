@@ -194,10 +194,9 @@ void test_websocket_content(size_t len) {
 
   async_simple::coro::syncAwait(client.async_send_ws(send_str));
 
-  promise->get_future().wait();
-
   server.stop();
   server_thread.join();
+  promise->get_future().wait();
 }
 
 TEST_CASE("test websocket content lt 126") {
