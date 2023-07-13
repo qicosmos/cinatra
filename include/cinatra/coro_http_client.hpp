@@ -1,5 +1,4 @@
 #pragma once
-#include <asio/streambuf.hpp>
 #include <atomic>
 #include <cassert>
 #include <charconv>
@@ -15,6 +14,8 @@
 #include <utility>
 
 #include "asio/dispatch.hpp"
+#include "asio/error.hpp"
+#include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
@@ -25,6 +26,7 @@
 #include "websocket.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 
 namespace coro_io {
 template <typename T, typename U>
@@ -180,28 +182,14 @@ class coro_http_client {
     std::string domain;
 #endif
   };
-  coro_http_client()
-      : io_ctx_(std::make_unique<asio::io_context>()),
-        socket_(std::make_shared<socket_t>(io_ctx_->get_executor())),
-        executor_wrapper_(io_ctx_->get_executor()),
-        timer_(&executor_wrapper_) {
-    std::promise<void> promise;
-    io_thd_ = std::thread([this, &promise] {
-      work_ = std::make_unique<asio::io_context::work>(*io_ctx_);
-      executor_wrapper_.schedule([&] {
-        promise.set_value();
-      });
-      io_ctx_->run();
-    });
-    promise.get_future().wait();
-  }
 
   coro_http_client(asio::io_context::executor_type executor)
       : socket_(std::make_shared<socket_t>(executor)),
         executor_wrapper_(executor),
         timer_(&executor_wrapper_) {}
 
-  coro_http_client(coro_io::ExecutorWrapper<> *executor)
+  coro_http_client(
+      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor())
       : coro_http_client(executor->get_asio_executor()) {}
 
   bool init_config(const config &conf) {
@@ -236,22 +224,7 @@ class coro_http_client {
     return true;
   }
 
-  ~coro_http_client() {
-    async_close();
-    if (io_thd_.joinable()) {
-      work_ = nullptr;
-      if (io_thd_.get_id() == std::this_thread::get_id()) {
-        std::thread thrd{[io_ctx = std::move(io_ctx_),
-                          io_thd = std::move(io_thd_)]() mutable {
-          io_thd.join();
-        }};
-        thrd.detach();
-      }
-      else {
-        io_thd_.join();
-      }
-    }
-  }
+  ~coro_http_client() { async_close(); }
 
   void async_close() {
     if (socket_->has_closed_)
@@ -263,10 +236,9 @@ class coro_http_client {
   }
 
 #ifdef CINATRA_ENABLE_SSL
-  [[nodiscard]] bool init_ssl(const std::string &base_path,
-                              const std::string &cert_file,
-                              int verify_mode = asio::ssl::verify_none,
-                              const std::string &domain = "localhost") {
+  bool init_ssl(const std::string &base_path, const std::string &cert_file,
+                int verify_mode = asio::ssl::verify_none,
+                const std::string &domain = "localhost") {
     try {
       ssl_init_ret_ = false;
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
@@ -1520,6 +1492,7 @@ class coro_http_client {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
+        close_socket(*socket_);
         if (on_ws_msg_)
           on_ws_msg_(data);
         co_return;
@@ -1543,6 +1516,7 @@ class coro_http_client {
             ec) {
           data.net_err = ec;
           data.status = 404;
+          close_socket(*socket_);
           if (on_ws_msg_)
             on_ws_msg_(data);
           co_return;
@@ -1566,6 +1540,11 @@ class coro_http_client {
           on_ws_close_(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
         async_close();
+
+        data.net_err = asio::error::eof;
+        data.status = 404;
+        if (on_ws_msg_)
+          on_ws_msg_(data);
         co_return;
       }
       if (on_ws_msg_)
@@ -1656,12 +1635,9 @@ class coro_http_client {
     return has_http_scheme;
   }
 
-  std::unique_ptr<asio::io_context> io_ctx_;
-
   coro_io::ExecutorWrapper<> executor_wrapper_;
   std::unique_ptr<asio::io_context::work> work_;
   coro_io::period_timer timer_;
-  std::thread io_thd_;
   std::shared_ptr<socket_t> socket_;
   asio::streambuf read_buf_;
   simple_buffer body_{};

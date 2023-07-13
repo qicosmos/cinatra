@@ -458,8 +458,7 @@ TEST_CASE("test coro_http_client chunked download") {
   std::filesystem::remove(filename, ec);
   auto r = client.download(uri, filename);
   if (!r.net_err)
-    ;
-  CHECK(r.status >= 200);
+    CHECK(r.status >= 200);
 }
 
 TEST_CASE("test coro_http_client get") {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <async_simple/Executor.h>
+#include <async_simple/coro/Lazy.h>
 
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
@@ -22,11 +23,10 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
-
-#include "async_simple/coro/Lazy.h"
 
 namespace coro_io {
 
@@ -107,6 +107,12 @@ class io_context_pool {
   }
 
   void run() {
+    bool has_run_or_stop = false;
+    bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+    if (!ok) {
+      return;
+    }
+
     std::vector<std::shared_ptr<std::thread>> threads;
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
@@ -123,15 +129,24 @@ class io_context_pool {
   }
 
   void stop() {
-    work_.clear();
-    promise_.get_future().wait();
-    return;
+    std::call_once(flag_, [this] {
+      bool has_run_or_stop = false;
+      bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+
+      work_.clear();
+
+      if (ok) {
+        return;
+      }
+
+      promise_.get_future().wait();
+    });
   }
 
-  // ~io_context_pool() {
-  //   if (!has_stop())
-  //     stop();
-  // }
+  ~io_context_pool() {
+    if (!has_stop())
+      stop();
+  }
 
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
 
@@ -157,6 +172,8 @@ class io_context_pool {
   std::vector<work_ptr> work_;
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
+  std::atomic<bool> has_run_or_stop_ = false;
+  std::once_flag flag_;
 };
 
 class multithread_context_pool {
