@@ -33,6 +33,9 @@ class ScopedTimer {
 };
 
 void test_local_time_performance() {
+  auto local = cinatra::get_local_time_str();
+  std::cout << local << "\n";
+
   int Count = 100000;
   std::string_view format = "%Y-%m-%d %H:%M:%S";
   char buf[32];
@@ -76,6 +79,7 @@ void test_gmt_time_performance() {
 }
 
 TEST_CASE("test get time string") {
+  test_local_time_performance();
   test_gmt_time_performance();
 
   auto s = cinatra::get_local_time_str();

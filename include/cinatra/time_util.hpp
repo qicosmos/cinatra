@@ -342,15 +342,29 @@ inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
 //   return {buf, n};
 // }
 
-inline std::string get_local_time_str(std::time_t t) {
-  char buf[32];
-  auto s = get_local_time_str(buf, t, "%Y-%m-%d %H:%M:%S");
+inline std::string_view get_local_time_str(
+    std::chrono::system_clock::time_point t) {
+  static thread_local char buf[32];
+  static thread_local std::chrono::seconds last_sec{};
+  static thread_local size_t last_size{};
 
-  return {s.data(), s.size()};
+  std::chrono::system_clock::duration d = t.time_since_epoch();
+  std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(d);
+  if (last_sec == s) {
+    return {buf, last_size};
+  }
+
+  auto tm = std::chrono::system_clock::to_time_t(t);
+
+  auto str = get_local_time_str(buf, tm, "%Y-%m-%d %H:%M:%S");
+  last_size = str.size();
+  last_sec = s;
+
+  return str;
 }
 
-inline std::string get_local_time_str() {
-  return get_local_time_str(std::time(nullptr));
+inline std::string_view get_local_time_str() {
+  return get_local_time_str(std::chrono::system_clock::now());
 }
 
 // template <size_t N>
