@@ -170,6 +170,7 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     client.init_config(conf);
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+    std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
     bool ret = (r.net_err == std::errc::timed_out ||
                 r.net_err == asio::error::operation_aborted);
     CHECK(ret);
