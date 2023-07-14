@@ -674,8 +674,11 @@ class request {
       throw std::invalid_argument("not support the value type");
     }
   }
-
+#ifndef CINATRA_AARCH64
   std::string_view get_query_value(std::string_view key) {
+#elif CINATRA_AARCH64
+  std::string get_query_value(std::string_view key) {
+#endif
     if (restful_params_.empty()) {
       auto url = get_url();
       url = url.length() > 1 && url.back() == '/'
@@ -692,22 +695,43 @@ class request {
         if (code_utils::is_url_encode(itf->second)) {
           auto ret = utf8_character_params_.emplace(
               map_key, code_utils::get_string_by_urldecode(itf->second));
+#if CINATRA_AARCH64
+          return std::string(ret.first->second.data(),
+                             ret.first->second.size());
+#else
           return std::string_view(ret.first->second.data(),
                                   ret.first->second.size());
+#endif
         }
+#if CINATRA_AARCH64
+        return std::string(itf->second);
+#else
         return itf->second;
+#endif
       }
       if (code_utils::is_url_encode(it->second)) {
         auto ret = utf8_character_params_.emplace(
             map_key, code_utils::get_string_by_urldecode(it->second));
+#if CINATRA_AARCH64
+        return std::string(ret.first->second.data(), ret.first->second.size());
+#else
         return std::string_view(ret.first->second.data(),
                                 ret.first->second.size());
+#endif
       }
+#if CINATRA_AARCH64
+      return std::string(it->second);
+#else
       return it->second;
+#endif
     }
     else {
       const std::string &result(matches_[restful_params_.at(std::string(key))]);
+#if CINATRA_AARCH64
+      return std::string(result.data(), result.size());
+#else
       return std::string_view(result.data(), result.size());
+#endif
     }
   }
 

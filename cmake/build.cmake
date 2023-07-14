@@ -24,6 +24,11 @@ else ()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -pthread -std=c++20")
 endif ()
 
+if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+    message(STATUS "Build in aarch64")
+    add_definitions(-DCINATRA_AARCH64)
+endif ()
+
 # --------------------- Gcc
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
