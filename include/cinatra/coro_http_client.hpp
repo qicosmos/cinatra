@@ -854,10 +854,11 @@ class coro_http_client {
 
     do {
       uri_t u;
+      std::string append_uri;
 
       if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
         bool no_schema = !has_schema(uri);
-        std::string append_uri;
+
         if (no_schema) {
           append_uri.append("http://").append(uri);
         }
