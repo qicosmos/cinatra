@@ -150,6 +150,19 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test pass path not entire uri") {
+  coro_http_client client{};
+  auto r =
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  CHECK(r.status >= 200);
+
+  r = async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  CHECK(r.status >= 200);
+
+  r = async_simple::coro::syncAwait(client.async_get("/"));
+  CHECK(r.status >= 200);
+}
+
 TEST_CASE("test coro_http_client connect/request timeout") {
   {
     coro_http_client client{};

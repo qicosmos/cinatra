@@ -853,17 +853,20 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      bool no_schema = !has_schema(uri);
-      std::string append_uri;
-      if (no_schema) {
-        append_uri.append("http://").append(uri);
-      }
-      auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
-      if (!ok) {
-        break;
-      }
+      uri_t u;
 
-      if (socket_->has_closed_) {
+      if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
+        bool no_schema = !has_schema(uri);
+        std::string append_uri;
+        if (no_schema) {
+          append_uri.append("http://").append(uri);
+        }
+        bool ok = false;
+        std::tie(ok, u) = handle_uri(data, no_schema ? append_uri : uri);
+        if (!ok) {
+          break;
+        }
+
         auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
@@ -882,6 +885,9 @@ class coro_http_client {
         if (ec = co_await wait_timer(std::move(conn_future)); ec) {
           break;
         }
+      }
+      else {
+        u.path = uri;
       }
 
       std::vector<asio::const_buffer> vec;
