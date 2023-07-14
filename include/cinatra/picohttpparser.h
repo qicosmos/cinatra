@@ -29,14 +29,6 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#ifdef __SSE4_2__
-#ifdef _MSC_VER
-#include <nmmintrin.h>
-#else
-#include <x86intrin.h>
-#endif
-#endif
-
 #include <sys/types.h>
 
 #ifdef _MSC_VER
@@ -116,45 +108,46 @@ struct phr_chunked_decoder {
 
 #define IS_PRINTABLE_ASCII(c) ((unsigned char)(c)-040u < 0137u)
 
-#define CHECK_EOF()                                                            \
-  if (buf == buf_end) {                                                        \
-    *ret = -2;                                                                 \
-    return NULL;                                                               \
+#define CHECK_EOF()     \
+  if (buf == buf_end) { \
+    *ret = -2;          \
+    return NULL;        \
   }
 
-#define EXPECT_CHAR_NO_CHECK(ch)                                               \
-  if (*buf++ != ch) {                                                          \
-    *ret = -1;                                                                 \
-    return NULL;                                                               \
+#define EXPECT_CHAR_NO_CHECK(ch) \
+  if (*buf++ != ch) {            \
+    *ret = -1;                   \
+    return NULL;                 \
   }
 
-#define EXPECT_CHAR(ch)                                                        \
-  CHECK_EOF();                                                                 \
+#define EXPECT_CHAR(ch) \
+  CHECK_EOF();          \
   EXPECT_CHAR_NO_CHECK(ch);
 
-#define ADVANCE_TOKEN(tok, toklen)                                             \
-  do {                                                                         \
-    const char *tok_start = buf;                                               \
-    static const char ALIGNED(16) ranges2[] = "\000\040\177\177";              \
-    int found2;                                                                \
-    buf = findchar_fast(buf, buf_end, ranges2, sizeof(ranges2) - 1, &found2);  \
-    if (!found2) {                                                             \
-      CHECK_EOF();                                                             \
-    }                                                                          \
-    while (1) {                                                                \
-      if (*buf == ' ') {                                                       \
-        break;                                                                 \
-      } else if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {                        \
-        if ((unsigned char)*buf < '\040' || *buf == '\177') {                  \
-          *ret = -1;                                                           \
-          return NULL;                                                         \
-        }                                                                      \
-      }                                                                        \
-      ++buf;                                                                   \
-      CHECK_EOF();                                                             \
-    }                                                                          \
-    tok = tok_start;                                                           \
-    toklen = buf - tok_start;                                                  \
+#define ADVANCE_TOKEN(tok, toklen)                                            \
+  do {                                                                        \
+    const char *tok_start = buf;                                              \
+    static const char ALIGNED(16) ranges2[] = "\000\040\177\177";             \
+    int found2;                                                               \
+    buf = findchar_fast(buf, buf_end, ranges2, sizeof(ranges2) - 1, &found2); \
+    if (!found2) {                                                            \
+      CHECK_EOF();                                                            \
+    }                                                                         \
+    while (1) {                                                               \
+      if (*buf == ' ') {                                                      \
+        break;                                                                \
+      }                                                                       \
+      else if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {                         \
+        if ((unsigned char)*buf < '\040' || *buf == '\177') {                 \
+          *ret = -1;                                                          \
+          return NULL;                                                        \
+        }                                                                     \
+      }                                                                       \
+      ++buf;                                                                  \
+      CHECK_EOF();                                                            \
+    }                                                                         \
+    tok = tok_start;                                                          \
+    toklen = buf - tok_start;                                                 \
   } while (0)
 
 static const char *token_char_map =
@@ -171,31 +164,10 @@ static const char *findchar_fast(const char *buf, const char *buf_end,
                                  const char *ranges, int ranges_size,
                                  int *found) {
   *found = 0;
-#if __SSE4_2__
-  if (likely(buf_end - buf >= 16)) {
-    __m128i ranges16 = _mm_loadu_si128((const __m128i *)ranges);
-
-    size_t left = (buf_end - buf) & ~15;
-    do {
-      __m128i b16 = _mm_loadu_si128((const __m128i *)buf);
-      int r = _mm_cmpestri(ranges16, ranges_size, b16, 16,
-                           _SIDD_LEAST_SIGNIFICANT | _SIDD_CMP_RANGES |
-                               _SIDD_UBYTE_OPS);
-      if (unlikely(r != 16)) {
-        buf += r;
-        *found = 1;
-        break;
-      }
-      buf += 16;
-      left -= 16;
-    } while (likely(left != 0));
-  }
-#else
   /* suppress unused parameter warning */
   (void)buf_end;
   (void)ranges;
   (void)ranges_size;
-#endif
   return buf;
 }
 
@@ -204,27 +176,14 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
                                     int *ret) {
   const char *token_start = buf;
 
-#ifdef __SSE4_2__
-  static const char ranges1[] = "\0\010"
-                                /* allow HT */
-                                "\012\037"
-                                /* allow SP and up to but not including DEL */
-                                "\177\177"
-      /* allow chars w. MSB set */
-      ;
-  int found;
-  buf = findchar_fast(buf, buf_end, ranges1, sizeof(ranges1) - 1, &found);
-  if (found)
-    goto FOUND_CTL;
-#else
   /* find non-printable char within the next 8 bytes, this is the hottest code;
    * manually inlined */
   while (likely(buf_end - buf >= 8)) {
-#define DOIT()                                                                 \
-  do {                                                                         \
-    if (unlikely(!IS_PRINTABLE_ASCII(*buf)))                                   \
-      goto NonPrintable;                                                       \
-    ++buf;                                                                     \
+#define DOIT()                               \
+  do {                                       \
+    if (unlikely(!IS_PRINTABLE_ASCII(*buf))) \
+      goto NonPrintable;                     \
+    ++buf;                                   \
   } while (0)
     DOIT();
     DOIT();
@@ -243,7 +202,7 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
     }
     ++buf;
   }
-#endif
+
   for (;; ++buf) {
     CHECK_EOF();
     if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {
@@ -258,10 +217,12 @@ FOUND_CTL:
     ++buf;
     EXPECT_CHAR('\012');
     *token_len = buf - 2 - token_start;
-  } else if (*buf == '\012') {
+  }
+  else if (*buf == '\012') {
     *token_len = buf - token_start;
     ++buf;
-  } else {
+  }
+  else {
     *ret = -1;
     return NULL;
   }
@@ -282,10 +243,12 @@ static const char *is_complete(const char *buf, const char *buf_end,
       CHECK_EOF();
       EXPECT_CHAR('\012');
       ++ret_cnt;
-    } else if (*buf == '\012') {
+    }
+    else if (*buf == '\012') {
       ++buf;
       ++ret_cnt;
-    } else {
+    }
+    else {
       ++buf;
       ret_cnt = 0;
     }
@@ -298,23 +261,23 @@ static const char *is_complete(const char *buf, const char *buf_end,
   return NULL;
 }
 
-#define PARSE_INT(valp_, mul_)                                                 \
-  if (*buf < '0' || '9' < *buf) {                                              \
-    buf++;                                                                     \
-    *ret = -1;                                                                 \
-    return NULL;                                                               \
-  }                                                                            \
+#define PARSE_INT(valp_, mul_)    \
+  if (*buf < '0' || '9' < *buf) { \
+    buf++;                        \
+    *ret = -1;                    \
+    return NULL;                  \
+  }                               \
   *(valp_) = (mul_) * (*buf++ - '0');
 
-#define PARSE_INT_3(valp_)                                                     \
-  do {                                                                         \
-    int res_ = 0;                                                              \
-    PARSE_INT(&res_, 100)                                                      \
-    *valp_ = res_;                                                             \
-    PARSE_INT(&res_, 10)                                                       \
-    *valp_ += res_;                                                            \
-    PARSE_INT(&res_, 1)                                                        \
-    *valp_ += res_;                                                            \
+#define PARSE_INT_3(valp_) \
+  do {                     \
+    int res_ = 0;          \
+    PARSE_INT(&res_, 100)  \
+    *valp_ = res_;         \
+    PARSE_INT(&res_, 10)   \
+    *valp_ += res_;        \
+    PARSE_INT(&res_, 1)    \
+    *valp_ += res_;        \
   } while (0)
 
 /* returned pointer is always within [buf, buf_end), or null */
@@ -346,7 +309,8 @@ static const char *parse_headers(const char *buf, const char *buf_end,
       ++buf;
       EXPECT_CHAR('\012');
       break;
-    } else if (*buf == '\012') {
+    }
+    else if (*buf == '\012') {
       ++buf;
       break;
     }
@@ -375,7 +339,8 @@ static const char *parse_headers(const char *buf, const char *buf_end,
       while (1) {
         if (*buf == ':') {
           break;
-        } else if (!token_char_map[(unsigned char)*buf]) {
+        }
+        else if (!token_char_map[(unsigned char)*buf]) {
           *ret = -1;
           return NULL;
         }
@@ -394,7 +359,8 @@ static const char *parse_headers(const char *buf, const char *buf_end,
           break;
         }
       }
-    } else {
+    }
+    else {
       headers[*num_headers].name = NULL;
       headers[*num_headers].name_len = 0;
     }
@@ -418,7 +384,8 @@ static const char *parse_request(const char *buf, const char *buf_end,
   if (*buf == '\015') {
     ++buf;
     EXPECT_CHAR('\012');
-  } else if (*buf == '\012') {
+  }
+  else if (*buf == '\012') {
     ++buf;
   }
 
@@ -433,9 +400,11 @@ static const char *parse_request(const char *buf, const char *buf_end,
   if (*buf == '\015') {
     ++buf;
     EXPECT_CHAR('\012');
-  } else if (*buf == '\012') {
+  }
+  else if (*buf == '\012') {
     ++buf;
-  } else {
+  }
+  else {
     *ret = -1;
     return NULL;
   }
@@ -573,11 +542,14 @@ enum {
 static int decode_hex(int ch) {
   if ('0' <= ch && ch <= '9') {
     return ch - '0';
-  } else if ('A' <= ch && ch <= 'F') {
+  }
+  else if ('A' <= ch && ch <= 'F') {
     return ch - 'A' + 0xa;
-  } else if ('a' <= ch && ch <= 'f') {
+  }
+  else if ('a' <= ch && ch <= 'f') {
     return ch - 'a' + 0xa;
-  } else {
+  }
+  else {
     return -1;
   }
 }
@@ -589,102 +561,103 @@ inline ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder,
 
   while (1) {
     switch (decoder->_state) {
-    case CHUNKED_IN_CHUNK_SIZE:
-      for (;; ++src) {
-        int v;
-        if (src == bufsz)
-          goto Exit;
-        if ((v = decode_hex(buf[src])) == -1) {
-          if (decoder->_hex_count == 0) {
+      case CHUNKED_IN_CHUNK_SIZE:
+        for (;; ++src) {
+          int v;
+          if (src == bufsz)
+            goto Exit;
+          if ((v = decode_hex(buf[src])) == -1) {
+            if (decoder->_hex_count == 0) {
+              ret = -1;
+              goto Exit;
+            }
+            break;
+          }
+          if (decoder->_hex_count == sizeof(size_t) * 2) {
             ret = -1;
             goto Exit;
           }
-          break;
+          decoder->bytes_left_in_chunk = decoder->bytes_left_in_chunk * 16 + v;
+          ++decoder->_hex_count;
         }
-        if (decoder->_hex_count == sizeof(size_t) * 2) {
+        decoder->_hex_count = 0;
+        decoder->_state = CHUNKED_IN_CHUNK_EXT;
+        /* fallthru */
+      case CHUNKED_IN_CHUNK_EXT:
+        /* RFC 7230 A.2 "Line folding in chunk extensions is disallowed" */
+        for (;; ++src) {
+          if (src == bufsz)
+            goto Exit;
+          if (buf[src] == '\012')
+            break;
+        }
+        ++src;
+        if (decoder->bytes_left_in_chunk == 0) {
+          if (decoder->consume_trailer) {
+            decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
+            break;
+          }
+          else {
+            goto Complete;
+          }
+        }
+        decoder->_state = CHUNKED_IN_CHUNK_DATA;
+        /* fallthru */
+      case CHUNKED_IN_CHUNK_DATA: {
+        size_t avail = bufsz - src;
+        if (avail < decoder->bytes_left_in_chunk) {
+          if (dst != src)
+            memmove(buf + dst, buf + src, avail);
+          src += avail;
+          dst += avail;
+          decoder->bytes_left_in_chunk -= avail;
+          goto Exit;
+        }
+        if (dst != src)
+          memmove(buf + dst, buf + src, decoder->bytes_left_in_chunk);
+        src += decoder->bytes_left_in_chunk;
+        dst += decoder->bytes_left_in_chunk;
+        decoder->bytes_left_in_chunk = 0;
+        decoder->_state = CHUNKED_IN_CHUNK_CRLF;
+      }
+        /* fallthru */
+      case CHUNKED_IN_CHUNK_CRLF:
+        for (;; ++src) {
+          if (src == bufsz)
+            goto Exit;
+          if (buf[src] != '\015')
+            break;
+        }
+        if (buf[src] != '\012') {
           ret = -1;
           goto Exit;
         }
-        decoder->bytes_left_in_chunk = decoder->bytes_left_in_chunk * 16 + v;
-        ++decoder->_hex_count;
-      }
-      decoder->_hex_count = 0;
-      decoder->_state = CHUNKED_IN_CHUNK_EXT;
-      /* fallthru */
-    case CHUNKED_IN_CHUNK_EXT:
-      /* RFC 7230 A.2 "Line folding in chunk extensions is disallowed" */
-      for (;; ++src) {
-        if (src == bufsz)
-          goto Exit;
-        if (buf[src] == '\012')
-          break;
-      }
-      ++src;
-      if (decoder->bytes_left_in_chunk == 0) {
-        if (decoder->consume_trailer) {
-          decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
-          break;
-        } else {
-          goto Complete;
+        ++src;
+        decoder->_state = CHUNKED_IN_CHUNK_SIZE;
+        break;
+      case CHUNKED_IN_TRAILERS_LINE_HEAD:
+        for (;; ++src) {
+          if (src == bufsz)
+            goto Exit;
+          if (buf[src] != '\015')
+            break;
         }
-      }
-      decoder->_state = CHUNKED_IN_CHUNK_DATA;
-      /* fallthru */
-    case CHUNKED_IN_CHUNK_DATA: {
-      size_t avail = bufsz - src;
-      if (avail < decoder->bytes_left_in_chunk) {
-        if (dst != src)
-          memmove(buf + dst, buf + src, avail);
-        src += avail;
-        dst += avail;
-        decoder->bytes_left_in_chunk -= avail;
-        goto Exit;
-      }
-      if (dst != src)
-        memmove(buf + dst, buf + src, decoder->bytes_left_in_chunk);
-      src += decoder->bytes_left_in_chunk;
-      dst += decoder->bytes_left_in_chunk;
-      decoder->bytes_left_in_chunk = 0;
-      decoder->_state = CHUNKED_IN_CHUNK_CRLF;
-    }
-      /* fallthru */
-    case CHUNKED_IN_CHUNK_CRLF:
-      for (;; ++src) {
-        if (src == bufsz)
-          goto Exit;
-        if (buf[src] != '\015')
-          break;
-      }
-      if (buf[src] != '\012') {
-        ret = -1;
-        goto Exit;
-      }
-      ++src;
-      decoder->_state = CHUNKED_IN_CHUNK_SIZE;
-      break;
-    case CHUNKED_IN_TRAILERS_LINE_HEAD:
-      for (;; ++src) {
-        if (src == bufsz)
-          goto Exit;
-        if (buf[src] != '\015')
-          break;
-      }
-      if (buf[src++] == '\012')
-        goto Complete;
-      decoder->_state = CHUNKED_IN_TRAILERS_LINE_MIDDLE;
-      /* fallthru */
-    case CHUNKED_IN_TRAILERS_LINE_MIDDLE:
-      for (;; ++src) {
-        if (src == bufsz)
-          goto Exit;
-        if (buf[src] == '\012')
-          break;
-      }
-      ++src;
-      decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
-      break;
-    default:
-      assert(!"decoder is corrupt");
+        if (buf[src++] == '\012')
+          goto Complete;
+        decoder->_state = CHUNKED_IN_TRAILERS_LINE_MIDDLE;
+        /* fallthru */
+      case CHUNKED_IN_TRAILERS_LINE_MIDDLE:
+        for (;; ++src) {
+          if (src == bufsz)
+            goto Exit;
+          if (buf[src] == '\012')
+            break;
+        }
+        ++src;
+        decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
+        break;
+      default:
+        assert(!"decoder is corrupt");
     }
   }
 
