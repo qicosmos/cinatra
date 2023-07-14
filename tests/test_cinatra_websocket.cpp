@@ -206,6 +206,8 @@ void test_websocket_content(size_t len) {
   server.stop();
   server_thread.join();
 
+  client.async_close();
+
   quit_promise.get_future().wait();
 }
 
