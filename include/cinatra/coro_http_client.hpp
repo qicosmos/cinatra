@@ -300,7 +300,13 @@ class coro_http_client {
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
     resp_data data{};
-    auto [ok, u] = handle_uri(data, uri);
+    bool no_schema = !has_schema(uri);
+    std::string append_uri;
+    if (no_schema) {
+      append_uri.append("http://").append(uri);
+    }
+
+    auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
     if (!ok) {
       co_return resp_data{{}, 404};
     }
@@ -853,17 +859,21 @@ class coro_http_client {
     bool is_keep_alive = true;
 
     do {
-      bool no_schema = !has_schema(uri);
+      uri_t u;
       std::string append_uri;
-      if (no_schema) {
-        append_uri.append("http://").append(uri);
-      }
-      auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
-      if (!ok) {
-        break;
-      }
 
-      if (socket_->has_closed_) {
+      if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
+        bool no_schema = !has_schema(uri);
+
+        if (no_schema) {
+          append_uri.append("http://").append(uri);
+        }
+        bool ok = false;
+        std::tie(ok, u) = handle_uri(data, no_schema ? append_uri : uri);
+        if (!ok) {
+          break;
+        }
+
         auto conn_future = start_timer(conn_timeout_duration_, "connect timer");
         std::string host = proxy_host_.empty() ? u.get_host() : proxy_host_;
         std::string port = proxy_port_.empty() ? u.get_port() : proxy_port_;
@@ -872,6 +882,8 @@ class coro_http_client {
             ec) {
           break;
         }
+
+        socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
 
         if (u.is_ssl) {
           if (ec = co_await handle_shake(); ec) {
@@ -882,6 +894,9 @@ class coro_http_client {
         if (ec = co_await wait_timer(std::move(conn_future)); ec) {
           break;
         }
+      }
+      else {
+        u.path = uri;
       }
 
       std::vector<asio::const_buffer> vec;
@@ -1376,6 +1391,8 @@ class coro_http_client {
         co_return resp_data{ec, 404};
       }
 
+      socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+
       if (u.is_ssl) {
         if (auto ec = co_await handle_shake(); ec) {
           co_return resp_data{ec, 404};
@@ -1623,10 +1640,10 @@ class coro_http_client {
 
   template <typename S>
   bool has_schema(const S &url) {
-    size_t pos_http = url.find_first_of("http://");
-    size_t pos_https = url.find_first_of("https://");
-    size_t pos_ws = url.find_first_of("ws://");
-    size_t pos_wss = url.find_first_of("wss://");
+    size_t pos_http = url.find("http://");
+    size_t pos_https = url.find("https://");
+    size_t pos_ws = url.find("ws://");
+    size_t pos_wss = url.find("wss://");
     bool has_http_scheme =
         ((pos_http != std::string::npos) && pos_http == 0) ||
         ((pos_https != std::string::npos) && pos_https == 0) ||

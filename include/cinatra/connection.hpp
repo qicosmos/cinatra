@@ -122,16 +122,18 @@ class connection : public base_connection,
   }
 
   std::string remote_address() {
+    static std::string remote_addr;
     if (has_closed_) {
-      return "";
+      return remote_addr;
     }
 
     std::stringstream ss;
     std::error_code ec;
     ss << socket_.remote_endpoint(ec);
     if (ec) {
-      return "";
+      return remote_addr;
     }
+    remote_addr = ss.str();
     return ss.str();
   }
 

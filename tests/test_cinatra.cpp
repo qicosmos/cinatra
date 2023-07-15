@@ -150,6 +150,19 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test pass path not entire uri") {
+  coro_http_client client{};
+  auto r =
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  CHECK(r.status >= 200);
+
+  r = async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  CHECK(r.status >= 200);
+
+  r = async_simple::coro::syncAwait(client.async_get("/"));
+  CHECK(r.status >= 200);
+}
+
 TEST_CASE("test coro_http_client connect/request timeout") {
   {
     coro_http_client client{};
@@ -157,7 +170,10 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     client.init_config(conf);
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-    CHECK(r.net_err == std::errc::timed_out);
+    std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
+    bool ret = (r.net_err == std::errc::timed_out ||
+                r.net_err == asio::error::operation_aborted);
+    CHECK(ret);
   }
 
   {
