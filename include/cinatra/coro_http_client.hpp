@@ -300,7 +300,13 @@ class coro_http_client {
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
     resp_data data{};
-    auto [ok, u] = handle_uri(data, uri);
+    bool no_schema = !has_schema(uri);
+    std::string append_uri;
+    if (no_schema) {
+      append_uri.append("http://").append(uri);
+    }
+
+    auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
     if (!ok) {
       co_return resp_data{{}, 404};
     }
@@ -1634,10 +1640,10 @@ class coro_http_client {
 
   template <typename S>
   bool has_schema(const S &url) {
-    size_t pos_http = url.find_first_of("http://");
-    size_t pos_https = url.find_first_of("https://");
-    size_t pos_ws = url.find_first_of("ws://");
-    size_t pos_wss = url.find_first_of("wss://");
+    size_t pos_http = url.find("http://");
+    size_t pos_https = url.find("https://");
+    size_t pos_ws = url.find("ws://");
+    size_t pos_wss = url.find("wss://");
     bool has_http_scheme =
         ((pos_http != std::string::npos) && pos_http == 0) ||
         ((pos_https != std::string::npos) && pos_https == 0) ||
