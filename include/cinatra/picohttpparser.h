@@ -29,7 +29,6 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#include <sys/types.h>
 
 #ifdef _MSC_VER
 #define ssize_t intptr_t
