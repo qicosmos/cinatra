@@ -877,6 +877,8 @@ class coro_http_client {
           break;
         }
 
+        socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
+
         if (u.is_ssl) {
           if (ec = co_await handle_shake(); ec) {
             break;
@@ -1382,6 +1384,8 @@ class coro_http_client {
           ec) {
         co_return resp_data{ec, 404};
       }
+
+      socket_->impl_.set_option(asio::ip::tcp::no_delay(true));
 
       if (u.is_ssl) {
         if (auto ec = co_await handle_shake(); ec) {
