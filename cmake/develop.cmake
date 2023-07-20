@@ -70,6 +70,23 @@ if(ENABLE_CLIENT_SSL)
 	add_definitions(-DCINATRA_ENABLE_CLIENT_SSL)
 endif()
 
+
+if(ENABLE_SIMD STREQUAL "SSE42" OR ENABLE_SIMD STREQUAL "AVX2" OR ENABLE_SIMD STREQUAL "AARCH64")
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+		message(STATUS "Build with simd in aarch64")
+		add_definitions(-DCINATRA_AARCH64)
+	elseif (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
+		message(STATUS "Build with simd in X86_64")
+		if (ENABLE_SIMD STREQUAL "SSE42")
+			message(STATUS "Build with SSE4.2 ISA")
+			add_definitions(-DCINATRA_SSE)
+		elseif (ENABLE_SIMD STREQUAL "AVX2")
+			message(STATUS "Build with AVX2 ISA")
+			add_definitions(-DCINATRA_AVX2)
+		endif ()
+	endif ()
+endif()
+
 add_definitions(-DASIO_STANDALONE)
 
 if (ENABLE_SSL)

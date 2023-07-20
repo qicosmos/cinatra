@@ -22,6 +22,21 @@ endif()
 if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
+
+if (ENABLE_SIMD STREQUAL "AARCH64")
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+		#TODO
+	endif ()
+elseif (ENABLE_SIMD STREQUAL "SSE42")
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
+		target_link_libraries(${project_name} sse4.2)
+	endif ()
+elseif (ENABLE_SIMD STREQUAL "AVX2")
+	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
+		target_link_libraries(${project_name} avx2)
+	endif ()
+endif ()
+
 install(TARGETS ${project_name} DESTINATION include)
 
 set(unittest_press_tool test_cinatra_press_tool)
