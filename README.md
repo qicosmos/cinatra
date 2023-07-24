@@ -60,6 +60,17 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize")
 
+## cinatra指令集功能使用
+
+cinatra支持通过指令集优化其内部逻辑，其通过宏来控制是否使用指令集。使用之前请确保cpu支持。
+
+使用如下命令即可编译带simd优化的cinatra。注意只能开启一种simd指令集优化,开启多个会导致编译失败。
+
+```shell
+cmake -DENABLE_SIMD=SSE42 .. # 启用sse4.2指令集
+cmake -DENABLE_SIMD=AVX2 .. # 启用avx2指令集
+```
+
 # 快速示例
 
 ## 示例1：一个简单的hello world

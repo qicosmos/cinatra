@@ -44,6 +44,17 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-tree-slp-vectorize"
 
 1. C++20 compiler (gcc 10.2, clang 13, Visual Studio 2022, or later versions)
 
+## Usage:cinatra instruction set optimization
+
+cinatra supports optimizing its internal logic through the instruction set, which controls whether to use the instruction set through macros. Please make sure the cpu support before use.
+
+Use the following command to compile cinatra with simd optimization.Note that only one simd instruction set can be opened, and opening multiple instruction sets will cause compilation failure.
+
+```shell
+cmake -DENABLE_SIMD=SSE42 .. # enable sse4.2 instruction set
+cmake -DENABLE_SIMD=AVX2 .. # enable avx2 instruction set
+```
+
 ## Examples
 
 ### Example 1: A simple "Hello World"
