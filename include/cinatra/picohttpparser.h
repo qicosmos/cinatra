@@ -30,6 +30,20 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifdef CINATRA_SSE
+#ifdef _MSC_VER
+#include <nmmintrin.h>
+#else
+#include <x86intrin.h>
+#endif
+#endif
+
+#ifdef CINATRA_AVX2
+#include <immintrin.h>
+#endif
+
+#include <sys/types.h>
+
 #ifdef _MSC_VER
 #define ssize_t intptr_t
 #endif
@@ -163,10 +177,31 @@ static const char *findchar_fast(const char *buf, const char *buf_end,
                                  const char *ranges, int ranges_size,
                                  int *found) {
   *found = 0;
+#ifdef CINATRA_SSE
+  if (likely(buf_end - buf >= 16)) {
+    __m128i ranges16 = _mm_loadu_si128((const __m128i *)ranges);
+
+    size_t left = (buf_end - buf) & ~15;
+    do {
+      __m128i b16 = _mm_loadu_si128((const __m128i *)buf);
+      int r = _mm_cmpestri(
+          ranges16, ranges_size, b16, 16,
+          _SIDD_LEAST_SIGNIFICANT | _SIDD_CMP_RANGES | _SIDD_UBYTE_OPS);
+      if (unlikely(r != 16)) {
+        buf += r;
+        *found = 1;
+        break;
+      }
+      buf += 16;
+      left -= 16;
+    } while (likely(left != 0));
+  }
+#else
   /* suppress unused parameter warning */
   (void)buf_end;
   (void)ranges;
   (void)ranges_size;
+#endif
   return buf;
 }
 
@@ -174,7 +209,20 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
                                     const char **token, size_t *token_len,
                                     int *ret) {
   const char *token_start = buf;
-
+#ifdef CINATRA_SSE
+  static const char ranges1[] =
+      "\0\010"
+      /* allow HT */
+      "\012\037"
+      /* allow SP and up to but not including DEL */
+      "\177\177"
+      /* allow chars w. MSB set */
+      ;
+  int found;
+  buf = findchar_fast(buf, buf_end, ranges1, sizeof(ranges1) - 1, &found);
+  if (found)
+    goto FOUND_CTL;
+#else
   /* find non-printable char within the next 8 bytes, this is the hottest code;
    * manually inlined */
   while (likely(buf_end - buf >= 8)) {
@@ -201,7 +249,7 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
     }
     ++buf;
   }
-
+#endif
   for (;; ++buf) {
     CHECK_EOF();
     if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {
@@ -298,6 +346,343 @@ static const char *parse_http_version(const char *buf, const char *buf_end,
   return buf;
 }
 
+#ifdef CINATRA_AVX2
+static unsigned long TZCNT(unsigned long long in) {
+  unsigned long res;
+  asm("tzcnt %1, %0\n\t" : "=r"(res) : "r"(in));
+  return res;
+}
+/* Parse only 32 bytes */
+static void find_ranges32(__m256i b0, unsigned long *range0,
+                          unsigned long *range1) {
+  const __m256i rr0 = _mm256_set1_epi8(0x00 - 1);
+  const __m256i rr1 = _mm256_set1_epi8(0x1f + 1);
+  const __m256i rr2 = _mm256_set1_epi8(0x3a);
+  const __m256i rr4 = _mm256_set1_epi8(0x7f);
+  const __m256i rr7 = _mm256_set1_epi8(0x09);
+
+  /* 0<=x */
+  __m256i gz0 = _mm256_cmpgt_epi8(b0, rr0);
+  /* 0=<x<=1f */
+  __m256i z_1f_0 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b0), gz0);
+  /* 0<=x<=1f || x==3a */
+  __m256i range0_0 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b0), z_1f_0);
+  /* 0<=x<9 || 9<x<=1f || x==7f */
+  __m256i range1_0 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b0),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b0, rr7), z_1f_0));
+  /* Generate bit masks */
+  unsigned int r0 = _mm256_movemask_epi8(range0_0);
+  /* Combine 32bit masks into a single 64bit mask */
+  *range0 = r0;
+  r0 = _mm256_movemask_epi8(range1_0);
+  *range1 = r0;
+}
+
+/* Parse only 64 bytes */
+static void find_ranges64(__m256i b0, __m256i b1, unsigned long *range0,
+                          unsigned long *range1) {
+  const __m256i rr0 = _mm256_set1_epi8(0x00 - 1);
+  const __m256i rr1 = _mm256_set1_epi8(0x1f + 1);
+  const __m256i rr2 = _mm256_set1_epi8(0x3a);
+  const __m256i rr4 = _mm256_set1_epi8(0x7f);
+  const __m256i rr7 = _mm256_set1_epi8(0x09);
+
+  /* 0<=x */
+  __m256i gz0 = _mm256_cmpgt_epi8(b0, rr0);
+  __m256i gz1 = _mm256_cmpgt_epi8(b1, rr0);
+  /* 0=<x<=1f */
+  __m256i z_1f_0 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b0), gz0);
+  __m256i z_1f_1 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b1), gz1);
+  /* 0<=x<=1f || x==3a */
+  __m256i range0_0 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b0), z_1f_0);
+  __m256i range0_1 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b1), z_1f_1);
+  /* 0<=x<9 || 9<x<=1f || x==7f */
+  __m256i range1_0 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b0),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b0, rr7), z_1f_0));
+  __m256i range1_1 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b1),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b1, rr7), z_1f_1));
+  /* Generate bit masks */
+  unsigned int r0 = _mm256_movemask_epi8(range0_0);
+  unsigned int r1 = _mm256_movemask_epi8(range0_1);
+  /* Combine 32bit masks into a single 64bit mask */
+  *range0 = r0 ^ ((unsigned long)r1 << 32);
+  r0 = _mm256_movemask_epi8(range1_0);
+  r1 = _mm256_movemask_epi8(range1_1);
+  *range1 = r0 ^ ((unsigned long)r1 << 32);
+}
+
+/* This function parses 128 bytes at a time, creating bitmap of all interesting
+ * tokens */
+static void find_ranges(const char *buf, const char *buf_end,
+                        unsigned long *range0, unsigned long *range1) {
+  const __m256i rr0 = _mm256_set1_epi8(0x00 - 1);
+  const __m256i rr1 = _mm256_set1_epi8(0x1f + 1);
+  const __m256i rr2 = _mm256_set1_epi8(0x3a);
+  const __m256i rr4 = _mm256_set1_epi8(0x7f);
+  const __m256i rr7 = _mm256_set1_epi8(0x09);
+
+  __m256i b0, b1, b2, b3;
+  unsigned char tmpbuf[32];
+  int i;
+  int dist;
+
+  if ((dist = buf_end - buf) < 128) {
+    // memcpy(tmpbuf, buf + (dist & (-32)), dist & 31);
+    for (i = 0; i < (dist & 31); i++) tmpbuf[i] = buf[(dist & (-32)) + i];
+    if (dist >= 96) {
+      b0 = _mm256_loadu_si256((void *)buf + 32 * 0);
+      b1 = _mm256_loadu_si256((void *)buf + 32 * 1);
+      b2 = _mm256_loadu_si256((void *)buf + 32 * 2);
+      b3 = _mm256_loadu_si256((void *)tmpbuf);
+    }
+    else if (dist >= 64) {
+      b0 = _mm256_loadu_si256((void *)buf + 32 * 0);
+      b1 = _mm256_loadu_si256((void *)buf + 32 * 1);
+      b2 = _mm256_loadu_si256((void *)tmpbuf);
+      b3 = _mm256_setzero_si256();
+    }
+    else {
+      if (dist < 32) {
+        b0 = _mm256_loadu_si256((void *)tmpbuf);
+        return find_ranges32(b0, range0, range1);
+      }
+      else {
+        b0 = _mm256_loadu_si256((void *)buf + 32 * 0);
+        b1 = _mm256_loadu_si256((void *)tmpbuf);
+        return find_ranges64(b0, b1, range0, range1);
+      }
+    }
+  }
+  else {
+    /* Load 128 bytes */
+    b0 = _mm256_loadu_si256((void *)buf + 32 * 0);
+    b1 = _mm256_loadu_si256((void *)buf + 32 * 1);
+    b2 = _mm256_loadu_si256((void *)buf + 32 * 2);
+    b3 = _mm256_loadu_si256((void *)buf + 32 * 3);
+  }
+
+  /* 0<=x */
+  __m256i gz0 = _mm256_cmpgt_epi8(b0, rr0);
+  __m256i gz1 = _mm256_cmpgt_epi8(b1, rr0);
+  __m256i gz2 = _mm256_cmpgt_epi8(b2, rr0);
+  __m256i gz3 = _mm256_cmpgt_epi8(b3, rr0);
+  /* 0=<x<=1f */
+  __m256i z_1f_0 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b0), gz0);
+  __m256i z_1f_1 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b1), gz1);
+  __m256i z_1f_2 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b2), gz2);
+  __m256i z_1f_3 = _mm256_and_si256(_mm256_cmpgt_epi8(rr1, b3), gz3);
+  /* 0<=x<=1f || x==3a */
+  __m256i range0_0 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b0), z_1f_0);
+  __m256i range0_1 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b1), z_1f_1);
+  __m256i range0_2 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b2), z_1f_2);
+  __m256i range0_3 = _mm256_or_si256(_mm256_cmpeq_epi8(rr2, b3), z_1f_3);
+  /* 0<=x<9 || 9<x<=1f || x==7f */
+  __m256i range1_0 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b0),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b0, rr7), z_1f_0));
+  __m256i range1_1 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b1),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b1, rr7), z_1f_1));
+  __m256i range1_2 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b2),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b2, rr7), z_1f_2));
+  __m256i range1_3 =
+      _mm256_or_si256(_mm256_cmpeq_epi8(rr4, b3),
+                      _mm256_andnot_si256(_mm256_cmpeq_epi8(b3, rr7), z_1f_3));
+  /* Generate bit masks */
+  unsigned int r0 = _mm256_movemask_epi8(range0_0);
+  unsigned int r1 = _mm256_movemask_epi8(range0_1);
+  /* Combine 32bit masks into a single 64bit mask */
+  *range0 = r0 ^ ((unsigned long)r1 << 32);
+
+  r0 = _mm256_movemask_epi8(range0_2);
+  r1 = _mm256_movemask_epi8(range0_3);
+  range0[1] = r0 ^ ((unsigned long)r1 << 32);
+
+  r0 = _mm256_movemask_epi8(range1_0);
+  r1 = _mm256_movemask_epi8(range1_1);
+
+  *range1 = r0 ^ ((unsigned long)r1 << 32);
+  r0 = _mm256_movemask_epi8(range1_2);
+  r1 = _mm256_movemask_epi8(range1_3);
+
+  range1[1] = r0 ^ ((unsigned long)r1 << 32);
+}
+
+static const char *parse_headers(const char *buf, const char *buf_end,
+                                 struct phr_header *headers,
+                                 size_t *num_headers, size_t max_headers,
+                                 int *ret) {
+  /* Bitmap for the first type of tokens */
+  unsigned long rr0[2] = {0};
+  /* Bitmap for the second type of tokens */
+  unsigned long rr1[2] = {0};
+  /* Pointer to the start of the currently parsed block of 128 bytes */
+  const char *prep_start = NULL;
+  int found;
+  int n_headers = *num_headers;
+
+  for (;; ++n_headers) {
+    CHECK_EOF();
+    if (*buf == '\015') {
+      ++buf;
+      EXPECT_CHAR('\012');
+      break;
+    }
+    else if (*buf == '\012') {
+      ++buf;
+      break;
+    }
+    if (n_headers == max_headers) {
+      *ret = -1;
+      *num_headers = n_headers;
+      return NULL;
+    }
+
+    if (!(n_headers != 0 && (*buf == ' ' || *buf == '\t')) &&
+        !(*buf >= 65 && *buf <= 90)) {
+      if (!token_char_map[(unsigned char)*buf]) {
+        *ret = -1;
+        *num_headers = n_headers;
+        return NULL;
+      }
+      headers[n_headers].name = buf;
+
+      /* Attempt to find a match in the index */
+      found = 0;
+      do {
+        unsigned long distance = buf - prep_start;
+        /* Check if the bitmaps are still valid. An assumption I make is that
+           buf > 128 (i.e. the os will never allocate memory at address 0-128 */
+        if (unlikely(distance >=
+                     128)) { /* Bitmaps are too old, make new ones */
+          prep_start = buf;
+          distance = 0;
+          find_ranges(buf, buf_end, rr0, rr1);
+        }
+        else if (distance >= 64) { /* In the second half of the bitmap */
+          unsigned long index =
+              rr0[1] >> (distance - 64);     /* Correct offset of the bitmap */
+          unsigned long find = TZCNT(index); /* Fine next set bit */
+          if ((find < 64)) {                 /* Yey, we found a token */
+            buf += find;
+            found = 1;
+            break;
+          }
+          buf = prep_start + 128; /* No token was found in the current bitmap */
+          continue;
+        }
+        unsigned long index =
+            rr0[0] >> (distance);          /* In the first half of the bitmap */
+        unsigned long find = TZCNT(index); /* Find next set bit */
+        if ((find < 64)) {                 /* Token found */
+          buf += find;
+          found = 1;
+          break;
+        } /* Token not found, look at second half of bitmap */
+        index = rr0[1];
+        find = TZCNT(index);
+        if ((find < 64)) {
+          buf += 64 + find - distance;
+          found = 1;
+          break;
+        }
+
+        buf = prep_start + 128;
+      } while (buf < buf_end);
+
+      if (!found)
+        if (buf >= buf_end) {
+          *ret = -2;
+          *num_headers = n_headers;
+          return NULL;
+        }
+      headers[n_headers].name_len = buf - headers[n_headers].name;
+      ++buf;
+      CHECK_EOF();
+      while ((*buf == ' ' || *buf == '\t')) {
+        ++buf;
+        CHECK_EOF();
+      }
+    }
+    else {
+      headers[n_headers].name = NULL;
+      headers[n_headers].name_len = 0;
+    }
+    const char *token_start = buf;
+
+    found = 0;
+
+    do {
+      /* Too far */
+      unsigned long distance = buf - prep_start; /* Same algorithm as above */
+      if (unlikely(distance >= 128)) {
+        prep_start = buf;
+        distance = 0;
+        find_ranges(buf, buf_end, rr0, rr1);
+      }
+      else if (distance >= 64) {
+        unsigned long index = rr1[1] >> (distance - 64);
+        unsigned long find = TZCNT(index);
+        if ((find < 64)) {
+          buf += find;
+          found = 1;
+          break;
+        }
+        buf = prep_start + 128;
+        continue;
+      }
+      unsigned long index = rr1[0] >> (distance);
+      unsigned long find = TZCNT(index);
+      if ((find < 64)) {
+        buf += find;
+        found = 1;
+        break;
+      }
+      index = rr1[1];
+      find = TZCNT(index);
+      if ((find < 64)) {
+        buf += 64 + find - distance;
+        found = 1;
+        break;
+      }
+
+      buf = prep_start + 128;
+    } while (buf < buf_end);
+
+    if (!found)
+      if (buf >= buf_end) {
+        *ret = -2;
+        *num_headers = n_headers;
+        return NULL;
+      }
+
+    unsigned short two_char = *(unsigned short *)buf;
+
+    if (likely(two_char == 0x0a0d)) {
+      headers[n_headers].value_len = buf - token_start;
+      buf += 2;
+    }
+    else if (unlikely(two_char & 0x0a == 0x0a)) {
+      headers[n_headers].value_len = buf - token_start;
+      ++buf;
+    }
+    else {
+      *ret = -1;
+      *num_headers = n_headers;
+      return NULL;
+    }
+    headers[n_headers].value = token_start;
+  }
+  *num_headers = n_headers;
+  return buf;
+}
+
+#else
+
 static const char *parse_headers(const char *buf, const char *buf_end,
                                  struct phr_header *headers,
                                  size_t *num_headers, size_t max_headers,
@@ -371,6 +756,8 @@ static const char *parse_headers(const char *buf, const char *buf_end,
   }
   return buf;
 }
+
+#endif
 
 static const char *parse_request(const char *buf, const char *buf_end,
                                  const char **method, size_t *method_len,
