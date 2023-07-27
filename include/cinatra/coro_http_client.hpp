@@ -224,7 +224,12 @@ class coro_http_client {
     return true;
   }
 
-  ~coro_http_client() { async_close(); }
+  ~coro_http_client() {
+    async_close();
+    if (ws_quit_promise_) {
+      ws_quit_promise_->get_future().wait();
+    }
+  }
 
   void async_close() {
     if (socket_->has_closed_)
@@ -1511,23 +1516,22 @@ class coro_http_client {
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
 
+    ws_quit_promise_ = std::make_unique<std::promise<void>>();
+
     websocket ws{};
     while (true) {
-      std::weak_ptr socket = socket_;
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
         data.net_err = ec;
         data.status = 404;
-        auto sock = socket.lock();
-        if (!sock) {
-          co_return;
-        }
-        if (!sock->has_closed_) {
-          close_socket(*sock);
+
+        if (!has_closed()) {
+          close_socket(*socket_);
         }
 
         if (on_ws_msg_)
           on_ws_msg_(data);
 
+        ws_quit_promise_->set_value();
         co_return;
       }
 
@@ -1710,6 +1714,8 @@ class coro_http_client {
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
+
+  std::unique_ptr<std::promise<void>> ws_quit_promise_;
 #ifdef BENCHMARK_TEST
   std::string req_str_;
   bool stop_bench_ = false;
