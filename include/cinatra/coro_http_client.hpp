@@ -1517,6 +1517,9 @@ class coro_http_client {
     size_t header_size = 2;
 
     ws_quit_promise_ = std::make_unique<std::promise<void>>();
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      ws_quit_promise_->set_value();
+    });
 
     websocket ws{};
     while (true) {
@@ -1531,7 +1534,6 @@ class coro_http_client {
         if (on_ws_msg_)
           on_ws_msg_(data);
 
-        ws_quit_promise_->set_value();
         co_return;
       }
 
