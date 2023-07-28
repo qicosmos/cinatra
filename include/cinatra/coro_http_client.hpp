@@ -1518,10 +1518,10 @@ class coro_http_client {
 
     ws_quit_promise_ = std::make_unique<std::promise<void>>();
     std::cout << "create ws promise\n";
-    std::shared_ptr<int> guard(nullptr, [this](auto) {
-      std::cout << "will quit ws coroutine, set promise\n";
-      ws_quit_promise_->set_value();
-    });
+    //    std::shared_ptr<int> guard(nullptr, [this](auto) {
+    //      std::cout << "will quit ws coroutine, set promise\n";
+    //      ws_quit_promise_->set_value();
+    //    });
 
     websocket ws{};
     while (true) {
@@ -1535,7 +1535,8 @@ class coro_http_client {
 
         if (on_ws_msg_)
           on_ws_msg_(data);
-
+        std::cout << "will quit ws coroutine, set promise\n";
+        ws_quit_promise_->set_value();
         co_return;
       }
 
@@ -1560,6 +1561,8 @@ class coro_http_client {
           close_socket(*socket_);
           if (on_ws_msg_)
             on_ws_msg_(data);
+          std::cout << "will quit ws coroutine, set promise\n";
+          ws_quit_promise_->set_value();
           co_return;
         }
       }
@@ -1586,6 +1589,8 @@ class coro_http_client {
         data.status = 404;
         if (on_ws_msg_)
           on_ws_msg_(data);
+        ws_quit_promise_->set_value();
+        std::cout << "will quit ws coroutine, set promise\n";
         co_return;
       }
       if (on_ws_msg_)
