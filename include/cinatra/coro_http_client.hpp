@@ -1724,7 +1724,7 @@ class coro_http_client {
       std::chrono::seconds(60);
   std::string resp_chunk_str_;
 
-  std::unique_ptr<std::promise<void>> ws_quit_promise_;
+  std::unique_ptr<std::promise<void>> ws_quit_promise_ = nullptr;
 #ifdef BENCHMARK_TEST
   std::string req_str_;
   bool stop_bench_ = false;
