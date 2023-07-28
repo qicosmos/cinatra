@@ -1517,7 +1517,9 @@ class coro_http_client {
     size_t header_size = 2;
 
     ws_quit_promise_ = std::make_unique<std::promise<void>>();
+    std::cout << "create ws promise\n";
     std::shared_ptr<int> guard(nullptr, [this](auto) {
+      std::cout << "will quit ws coroutine, set promise\n";
       ws_quit_promise_->set_value();
     });
 
