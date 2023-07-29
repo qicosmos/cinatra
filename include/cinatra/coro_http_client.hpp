@@ -252,6 +252,10 @@ class coro_http_client {
           return false;
       }
 
+      if (base_path.empty() && cert_file.empty()) {
+        ssl_ctx_->set_default_verify_paths();
+      }
+
       ssl_ctx_->set_verify_mode(verify_mode);
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
