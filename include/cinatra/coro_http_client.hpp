@@ -1513,6 +1513,7 @@ class coro_http_client {
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
+    auto on_ws_msg = std::move(on_ws_msg_);
     websocket ws{};
     while (true) {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
@@ -1525,8 +1526,8 @@ class coro_http_client {
 
         close_socket(*sock);
 
-        if (on_ws_msg_)
-          on_ws_msg_(data);
+        if (on_ws_msg)
+          on_ws_msg(data);
         co_return;
       }
 
