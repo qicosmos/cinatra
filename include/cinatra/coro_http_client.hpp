@@ -1493,6 +1493,7 @@ class coro_http_client {
     return resp_headers;
   }
 
+  // this function must be called before async_ws_connect.
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
 

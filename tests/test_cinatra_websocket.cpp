@@ -37,8 +37,6 @@ TEST_CASE("test wss client") {
   coro_http_client client;
   bool ok = client.init_ssl("../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-  REQUIRE(async_simple::coro::syncAwait(
-      client.async_ws_connect("wss://localhost:9001")));
 
   std::promise<void> promise;
   client.on_ws_msg([&promise](resp_data data) {
@@ -51,6 +49,9 @@ TEST_CASE("test wss client") {
     CHECK(data.resp_body == "hello");
     promise.set_value();
   });
+
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_ws_connect("wss://localhost:9001")));
 
   auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
   std::cout << result.net_err << "\n";
