@@ -408,6 +408,12 @@ class connection : public base_connection,
       return;
     }
 
+    size_t body_len = req_.body_len();
+    if (body_len > max_body_len_) {
+      response_back();
+      return;
+    }
+
     int ret = req_.parse_header(len_);
 
     if (ret == parse_status::has_error) {

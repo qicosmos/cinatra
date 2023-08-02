@@ -22,6 +22,7 @@ enum class status_type {
   forbidden = 403,
   not_found = 404,
   conflict = 409,
+  entity_too_large = 413,
   internal_server_error = 500,
   not_implemented = 501,
   bad_gateway = 502,
@@ -109,6 +110,12 @@ inline std::string_view conflict =
     "<body><h1>409 Conflict</h1></body>"
     "</html>";
 
+inline std::string_view entity_too_large =
+    "<html>"
+    "<head><title>RequestEntityTooLarge</title></head>"
+    "<body><h1>413 RequestEntityTooLarge</h1></body>"
+    "</html>";
+
 inline std::string_view internal_server_error =
     "<html>"
     "<head><title>Internal Server Error</title></head>"
@@ -159,6 +166,7 @@ inline constexpr std::string_view rep_unauthorized =
 inline constexpr std::string_view rep_forbidden = "HTTP/1.1 403 Forbidden\r\n";
 inline constexpr std::string_view rep_not_found = "HTTP/1.1 404 Not Found\r\n";
 inline constexpr std::string_view rep_conflict = "HTTP/1.1 409 Conflict\r\n";
+inline constexpr std::string_view rep_entity_too_large = "HTTP/1.1 413 Request Too Large\r\n";
 inline constexpr std::string_view rep_internal_server_error =
     "HTTP/1.1 500 Internal Server Error\r\n";
 inline constexpr std::string_view rep_not_implemented =
@@ -289,6 +297,8 @@ inline decltype(auto) to_buffer(status_type status) {
       return T(rep_not_found.data(), rep_not_found.length());
     case status_type::conflict:
       return T(rep_conflict.data(), rep_conflict.length());
+    case status_type::entity_too_large:
+      return T(rep_entity_too_large.data(), rep_entity_too_large.length());
     case status_type::internal_server_error:
       return T(rep_internal_server_error.data(),
                rep_internal_server_error.length());
@@ -355,6 +365,9 @@ inline constexpr std::string_view to_rep_string(status_type status) {
     case cinatra::status_type::conflict:
       return rep_conflict;
       break;
+    case cinatra::status_type::entity_too_large:
+      return rep_entity_too_large;
+      break;
     case cinatra::status_type::internal_server_error:
       return rep_internal_server_error;
       break;
@@ -403,6 +416,8 @@ inline std::string_view to_string(status_type status) {
       return not_found;
     case status_type::conflict:
       return conflict;
+    case status_type::entity_too_large:
+      return entity_too_large;
     case status_type::internal_server_error:
       return internal_server_error;
     case status_type::not_implemented:
