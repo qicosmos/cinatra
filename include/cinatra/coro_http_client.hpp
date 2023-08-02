@@ -1673,7 +1673,7 @@ class coro_http_client {
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
 
-#ifdef CINATRA_ENABLE_SSLƒ
+#ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
