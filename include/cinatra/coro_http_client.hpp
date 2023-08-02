@@ -1533,8 +1533,8 @@ class coro_http_client {
           data.net_err = ec;
           data.status = 404;
           close_socket(*socket_);
-          if (on_ws_msg_)
-            on_ws_msg_(data);
+          if (on_ws_msg)
+            on_ws_msg(data);
           co_return;
         }
       }
@@ -1559,12 +1559,12 @@ class coro_http_client {
 
         data.net_err = asio::error::eof;
         data.status = 404;
-        if (on_ws_msg_)
-          on_ws_msg_(data);
+        if (on_ws_msg)
+          on_ws_msg(data);
         co_return;
       }
-      if (on_ws_msg_)
-        on_ws_msg_(data);
+      if (on_ws_msg)
+        on_ws_msg(data);
     }
   }
 
@@ -1673,7 +1673,7 @@ class coro_http_client {
   std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
 
-#ifdef CINATRA_ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSLƒ
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool ssl_init_ret_ = true;
