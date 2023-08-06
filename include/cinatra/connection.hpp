@@ -36,7 +36,9 @@ class connection : public base_connection,
       asio::io_service &io_service, ssl_configure ssl_conf,
       std::size_t max_req_size, long keep_alive_timeout, http_handler &handler,
       std::string &static_dir,
-      std::function<bool(request &req, response &res)> *upload_check)
+      std::function<bool(request &req, response &res)> *upload_check,
+      std::string &checker_resp,
+      std::function<bool(request &req, response &res)> *req_body_check)
       : socket_(io_service),
         MAX_REQ_SIZE_(max_req_size),
         KEEP_ALIVE_TIMEOUT_(keep_alive_timeout),
@@ -44,7 +46,9 @@ class connection : public base_connection,
         http_handler_(handler),
         req_(res_),
         static_dir_(static_dir),
-        upload_check_(upload_check) {
+        upload_check_(upload_check),
+        checker_resp_(checker_resp),
+        req_body_check_(req_body_check) {
     if constexpr (is_ssl_) {
       init_ssl_context(std::move(ssl_conf));
     }
@@ -408,12 +412,6 @@ class connection : public base_connection,
       return;
     }
 
-    size_t body_len = req_.body_len();
-    if (body_len > max_body_len_) {
-      response_back();
-      return;
-    }
-
     int ret = req_.parse_header(len_);
 
     if (ret == parse_status::has_error) {
@@ -448,7 +446,16 @@ class connection : public base_connection,
   void handle_request(std::size_t bytes_transferred) {
     auto type = get_content_type();
     req_.set_http_type(type);
+
     if (req_.has_body()) {
+      if (req_body_check_) {
+        bool r = (*req_body_check_)(req_, res_);
+        if (!r) {
+          response_back(status_type::entity_too_large,
+                        std::move(checker_resp_));
+          return;
+        }
+      }
       switch (type) {
         case cinatra::content_type::string:
         case cinatra::content_type::websocket:
@@ -1476,6 +1483,8 @@ class connection : public base_connection,
   // callback handler to application layer
   const http_handler &http_handler_;
   std::function<bool(request &req, response &res)> *upload_check_ = nullptr;
+  std::string checker_resp_;
+  std::function<bool(request &req, response &res)> *req_body_check_ = nullptr;
   std::any tag_;
   std::function<void(request &, std::string &)> multipart_begin_ = nullptr;
 

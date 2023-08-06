@@ -245,6 +245,13 @@ class http_server_ : private noncopyable {
     upload_check_ = std::move(checker);
   }
 
+  // should be called before listen
+  void set_body_check(std::function<bool(request &req, response &res)> checker,
+                      std::string resp_str = "") {
+    checker_resp_ = resp_str;
+    req_body_check_ = std::move(checker);
+  }
+
   void mapping_to_root_path(std::string relate_path) {
     relate_paths_.emplace_back("." + std::move(relate_path));
   }
@@ -280,7 +287,8 @@ class http_server_ : private noncopyable {
     auto new_conn = std::make_shared<connection<ScoketType>>(
         io_service_pool_.get_io_service(), ssl_conf_, max_req_buf_size_,
         keep_alive_timeout_, http_handler_, upload_dir_,
-        upload_check_ ? &upload_check_ : nullptr);
+        upload_check_ ? &upload_check_ : nullptr, checker_resp_,
+        req_body_check_ ? &req_body_check_ : nullptr);
 
     acceptor_->async_accept(
         new_conn->tcp_socket(), [this, new_conn](const std::error_code &e) {
@@ -603,6 +611,8 @@ class http_server_ : private noncopyable {
   std::function<bool(request &req, response &res)> download_check_;
   std::vector<std::string> relate_paths_;
   std::function<bool(request &req, response &res)> upload_check_ = nullptr;
+  std::string checker_resp_;
+  std::function<bool(request &req, response &res)> req_body_check_ = nullptr;
 
   std::function<void(request &req, response &res)> not_found_ = nullptr;
   std::function<void(request &, std::string &)> multipart_begin_ = nullptr;
