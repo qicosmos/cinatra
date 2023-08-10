@@ -944,3 +944,84 @@ TEST_CASE(
                    std::chrono::microseconds::period::den
             << "s" << std::endl;
 }
+
+TEST_CASE("test server body limit upload request body") {
+  http_server server(std::thread::hardware_concurrency());
+  //  server.enable_timeout(false);
+
+  auto control_func = [](request &req, response &res) -> bool {
+    int max_body_size = 2048;  // 1k
+    if (max_body_size < req.body_len()) {
+      return false;
+    }
+    return true;
+  };
+
+  server.set_body_check(control_func, "Request Entity Is Too Large");
+
+  bool r = server.listen("0.0.0.0", "8090");
+  if (!r) {
+    std::cout << "listen failed."
+              << "\n";
+  }
+
+  server.set_http_handler<POST>("/multipart", [](request &req, response &res) {
+    assert(req.get_content_type() == content_type::multipart);
+    auto &files = req.get_upload_files();
+    for (auto &file : files) {
+      std::cout << file.get_file_path() << " " << file.get_file_size()
+                << std::endl;
+    }
+    std::cout << "multipart finished\n";
+    res.render_string("multipart finished");
+  });
+
+  std::promise<void> pr;
+  std::future<void> f = pr.get_future();
+  std::thread server_thread([&server, &pr]() {
+    pr.set_value();
+    server.run();
+  });
+  f.wait();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/multipart";
+
+  client.set_max_single_part_size(2048);
+  std::string test_file_name = "test1.txt";
+  std::ofstream test_file;
+  test_file.open(test_file_name,
+                 std::ios::binary | std::ios::out | std::ios::trunc);
+  std::vector<char> test_file_data(10 * 1024 * 1024, '0');
+  test_file.write(test_file_data.data(), test_file_data.size());
+  test_file.close();
+  auto result = async_simple::coro::syncAwait(
+      client.async_upload_multipart(uri, "test", test_file_name));
+
+  CHECK(result.status == 404);
+
+  coro_http_client sec_client{};
+  sec_client.set_max_single_part_size(512);
+  std::string small_file_name = "test2.txt";
+  std::ofstream small_file;
+  small_file.open(small_file_name,
+                  std::ios::binary | std::ios::out | std::ios::trunc);
+  std::vector<char> small_file_data(512, '0');
+  small_file.write(small_file_data.data(), small_file_data.size());
+  small_file.close();
+  result = async_simple::coro::syncAwait(
+      sec_client.async_upload_multipart(uri, "test", small_file_name));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "multipart finished");
+
+  std::filesystem::remove(std::filesystem::path(test_file_name));
+  std::filesystem::remove(std::filesystem::path(small_file_name));
+
+  client.async_close();
+  sec_client.async_close();
+
+  server.stop();
+  server_thread.join();
+}
