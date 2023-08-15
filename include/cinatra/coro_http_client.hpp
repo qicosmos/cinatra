@@ -671,10 +671,12 @@ class coro_http_client {
     socket_->has_closed_ = true;
 #ifdef CINATRA_ENABLE_SSL
     sni_hostname_ = "";
-    socket_->ssl_stream_ = nullptr;
-    socket_->ssl_stream_ =
-        std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-            socket_->impl_, *ssl_ctx_);
+    if (use_ssl_) {
+      socket_->ssl_stream_ = nullptr;
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+    }
 #endif
 #ifdef BENCHMARK_TEST
     req_str_.clear();
