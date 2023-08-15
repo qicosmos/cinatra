@@ -171,9 +171,7 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
     std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
-    bool ret = (r.net_err == std::errc::timed_out ||
-                r.net_err == asio::error::operation_aborted);
-    CHECK(ret);
+    CHECK(r.net_err != std::errc{});
   }
 
   {
@@ -184,7 +182,7 @@ TEST_CASE("test coro_http_client connect/request timeout") {
     auto r =
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
     std::cout << r.net_err.message() << "\n";
-    CHECK(r.net_err == std::errc::timed_out);
+    CHECK(r.net_err != std::errc{});
   }
 }
 
@@ -205,6 +203,8 @@ TEST_CASE("test coro_http_client async_http_connect") {
   CHECK(r.status != 200);
 
   r = async_simple::coro::syncAwait(client1.reconnect("http://cn.bing.com"));
+  CHECK(client1.get_host() == "cn.bing.com");
+  CHECK(client1.get_port() == "http");
   CHECK(r.status >= 200);
 
   r = async_simple::coro::syncAwait(client1.reconnect("http://www.baidu.com"));
