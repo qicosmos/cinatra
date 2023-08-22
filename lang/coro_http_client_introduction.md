@@ -4,11 +4,10 @@ coro_http_client 使用文档
 
 ## 如何引入 coro_http_cient
 
-coro_http_cient 是yalantinglibgs 的子库，yalantinglibs 是header only的，下载yalantinglibgs 库之后，在自己的工程中包含目录：
+coro_http_cient 是cinatra 的子库，cinatra 是header only的，下载cinatra 库之后，在自己的工程中包含目录：
 
 ```c++
   include_directories(include)
-  include_directories(include/ylt/thirdparty)
 ```
 
 如果是gcc 编译器还需要设置以启用C++20 协程：
@@ -24,10 +23,10 @@ coro_http_cient 是yalantinglibgs 的子库，yalantinglibs 是header only的，
 
 ```c++
 #include <iostream>
-#include "ylt/coro_http/coro_http_client.hpp"
+#include "cinatra/coro_http_client.hpp"
 
 int main() {
-    coro_http::coro_http_client client{};
+    cinatra::coro_http_client client{};
     std::string uri = "http://cn.bing.com";
     auto result = client.get(uri);
     if (result.net_err) {
@@ -35,7 +34,7 @@ int main() {
     }
     std::cout << result.status << "\n";
 
-    result = client.post(uri, "hello", coro_http::req_content_type::json);
+    result = client.post(uri, "hello", cinatra::req_content_type::json);
     std::cout << result.status << "\n";    
 }
 ```
