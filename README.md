@@ -344,6 +344,9 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 	}
 
 ## cinatra客户端使用
+
+[使用文档](lang/coro_http_client_introduction.md)
+
 ### sync_send get/post message
 
 ```
