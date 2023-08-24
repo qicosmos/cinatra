@@ -135,6 +135,12 @@ class simple_buffer {
     m_size += len;
   }
 
+  // set \0 at the tail.
+  void set_string_end() {
+    write("\0", 1);
+    m_size -= 1;
+  }
+
   char *data() { return m_data; }
 
   const char *data() const { return m_data; }
@@ -1301,6 +1307,7 @@ class coro_http_client {
     } while (0);
 
     if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.set_string_end();
       data.resp_body =
           std::string_view{resp_chunk_str_.data(), resp_chunk_str_.size()};
     }
@@ -1313,9 +1320,14 @@ class coro_http_client {
                                                        bool is_ranges,
                                                        auto &ctx) {
     if (content_len > 0) {
-      auto data_ptr = read_buf_.size() == 0
-                          ? body_.data()
-                          : asio::buffer_cast<const char *>(read_buf_.data());
+      const char *data_ptr;
+      if (read_buf_.size() == 0) {
+        body_.set_string_end();
+        data_ptr = body_.data();
+      }
+      else {
+        data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
+      }
 
       if (is_ranges) {
         if (ctx.stream) {
