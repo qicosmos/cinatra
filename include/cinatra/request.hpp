@@ -113,7 +113,7 @@ class request {
     if (!copy_headers_.empty())
       copy_headers_.clear();
     num_headers_ = sizeof(headers_) / sizeof(headers_[0]);
-    header_len_ = phr_parse_request(
+    header_len_ = detail::phr_parse_request(
         buf_.data(), cur_size_, &method_, &method_len_, &url_, &url_len_,
         &minor_version_, headers_, &num_headers_, last_len);
 
@@ -337,9 +337,8 @@ class request {
   std::string_view get_header_value(std::string_view key) const {
     if (copy_headers_.empty()) {
       for (size_t i = 0; i < num_headers_; i++) {
-        if (iequal(headers_[i].name, headers_[i].name_len, key.data(),
-                   key.length()))
-          return std::string_view(headers_[i].value, headers_[i].value_len);
+        if (iequal(headers_[i].name, key))
+          return headers_[i].value;
       }
 
       return {};
@@ -361,16 +360,14 @@ class request {
     return {};
   }
 
-  std::pair<phr_header *, size_t> get_headers() {
+  std::span<http_header> get_headers() {
     if (copy_headers_.empty())
       return {headers_, num_headers_};
 
     num_headers_ = copy_headers_.size();
     for (size_t i = 0; i < num_headers_; i++) {
-      headers_[i].name = copy_headers_[i].first.data();
-      headers_[i].name_len = copy_headers_[i].first.size();
-      headers_[i].value = copy_headers_[i].second.data();
-      headers_[i].value_len = copy_headers_[i].second.size();
+      headers_[i].name = copy_headers_[i].first;
+      headers_[i].value = copy_headers_[i].second;
     }
     return {headers_, num_headers_};
   }
@@ -876,9 +873,8 @@ class request {
       return;
 
     for (size_t i = 0; i < num_headers_; i++) {
-      copy_headers_.emplace_back(
-          std::string(headers_[i].name, headers_[i].name_len),
-          std::string(headers_[i].value, headers_[i].value_len));
+      copy_headers_.emplace_back(std::string{headers_[i].name},
+                                 std::string{headers_[i].value});
     }
   }
 
@@ -899,7 +895,7 @@ class request {
   std::vector<char> buf_;
 
   size_t num_headers_ = 0;
-  struct phr_header headers_[64];
+  http_header headers_[64];
   const char *method_ = nullptr;
   size_t method_len_ = 0;
   const char *url_ = nullptr;
