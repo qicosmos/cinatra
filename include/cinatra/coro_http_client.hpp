@@ -1261,6 +1261,12 @@ class coro_http_client {
       }
       if (parser_.is_chunked()) {
         is_keep_alive = true;
+        if (read_buf_.size() > 0) {
+          const char *data_ptr =
+              asio::buffer_cast<const char *>(read_buf_.data());
+          chunked_buf_.sputn(data_ptr, read_buf_.size());
+          read_buf_.consume(read_buf_.size());
+        }
         ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
