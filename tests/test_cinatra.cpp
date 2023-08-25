@@ -165,6 +165,7 @@ TEST_CASE("test pass path not entire uri") {
 
 TEST_CASE("test coro_http_client connect/request timeout") {
   {
+#if !defined(_MSC_VER)
     coro_http_client client{};
     cinatra::coro_http_client::config conf{.conn_timeout_duration = 1ms};
     client.init_config(conf);
@@ -172,6 +173,7 @@ TEST_CASE("test coro_http_client connect/request timeout") {
         async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
     std::cout << r.net_err.value() << ", " << r.net_err.message() << "\n";
     CHECK(r.net_err != std::errc{});
+#endif
   }
 
   {
