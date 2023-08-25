@@ -1261,7 +1261,6 @@ class coro_http_client {
       }
       if (parser_.is_chunked()) {
         is_keep_alive = true;
-        read_buf_.consume(parser.header_len());
         if (read_buf_.size() > 0) {
           const char *data_ptr =
               asio::buffer_cast<const char *>(read_buf_.data());
