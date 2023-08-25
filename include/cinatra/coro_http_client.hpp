@@ -1237,7 +1237,7 @@ class coro_http_client {
         break;
       }
 
-      ec = handle_header(data, parser, size);
+      ec = handle_header(data, parser_, size);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       if (inject_header_valid == ClientInjectAction::header_error) {
         ec = std::make_error_code(std::errc::protocol_error);
@@ -1250,32 +1250,32 @@ class coro_http_client {
         break;
       }
 
-      is_keep_alive = parser.keep_alive();
+      is_keep_alive = parser_.keep_alive();
       if (method == http_method::HEAD) {
         co_return data;
       }
 
-      bool is_ranges = parser.is_ranges();
+      bool is_ranges = parser_.is_ranges();
       if (is_ranges) {
         is_keep_alive = true;
       }
-      if (parser.is_chunked()) {
+      if (parser_.is_chunked()) {
         is_keep_alive = true;
         ec = co_await handle_chunked(data, std::move(ctx));
         break;
       }
 
       redirect_uri_.clear();
-      bool is_redirect = parser.is_location();
+      bool is_redirect = parser_.is_location();
       if (is_redirect)
-        redirect_uri_ = parser.get_header_value("Location");
+        redirect_uri_ = parser_.get_header_value("Location");
 
-      size_t content_len = (size_t)parser.body_len();
+      size_t content_len = (size_t)parser_.body_len();
 #ifdef BENCHMARK_TEST
-      total_len_ = parser.total_len();
+      total_len_ = parser_.total_len();
 #endif
 
-      if ((size_t)parser.body_len() <= read_buf_.size()) {
+      if ((size_t)parser_.body_len() <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
