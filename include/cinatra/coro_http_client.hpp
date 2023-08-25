@@ -1710,8 +1710,7 @@ class coro_http_client {
     return has_http_scheme;
   }
 
-  http_parser parser;
-
+  http_parser parser_;
   coro_io::ExecutorWrapper<> executor_wrapper_;
   coro_io::period_timer timer_;
   std::shared_ptr<socket_t> socket_;

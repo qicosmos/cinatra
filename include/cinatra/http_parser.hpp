@@ -12,7 +12,7 @@
 using namespace std::string_view_literals;
 
 #ifndef CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
-#define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 200
+#define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 100
 #endif
 
 namespace cinatra {
@@ -49,7 +49,7 @@ class http_parser {
 
   std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
-      if (iequal(headers_[i].name,key))
+      if (iequal(headers_[i].name, key))
         return headers_[i].value;
     }
     return {};
@@ -95,7 +95,7 @@ class http_parser {
   int total_len() const { return header_len_ + body_len_; }
 
   bool is_location() {
-    auto location = this->get_header_value("Location");
+    auto location = this->get_header_value("Location"sv);
     return !location.empty();
   }
 
