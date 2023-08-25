@@ -22,6 +22,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
+#include "picohttpparser.h"
 #include "response_cv.hpp"
 #include "uri.hpp"
 #include "websocket.hpp"
@@ -50,11 +51,13 @@ inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
 
+struct http_header;
+
 struct resp_data {
   std::error_code net_err;
   int status;
   std::string_view resp_body;
-  std::vector<std::pair<std::string, std::string>> resp_headers;
+  std::span<http_header> resp_headers;
   bool eof;
 #ifdef BENCHMARK_TEST
   uint64_t total;
@@ -1216,7 +1219,7 @@ class coro_http_client {
       return std::make_error_code(std::errc::protocol_error);
     }
     read_buf_.consume(header_size);  // header size
-    data.resp_headers = get_headers(parser);
+    data.resp_headers = parser.get_headers();
     data.status = parser.status();
     return {};
   }
@@ -1234,7 +1237,6 @@ class coro_http_client {
         break;
       }
 
-      http_parser parser;
       ec = handle_header(data, parser, size);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
       if (inject_header_valid == ClientInjectAction::header_error) {
@@ -1548,20 +1550,6 @@ class coro_http_client {
     co_return resp_data{{}, 200};
   }
 
-  std::vector<std::pair<std::string, std::string>> get_headers(
-      http_parser &parser) {
-    std::vector<std::pair<std::string, std::string>> resp_headers;
-
-    auto [headers, num_headers] = parser.get_headers();
-    for (size_t i = 0; i < num_headers; i++) {
-      resp_headers.emplace_back(
-          std::string(headers[i].name, headers[i].name_len),
-          std::string(headers[i].value, headers[i].value_len));
-    }
-
-    return resp_headers;
-  }
-
   // this function must be called before async_ws_connect.
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
@@ -1721,6 +1709,8 @@ class coro_http_client {
         ((pos_wss != std::string::npos) && pos_wss == 0);
     return has_http_scheme;
   }
+
+  http_parser parser;
 
   coro_io::ExecutorWrapper<> executor_wrapper_;
   coro_io::period_timer timer_;
