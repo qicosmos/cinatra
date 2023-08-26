@@ -154,6 +154,10 @@ TEST_CASE("test pass path not entire uri") {
   coro_http_client client{};
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+  std::cout << r.resp_body.size() << "\n";
+  auto buf = client.release_buf();
+  std::cout << strlen(buf.get()) << "\n";
+  std::cout << buf << "\n";
   CHECK(r.status >= 200);
 
   r = async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
@@ -565,6 +569,9 @@ TEST_CASE("test basic http request") {
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
+  size_t size = result.resp_body.size();
+  auto buf = client.release_buf();
+  CHECK(size == strlen(buf.get()));
   CHECK(result.resp_body == "hello world");
 
   result = async_simple::coro::syncAwait(client.async_post(
