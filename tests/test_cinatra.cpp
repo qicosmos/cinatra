@@ -1,3 +1,4 @@
+
 #include <async_simple/coro/Collect.h>
 
 #include <chrono>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include "cinatra.hpp"
+#include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
 using namespace std::chrono_literals;
@@ -127,6 +129,46 @@ TEST_CASE("test ssl client") {
   CHECK(result.status >= 200);
 }
 #endif
+
+TEST_CASE("test cinatra::string with SSO") {
+  std::string s = "HelloHi";
+  auto oldlen = s.length();
+  s.reserve(10);
+  memset(s.data() + oldlen + 1, 'A', 3);
+  cinatra::detail::resize(s, 10);
+  CHECK(s[10] == '\0');
+  memcpy(s.data() + oldlen, "233", 3);
+  CHECK(strlen(s.data()) == 10);
+  CHECK(s == "HelloHi233");
+}
+
+TEST_CASE("test cinatra::string without SSO") {
+  std::string s(1000, 'A');
+  std::string s2(5000, 'B');
+  std::string sum = s + s2;
+  auto oldlen = s.length();
+  s.reserve(6000);
+  memset(s.data() + oldlen + 1, 'A', 5000);
+  cinatra::detail::resize(s, 6000);
+  CHECK(s[6000] == '\0');
+  memcpy(s.data() + oldlen, s2.data(), s2.length());
+  CHECK(strlen(s.data()) == 6000);
+  CHECK(s == sum);
+}
+
+TEST_CASE("test cinatra::string SSO to no SSO") {
+  std::string s(10, 'A');
+  std::string s2(5000, 'B');
+  std::string sum = s + s2;
+  auto oldlen = s.length();
+  s.reserve(5010);
+  memset(s.data() + oldlen + 1, 'A', 5000);
+  cinatra::detail::resize(s, 5010);
+  CHECK(s[5010] == '\0');
+  memcpy(s.data() + oldlen, s2.data(), s2.length());
+  CHECK(strlen(s.data()) == 5010);
+  CHECK(s == sum);
+}
 
 async_simple::coro::Lazy<void> test_collect_all() {
   asio::io_context ioc;
