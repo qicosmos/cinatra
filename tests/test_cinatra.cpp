@@ -1,4 +1,3 @@
-
 #include <async_simple/coro/Collect.h>
 
 #include <chrono>
