@@ -203,13 +203,12 @@ void test_coro_http_client() {
   std::cout << data.resp_body << "\n";
 
   std::string uri2 = "https://www.baidu.com";
-  std::string uri3 = "https://cn.bing.com";
-  coro_http_client client{};
-  client.init_ssl("../../include/cinatra", "server.crt");
-  data = co_await client.async_get(uri2);
+  coro_http_client client1{};
+  client1.init_ssl("../../include/cinatra", "server.crt");
+  data = co_await client1.async_get(uri2);
   print(data.status);
 
-  data = co_await client.async_get(uri3);
+  data = co_await client1.async_get(uri2);
   print(data.status);  
 }
 #endif
