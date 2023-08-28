@@ -11,8 +11,10 @@ inline void resize(std::string& str, std::size_t sz) {
     return sz;
   });
 }
-#elif defined(__clang_major__) && __clang_major__ <= 11 && __clang_major__ >= 8
-// clang8-11 has bug in global friend function. discard it.
+#elif (defined(__clang_major__) && __clang_major__ <= 11) || \
+    (defined(_MSC_VER) && _MSC_VER <= 1920)
+// old clang has bug in global friend function. discard it.
+// old msvc don't support visit private, discard it.
 inline void resize(std::string& str, std::size_t sz) { str.resize(sz); }
 #else
 
@@ -29,7 +31,7 @@ template <typename Money_t, Money_t std::string::*p>
 class string_thief {
  public:
   friend void string_set_length_hacker(std::string& bank, std::size_t sz) {
-    bank.*p = sz;
+    (bank.*p)._Myval2._Mysize = sz;
   }
 };
 #endif
@@ -41,8 +43,8 @@ template class string_thief<void(std::string::size_type),
 template class string_thief<void(std::string::size_type),
                             &std::string::__set_size>;
 #elif defined(_MSVC_STL_VERSION)
-template class string_thief<void(std::string::size_type),
-                            &std::string::_Mypair._Myval2._Mysize>;
+template class string_thief<decltype(std::string::_Mypair),
+                            &std::string::_Mypair>;
 #endif
 
 #if defined(__GLIBCXX__) || defined(_LIBCPP_VERSION) || \
