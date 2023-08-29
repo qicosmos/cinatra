@@ -611,9 +611,10 @@ TEST_CASE("test basic http request") {
   std::string uri = "http://127.0.0.1:8090";
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   size_t size = result.resp_body.size();
+  CHECK(result.resp_body == "hello world");
   auto buf = client.release_buf();
   CHECK(size == strlen(buf.data()));
-  CHECK(result.resp_body == "hello world");
+  CHECK(buf == "hello world");
 
   result = async_simple::coro::syncAwait(client.async_post(
       uri, "async post hello coro_http_client", req_content_type::string));
