@@ -197,7 +197,7 @@ TEST_CASE("test pass path not entire uri") {
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   std::cout << r.resp_body.size() << "\n";
   auto buf = client.release_buf();
-  std::cout << strlen(buf.get()) << "\n";
+  std::cout << strlen(buf.data()) << "\n";
   std::cout << buf << "\n";
   CHECK(r.status >= 200);
 
@@ -612,7 +612,7 @@ TEST_CASE("test basic http request") {
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   size_t size = result.resp_body.size();
   auto buf = client.release_buf();
-  CHECK(size == strlen(buf.get()));
+  CHECK(size == strlen(buf.data()));
   CHECK(result.resp_body == "hello world");
 
   result = async_simple::coro::syncAwait(client.async_post(
