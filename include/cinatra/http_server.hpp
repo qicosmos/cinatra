@@ -174,6 +174,10 @@ class http_server_ : private noncopyable {
     set_file_dir(std::move(path), upload_dir_);
   }
 
+  void set_http_file_server(std::string path) {
+    download_display_file_dir_ = path;
+  }
+
   const std::string &static_dir() const { return static_dir_; }
 
   // xM
@@ -342,6 +346,16 @@ class http_server_ : private noncopyable {
             bool r = download_check_(req, res);
             if (!r) {
               res.set_status_and_content(status_type::bad_request);
+              return;
+            }
+          }
+
+          if (!download_display_file_dir_.empty()) {
+            std::string ret = "";
+            bool is_need_download_lists_response =
+                build_http_download_lists_response(req, std::move(ret));
+            if (is_need_download_lists_response) {
+              res.set_status_and_content(status_type::ok, std::move(ret));
               return;
             }
           }
@@ -587,6 +601,35 @@ class http_server_ : private noncopyable {
     }
   }
 
+  bool build_http_download_lists_response(request &req,
+                                          std::string &&resp_str) {
+    std::string res_str = "";
+    std::string href_of_head = "<br><a href=\"http://" +
+                               std::string(req.get_header_value("host")) + "/";
+    std::string href_of_tail = "\"target=\"_blank\">";
+    if (req.get_res_path() == download_display_file_dir_) {
+      std::string file_dir_str = static_dir_;
+      std::filesystem::path dir_path(file_dir_str);
+
+      for (const auto &entry : std::filesystem::directory_iterator(dir_path)) {
+        if (!entry.is_directory()) {
+          auto u8_file_name = entry.path().filename().u8string();
+          std::string file_name_str(u8_file_name.begin(), u8_file_name.end());
+          std::string full_href = href_of_head + file_name_str + href_of_tail +
+                                  file_name_str + "</a></br>";
+          res_str += full_href;
+        }
+      }
+      std::string ret =
+          download_dir_response_head_ + res_str + download_dir_response_tail_;
+      resp_str = std::move(ret);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
   service_pool_policy io_service_pool_;
 
   std::size_t max_req_buf_size_ =
@@ -596,6 +639,7 @@ class http_server_ : private noncopyable {
   http_router http_router_;
   std::string static_dir_ = fs::absolute("www").string();  // default
   std::string upload_dir_ = fs::absolute("www").string();  // default
+  std::string download_display_file_dir_ = "";
   std::time_t static_res_cache_max_age_ = 0;
 
   bool enable_timeout_ = true;
@@ -620,6 +664,15 @@ class http_server_ : private noncopyable {
   uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<connection<ScoketType>>> conns_;
   std::mutex conns_mtx_;
+
+  std::string download_dir_response_head_ =
+      "<html>"
+      "<head><meta charset=\"utf-8\"><title>http file download "
+      "server</title></head>"
+      "<body>";
+  std::string download_dir_response_tail_ =
+      "</body>"
+      "</html>";
 };
 
 template <typename T>
