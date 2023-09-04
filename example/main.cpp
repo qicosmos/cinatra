@@ -242,6 +242,7 @@ int main() {
   // test_ssl_server();
   // test_download();
   http_server server(std::thread::hardware_concurrency());
+  server.set_http_file_server("http_download_file_server");
   bool r = server.listen("0.0.0.0", "8090");
   if (!r) {
     // LOG_INFO << "listen failed";
