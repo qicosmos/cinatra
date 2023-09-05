@@ -52,6 +52,9 @@ add_executable(test_time_util
         )
 add_test(NAME test_time_util COMMAND test_time_util)
 
+add_executable(test_coro_http_server test_coro_http_server.cpp)
+add_test(NAME test_coro_http_server COMMAND test_coro_http_server)
+
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
     message(STATUS "Use SSL")
