@@ -6,6 +6,7 @@
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Lazy.h"
 #include "cinatra_log_wrapper.hpp"
+#include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 
@@ -123,7 +124,15 @@ class coro_http_server {
       }
 
       CINATRA_LOG_DEBUG << "new connection comming";
+      auto conn =
+          std::make_shared<coro_connection>(executor, std::move(socket));
+      start_one(conn).via(&conn->get_executor()).detach();
     }
+  }
+
+  async_simple::coro::Lazy<void> start_one(
+      std::shared_ptr<coro_connection> conn) noexcept {
+    co_await conn->start();
   }
 
   void close_acceptor() {

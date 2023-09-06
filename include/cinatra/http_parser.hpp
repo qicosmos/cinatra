@@ -47,6 +47,43 @@ class http_parser {
     return header_len_;
   }
 
+  int parse_request(const char *data, size_t size, int last_len) {
+    int minor_version;
+
+    num_headers_ = CINATRA_MAX_HTTP_HEADER_FIELD_SIZE;
+
+    const char *method;
+    size_t method_len;
+    const char *url;
+    size_t url_len;
+    header_len_ = detail::phr_parse_request(
+        data, size, &method, &method_len, &url, &url_len, &minor_version,
+        headers_.data(), &num_headers_, last_len);
+
+    if (header_len_ < 0) [[unlikely]] {
+      CINATRA_LOG_WARNING << "parse http head failed";
+      if (size == CINATRA_MAX_HTTP_HEADER_FIELD_SIZE) {
+        CINATRA_LOG_ERROR << "the field of http head is out of max limit "
+                          << CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
+                          << ", you can define macro "
+                             "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
+      }
+    }
+
+    method_ = {method, method_len};
+    url_ = {url, url_len};
+
+    auto content_len = this->get_header_value("content-length"sv);
+    if (content_len.empty()) {
+      body_len_ = 0;
+    }
+    else {
+      body_len_ = atoi(content_len.data());
+    }
+
+    return header_len_;
+  }
+
   std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
       if (iequal(headers_[i].name, key))
@@ -119,5 +156,7 @@ class http_parser {
   int header_len_ = 0;
   int body_len_ = 0;
   std::array<http_header, CINATRA_MAX_HTTP_HEADER_FIELD_SIZE> headers_;
+  std::string_view method_;
+  std::string_view url_;
 };
 }  // namespace cinatra
