@@ -706,6 +706,7 @@ class coro_http_client {
   template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
       S uri, http_method method, String filename,
+      req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
@@ -713,7 +714,7 @@ class coro_http_client {
       }
     });
 
-    req_context<> ctx{req_content_type::text};
+    req_context<> ctx{content_type};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
