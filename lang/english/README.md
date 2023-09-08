@@ -53,6 +53,7 @@ Use the following command to compile cinatra with simd optimization.Note that on
 ```shell
 cmake -DENABLE_SIMD=SSE42 .. # enable sse4.2 instruction set
 cmake -DENABLE_SIMD=AVX2 .. # enable avx2 instruction set
+cmake -DENABLE_SIMD=AARCH64 .. # enable neon instruction set in aarch64
 ```
 
 ## Examples
