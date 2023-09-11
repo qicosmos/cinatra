@@ -3,10 +3,12 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
 #include "cinatra.hpp"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
@@ -189,6 +191,31 @@ async_simple::coro::Lazy<void> test_collect_all() {
     CHECK(result.status >= 200);
   }
   thd.join();
+}
+
+TEST_CASE("test request with out buffer") {
+  std::string str;
+  str.resize(10);
+  std::string url = "http://cn.bing.com";
+
+  {
+    coro_http_client client;
+    auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    CHECK(result.net_err == std::errc::no_buffer_space);
+  }
+
+  {
+    str.resize(6400);
+    coro_http_client client;
+    auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    CHECK(result.status == 200);
+    std::string_view sv(str.data(), result.resp_body.size());
+    CHECK(result.resp_body == sv);
+  }
 }
 
 TEST_CASE("test pass path not entire uri") {
