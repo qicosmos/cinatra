@@ -20,7 +20,7 @@ struct email_data {
 template <typename T> class client {
 public:
   static constexpr bool IS_SSL = std::is_same_v<T, cinatra::SSL>;
-  client(asio::io_service &io_service)
+  client(asio_ns::io_service &io_service)
       : io_context_(io_service), socket_(io_service), resolver_(io_service) {}
 
   ~client() { close(); }
@@ -35,12 +35,12 @@ public:
       host.erase(0, pos + 3);
     }
 
-    asio::ip::tcp::resolver::query qry(
+    asio_ns::ip::tcp::resolver::query qry(
         host, server_.port,
-        asio::ip::resolver_query_base::numeric_service);
+        asio_ns::ip::resolver_query_base::numeric_service);
     std::error_code ec;
     auto endpoint_iterator = resolver_.resolve(qry, ec);
-    asio::connect(socket_, endpoint_iterator, ec);
+    asio_ns::connect(socket_, endpoint_iterator, ec);
     if (ec) {
       return;
     }
@@ -51,13 +51,13 @@ public:
 
     build_request();
 
-    asio::write(socket(), request_, ec);
+    asio_ns::write(socket(), request_, ec);
     if (ec) {
       return;
     }
 
     while (true) {
-      asio::read(socket(), response_, asio::transfer_at_least(1),
+      asio_ns::read(socket(), response_, asio_ns::transfer_at_least(1),
                         ec);
       if (ec) {
         return;
@@ -87,13 +87,13 @@ private:
   }
   void upgrade_to_ssl() {
 #ifdef CINATRA_ENABLE_SSL
-    asio::ssl::context ctx(asio::ssl::context::sslv23);
+    asio_ns::ssl::context ctx(asio_ns::ssl::context::sslv23);
     ctx.set_default_verify_paths();
     ctx.set_verify_mode(ctx.verify_fail_if_no_peer_cert);
 
     ssl_socket_ = std::make_unique<
-        asio::ssl::stream<asio::ip::tcp::socket &>>(socket_, ctx);
-    ssl_socket_->set_verify_mode(asio::ssl::verify_none);
+        asio_ns::ssl::stream<asio_ns::ip::tcp::socket &>>(socket_, ctx);
+    ssl_socket_->set_verify_mode(asio_ns::ssl::verify_none);
     ssl_socket_->set_verify_callback([](auto preverified, auto &ctx) {
       char subject_name[256];
       X509 *cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
@@ -103,7 +103,7 @@ private:
     });
 
     std::error_code ec;
-    ssl_socket_->handshake(asio::ssl::stream_base::client, ec);
+    ssl_socket_->handshake(asio_ns::ssl::stream_base::client, ec);
 #endif
   }
 
@@ -185,28 +185,28 @@ private:
 #endif
     }
 
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
+    socket_.shutdown(asio_ns::ip::tcp::socket::shutdown_both, ignore_ec);
     socket_.close(ignore_ec);
   }
 
 private:
-  asio::io_context &io_context_;
-  asio::ip::tcp::socket socket_;
+  asio_ns::io_context &io_context_;
+  asio_ns::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+  std::unique_ptr<asio_ns::ssl::stream<asio_ns::ip::tcp::socket &>>
       ssl_socket_;
 #endif
-  asio::ip::tcp::resolver resolver_;
+  asio_ns::ip::tcp::resolver resolver_;
 
   email_server server_;
   email_data data_;
 
-  asio::streambuf request_;
-  asio::streambuf response_;
+  asio_ns::streambuf request_;
+  asio_ns::streambuf response_;
 };
 
 template <typename T>
-static inline auto get_smtp_client(asio::io_service &io_service) {
+static inline auto get_smtp_client(asio_ns::io_service &io_service) {
   return smtp::client<T>(io_service);
 }
 

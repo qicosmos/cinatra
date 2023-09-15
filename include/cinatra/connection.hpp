@@ -32,7 +32,7 @@ class connection : public base_connection,
                    private noncopyable {
 public:
   explicit connection(
-      asio::io_service &io_service, ssl_configure ssl_conf,
+      asio_ns::io_service &io_service, ssl_configure ssl_conf,
       std::size_t max_req_size, long keep_alive_timeout, http_handler &handler,
       std::string &static_dir,
       std::function<bool(request &req, response &res)> *upload_check)
@@ -49,11 +49,11 @@ public:
 
   void init_ssl_context(ssl_configure ssl_conf) {
 #ifdef CINATRA_ENABLE_SSL
-    unsigned long ssl_options = asio::ssl::context::default_workarounds |
-                                asio::ssl::context::no_sslv2 |
-                                asio::ssl::context::single_dh_use;
+    unsigned long ssl_options = asio_ns::ssl::context::default_workarounds |
+                                asio_ns::ssl::context::no_sslv2 |
+                                asio_ns::ssl::context::single_dh_use;
     try {
-      asio::ssl::context ssl_context(asio::ssl::context::sslv23);
+      asio_ns::ssl::context ssl_context(asio_ns::ssl::context::sslv23);
       ssl_context.set_options(ssl_options);
       ssl_context.set_password_callback([](auto, auto) { return "123456"; });
 
@@ -64,11 +64,11 @@ public:
 
       if (fs::exists(ssl_conf.key_file, ec))
         ssl_context.use_private_key_file(std::move(ssl_conf.key_file),
-                                         asio::ssl::context::pem);
+                                         asio_ns::ssl::context::pem);
 
       // ssl_context_callback(ssl_context);
       ssl_stream_ = std::make_unique<
-          asio::ssl::stream<asio::ip::tcp::socket &>>(
+          asio_ns::ssl::stream<asio_ns::ip::tcp::socket &>>(
           socket_, ssl_context);
     } catch (const std::exception &e) {
       std::cout << e.what() << "\n";
@@ -171,8 +171,7 @@ public:
     if (!enable_timeout_)
       return;
 
-    std::error_code ec;
-    timer_.cancel(ec);
+    timer_.cancel();
   }
 
   void enable_timeout(bool enable) { enable_timeout_ = enable; }
@@ -215,8 +214,8 @@ public:
       chunked_header_ = http_range_chunk_header + "Content-Type: " +
                         std::string(mime.data(), mime.length()) + "\r\n\r\n";
     }
-    asio::async_write(
-        socket(), asio::buffer(chunked_header_),
+    asio_ns::async_write(
+        socket(), asio_ns::buffer(chunked_header_),
         [self = this->shared_from_this()](const std::error_code &ec,
                                           std::size_t) {
           self->handle_chunked_header(ec);
@@ -226,7 +225,7 @@ public:
   void write_ranges_header(std::string header_str) {
     reset_timer();
     chunked_header_ = std::move(header_str); // reuse the variable
-    asio::async_write(socket(), asio::buffer(chunked_header_),
+    asio_ns::async_write(socket(), asio_ns::buffer(chunked_header_),
                              [this, self = this->shared_from_this()](
                                  const std::error_code &ec,
                                  std::size_t) { handle_chunked_header(ec); });
@@ -235,7 +234,7 @@ public:
   void write_chunked_data(std::string &&buf, bool eof) {
     reset_timer();
 
-    std::vector<asio::const_buffer> buffers =
+    std::vector<asio_ns::const_buffer> buffers =
         res_.to_chunked_buffers(buf.data(), buf.length(), eof);
     if (buffers.empty()) {
       handle_write(std::error_code{});
@@ -243,7 +242,7 @@ public:
     }
 
     auto self = this->shared_from_this();
-    asio::async_write(socket(), buffers,
+    asio_ns::async_write(socket(), buffers,
                              [this, self, buf = std::move(buf), eof](
                                  const std::error_code &ec, size_t) {
                                if (ec) {
@@ -268,8 +267,8 @@ public:
 
     chunked_header_ = std::move(buf); // reuse the variable
     auto self = this->shared_from_this();
-    asio::async_write(
-        socket(), asio::buffer(chunked_header_),
+    asio_ns::async_write(
+        socket(), asio_ns::buffer(chunked_header_),
         [this, self, eof](const std::error_code &ec, size_t) {
           if (ec) {
             return;
@@ -326,7 +325,7 @@ private:
 
   void async_handshake() {
 #ifdef CINATRA_ENABLE_SSL
-    ssl_stream_->async_handshake(asio::ssl::stream_base::server,
+    ssl_stream_->async_handshake(asio_ns::ssl::stream_base::server,
                                  [this, self = this->shared_from_this()](
                                      const std::error_code &error) {
                                    if (error) {
@@ -353,7 +352,7 @@ private:
 #endif
 
     socket().async_read_some(
-        asio::buffer(req_.buffer(), req_.left_size()),
+        asio_ns::buffer(req_.buffer(), req_.left_size()),
         [this, self = this->shared_from_this()](
             const std::error_code &e, std::size_t bytes_transferred) {
           if (e) {
@@ -446,11 +445,11 @@ private:
       auto resp_vec =
           http_cache::get().get(std::string(raw_url.data(), raw_url.length()));
       if (!resp_vec.empty()) {
-        std::vector<asio::const_buffer> buffers;
+        std::vector<asio_ns::const_buffer> buffers;
         for (auto &iter : resp_vec) {
-          buffers.emplace_back(asio::buffer(iter.data(), iter.size()));
+          buffers.emplace_back(asio_ns::buffer(iter.data(), iter.size()));
         }
-        asio::async_write(
+        asio_ns::async_write(
             socket(), buffers,
             [self = this->shared_from_this(), resp_vec = std::move(resp_vec)](
                 const std::error_code &ec, std::size_t) {
@@ -516,8 +515,8 @@ private:
     }
 
     res_.set_delay(false);
-    asio::async_write(
-        socket(), asio::buffer(rep_str.data(), rep_str.size()),
+    asio_ns::async_write(
+        socket(), asio_ns::buffer(rep_str.data(), rep_str.size()),
         [head_not_complete, body_not_complete, left_body_len, this,
          self = this->shared_from_this(),
          &rep_str](const std::error_code &ec, std::size_t) {
@@ -541,7 +540,7 @@ private:
     reset_timer();
 
     socket().async_read_some(
-        asio::buffer(req_.buffer(), req_.left_size()),
+        asio_ns::buffer(req_.buffer(), req_.left_size()),
         [this, self = this->shared_from_this()](
             const std::error_code &e, std::size_t bytes_transferred) {
           handle_read(e, bytes_transferred);
@@ -552,8 +551,8 @@ private:
     reset_timer();
 
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), req_.left_body_len()),
         [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
@@ -592,8 +591,8 @@ private:
     // res_.raw_content());
     //			}
 
-    asio::async_write(
-        socket(), asio::buffer(rep_str.data(), rep_str.size()),
+    asio_ns::async_write(
+        socket(), asio_ns::buffer(rep_str.data(), rep_str.size()),
         [this,
          self = this->shared_from_this()](const std::error_code &ec,
                                           std::size_t) { handle_write(ec); });
@@ -647,8 +646,7 @@ private:
   void close(bool close_ssl = true) {
 #ifdef CINATRA_ENABLE_SSL
     if (close_ssl && ssl_stream_) {
-      std::error_code ec;
-      ssl_stream_->shutdown(ec);
+      ssl_stream_->shutdown();
       ssl_stream_ = nullptr;
     }
 #endif
@@ -659,8 +657,7 @@ private:
 
     req_.close_upload_file();
     shutdown();
-    std::error_code ec;
-    socket_.close(ec);
+    socket_.close();
     has_closed_ = true;
     has_shake_ = false;
   }
@@ -726,8 +723,8 @@ private:
 
   void do_read_octet_stream_body() {
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), req_.left_body_len()),
         [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
@@ -796,8 +793,8 @@ private:
     reset_timer();
 
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), req_.left_body_len()),
         [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
@@ -953,8 +950,8 @@ private:
 
     req_.fit_size();
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), req_.left_body_len()),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), req_.left_body_len()),
         [self, this](std::error_code ec, std::size_t length) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
@@ -985,8 +982,8 @@ private:
 
   void do_read_part_data() {
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), req_.left_body_size()),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), req_.left_body_size()),
         [self, this](std::error_code ec, std::size_t length) {
           if (ec) {
             req_.set_state(data_proc_state::data_error);
@@ -1043,14 +1040,14 @@ private:
 
   //-------------web socket----------------//
   void response_handshake() {
-    std::vector<asio::const_buffer> buffers = res_.to_buffers();
+    std::vector<asio_ns::const_buffer> buffers = res_.to_buffers();
     if (buffers.empty()) {
       close(false);
       return;
     }
 
     auto self = this->shared_from_this();
-    asio::async_write(
+    asio_ns::async_write(
         socket(), buffers,
         [this, self](const std::error_code &ec, std::size_t) {
           if (ec) {
@@ -1069,8 +1066,8 @@ private:
 
   void do_read_websocket_head(size_t length) {
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), length),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), length),
         [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
@@ -1110,8 +1107,8 @@ private:
 
   void do_read_websocket_data(size_t length) {
     auto self = this->shared_from_this();
-    asio::async_read(
-        socket(), asio::buffer(req_.buffer(), length),
+    asio_ns::async_read(
+        socket(), asio_ns::buffer(req_.buffer(), length),
         [this, self](const std::error_code &ec,
                      size_t bytes_transferred) {
           if (ec) {
@@ -1307,13 +1304,11 @@ private:
   }
 
   void shutdown_send() {
-    std::error_code ignored_ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_send, ignored_ec);
+    socket_.shutdown(asio_ns::ip::tcp::socket::shutdown_send);
   }
 
   void shutdown() {
-    std::error_code ignored_ec;
-    socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
+    socket_.shutdown(asio_ns::ip::tcp::socket::shutdown_both);
   }
 
   //-----------------send message----------------//
@@ -1337,10 +1332,10 @@ private:
   void do_write_msg() {
     active_buffer_ ^= 1; // switch buffers
     for (const auto &data : buffers_[active_buffer_]) {
-      buffer_seq_.push_back(asio::buffer(data));
+      buffer_seq_.push_back(asio_ns::buffer(data));
     }
 
-    asio::async_write(
+    asio_ns::async_write(
         socket(), buffer_seq_,
         [this, self = this->shared_from_this()](
             const std::error_code &ec, size_t) {
@@ -1373,12 +1368,12 @@ private:
   static constexpr bool is_ssl_ = std::is_same_v<SocketType, SSL>;
 
   //-----------------send message----------------//
-  asio::ip::tcp::socket socket_;
+  asio_ns::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
+  std::unique_ptr<asio_ns::ssl::stream<asio_ns::ip::tcp::socket &>>
       ssl_stream_ = nullptr;
 #endif
-  asio::steady_timer timer_;
+  asio_ns::steady_timer timer_;
   bool enable_timeout_ = true;
   response res_;
   request req_;
@@ -1394,7 +1389,7 @@ private:
   // for writing message
   std::mutex buffers_mtx_;
   std::vector<std::string> buffers_[2]; // a double buffer
-  std::vector<asio::const_buffer> buffer_seq_;
+  std::vector<asio_ns::const_buffer> buffer_seq_;
   int active_buffer_ = 0;
   std::function<void()> send_ok_cb_ = nullptr;
   std::function<void(const std::error_code &)> send_failed_cb_ =

@@ -13,8 +13,8 @@ public:
       pool_size = 1; // set default value as 1
 
     for (std::size_t i = 0; i < pool_size; ++i) {
-      io_service_ptr io_service(new asio::io_service);
-      work_ptr work(new asio::io_service::work(*io_service));
+      io_service_ptr io_service(new asio_ns::io_service);
+      work_ptr work(new asio_ns::io_service::work(*io_service));
       io_services_.push_back(io_service);
       work_.push_back(work);
     }
@@ -44,8 +44,8 @@ public:
       io_services_[i]->stop();
   }
 
-  asio::io_service &get_io_service() {
-    asio::io_service &io_service = *io_services_[next_io_service_];
+  asio_ns::io_service &get_io_service() {
+    asio_ns::io_service &io_service = *io_services_[next_io_service_];
     ++next_io_service_;
     if (next_io_service_ == io_services_.size())
       next_io_service_ = 0;
@@ -53,8 +53,8 @@ public:
   }
 
 private:
-  using io_service_ptr = std::shared_ptr<asio::io_service>;
-  using work_ptr = std::shared_ptr<asio::io_service::work>;
+  using io_service_ptr = std::shared_ptr<asio_ns::io_service>;
+  using work_ptr = std::shared_ptr<asio_ns::io_service::work>;
 
   std::vector<io_service_ptr> io_services_;
   std::vector<work_ptr> work_;
@@ -64,8 +64,8 @@ private:
 class io_service_inplace : private noncopyable {
 public:
   explicit io_service_inplace() {
-    io_services_ = std::make_shared<asio::io_service>();
-    work_ = std::make_shared<asio::io_service::work>(*io_services_);
+    io_services_ = std::make_shared<asio_ns::io_service>();
+    work_ = std::make_shared<asio_ns::io_service::work>(*io_services_);
   }
 
   void run() { io_services_->run(); }
@@ -83,11 +83,11 @@ public:
       io_services_->stop();
   }
 
-  asio::io_service &get_io_service() { return *io_services_; }
+  asio_ns::io_service &get_io_service() { return *io_services_; }
 
 private:
-  using io_service_ptr = std::shared_ptr<asio::io_service>;
-  using work_ptr = std::shared_ptr<asio::io_service::work>;
+  using io_service_ptr = std::shared_ptr<asio_ns::io_service>;
+  using work_ptr = std::shared_ptr<asio_ns::io_service::work>;
 
   io_service_ptr io_services_;
   work_ptr work_;

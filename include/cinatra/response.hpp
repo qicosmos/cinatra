@@ -112,8 +112,8 @@ public:
     rep_str_.append(std::move(content_));
   }
 
-  std::vector<asio::const_buffer> to_buffers() {
-    std::vector<asio::const_buffer> buffers;
+  std::vector<asio_ns::const_buffer> to_buffers() {
+    std::vector<asio_ns::const_buffer> buffers;
     add_header("Host", "cinatra");
     if (session_ != nullptr && session_->is_need_update()) {
       auto cookie_str = session_->get_cookie().to_string();
@@ -123,25 +123,25 @@ public:
     buffers.reserve(headers_.size() * 4 + 5);
     buffers.emplace_back(to_buffer(status_));
     for (auto const &h : headers_) {
-      buffers.emplace_back(asio::buffer(h.first));
-      buffers.emplace_back(asio::buffer(name_value_separator));
-      buffers.emplace_back(asio::buffer(h.second));
-      buffers.emplace_back(asio::buffer(crlf));
+      buffers.emplace_back(asio_ns::buffer(h.first));
+      buffers.emplace_back(asio_ns::buffer(name_value_separator));
+      buffers.emplace_back(asio_ns::buffer(h.second));
+      buffers.emplace_back(asio_ns::buffer(crlf));
     }
 
-    buffers.push_back(asio::buffer(crlf));
+    buffers.push_back(asio_ns::buffer(crlf));
 
     if (body_type_ == content_type::string) {
       buffers.emplace_back(
-          asio::buffer(content_.data(), content_.size()));
+          asio_ns::buffer(content_.data(), content_.size()));
     }
 
     if (http_cache::get().need_cache(raw_url_)) {
       cache_data.clear();
       for (auto &buf : buffers) {
         cache_data.push_back(
-            std::string(asio::buffer_cast<const char *>(buf),
-                        asio::buffer_size(buf)));
+            std::string(asio_ns::buffer_cast<const char *>(buf),
+                        asio_ns::buffer_size(buf)));
       }
     }
 
@@ -241,25 +241,25 @@ public:
     add_header("Transfer-Encoding", "chunked");
   }
 
-  std::vector<asio::const_buffer>
+  std::vector<asio_ns::const_buffer>
   to_chunked_buffers(const char *chunk_data, size_t length, bool eof) {
-    std::vector<asio::const_buffer> buffers;
+    std::vector<asio_ns::const_buffer> buffers;
 
     if (length > 0) {
       // convert bytes transferred count to a hex string.
       chunk_size_ = to_hex_string(length);
 
       // Construct chunk based on rfc2616 section 3.6.1
-      buffers.push_back(asio::buffer(chunk_size_));
-      buffers.push_back(asio::buffer(crlf));
-      buffers.push_back(asio::buffer(chunk_data, length));
-      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio_ns::buffer(chunk_size_));
+      buffers.push_back(asio_ns::buffer(crlf));
+      buffers.push_back(asio_ns::buffer(chunk_data, length));
+      buffers.push_back(asio_ns::buffer(crlf));
     }
 
     // append last-chunk
     if (eof) {
-      buffers.push_back(asio::buffer(last_chunk));
-      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio_ns::buffer(last_chunk));
+      buffers.push_back(asio_ns::buffer(crlf));
     }
 
     return buffers;
