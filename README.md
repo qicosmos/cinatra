@@ -69,6 +69,7 @@ cinatra支持通过指令集优化其内部逻辑，其通过宏来控制是否�
 ```shell
 cmake -DENABLE_SIMD=SSE42 .. # 启用sse4.2指令集
 cmake -DENABLE_SIMD=AVX2 .. # 启用avx2指令集
+cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 ```
 
 # 快速示例
