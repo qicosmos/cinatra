@@ -5,6 +5,8 @@
 #include "asio/streambuf.hpp"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/coro_http_response.hpp"
+#include "cinatra/coro_http_router.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -73,6 +75,13 @@ class coro_http_server {
 
   // call it after server async_start or sync_start.
   uint16_t port() const { return port_; }
+
+  template <http_method method>
+  void set_http_handler(std::string key,
+                        std::function<void(coro_http_response &)> handler) {
+    coro_http_router::instance().set_http_handler<method>(std::move(key),
+                                                          std::move(handler));
+  }
 
  private:
   std::errc listen() {

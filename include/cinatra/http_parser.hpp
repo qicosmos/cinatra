@@ -138,6 +138,10 @@ class http_parser {
 
   std::string_view msg() const { return msg_; }
 
+  std::string_view method() const { return method_; }
+
+  std::string_view url() const { return url_; }
+
   std::span<http_header> get_headers() {
     return {headers_.data(), num_headers_};
   }
