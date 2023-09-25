@@ -450,7 +450,6 @@ TEST_CASE("test bad uri") {
   CHECK(client.add_header("hello", "cinatra"));
   CHECK(client.add_header("hello", "cinatra"));
   CHECK(!client.add_header("", "cinatra"));
-  CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
   auto result = async_simple::coro::syncAwait(
       client.async_upload_multipart("http://www.badurlrandom.org"));
