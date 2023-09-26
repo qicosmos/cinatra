@@ -763,7 +763,12 @@ class coro_http_client {
       }
     }
 
-    add_header("Transfer-Encoding", "chunked");
+    if (headers.empty()) {
+      add_header("Transfer-Encoding", "chunked");
+    }
+    else {
+      headers.emplace("Transfer-Encoding", "chunked");
+    }
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
