@@ -616,6 +616,7 @@ TEST_CASE("test basic http request") {
               << "\n";
   }
 
+  // Setting up GET and POST handlers
   server.set_http_handler<GET>(
       "/", [&server](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
@@ -625,6 +626,20 @@ TEST_CASE("test basic http request") {
         std::string str(req.body());
         str.append(" reply from post");
         res.set_status_and_content(status_type::ok, std::move(str));
+      });
+
+  // Setting up PUT handler
+  server.set_http_handler<PUT>(
+      "/", [&server](request &req, response &res) mutable {
+        std::string str(req.body());
+        str.append(" put successfully");
+        res.set_status_and_content(status_type::ok, std::move(str));
+      });
+
+  // Setting up DELETE handler
+  server.set_http_handler<DEL>(
+      "/", [&server](request &, response &res) mutable {
+        res.set_status_and_content(status_type::ok, "data deleted");
       });
 
   std::promise<void> pr;
@@ -639,13 +654,28 @@ TEST_CASE("test basic http request") {
 
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090";
-  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  size_t size = result.resp_body.size();
+
+  // Testing PUT method
+  resp_data result = async_simple::coro::syncAwait(client.async_request(
+      uri, http_method::PUT,
+      req_context<std::string_view>{.content = "data for put"}));
+  CHECK(result.resp_body == "data for put put successfully");
+
+  // Testing DELETE method
+  result = async_simple::coro::syncAwait(client.async_request(
+      uri, http_method::DEL, req_context<std::string_view>{}));
+  CHECK(result.resp_body == "data deleted");
+
+  // Testing GET method again after DELETE
+  result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.resp_body == "hello world");
+
+  size_t size = result.resp_body.size();
   auto buf = client.release_buf();
   CHECK(size == strlen(buf.data()));
   CHECK(buf == "hello world");
 
+  // Rest of the POST tests
   result = async_simple::coro::syncAwait(client.async_post(
       uri, "async post hello coro_http_client", req_content_type::string));
   CHECK(result.resp_body ==
