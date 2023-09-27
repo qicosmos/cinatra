@@ -1070,8 +1070,9 @@ class coro_http_client {
       const uri_t &u, http_method method, const auto &ctx,
       bool is_chunked = false,
       std::unordered_map<std::string, std::string> headers = {}) {
-    std::string req_str(method_name(method));
-
+    std::string req_str;
+    detail::resize(req_str, 512);
+    req_str.append(method_name(method));
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
       req_str.append("?").append(u.query);
