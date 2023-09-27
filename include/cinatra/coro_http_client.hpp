@@ -1071,7 +1071,7 @@ class coro_http_client {
       bool is_chunked = false,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::string req_str;
-    detail::resize(req_str, 512);
+    req_str.reserve(512);
     req_str.append(method_name(method));
     req_str.append(" ").append(u.get_path());
     if (!u.query.empty()) {
