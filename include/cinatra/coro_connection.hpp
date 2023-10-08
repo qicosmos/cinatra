@@ -3,6 +3,7 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
+#include <thread>
 
 #include "asio/streambuf.hpp"
 #include "coro_http_router.hpp"
@@ -70,7 +71,19 @@ class coro_connection {
       std::string_view key = {
           parser_.method().data(),
           parser_.method().length() + 1 + parser_.url().length()};
-      coro_http_router::instance().route_map(key, response_);
+
+      auto &router = coro_http_router::instance();
+      if (auto handler = router.get_handler(key); handler) {
+        (*handler)(response_);
+      }
+      else {
+        if (auto coro_handler = router.get_coro_handler(key); coro_handler) {
+          co_await (*coro_handler)(response_);
+        }
+        else {
+          // not found
+        }
+      }
 
       co_await async_write(asio::buffer(g_resp_str));
 

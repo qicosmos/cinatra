@@ -268,6 +268,22 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
   }
 }
 
+template <typename Func>
+inline async_simple::coro::Lazy<void> post(
+    Func func,
+    coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
+  callback_awaitor<void> awaitor;
+
+  co_return co_await awaitor.await_resume(
+      [e, func = std::move(func)](auto handler) {
+        auto executor = e->get_asio_executor();
+        asio::post(executor, [=, func = std::move(func)]() {
+          func();
+          handler.resume();
+        });
+      });
+}
+
 template <typename Socket, typename AsioBuffer>
 std::pair<asio::error_code, size_t> read_some(Socket &sock,
                                               AsioBuffer &&buffer) {

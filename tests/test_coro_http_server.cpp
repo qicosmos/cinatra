@@ -4,27 +4,38 @@
 #include <thread>
 
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <iostream>
 
 #include "cinatra/coro_http_server.hpp"
 #include "doctest/doctest.h"
 
+using namespace std::chrono_literals;
+
 TEST_CASE("test listen random port") {
   cinatra::coro_http_server server(1, 9001);
-  server.set_http_handler<cinatra::GET>("/",
-                                        [](cinatra::coro_http_response& resp) {
-                                          // response in io thread.
-                                          resp.set_status(200);
-                                          resp.set_content("hello world");
-                                        });
+  server.set_http_handler<cinatra::GET>(
+      "/", [](cinatra::coro_http_response& resp) {
+        // response in io thread.
+        std::cout << std::this_thread::get_id() << "\n";
+        resp.set_status(200);
+        resp.set_content("hello world");
+      });
 
   server.set_http_handler<cinatra::GET>(
       "/coro",
       [](cinatra::coro_http_response& resp) -> async_simple::coro::Lazy<void> {
-        // coroutine in other thread.
-        resp.set_status(200);
-        resp.set_content("hello world");
+        std::cout << std::this_thread::get_id() << "\n";
+
+        co_await coro_io::post([&] {
+          // coroutine in other thread.
+          std::cout << std::this_thread::get_id() << "\n";
+          resp.set_status(200);
+          resp.set_content("hello world in coro");
+        });
+        std::cout << std::this_thread::get_id() << "\n";
         co_return;
       });
   server.sync_start();

@@ -63,14 +63,20 @@ class coro_http_router {
     }
   }
 
-  void route_map(std::string_view key, coro_http_response& resp) {
-    auto it = map_handles_.find(key);
-    if (it != map_handles_.end()) {
-      it->second(resp);
+  std::function<void(coro_http_response& resp)>* get_handler(
+      std::string_view key) {
+    if (auto it = map_handles_.find(key); it != map_handles_.end()) {
+      return &it->second;
     }
-    else {
-      // not found TODO
+    return nullptr;
+  }
+
+  std::function<async_simple::coro::Lazy<void>(coro_http_response& resp)>*
+  get_coro_handler(std::string_view key) {
+    if (auto it = coro_handles_.find(key); it != coro_handles_.end()) {
+      return &it->second;
     }
+    return nullptr;
   }
 
  private:
