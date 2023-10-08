@@ -53,6 +53,7 @@ Use the following command to compile cinatra with simd optimization.Note that on
 ```shell
 cmake -DENABLE_SIMD=SSE42 .. # enable sse4.2 instruction set
 cmake -DENABLE_SIMD=AVX2 .. # enable avx2 instruction set
+cmake -DENABLE_SIMD=AARCH64 .. # enable neon instruction set in aarch64
 ```
 
 ## Examples
@@ -247,6 +248,22 @@ Assume the file "show.jpg" is in the "./purecpp/static/" of the server, you just
 http://127.0.0.1:8080/purecpp/static/show.jpg
 //cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 ```
+
+At the same time, you can use the `set_http_file_server(std::string path);` function to build an http file download server. The parameter path is the path of all downloadable files. Examples are as follows:
+
+```cpp
+#include "cinatra.hpp"
+using namespace cinatra;
+
+int main() {
+	http_server server(std::thread::hardware_concurrency());
+	server.set_http_file_server("http_file_server");
+	server.listen("0.0.0.0", "8080");
+	// ......
+}
+```
+
+In this time, when accessing the `http_file_server` path of the current server, all downloadable files will be displayed in the browser, and you can download them by clicking on them.
 
 ### Example 6: WebSocket
 

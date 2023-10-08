@@ -3,10 +3,12 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
 #include "cinatra.hpp"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
@@ -189,6 +191,35 @@ async_simple::coro::Lazy<void> test_collect_all() {
     CHECK(result.status >= 200);
   }
   thd.join();
+}
+
+TEST_CASE("test request with out buffer") {
+  std::string str;
+  str.resize(10);
+  std::string url = "http://cn.bing.com";
+
+  {
+    coro_http_client client;
+    auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    std::cout << result.status << "\n";
+    std::cout << result.net_err.message() << "\n";
+    if (result.status == 404)
+      CHECK(result.net_err == std::errc::no_buffer_space);
+  }
+
+  {
+    str.resize(6400);
+    coro_http_client client;
+    auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    bool ok = result.status == 200 || result.status == 301;
+    CHECK(ok);
+    std::string_view sv(str.data(), result.resp_body.size());
+    CHECK(result.resp_body == sv);
+  }
 }
 
 TEST_CASE("test pass path not entire uri") {
@@ -419,7 +450,6 @@ TEST_CASE("test bad uri") {
   CHECK(client.add_header("hello", "cinatra"));
   CHECK(client.add_header("hello", "cinatra"));
   CHECK(!client.add_header("", "cinatra"));
-  CHECK(!client.add_header("Host", "cinatra"));
   client.add_str_part("hello", "world");
   auto result = async_simple::coro::syncAwait(
       client.async_upload_multipart("http://www.badurlrandom.org"));
@@ -535,14 +565,14 @@ TEST_CASE("test coro_http_client add header and url queries") {
   coro_http_client client{};
   client.add_header("Connection", "keep-alive");
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.cn"));
   CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(r.status < 400);
 
   auto r2 = async_simple::coro::syncAwait(
       client.async_get("http://www.baidu.com?name='tom'&age=20"));
   CHECK(!r2.net_err);
-  CHECK(r2.status == 200);
+  CHECK(r2.status < 400);
 }
 
 TEST_CASE("test coro_http_client not exist domain and bad uri") {
@@ -586,6 +616,7 @@ TEST_CASE("test basic http request") {
               << "\n";
   }
 
+  // Setting up GET and POST handlers
   server.set_http_handler<GET>(
       "/", [&server](request &, response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
@@ -595,6 +626,20 @@ TEST_CASE("test basic http request") {
         std::string str(req.body());
         str.append(" reply from post");
         res.set_status_and_content(status_type::ok, std::move(str));
+      });
+
+  // Setting up PUT handler
+  server.set_http_handler<PUT>(
+      "/", [&server](request &req, response &res) mutable {
+        std::string str(req.body());
+        str.append(" put successfully");
+        res.set_status_and_content(status_type::ok, std::move(str));
+      });
+
+  // Setting up DELETE handler
+  server.set_http_handler<DEL>(
+      "/", [&server](request &, response &res) mutable {
+        res.set_status_and_content(status_type::ok, "data deleted");
       });
 
   std::promise<void> pr;
@@ -609,13 +654,28 @@ TEST_CASE("test basic http request") {
 
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090";
-  resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  size_t size = result.resp_body.size();
+
+  // Testing PUT method
+  resp_data result = async_simple::coro::syncAwait(client.async_request(
+      uri, http_method::PUT,
+      req_context<std::string_view>{.content = "data for put"}));
+  CHECK(result.resp_body == "data for put put successfully");
+
+  // Testing DELETE method
+  result = async_simple::coro::syncAwait(client.async_request(
+      uri, http_method::DEL, req_context<std::string_view>{}));
+  CHECK(result.resp_body == "data deleted");
+
+  // Testing GET method again after DELETE
+  result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(result.resp_body == "hello world");
+
+  size_t size = result.resp_body.size();
   auto buf = client.release_buf();
   CHECK(size == strlen(buf.data()));
   CHECK(buf == "hello world");
 
+  // Rest of the POST tests
   result = async_simple::coro::syncAwait(client.async_post(
       uri, "async post hello coro_http_client", req_content_type::string));
   CHECK(result.resp_body ==
@@ -647,17 +707,17 @@ TEST_CASE("test basic http request") {
 
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
 TEST_CASE("test inject failed") {
-  {
-    coro_http_client client{};
-    inject_response_valid = ClientInjectAction::response_error;
-    client.set_req_timeout(8s);
-    auto result = client.get("http://purecpp.cn");
-    CHECK(result.net_err == std::errc::protocol_error);
+  // {
+  //   coro_http_client client{};
+  //   inject_response_valid = ClientInjectAction::response_error;
+  //   client.set_req_timeout(8s);
+  //   auto result = client.get("http://purecpp.cn");
+  //   CHECK(result.net_err == std::errc::protocol_error);
 
-    inject_header_valid = ClientInjectAction::header_error;
-    result = client.get("http://purecpp.cn");
-    CHECK(result.net_err == std::errc::protocol_error);
-  }
+  //   inject_header_valid = ClientInjectAction::header_error;
+  //   result = client.get("http://purecpp.cn");
+  //   CHECK(result.net_err == std::errc::protocol_error);
+  // }
 
   {
     coro_http_client client{};

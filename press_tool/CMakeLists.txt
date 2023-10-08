@@ -25,7 +25,9 @@ endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")
     if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-        #TODO
+        add_library(neon INTERFACE IMPORTED)
+        target_compile_options(neon INTERFACE -march=armv8-a+fp+simd)
+        target_link_libraries(${project_name} neon)
     endif ()
 elseif (ENABLE_SIMD STREQUAL "SSE42")
     if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
