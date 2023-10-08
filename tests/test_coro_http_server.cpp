@@ -22,8 +22,7 @@ TEST_CASE("coro_server example, will block") {
         // response in io thread.
         std::cout << std::this_thread::get_id() << "\n";
         resp.set_keepalive(true);
-        resp.set_status(cinatra::status_type::ok);
-        // resp.set_content("hello world");
+        resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
 
   server.set_http_handler<cinatra::GET>(
