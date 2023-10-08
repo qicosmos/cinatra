@@ -15,6 +15,10 @@ class coro_http_response {
  public:
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) { content_ = std::move(content); }
+  void set_status_and_content(status_type status, std::string content) {
+    status_ = status;
+    content_ = std::move(content);
+  }
   std::string_view get_content() const { return content_; }
   cinatra::status_type get_status() const { return status_; }
 
@@ -54,6 +58,9 @@ class coro_http_response {
       auto [ptr, ec] = std::to_chars(buf, buf + 32, content_.size());
       resp_headers_.emplace("Content-Length",
                             std::string_view(buf, std::distance(buf, ptr)));
+    }
+    else {
+      resp_headers_.emplace("Content-Length", "0");
     }
 
     resp_headers_.emplace("Date", get_gmt_time_str());
