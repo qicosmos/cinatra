@@ -14,7 +14,8 @@
 
 using namespace std::chrono_literals;
 
-TEST_CASE("test listen random port") {
+TEST_CASE("coro_server example, will block") {
+  return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
       "/", [](cinatra::coro_http_response& resp) {
