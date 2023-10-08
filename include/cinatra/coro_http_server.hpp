@@ -1,6 +1,7 @@
 #pragma once
 
 #include <asio/dispatch.hpp>
+#include <type_traits>
 
 #include "asio/streambuf.hpp"
 #include "async_simple/Promise.h"
@@ -76,9 +77,8 @@ class coro_http_server {
   // call it after server async_start or sync_start.
   uint16_t port() const { return port_; }
 
-  template <http_method method>
-  void set_http_handler(std::string key,
-                        std::function<void(coro_http_response &)> handler) {
+  template <http_method method, typename Func>
+  void set_http_handler(std::string key, Func handler) {
     coro_http_router::instance().set_http_handler<method>(std::move(key),
                                                           std::move(handler));
   }

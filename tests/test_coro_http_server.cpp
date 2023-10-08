@@ -2,6 +2,8 @@
 #include <future>
 #include <system_error>
 #include <thread>
+
+#include "async_simple/coro/Lazy.h"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <iostream>
 
@@ -9,14 +11,24 @@
 #include "doctest/doctest.h"
 
 TEST_CASE("test listen random port") {
-  // cinatra::coro_http_server server(1, 9001);
-  // server.set_http_handler<cinatra::GET>("/",
-  //                                       [](cinatra::coro_http_response& resp) {
-  //                                         resp.set_status(200);
-  //                                         resp.set_content("hello world");
-  //                                       });
-  // server.sync_start();
-  // CHECK(server.port() > 0);
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>("/",
+                                        [](cinatra::coro_http_response& resp) {
+                                          // response in io thread.
+                                          resp.set_status(200);
+                                          resp.set_content("hello world");
+                                        });
+
+  server.set_http_handler<cinatra::GET>(
+      "/coro",
+      [](cinatra::coro_http_response& resp) -> async_simple::coro::Lazy<void> {
+        // coroutine in other thread.
+        resp.set_status(200);
+        resp.set_content("hello world");
+        co_return;
+      });
+  server.sync_start();
+  CHECK(server.port() > 0);
 }
 
 TEST_CASE("test server start and stop") {
