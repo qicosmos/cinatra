@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/utils.hpp"
 #include "coro_http_response.hpp"
 
@@ -22,41 +23,25 @@ class coro_http_router {
     return instance;
   }
 
+  // eg: "GET hello/" as a key
   template <http_method method>
   void set_http_handler(std::string key,
                         std::function<void(coro_http_response&)> handler) {
-    auto method_name = cinatra::method_name(method);
+    constexpr auto method_name = cinatra::method_name(method);
     std::string str;
     str.reserve(method_name.size() + 1 + key.size());
     str.append(method_name).append(" ").append(key);
 
-    // handlers_.push_back({std::move(str), std::move(handler)});
-    // std::sort(handlers_.begin(), handlers_.end(), [](auto& a, auto& b) {
-    //   return a.key < b.key;
-    // });
+    if (map_handles_.find(str) != map_handles_.end()) {
+      CINATRA_LOG_WARNING << key << " has already registered.";
+      return;
+    }
 
+    // hold keys to make sure map_handles_ key is
+    // std::string_view, avoid memcpy when route
     keys_.emplace_back(std::move(str));
     std::string_view sv(keys_.back());
     map_handles_.emplace(sv, std::move(handler));
-  }
-
-  bool route(std::string_view key, coro_http_response& resp) {
-    auto last = handlers_.end();
-    auto first = std::lower_bound(handlers_.begin(), last, key,
-                                  [](auto& item, auto& val) {
-                                    return item.key < val;
-                                  });
-    auto r = (!(first == last) and !(key < (*first).key));
-    bool found = false;
-    for (auto& handler : handlers_) {
-      if (handler.key == key) {
-        found = true;
-        handler.func(resp);
-        break;
-      }
-    }
-
-    return found;
   }
 
   void route_map(std::string_view key, coro_http_response& resp) {
@@ -65,13 +50,12 @@ class coro_http_router {
       it->second(resp);
     }
     else {
-      // not found
+      // not found TODO
     }
   }
 
  private:
   coro_http_router() = default;
-  std::vector<coro_http_handler> handlers_;
   std::unordered_map<std::string_view,
                      std::function<void(coro_http_response& resp)>>
       map_handles_;
