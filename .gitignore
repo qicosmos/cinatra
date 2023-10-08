@@ -49,3 +49,4 @@ CMakeUserPresets.json
 .DS_Store
 node_modules
 /CMakeSettings.json
+!cmake/build.cmake

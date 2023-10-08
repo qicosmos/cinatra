@@ -7,6 +7,7 @@
 #include <future>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -51,6 +52,30 @@ inline ClientInjectAction inject_chunk_valid = ClientInjectAction::none;
 inline ClientInjectAction inject_write_failed = ClientInjectAction::none;
 inline ClientInjectAction inject_read_failed = ClientInjectAction::none;
 #endif
+
+template <class, class = void>
+struct is_stream : std::false_type {};
+
+template <class T>
+struct is_stream<
+    T, std::void_t<decltype(std::declval<T>().read(nullptr, 0),
+                            std::declval<T>().async_read(nullptr, 0))>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool is_stream_v = is_stream<T>::value;
+
+template <class, class = void>
+struct is_smart_ptr : std::false_type {};
+
+template <class T>
+struct is_smart_ptr<
+    T, std::void_t<decltype(std::declval<T>().get(), *std::declval<T>(),
+                            is_stream_v<typename T::element_type>)>>
+    : std::true_type {};
+
+template <class T>
+constexpr bool is_stream_ptr_v = is_smart_ptr<T>::value;
 
 struct http_header;
 
@@ -255,11 +280,14 @@ class coro_http_client {
 
   bool has_closed() { return socket_->has_closed_; }
 
+  const auto &get_headers() { return req_headers_; }
+
+  void set_headers(std::unordered_map<std::string, std::string> req_headers) {
+    req_headers_ = std::move(req_headers);
+  }
+
   bool add_header(std::string key, std::string val) {
     if (key.empty())
-      return false;
-
-    if (key == "Host")
       return false;
 
     req_headers_[key] = std::move(val);
@@ -703,9 +731,10 @@ class coro_http_client {
 
   std::string_view get_port() { return port_; }
 
-  template <typename S, typename String>
+  template <typename S, typename File>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
-      S uri, http_method method, String filename,
+      S uri, http_method method, File file,
+      req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
@@ -713,19 +742,33 @@ class coro_http_client {
       }
     });
 
-    req_context<> ctx{req_content_type::text};
+    req_context<> ctx{content_type};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
       co_return resp_data{{}, 404};
     }
 
-    if (!std::filesystem::exists(filename)) {
-      co_return resp_data{
-          std::make_error_code(std::errc::no_such_file_or_directory), 404};
+    constexpr bool is_stream_file = is_stream_ptr_v<File>;
+    if constexpr (is_stream_file) {
+      if (!file) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
+    }
+    else {
+      if (!std::filesystem::exists(file)) {
+        co_return resp_data{
+            std::make_error_code(std::errc::no_such_file_or_directory), 404};
+      }
     }
 
-    add_header("Transfer-Encoding", "chunked");
+    if (headers.empty()) {
+      add_header("Transfer-Encoding", "chunked");
+    }
+    else {
+      headers.emplace("Transfer-Encoding", "chunked");
+    }
 
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
@@ -749,17 +792,31 @@ class coro_http_client {
       co_return resp_data{ec, 404};
     }
 
-    coro_io::coro_file file(filename, coro_io::open_mode::read);
     std::string file_data;
-    file_data.resize(max_single_part_size_);
+    detail::resize(file_data, max_single_part_size_);
     std::string chunk_size_str;
-    while (!file.eof()) {
-      auto [rd_ec, rd_size] =
-          co_await file.async_read(file_data.data(), file_data.size());
-      auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
-          file_data.data(), rd_size, chunk_size_str, file.eof());
-      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
-        co_return resp_data{ec, 404};
+
+    if constexpr (is_stream_file) {
+      while (!file->eof()) {
+        size_t rd_size =
+            file->read(file_data.data(), file_data.size()).gcount();
+        auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+            file_data.data(), rd_size, chunk_size_str, file->eof());
+        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+          co_return resp_data{ec, 404};
+        }
+      }
+    }
+    else {
+      coro_io::coro_file coro_file(file, coro_io::open_mode::read);
+      while (!coro_file.eof()) {
+        auto [rd_ec, rd_size] =
+            co_await coro_file.async_read(file_data.data(), file_data.size());
+        auto bufs = cinatra::to_chunked_buffers<asio::const_buffer>(
+            file_data.data(), rd_size, chunk_size_str, coro_file.eof());
+        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+          co_return resp_data{ec, 404};
+        }
       }
     }
 
@@ -777,16 +834,24 @@ class coro_http_client {
   template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_request(
       S uri, http_method method, req_context<String> ctx,
-      std::unordered_map<std::string, std::string> headers = {}) {
+      std::unordered_map<std::string, std::string> headers = {},
+      std::span<char> out_buf = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
     if (!body_.empty()) {
       body_.clear();
     }
+    if (!out_buf.empty()) {
+      out_buf_ = out_buf;
+    }
+
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       if (!req_headers_.empty()) {
         req_headers_.clear();
+      }
+      if (!out_buf_.empty()) {
+        out_buf_ = {};
       }
     });
 
@@ -1017,7 +1082,12 @@ class coro_http_client {
       req_str.append(" HTTP/1.1\r\n");
     }
     else {
-      req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+      if (req_headers_.find("Host") == req_headers_.end()) {
+        req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+      }
+      else {
+        req_str.append(" HTTP/1.1\r\n");
+      }
     }
 
     auto type_str = get_content_type_str(ctx.content_type);
@@ -1172,13 +1242,27 @@ class coro_http_client {
       total_len_ = parser_.total_len();
 #endif
 
-      if ((size_t)parser_.body_len() <= read_buf_.size()) {
+      bool is_out_buf = !out_buf_.empty();
+      if (is_out_buf) {
+        if (content_len > 0 && out_buf_.size() < content_len) {
+          data.status = 404;
+          data.net_err = std::make_error_code(std::errc::no_buffer_space);
+          co_return data;
+        }
+      }
+
+      if (content_len <= read_buf_.size()) {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          detail::resize(body_, content_len);
           auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-          memcpy(body_.data(), data_ptr, content_len);
+          if (is_out_buf) {
+            memcpy(out_buf_.data(), data_ptr, content_len);
+          }
+          else {
+            detail::resize(body_, content_len);
+            memcpy(body_.data(), data_ptr, content_len);
+          }
           read_buf_.consume(read_buf_.size());
         }
         co_await handle_entire_content(data, content_len, is_ranges, ctx);
@@ -1189,16 +1273,32 @@ class coro_http_client {
       size_t part_size = read_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      detail::resize(body_, content_len);
       auto data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
-      memcpy(body_.data(), data_ptr, part_size);
+      if (is_out_buf) {
+        memcpy(out_buf_.data(), data_ptr, part_size);
+      }
+      else {
+        detail::resize(body_, content_len);
+        memcpy(body_.data(), data_ptr, part_size);
+      }
+
       read_buf_.consume(part_size);
 
-      if (std::tie(ec, size) = co_await async_read(
-              asio::buffer(body_.data() + part_size, size_to_read),
-              size_to_read);
-          ec) {
-        break;
+      if (is_out_buf) {
+        if (std::tie(ec, size) = co_await async_read(
+                asio::buffer(out_buf_.data() + part_size, size_to_read),
+                size_to_read);
+            ec) {
+          break;
+        }
+      }
+      else {
+        if (std::tie(ec, size) = co_await async_read(
+                asio::buffer(body_.data() + part_size, size_to_read),
+                size_to_read);
+            ec) {
+          break;
+        }
       }
 
       // Now get entire content, additional data will discard.
@@ -1220,7 +1320,12 @@ class coro_http_client {
     if (content_len > 0) {
       const char *data_ptr;
       if (read_buf_.size() == 0) {
-        data_ptr = body_.data();
+        if (out_buf_.empty()) {
+          data_ptr = body_.data();
+        }
+        else {
+          data_ptr = out_buf_.data();
+        }
       }
       else {
         data_ptr = asio::buffer_cast<const char *>(read_buf_.data());
@@ -1650,6 +1755,7 @@ class coro_http_client {
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
+  std::span<char> out_buf_;
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;

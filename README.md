@@ -69,6 +69,7 @@ cinatra支持通过指令集优化其内部逻辑，其通过宏来控制是否�
 ```shell
 cmake -DENABLE_SIMD=SSE42 .. # 启用sse4.2指令集
 cmake -DENABLE_SIMD=AVX2 .. # 启用avx2指令集
+cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 ```
 
 # 快速示例
@@ -245,6 +246,20 @@ cinatra目前支持了multipart和octet-stream格式的上传。
     3. 如何下载：如果你把test.txt放到www之后，那么直接通过http://127.0.0.1:8090/test.txt下载即可。
 	//chunked download
 	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
+
+	同时可以使用set_http_file_server(std::string path);函数来将cinatra转换为一个http文件下载服务器，path为该文件服务器的路径。示例如下:
+
+	#include "cinatra.hpp"
+	using namespace cinatra;
+
+	int main() {
+		http_server server(std::thread::hardware_concurrency());
+		server.set_http_file_server("http_file_server");
+		server.listen("0.0.0.0", "8080");
+		// 略
+	}
+
+	此时访问当前服务器的`http_file_server`路径时会在浏览器展示所有可下载文件，点击即可下载。
 
 ## 示例6：websocket
 
