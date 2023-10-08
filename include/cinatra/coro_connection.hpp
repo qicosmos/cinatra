@@ -82,15 +82,13 @@ class coro_connection {
         }
         else {
           // not found
+          response_.set_status(status_type::not_found);
         }
       }
 
-      co_await async_write(asio::buffer(g_resp_str));
-
-      //   ec = co_await read_body();
-      //   route();
-      //   prepare_response();
-      //   send_response();
+      auto &&buffers = response_.to_buffers();
+      co_await async_write(buffers);
+      response_.clear();
     }
     co_return;
   }

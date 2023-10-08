@@ -20,7 +20,8 @@ TEST_CASE("test listen random port") {
       "/", [](cinatra::coro_http_response& resp) {
         // response in io thread.
         std::cout << std::this_thread::get_id() << "\n";
-        resp.set_status(200);
+        resp.set_keepalive(true);
+        resp.set_status(cinatra::status_type::ok);
         resp.set_content("hello world");
       });
 
@@ -32,7 +33,7 @@ TEST_CASE("test listen random port") {
         co_await coro_io::post([&] {
           // coroutine in other thread.
           std::cout << std::this_thread::get_id() << "\n";
-          resp.set_status(200);
+          resp.set_status(cinatra::status_type::ok);
           resp.set_content("hello world in coro");
         });
         std::cout << std::this_thread::get_id() << "\n";
