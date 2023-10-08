@@ -41,10 +41,10 @@ class coro_http_router {
   template <http_method method, typename Func>
   void set_http_handler(std::string key, Func handler) {
     constexpr auto method_name = cinatra::method_name(method);
-    std::string str;
-    str.append(method_name).append(" ").append(key);
+    std::string whole_str;
+    whole_str.append(method_name).append(" ").append(key);
 
-    if (keys_.find(str) != keys_.end()) {
+    if (keys_.find(whole_str) != keys_.end()) {
       CINATRA_LOG_WARNING << key << " has already registered.";
       return;
     }
@@ -52,14 +52,13 @@ class coro_http_router {
     // hold keys to make sure map_handles_ key is
     // std::string_view, avoid memcpy when route
     using return_type = typename timax::function_traits<Func>::result_type;
-    auto [it, ok] = keys_.emplace(std::move(str));
-    std::string_view sv(*it);
+    auto [it, ok] = keys_.emplace(std::move(whole_str));
 
     if constexpr (is_lazy_v<return_type>) {
-      coro_handles_.emplace(sv, std::move(handler));
+      coro_handles_.emplace(*it, std::move(handler));
     }
     else {
-      map_handles_.emplace(sv, std::move(handler));
+      map_handles_.emplace(*it, std::move(handler));
     }
   }
 

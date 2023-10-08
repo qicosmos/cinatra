@@ -77,10 +77,18 @@ class coro_http_server {
   // call it after server async_start or sync_start.
   uint16_t port() const { return port_; }
 
-  template <http_method method, typename Func>
+  template <http_method... method, typename Func>
   void set_http_handler(std::string key, Func handler) {
-    coro_http_router::instance().set_http_handler<method>(std::move(key),
-                                                          std::move(handler));
+    static_assert(sizeof...(method) >= 1, "must set http_method");
+    if constexpr (sizeof...(method) == 1) {
+      (coro_http_router::instance().set_http_handler<method>(
+           std::move(key), std::move(handler)),
+       ...);
+    }
+    else {
+      (coro_http_router::instance().set_http_handler<method>(key, handler),
+       ...);
+    }
   }
 
  private:

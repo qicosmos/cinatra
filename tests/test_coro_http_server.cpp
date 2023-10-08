@@ -17,7 +17,7 @@ using namespace std::chrono_literals;
 TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(1, 9001);
-  server.set_http_handler<cinatra::GET>(
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/", [](cinatra::coro_http_response& resp) {
         // response in io thread.
         std::cout << std::this_thread::get_id() << "\n";
