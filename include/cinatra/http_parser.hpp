@@ -5,9 +5,11 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 #include "cinatra_log_wrapper.hpp"
 #include "picohttpparser.h"
+#include "url_encode_decode.hpp"
 
 using namespace std::string_view_literals;
 
@@ -81,6 +83,12 @@ class http_parser {
       body_len_ = atoi(content_len.data());
     }
 
+    size_t pos = url_.find('?');
+    if (pos != std::string_view::npos) {
+      queries_ = parse_query(url_.substr(pos + 1, url_len - pos - 1));
+      url_ = {url, pos};
+    }
+
     return header_len_;
   }
 
@@ -90,6 +98,17 @@ class http_parser {
         return headers_[i].value;
     }
     return {};
+  }
+
+  const auto &queries() const { return queries_; }
+
+  std::string_view get_query_value(std::string_view key) {
+    if (auto it = queries_.find(key); it != queries_.end()) {
+      return it->second;
+    }
+    else {
+      return "";
+    }
   }
 
   bool is_chunked() const {
@@ -154,6 +173,57 @@ class http_parser {
                       });
   }
 
+  std::unordered_map<std::string_view, std::string_view> parse_query(
+      std::string_view str) {
+    std::unordered_map<std::string_view, std::string_view> query;
+    std::string_view key;
+    std::string_view val;
+    size_t pos = 0;
+    size_t length = str.length();
+    for (size_t i = 0; i < length; i++) {
+      char c = str[i];
+      if (c == '=') {
+        key = {&str[pos], i - pos};
+        key = trim(key);
+        pos = i + 1;
+      }
+      else if (c == '&') {
+        val = {&str[pos], i - pos};
+        val = trim(val);
+        if (code_utils::is_url_encode(val)) {
+          query.emplace(key, code_utils::get_string_by_urldecode(val));
+        }
+        else {
+          query.emplace(key, val);
+        }
+
+        pos = i + 1;
+      }
+    }
+
+    if (pos == 0) {
+      return {};
+    }
+
+    if ((length - pos) > 0) {
+      val = {&str[pos], length - pos};
+      val = trim(val);
+      query.emplace(key, val);
+    }
+    else if ((length - pos) == 0) {
+      query.emplace(key, "");
+    }
+
+    return query;
+  }
+
+  std::string_view trim(std::string_view v) {
+    v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+    v.remove_suffix(
+        (std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+    return v;
+  }
+
   int status_ = 0;
   std::string_view msg_;
   size_t num_headers_ = 0;
@@ -162,5 +232,6 @@ class http_parser {
   std::array<http_header, CINATRA_MAX_HTTP_HEADER_FIELD_SIZE> headers_;
   std::string_view method_;
   std::string_view url_;
+  std::unordered_map<std::string_view, std::string_view> queries_;
 };
 }  // namespace cinatra
