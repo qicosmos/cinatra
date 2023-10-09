@@ -25,14 +25,23 @@ class string_thief {
 #if defined(_MSVC_STL_VERSION)
     (self.*func_ptr)._Myval2._Mysize = sz;
 #else
+#if (_GLIBCXX_USE_CXX11_ABI == 1)
     (self.*func_ptr)(sz);
+#else
+    (self.*func_ptr)()->_M_set_length_and_sharable(sz);
+#endif
 #endif
   }
 };
 
 #if defined(__GLIBCXX__)  // libstdc++
+#if (_GLIBCXX_USE_CXX11_ABI == 1)
 template class string_thief<decltype(&std::string::_M_set_length),
                             &std::string::_M_set_length>;
+#else
+template class string_thief<decltype(&std::string::_M_rep),
+                            &std::string::_M_rep>;
+#endif
 #elif defined(_LIBCPP_VERSION)
 template class string_thief<decltype(&std::string::__set_size),
                             &std::string::__set_size>;
