@@ -54,7 +54,7 @@ class coro_http_response {
                      [](resp_header& header) {
                        return header.key == "Host";
                      }) == resp_headers_.end()) {
-      resp_headers_sv_.emplace_back("Host", "cinatra");
+      resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
     }
 
     if (status_ >= status_type::not_found) {
@@ -65,19 +65,19 @@ class coro_http_response {
 
     if (!content_.empty()) {
       auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
-      resp_headers_sv_.emplace_back(
-          "Content-Length", std::string_view(buf_, std::distance(buf_, ptr)));
+      resp_headers_sv_.emplace_back(resp_header_sv{
+          "Content-Length", std::string_view(buf_, std::distance(buf_, ptr))});
     }
     else {
-      resp_headers_sv_.emplace_back("Content-Length", "0");
+      resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
     }
 
-    resp_headers_sv_.emplace_back("Date", get_gmt_time_str());
+    resp_headers_sv_.emplace_back(resp_header_sv{"Date", get_gmt_time_str()});
 
     if (keepalive_.has_value()) {
       bool keepalive = keepalive_.value();
-      resp_headers_sv_.emplace_back("Connection",
-                                    keepalive ? "keep-alive" : "close");
+      resp_headers_sv_.emplace_back(
+          resp_header_sv{"Connection", keepalive ? "keep-alive" : "close"});
     }
 
     append_head(resp_headers_);
