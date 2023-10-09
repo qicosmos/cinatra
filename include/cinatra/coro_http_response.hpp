@@ -28,18 +28,14 @@ class coro_http_response {
 
   void set_keepalive(bool r) { keepalive_ = r; }
 
-  std::vector<asio::const_buffer> to_buffers() {
+  void to_buffers(std::vector<asio::const_buffer>& buffers) {
     build_resp_head();
 
-    std::vector<asio::const_buffer> buffers;
-    buffers.reserve(3);
     buffers.push_back(asio::buffer(to_rep_string(status_)));
     buffers.push_back(asio::buffer(head_));
     if (!content_.empty()) {
       buffers.push_back(asio::buffer(content_));
     }
-
-    return buffers;
   }
 
   void build_resp_head() {

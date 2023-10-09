@@ -25,7 +25,9 @@ class coro_connection {
  public:
   template <typename executor_t>
   coro_connection(executor_t *executor, asio::ip::tcp::socket socket)
-      : executor_(executor), socket_(std::move(socket)) {}
+      : executor_(executor), socket_(std::move(socket)) {
+    buffers_.reserve(3);
+  }
 
   ~coro_connection() {}
 
@@ -86,12 +88,15 @@ class coro_connection {
         }
       }
 
-      auto &&buffers = response_.to_buffers();
-      co_await async_write(buffers);
+      response_.to_buffers(buffers_);
+      co_await async_write(buffers_);
       response_.clear();
+      buffers_.clear();
     }
     co_return;
   }
+
+  auto &socket() { return socket_; }
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
@@ -151,5 +156,6 @@ class coro_connection {
   http_parser parser_;
   bool keep_alive_;
   coro_http_response response_;
+  std::vector<asio::const_buffer> buffers_;
 };
 }  // namespace cinatra
