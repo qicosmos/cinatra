@@ -11,8 +11,19 @@
 #include "time_util.hpp"
 
 namespace cinatra {
+struct resp_header {
+  std::string key;
+  std::string value;
+};
+
+struct resp_header_sv {
+  std::string_view key;
+  std::string_view value;
+};
+
 class coro_http_response {
  public:
+  coro_http_response() { head_.reserve(128); }
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) { content_ = std::move(content); }
   void set_status_and_content(status_type status, std::string content) {
@@ -23,7 +34,7 @@ class coro_http_response {
   cinatra::status_type get_status() const { return status_; }
 
   void add_header(auto k, auto v) {
-    resp_headers_.emplace(std::move(k), std::move(v));
+    resp_headers_.emplace_back(std::move(k), std::move(v));
   }
 
   void set_keepalive(bool r) { keepalive_ = r; }
@@ -39,8 +50,11 @@ class coro_http_response {
   }
 
   void build_resp_head() {
-    if (resp_headers_.find("Host") == resp_headers_.end()) {
-      resp_headers_.emplace("Host", "cinatra");
+    if (std::find_if(resp_headers_.begin(), resp_headers_.end(),
+                     [](resp_header& header) {
+                       return header.key == "Host";
+                     }) == resp_headers_.end()) {
+      resp_headers_sv_.emplace_back("Host", "cinatra");
     }
 
     if (status_ >= status_type::not_found) {
@@ -50,32 +64,32 @@ class coro_http_response {
     }
 
     if (!content_.empty()) {
-      char buf[32];
-      auto [ptr, ec] = std::to_chars(buf, buf + 32, content_.size());
-      resp_headers_.emplace("Content-Length",
-                            std::string_view(buf, std::distance(buf, ptr)));
+      auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
+      resp_headers_sv_.emplace_back(
+          "Content-Length", std::string_view(buf_, std::distance(buf_, ptr)));
     }
     else {
-      resp_headers_.emplace("Content-Length", "0");
+      resp_headers_sv_.emplace_back("Content-Length", "0");
     }
 
-    resp_headers_.emplace("Date", get_gmt_time_str());
+    resp_headers_sv_.emplace_back("Date", get_gmt_time_str());
 
     if (keepalive_.has_value()) {
       bool keepalive = keepalive_.value();
-      resp_headers_.emplace("Connection", keepalive ? "keep-alive" : "close");
+      resp_headers_sv_.emplace_back("Connection",
+                                    keepalive ? "keep-alive" : "close");
     }
 
-    size_t head_size = get_head_size();
-    head_.reserve(head_size);
-    append_head();
-    assert(head_.size() == head_size);
+    append_head(resp_headers_);
+    append_head(resp_headers_sv_);
+    head_.append(CRCF);
   }
 
   void clear() {
     head_.clear();
     content_.clear();
     resp_headers_.clear();
+    resp_headers_sv_.clear();
     keepalive_ = {};
   }
 
@@ -87,14 +101,13 @@ class coro_http_response {
     return size + 2;
   }
 
-  void append_head() {
-    for (auto& [k, v] : resp_headers_) {
+  void append_head(auto& headers) {
+    for (auto& [k, v] : headers) {
       head_.append(k);
       head_.append(":");
       head_.append(v);
       head_.append(CRCF);
     }
-    head_.append(CRCF);
   }
 
  private:
@@ -102,6 +115,8 @@ class coro_http_response {
   std::string head_;
   std::string content_;
   std::optional<bool> keepalive_;
-  std::unordered_map<std::string, std::string> resp_headers_;
+  char buf_[32];
+  std::vector<resp_header> resp_headers_;
+  std::vector<resp_header_sv> resp_headers_sv_;
 };
 }  // namespace cinatra
