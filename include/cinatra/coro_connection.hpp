@@ -12,14 +12,6 @@
 #include "string_resize.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 
-inline std::string g_resp_str =
-    "HTTP/1.1 200 OK\r\n"
-    "Connection: keep-alive\r\n"
-    "Content-Length: 11\r\n"
-    "Content-Type: text/html\r\n"
-    "Host: cinatra\r\n\r\n"
-    "hello world";
-
 namespace cinatra {
 class coro_connection {
  public:
@@ -93,7 +85,6 @@ class coro_connection {
       response_.clear();
       buffers_.clear();
     }
-    co_return;
   }
 
   auto &socket() { return socket_; }
@@ -119,7 +110,6 @@ class coro_connection {
   auto &get_executor() { return *executor_; }
 
  private:
-  void build_response() {}
   inline bool iequal(std::string_view a, std::string_view b) {
     return std::equal(a.begin(), a.end(), b.begin(), b.end(),
                       [](char a, char b) {

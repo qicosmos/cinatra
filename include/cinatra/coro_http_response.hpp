@@ -23,18 +23,18 @@ struct resp_header_sv {
 
 class coro_http_response {
  public:
-  coro_http_response() { head_.reserve(128); }
+  coro_http_response() : status_(status_type::not_implemented) {
+    head_.reserve(128);
+  }
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) { content_ = std::move(content); }
   void set_status_and_content(status_type status, std::string content) {
     status_ = status;
     content_ = std::move(content);
   }
-  std::string_view get_content() const { return content_; }
-  cinatra::status_type get_status() const { return status_; }
 
   void add_header(auto k, auto v) {
-    resp_headers_.emplace_back(std::move(k), std::move(v));
+    resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
 
   void set_keepalive(bool r) { keepalive_ = r; }
@@ -91,14 +91,6 @@ class coro_http_response {
     resp_headers_.clear();
     resp_headers_sv_.clear();
     keepalive_ = {};
-  }
-
-  size_t get_head_size() {
-    size_t size = 0;
-    for (auto& [k, v] : resp_headers_) {
-      size += k.size() + 3 + v.size();
-    }
-    return size + 2;
   }
 
   void append_head(auto& headers) {
