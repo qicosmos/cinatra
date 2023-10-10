@@ -104,8 +104,6 @@ class coro_connection {
     buffers_.clear();
   }
 
-  void sync_reply() { async_simple::coro::syncAwait(reply()); }
-
   auto &socket() { return socket_; }
 
   template <typename AsioBuffer>
