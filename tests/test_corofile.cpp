@@ -690,6 +690,75 @@ TEST_CASE("large_file_write_with_pool_test") {
   file.close();
   fs::remove(fs::path(filename));
 }
+TEST_CASE("open_non_existent_file_test") {
+  coro_io::coro_file file(
+      "non_existent_file.txt", coro_io::open_mode::read,
+      coro_io::get_global_block_executor<coro_io::multithread_context_pool>());
+  CHECK(!file.is_open());
+}
+TEST_CASE("write_to_read_only_file_test") {
+  std::string filename = "read_only_file.txt";
+  // Create the file first
+  std::ofstream temp_file(filename);
+  temp_file << "Temporary content";
+  temp_file.close();
+  // Set the file to read-only
+  fs::permissions(filename, fs::perms::owner_read);
+
+  coro_io::coro_file file(
+      filename, coro_io::open_mode::write,
+      coro_io::get_global_block_executor<coro_io::multithread_context_pool>());
+  auto ec = async_simple::coro::syncAwait(file.async_write("New content", 11));
+  CHECK(ec);  // Expecting error
+  // Clean up
+  fs::permissions(filename, fs::perms::all);
+  fs::remove(filename);
+}
+TEST_CASE("read_beyond_file_end_test") {
+  std::string filename = "temp_file_for_read_test.txt";
+  std::string content = "Short content";
+
+  // File creation
+  {
+    INFO("Creating file...");
+    std::ofstream temp_file(filename);
+    CHECK(temp_file.is_open());
+    temp_file << content;
+    temp_file.close();
+  }
+
+  // Read the file using coro_file
+  {
+    INFO("Opening file with coro_file...");
+    coro_io::coro_file file(filename, coro_io::open_mode::read,
+                            coro_io::get_global_block_executor<
+                                coro_io::multithread_context_pool>());
+    CHECK(file.is_open());
+
+    INFO("Reading from file...");
+    char buffer[1024];
+    try {
+      auto ec = async_simple::coro::syncAwait(
+          file.async_read(buffer, sizeof(buffer)));
+
+      CHECK(!ec.first);  // Expecting no error in the error code part of the pair
+      CHECK(ec.second <=content.size());  // Shouldn't read more than what we wrote
+    } catch (const std::exception& e) {
+      FAIL("Exception caught during read: " << e.what());
+    }
+  }
+
+  // Cleanup
+  {
+    INFO("Removing file...");
+    bool removed = fs::remove(filename);
+    CHECK(removed);  // Ensure the file was removed successfully
+  }
+}
+
+
+
+
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
