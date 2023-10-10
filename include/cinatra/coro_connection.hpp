@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "asio/streambuf.hpp"
+#include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
@@ -17,7 +18,7 @@ class coro_connection {
  public:
   template <typename executor_t>
   coro_connection(executor_t *executor, asio::ip::tcp::socket socket)
-      : executor_(executor), socket_(std::move(socket)) {
+      : executor_(executor), socket_(std::move(socket)), request_(parser_) {
     buffers_.reserve(3);
   }
 
@@ -68,11 +69,11 @@ class coro_connection {
 
       auto &router = coro_http_router::instance();
       if (auto handler = router.get_handler(key); handler) {
-        (*handler)(response_);
+        (*handler)(request_, response_);
       }
       else {
         if (auto coro_handler = router.get_coro_handler(key); coro_handler) {
-          co_await (*coro_handler)(response_);
+          co_await (*coro_handler)(request_, response_);
         }
         else {
           // not found
@@ -113,27 +114,9 @@ class coro_connection {
   auto &get_executor() { return *executor_; }
 
  private:
-  inline bool iequal(std::string_view a, std::string_view b) {
-    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
-                      [](char a, char b) {
-                        return tolower(a) == tolower(b);
-                      });
-  }
-
-  std::string_view get_header_value(std::string_view key) {
-    auto headers = parser_.get_headers();
-    for (auto &header : headers) {
-      if (iequal(header.name, key)) {
-        return header.value;
-      }
-    }
-
-    return {};
-  }
-
   bool check_keep_alive() {
     bool keep_alive = true;
-    auto val = get_header_value("connection");
+    auto val = request_.get_header_value("connection");
     if (!val.empty() && iequal(val, "close")) {
       keep_alive = false;
     }
@@ -157,6 +140,7 @@ class coro_connection {
   http_parser parser_;
   bool keep_alive_;
   coro_http_response response_;
+  coro_http_request request_;
   std::vector<asio::const_buffer> buffers_;
 };
 }  // namespace cinatra

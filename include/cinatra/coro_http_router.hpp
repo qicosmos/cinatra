@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "cinatra/cinatra_log_wrapper.hpp"
+#include "cinatra/coro_http_request.hpp"
 #include "cinatra/function_traits.hpp"
 #include "cinatra/utils.hpp"
 #include "coro_http_response.hpp"
@@ -60,15 +61,16 @@ class coro_http_router {
     }
   }
 
-  std::function<void(coro_http_response& resp)>* get_handler(
-      std::string_view key) {
+  std::function<void(coro_http_request& req, coro_http_response& resp)>*
+  get_handler(std::string_view key) {
     if (auto it = map_handles_.find(key); it != map_handles_.end()) {
       return &it->second;
     }
     return nullptr;
   }
 
-  std::function<async_simple::coro::Lazy<void>(coro_http_response& resp)>*
+  std::function<async_simple::coro::Lazy<void>(coro_http_request& req,
+                                               coro_http_response& resp)>*
   get_coro_handler(std::string_view key) {
     if (auto it = coro_handles_.find(key); it != coro_handles_.end()) {
       return &it->second;
@@ -82,15 +84,16 @@ class coro_http_router {
 
  private:
   coro_http_router() = default;
-  std::unordered_map<std::string_view,
-                     std::function<void(coro_http_response& resp)>>
-      map_handles_;
   std::set<std::string> keys_;
-
-  std::set<std::string> coro_keys_;
   std::unordered_map<
       std::string_view,
-      std::function<async_simple::coro::Lazy<void>(coro_http_response& resp)>>
+      std::function<void(coro_http_request& req, coro_http_response& resp)>>
+      map_handles_;
+
+  std::set<std::string> coro_keys_;
+  std::unordered_map<std::string_view,
+                     std::function<async_simple::coro::Lazy<void>(
+                         coro_http_request& req, coro_http_response& resp)>>
       coro_handles_;
 };
 }  // namespace cinatra

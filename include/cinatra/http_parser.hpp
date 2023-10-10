@@ -18,6 +18,12 @@ using namespace std::string_view_literals;
 #endif
 
 namespace cinatra {
+inline bool iequal0(std::string_view a, std::string_view b) {
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char a, char b) {
+    return tolower(a) == tolower(b);
+  });
+}
+
 class http_parser {
  public:
   int parse_response(const char *data, size_t size, int last_len) {
@@ -94,7 +100,7 @@ class http_parser {
 
   std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
-      if (iequal(headers_[i].name, key))
+      if (iequal0(headers_[i].name, key))
         return headers_[i].value;
     }
     return {};
@@ -135,7 +141,7 @@ class http_parser {
       return true;
     }
     auto val = this->get_header_value("connection"sv);
-    if (val.empty() || iequal(val, "keep-alive"sv)) {
+    if (val.empty() || iequal0(val, "keep-alive"sv)) {
       return true;
     }
 
@@ -166,13 +172,6 @@ class http_parser {
   }
 
  private:
-  bool iequal(std::string_view a, std::string_view b) const {
-    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
-                      [](char a, char b) {
-                        return tolower(a) == tolower(b);
-                      });
-  }
-
   std::unordered_map<std::string_view, std::string_view> parse_query(
       std::string_view str) {
     std::unordered_map<std::string_view, std::string_view> query;

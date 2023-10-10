@@ -21,7 +21,7 @@ TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/", [](cinatra::coro_http_response &resp) {
+      "/", [](coro_http_request &req, coro_http_response &resp) {
         // response in io thread.
         std::cout << std::this_thread::get_id() << "\n";
         resp.set_keepalive(true);
@@ -30,7 +30,8 @@ TEST_CASE("coro_server example, will block") {
 
   server.set_http_handler<cinatra::GET>(
       "/coro",
-      [](cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         std::cout << std::this_thread::get_id() << "\n";
 
         co_await coro_io::post([&] {
@@ -53,25 +54,26 @@ TEST_CASE("set http handler") {
   auto &handlers = router.get_handlers();
 
   server.set_http_handler<cinatra::GET>(
-      "/", [](cinatra::coro_http_response &response) {
+      "/", [](coro_http_request &req, coro_http_response &response) {
       });
   CHECK(handlers.size() == 1);
   server.set_http_handler<cinatra::GET>(
-      "/", [](cinatra::coro_http_response &response) {
+      "/", [](coro_http_request &req, coro_http_response &response) {
       });
   CHECK(handlers.size() == 1);
   server.set_http_handler<cinatra::GET>(
-      "/aa", [](cinatra::coro_http_response &response) {
+      "/aa", [](coro_http_request &req, coro_http_response &response) {
       });
   CHECK(handlers.size() == 2);
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/bb", [](cinatra::coro_http_response &response) {
+      "/bb", [](coro_http_request &req, coro_http_response &response) {
       });
   CHECK(handlers.size() == 4);
 
-  auto coro_func = [](cinatra::coro_http_response &response)
-      -> async_simple::coro::Lazy<void> {
+  auto coro_func =
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
     co_return;
   };
 
@@ -123,14 +125,42 @@ TEST_CASE("test server sync_start and stop") {
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/test", [](cinatra::coro_http_response &resp) {
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        auto value = req.get_header_value("connection");
+        CHECK(!value.empty());
+
+        auto value1 = req.get_header_value("connection1");
+        CHECK(value1.empty());
+
+        auto value2 = req.get_query_value("aa");
+        CHECK(value2 == "1");
+
+        auto value3 = req.get_query_value("bb");
+        CHECK(value3 == "test");
+
+        auto value4 = req.get_query_value("cc");
+        CHECK(value4.empty());
+
+        auto headers = req.get_headers();
+        CHECK(!headers.empty());
+
+        auto queries = req.get_queries();
+        CHECK(!queries.empty());
+
         resp.set_keepalive(true);
+        resp.set_status_and_content(cinatra::status_type::ok, "hello world");
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test1", [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
 
   server.set_http_handler<cinatra::GET>(
       "/test_coro",
-      [](cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         co_await coro_io::post([&] {
           resp.set_status(cinatra::status_type::ok);
           resp.set_content("hello world in coro");
@@ -138,13 +168,13 @@ TEST_CASE("get post") {
       });
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/empty", [](cinatra::coro_http_response &resp) {
+      "/empty", [](coro_http_request &req, coro_http_response &resp) {
         resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "");
       });
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/close", [](cinatra::coro_http_response &resp) {
+      "/close", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_keepalive(false);
         resp.set_status_and_content(cinatra::status_type::ok, "hello");
       });
@@ -154,12 +184,12 @@ TEST_CASE("get post") {
 
   coro_http_client client{};
   resp_data result;
-  result = client.get("http://127.0.0.1:9001/test");
+  result = client.get("http://127.0.0.1:9001/test?aa=1&bb=test");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world");
 
   result =
-      client.post("http://127.0.0.1:9001/test", "", req_content_type::text);
+      client.post("http://127.0.0.1:9001/test1", "", req_content_type::text);
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world");
 
