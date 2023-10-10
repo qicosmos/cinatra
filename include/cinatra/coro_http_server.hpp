@@ -26,6 +26,8 @@ class coro_http_server {
     stop();
   }
 
+  void set_no_delay(bool r) { no_delay_ = r; }
+
   // only call once, not thread safe.
   std::errc sync_start() noexcept {
     auto ret = async_start();
@@ -143,6 +145,9 @@ class coro_http_server {
       CINATRA_LOG_DEBUG << "new connection comming";
       auto conn =
           std::make_shared<coro_connection>(executor, std::move(socket));
+      if (no_delay_) {
+        conn->socket().set_option(asio::ip::tcp::no_delay(true));
+      }
       start_one(conn).via(&conn->get_executor()).detach();
     }
   }
@@ -167,5 +172,6 @@ class coro_http_server {
   asio::ip::tcp::acceptor acceptor_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
+  bool no_delay_ = true;
 };
 }  // namespace cinatra

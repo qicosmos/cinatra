@@ -2,9 +2,9 @@ name: Windows Server 2022
 
 on:
   push:
-    branches: [ main, master, cpp20_base ]
+    branches: [ main, master, coro_http_server ]
   pull_request:
-    branches: [ main, master, cpp20_base ]
+    branches: [ main, master, coro_http_server ]
 
 jobs:
   build_on_windows:

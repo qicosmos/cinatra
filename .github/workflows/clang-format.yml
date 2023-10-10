@@ -5,12 +5,12 @@ on:
     branches:
       - main
       - master
-      - cpp20_base
+      - coro_http_server
   pull_request:
     branches:
       - main
       - master
-      - cpp20_base
+      - coro_http_server
 
 jobs:
   build:

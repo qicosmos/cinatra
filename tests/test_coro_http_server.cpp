@@ -142,6 +142,13 @@ TEST_CASE("get post") {
         resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "");
       });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/close", [](cinatra::coro_http_response &resp) {
+        resp.set_keepalive(false);
+        resp.set_status_and_content(cinatra::status_type::ok, "hello");
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
@@ -172,6 +179,10 @@ TEST_CASE("get post") {
       });
   CHECK(it != headers.end());
   CHECK(result.resp_body.empty());
+
+  client.add_header("Connection", "close");
+  result = client.get("http://127.0.0.1:9001/close");
+  CHECK(result.status == 200);
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007) int main(int argc, char **argv) {

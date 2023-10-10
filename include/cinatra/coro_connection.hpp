@@ -82,6 +82,9 @@ class coro_connection {
 
       response_.to_buffers(buffers_);
       co_await async_write(buffers_);
+      if (!keep_alive_) {
+        close();
+      }
       response_.clear();
       buffers_.clear();
     }
@@ -119,7 +122,7 @@ class coro_connection {
 
   std::string_view get_header_value(std::string_view key) {
     auto headers = parser_.get_headers();
-    for (auto header : headers) {
+    for (auto &header : headers) {
       if (iequal(header.name, key)) {
         return header.value;
       }
@@ -136,6 +139,14 @@ class coro_connection {
     }
 
     return keep_alive;
+  }
+
+  void close() {
+    asio::dispatch(socket_.get_executor(), [this] {
+      std::error_code ec;
+      socket_.shutdown(asio::socket_base::shutdown_both, ec);
+      socket_.close(ec);
+    });
   }
 
  private:
