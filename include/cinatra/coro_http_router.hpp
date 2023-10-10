@@ -25,11 +25,6 @@ constexpr inline bool is_lazy_v =
     is_template_instant_of<async_simple::coro::Lazy,
                            std::remove_cvref_t<T>>::value;
 
-struct coro_http_handler {
-  std::string key;
-  std::function<void(coro_http_response&)> func;
-};
-
 class coro_http_router {
  public:
   static coro_http_router& instance() {
@@ -44,20 +39,23 @@ class coro_http_router {
     std::string whole_str;
     whole_str.append(method_name).append(" ").append(key);
 
-    if (keys_.find(whole_str) != keys_.end()) {
-      CINATRA_LOG_WARNING << key << " has already registered.";
-      return;
-    }
-
     // hold keys to make sure map_handles_ key is
     // std::string_view, avoid memcpy when route
     using return_type = typename timax::function_traits<Func>::result_type;
-    auto [it, ok] = keys_.emplace(std::move(whole_str));
-
     if constexpr (is_lazy_v<return_type>) {
+      auto [it, ok] = coro_keys_.emplace(std::move(whole_str));
+      if (!ok) {
+        CINATRA_LOG_WARNING << key << " has already registered.";
+        return;
+      }
       coro_handles_.emplace(*it, std::move(handler));
     }
     else {
+      auto [it, ok] = keys_.emplace(std::move(whole_str));
+      if (!ok) {
+        CINATRA_LOG_WARNING << key << " has already registered.";
+        return;
+      }
       map_handles_.emplace(*it, std::move(handler));
     }
   }
@@ -78,6 +76,10 @@ class coro_http_router {
     return nullptr;
   }
 
+  const auto& get_handlers() const { return map_handles_; }
+
+  const auto& get_coro_handlers() const { return coro_handles_; }
+
  private:
   coro_http_router() = default;
   std::unordered_map<std::string_view,
@@ -85,6 +87,7 @@ class coro_http_router {
       map_handles_;
   std::set<std::string> keys_;
 
+  std::set<std::string> coro_keys_;
   std::unordered_map<
       std::string_view,
       std::function<async_simple::coro::Lazy<void>(coro_http_response& resp)>>

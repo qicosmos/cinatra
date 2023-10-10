@@ -12,13 +12,15 @@
 #include "cinatra/coro_http_server.hpp"
 #include "doctest/doctest.h"
 
+using namespace cinatra;
+
 using namespace std::chrono_literals;
 
 TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/", [](cinatra::coro_http_response& resp) {
+      "/", [](cinatra::coro_http_response &resp) {
         // response in io thread.
         std::cout << std::this_thread::get_id() << "\n";
         resp.set_keepalive(true);
@@ -27,7 +29,7 @@ TEST_CASE("coro_server example, will block") {
 
   server.set_http_handler<cinatra::GET>(
       "/coro",
-      [](cinatra::coro_http_response& resp) -> async_simple::coro::Lazy<void> {
+      [](cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         std::cout << std::this_thread::get_id() << "\n";
 
         co_await coro_io::post([&] {
@@ -41,6 +43,52 @@ TEST_CASE("coro_server example, will block") {
       });
   server.sync_start();
   CHECK(server.port() > 0);
+}
+
+TEST_CASE("set http handler") {
+  cinatra::coro_http_server server(1, 9001);
+
+  auto &router = coro_http_router::instance();
+  auto &handlers = router.get_handlers();
+
+  server.set_http_handler<cinatra::GET>(
+      "/", [](cinatra::coro_http_response &response) {
+      });
+  CHECK(handlers.size() == 1);
+  server.set_http_handler<cinatra::GET>(
+      "/", [](cinatra::coro_http_response &response) {
+      });
+  CHECK(handlers.size() == 1);
+  server.set_http_handler<cinatra::GET>(
+      "/aa", [](cinatra::coro_http_response &response) {
+      });
+  CHECK(handlers.size() == 2);
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/bb", [](cinatra::coro_http_response &response) {
+      });
+  CHECK(handlers.size() == 4);
+
+  auto coro_func = [](cinatra::coro_http_response &response)
+      -> async_simple::coro::Lazy<void> {
+    co_return;
+  };
+
+  auto &coro_handlers = router.get_coro_handlers();
+  server.set_http_handler<cinatra::GET>("/", coro_func);
+  CHECK(coro_handlers.size() == 1);
+  server.set_http_handler<cinatra::GET>("/", coro_func);
+  CHECK(coro_handlers.size() == 1);
+  server.set_http_handler<cinatra::GET>("/aa", coro_func);
+  CHECK(coro_handlers.size() == 2);
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>("/bb", coro_func);
+  CHECK(coro_handlers.size() == 4);
+
+  CHECK(router.get_handler("GET /") != nullptr);
+  CHECK(router.get_handler("GET /cc") == nullptr);
+  CHECK(router.get_coro_handler("POST /bb") != nullptr);
+  CHECK(router.get_coro_handler("POST /cc") == nullptr);
 }
 
 TEST_CASE("test server start and stop") {
@@ -71,7 +119,7 @@ TEST_CASE("test server sync_start and stop") {
   CHECK(ec == std::errc::operation_canceled);
 }
 
-DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007) int main(int argc, char** argv) {
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007) int main(int argc, char **argv) {
   return doctest::Context(argc, argv).run();
 }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
