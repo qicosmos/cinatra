@@ -1,11 +1,14 @@
 #pragma once
 #include <charconv>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
 #include "define.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
@@ -23,7 +26,7 @@ struct resp_header_sv {
 
 class coro_http_response {
  public:
-  coro_http_response() : status_(status_type::not_implemented) {
+  coro_http_response() : status_(status_type::not_implemented), delay_(false) {
     head_.reserve(128);
   }
   void set_status(cinatra::status_type status) { status_ = status; }
@@ -32,10 +35,21 @@ class coro_http_response {
     status_ = status;
     content_ = std::move(content);
   }
+  void set_delay(bool r) { delay_ = r; }
+  bool get_delay() const { return delay_; }
 
   void add_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
+
+  void set_response_cb(
+      std::function<async_simple::coro::Lazy<void>()> response_cb) {
+    response_cb_ = std::move(response_cb);
+  }
+
+  async_simple::coro::Lazy<void> reply() { co_await response_cb_(); }
+
+  void sync_reply() { async_simple::coro::syncAwait(reply()); }
 
   void set_keepalive(bool r) { keepalive_ = r; }
 
@@ -91,6 +105,7 @@ class coro_http_response {
     resp_headers_.clear();
     resp_headers_sv_.clear();
     keepalive_ = {};
+    delay_ = false;
   }
 
   void append_head(auto& headers) {
@@ -107,8 +122,10 @@ class coro_http_response {
   std::string head_;
   std::string content_;
   std::optional<bool> keepalive_;
+  bool delay_;
   char buf_[32];
   std::vector<resp_header> resp_headers_;
   std::vector<resp_header_sv> resp_headers_sv_;
+  std::function<async_simple::coro::Lazy<void>()> response_cb_;
 };
 }  // namespace cinatra

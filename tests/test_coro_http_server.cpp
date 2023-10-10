@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/response_cv.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
@@ -215,7 +216,40 @@ TEST_CASE("get post") {
   CHECK(result.status == 200);
 }
 
-DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007) int main(int argc, char **argv) {
-  return doctest::Context(argc, argv).run();
+TEST_CASE("delay reply") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/delay", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_delay(true);
+        std::thread([&resp] {
+          std::this_thread::sleep_for(200ms);
+          resp.set_status_and_content(status_type::ok, "delay replay");
+          resp.sync_reply();
+        }).detach();
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/delay2",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        std::this_thread::sleep_for(200ms);
+        resp.set_status_and_content(status_type::ok, "delay replay in coro");
+        co_await resp.reply();
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  resp_data result;
+  result = client.get("http://127.0.0.1:9001/delay");
+  CHECK(result.status == 200);
+
+  result = client.get("http://127.0.0.1:9001/delay2");
+  CHECK(result.status == 200);
 }
+
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
+int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

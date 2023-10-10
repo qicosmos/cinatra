@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "asio/streambuf.hpp"
+#include "async_simple/coro/Lazy.h"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
@@ -20,6 +21,9 @@ class coro_connection {
   coro_connection(executor_t *executor, asio::ip::tcp::socket socket)
       : executor_(executor), socket_(std::move(socket)), request_(parser_) {
     buffers_.reserve(3);
+    response_.set_response_cb([this]() -> async_simple::coro::Lazy<void> {
+      co_await reply();
+    });
   }
 
   ~coro_connection() {}
@@ -81,15 +85,26 @@ class coro_connection {
         }
       }
 
-      response_.to_buffers(buffers_);
-      co_await async_write(buffers_);
-      if (!keep_alive_) {
-        close();
+      if (response_.get_delay()) {
+        continue;
       }
-      response_.clear();
-      buffers_.clear();
+
+      co_await reply();
     }
   }
+
+  async_simple::coro::Lazy<void> reply() {
+    // avoid duplicate reply
+    response_.to_buffers(buffers_);
+    co_await async_write(buffers_);
+    if (!keep_alive_) {
+      close();
+    }
+    response_.clear();
+    buffers_.clear();
+  }
+
+  void sync_reply() { async_simple::coro::syncAwait(reply()); }
 
   auto &socket() { return socket_; }
 
