@@ -216,7 +216,7 @@ TEST_CASE("get post") {
   CHECK(result.status == 200);
 }
 
-TEST_CASE("delay reply") {
+TEST_CASE("delay reply, server stop, form-urlencode") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/delay", [](coro_http_request &req, coro_http_response &resp) {
@@ -238,6 +238,14 @@ TEST_CASE("delay reply") {
         co_await resp.reply();
       });
 
+  server.set_http_handler<cinatra::POST>(
+      "/form-urlencode", [](coro_http_request &req, coro_http_response &resp) {
+        CHECK(req.get_body() == "theCityName=58367&aa=%22bbb%22");
+        CHECK(req.get_query_value("theCityName") == "58367");
+        CHECK(req.get_decode_query_value("aa") == "\"bbb\"");
+        resp.set_status_and_content(status_type::ok, "form-urlencode");
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
@@ -250,6 +258,11 @@ TEST_CASE("delay reply") {
 
   coro_http_client client1{};
   result = client1.get("http://127.0.0.1:9001/delay2");
+  CHECK(result.status == 200);
+
+  result = client1.post("http://127.0.0.1:9001/form-urlencode",
+                        "theCityName=58367&aa=%22bbb%22",
+                        req_content_type::form_url_encode);
   CHECK(result.status == 200);
 
   server.stop();

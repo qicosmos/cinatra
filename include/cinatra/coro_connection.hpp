@@ -78,6 +78,10 @@ class coro_http_connection {
           parser_.method().data(),
           parser_.method().length() + 1 + parser_.url().length()};
 
+      if (!body_.empty()) {
+        request_.set_body(body_);
+      }
+
       auto &router = coro_http_router::instance();
       if (auto handler = router.get_handler(key); handler) {
         (*handler)(request_, response_);
@@ -116,6 +120,7 @@ class coro_http_connection {
     }
     response_.clear();
     buffers_.clear();
+    body_.clear();
   }
 
   auto &socket() { return socket_; }

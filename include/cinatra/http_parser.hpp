@@ -91,7 +91,7 @@ class http_parser {
 
     size_t pos = url_.find('?');
     if (pos != std::string_view::npos) {
-      queries_ = parse_query(url_.substr(pos + 1, url_len - pos - 1));
+      parse_query(url_.substr(pos + 1, url_len - pos - 1));
       url_ = {url, pos};
     }
 
@@ -171,10 +171,7 @@ class http_parser {
     return {headers_.data(), num_headers_};
   }
 
- private:
-  std::unordered_map<std::string_view, std::string_view> parse_query(
-      std::string_view str) {
-    std::unordered_map<std::string_view, std::string_view> query;
+  void parse_query(std::string_view str) {
     std::string_view key;
     std::string_view val;
     size_t pos = 0;
@@ -189,31 +186,24 @@ class http_parser {
       else if (c == '&') {
         val = {&str[pos], i - pos};
         val = trim(val);
-        if (code_utils::is_url_encode(val)) {
-          query.emplace(key, code_utils::get_string_by_urldecode(val));
-        }
-        else {
-          query.emplace(key, val);
-        }
+        queries_.emplace(key, val);
 
         pos = i + 1;
       }
     }
 
     if (pos == 0) {
-      return {};
+      return;
     }
 
     if ((length - pos) > 0) {
       val = {&str[pos], length - pos};
       val = trim(val);
-      query.emplace(key, val);
+      queries_.emplace(key, val);
     }
     else if ((length - pos) == 0) {
-      query.emplace(key, "");
+      queries_.emplace(key, "");
     }
-
-    return query;
   }
 
   std::string_view trim(std::string_view v) {
@@ -223,6 +213,7 @@ class http_parser {
     return v;
   }
 
+ private:
   int status_ = 0;
   std::string_view msg_;
   size_t num_headers_ = 0;
