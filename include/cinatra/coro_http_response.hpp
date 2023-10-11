@@ -102,6 +102,9 @@ class coro_http_response {
   void clear() {
     head_.clear();
     content_.clear();
+    head_.shrink_to_fit();
+    content_.shrink_to_fit();
+
     resp_headers_.clear();
     resp_headers_sv_.clear();
     keepalive_ = {};
