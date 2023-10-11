@@ -22,7 +22,7 @@ class coro_http_server {
         acceptor_(pool_.get_executor()->get_asio_executor()) {}
 
   ~coro_http_server() {
-    CINATRA_LOG_INFO << "coro_rpc_server will quit";
+    CINATRA_LOG_INFO << "coro_http_server will quit";
     stop();
   }
 
@@ -73,7 +73,7 @@ class coro_http_server {
     pool_.stop();
     CINATRA_LOG_INFO << "server's thread-pool finished.";
     thd_.join();
-    CINATRA_LOG_INFO << "stop coro_rpc_server ok";
+    CINATRA_LOG_INFO << "stop coro_http_server ok";
   }
 
   // call it after server async_start or sync_start.

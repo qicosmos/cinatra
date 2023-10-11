@@ -207,7 +207,7 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
-  auto &executor = socket.get_executor();
+  auto executor = socket.get_executor();
   co_return co_await awaitor.await_resume([&](auto handler) {
     asio::post(executor, [&, handler]() {
       asio::error_code ignored_ec;

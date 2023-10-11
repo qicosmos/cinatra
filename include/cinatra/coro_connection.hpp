@@ -98,7 +98,7 @@ class coro_connection {
     response_.to_buffers(buffers_);
     co_await async_write(buffers_);
     if (!keep_alive_) {
-      close();
+      co_await coro_io::async_close(socket_);
     }
     response_.clear();
     buffers_.clear();
