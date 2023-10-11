@@ -15,10 +15,10 @@
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
-class coro_connection {
+class coro_http_connection {
  public:
   template <typename executor_t>
-  coro_connection(executor_t *executor, asio::ip::tcp::socket socket)
+  coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
       : executor_(executor), socket_(std::move(socket)), request_(parser_) {
     buffers_.reserve(3);
     response_.set_response_cb([this]() -> async_simple::coro::Lazy<void> {
@@ -26,21 +26,21 @@ class coro_connection {
     });
   }
 
-  ~coro_connection() {}
+  ~coro_http_connection() {}
 
   async_simple::coro::Lazy<void> start() {
     while (true) {
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
       if (ec) {
         CINATRA_LOG_ERROR << "read http header error: " << ec.message();
-        co_return;
+        break;
       }
 
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       int head_len = parser_.parse_request(data_ptr, size, 0);
       if (head_len <= 0) {
         CINATRA_LOG_ERROR << "parse http header error";
-        co_return;
+        break;
       }
 
       head_buf_.consume(size);

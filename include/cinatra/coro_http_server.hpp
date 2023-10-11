@@ -144,7 +144,7 @@ class coro_http_server {
 
       CINATRA_LOG_DEBUG << "new connection comming";
       auto conn =
-          std::make_shared<coro_connection>(executor, std::move(socket));
+          std::make_shared<coro_http_connection>(executor, std::move(socket));
       if (no_delay_) {
         conn->socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -153,7 +153,7 @@ class coro_http_server {
   }
 
   async_simple::coro::Lazy<void> start_one(
-      std::shared_ptr<coro_connection> conn) noexcept {
+      std::shared_ptr<coro_http_connection> conn) noexcept {
     co_await conn->start();
   }
 
