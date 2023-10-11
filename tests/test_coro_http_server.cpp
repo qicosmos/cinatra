@@ -241,13 +241,19 @@ TEST_CASE("delay reply") {
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
-  coro_http_client client{};
   resp_data result;
-  result = client.get("http://127.0.0.1:9001/delay");
+  {
+    coro_http_client client{};
+    result = client.get("http://127.0.0.1:9001/delay");
+    CHECK(result.status == 200);
+  }
+
+  coro_http_client client1{};
+  result = client1.get("http://127.0.0.1:9001/delay2");
   CHECK(result.status == 200);
 
-  result = client.get("http://127.0.0.1:9001/delay2");
-  CHECK(result.status == 200);
+  server.stop();
+  std::cout << "ok\n";
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

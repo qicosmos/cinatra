@@ -1,6 +1,8 @@
 #pragma once
 
 #include <asio/dispatch.hpp>
+#include <cstdint>
+#include <mutex>
 #include <type_traits>
 
 #include "asio/streambuf.hpp"
@@ -69,6 +71,16 @@ class coro_http_server {
       return;
     }
     close_acceptor();
+
+    // close current connections.
+    {
+      std::scoped_lock lock(conn_mtx_);
+      for (auto &conn : connections_) {
+        conn.second->close();
+      }
+      connections_.clear();
+    }
+
     CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
     pool_.stop();
     CINATRA_LOG_INFO << "server's thread-pool finished.";
@@ -142,12 +154,27 @@ class coro_http_server {
         continue;
       }
 
-      CINATRA_LOG_DEBUG << "new connection comming";
+      uint64_t conn_id = ++conn_id_;
+      CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn =
           std::make_shared<coro_http_connection>(executor, std::move(socket));
       if (no_delay_) {
         conn->socket().set_option(asio::ip::tcp::no_delay(true));
       }
+
+      conn->set_quit_callback(
+          [this](const uint64_t &id) {
+            std::scoped_lock lock(conn_mtx_);
+            if (!connections_.empty())
+              connections_.erase(id);
+          },
+          conn_id);
+
+      {
+        std::scoped_lock lock(conn_mtx_);
+        connections_.emplace(conn_id, conn);
+      }
+
       start_one(conn).via(&conn->get_executor()).detach();
     }
   }
@@ -173,5 +200,10 @@ class coro_http_server {
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
   bool no_delay_ = true;
+
+  uint64_t conn_id_ = 0;
+  std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
+      connections_;
+  std::mutex conn_mtx_;
 };
 }  // namespace cinatra
