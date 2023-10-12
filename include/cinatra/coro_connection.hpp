@@ -84,11 +84,11 @@ class coro_http_connection {
 
       auto &router = coro_http_router::instance();
       if (auto handler = router.get_handler(key); handler) {
-        (*handler)(request_, response_);
+        router.route(handler, request_, response_);
       }
       else {
         if (auto coro_handler = router.get_coro_handler(key); coro_handler) {
-          co_await (*coro_handler)(request_, response_);
+          co_await router.route_coro(coro_handler, request_, response_);
         }
         else {
           // not found

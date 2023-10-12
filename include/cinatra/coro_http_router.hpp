@@ -11,6 +11,7 @@
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/coro_http_request.hpp"
 #include "cinatra/function_traits.hpp"
+#include "cinatra/response_cv.hpp"
 #include "cinatra/utils.hpp"
 #include "coro_http_response.hpp"
 
@@ -76,6 +77,33 @@ class coro_http_router {
       return &it->second;
     }
     return nullptr;
+  }
+
+  void route(auto handler, auto& req, auto& resp) {
+    try {
+      (*handler)(req, resp);
+    } catch (const std::exception& e) {
+      CINATRA_LOG_WARNING << "exception in business function, reason: "
+                          << e.what();
+      resp.set_status(status_type::service_unavailable);
+    } catch (...) {
+      CINATRA_LOG_WARNING << "unknown exception in business function";
+      resp.set_status(status_type::service_unavailable);
+    }
+  }
+
+  async_simple::coro::Lazy<void> route_coro(auto handler, auto& req,
+                                            auto& resp) {
+    try {
+      co_await (*handler)(req, resp);
+    } catch (const std::exception& e) {
+      CINATRA_LOG_WARNING << "exception in business function, reason: "
+                          << e.what();
+      resp.set_status(status_type::service_unavailable);
+    } catch (...) {
+      CINATRA_LOG_WARNING << "unknown exception in business function";
+      resp.set_status(status_type::service_unavailable);
+    }
   }
 
   const auto& get_handlers() const { return map_handles_; }
