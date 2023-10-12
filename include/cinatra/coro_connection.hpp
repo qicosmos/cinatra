@@ -96,11 +96,13 @@ class coro_http_connection {
         }
       }
 
-      if (response_.get_delay()) {
-        continue;
+      if (!response_.get_delay()) {
+        co_await reply();
       }
 
-      co_await reply();
+      response_.clear();
+      buffers_.clear();
+      body_.clear();
     }
   }
 
@@ -118,9 +120,6 @@ class coro_http_connection {
       // now in io thread, so can close socket immediately.
       close();
     }
-    response_.clear();
-    buffers_.clear();
-    body_.clear();
   }
 
   auto &socket() { return socket_; }

@@ -72,9 +72,7 @@ class coro_http_response {
     }
 
     if (status_ >= status_type::not_found) {
-      auto sv = to_string(status_);
-      content_.reserve(sv.size());
-      content_.append(sv);
+      content_.append(to_string(status_));
     }
 
     if (!content_.empty()) {

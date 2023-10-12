@@ -1,5 +1,6 @@
 #include <chrono>
 #include <future>
+#include <stdexcept>
 #include <system_error>
 #include <thread>
 
@@ -216,14 +217,14 @@ TEST_CASE("get post") {
   CHECK(result.status == 200);
 }
 
-TEST_CASE("delay reply, server stop, form-urlencode") {
+TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/delay", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_delay(true);
         std::thread([&resp] {
           std::this_thread::sleep_for(200ms);
-          resp.set_status_and_content(status_type::ok, "delay replay");
+          resp.set_status_and_content(status_type::ok, "delay reply");
           resp.sync_reply();
         }).detach();
       });
@@ -234,7 +235,7 @@ TEST_CASE("delay reply, server stop, form-urlencode") {
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         resp.set_delay(true);
         std::this_thread::sleep_for(200ms);
-        resp.set_status_and_content(status_type::ok, "delay replay in coro");
+        resp.set_status_and_content(status_type::ok, "delay reply in coro");
         co_await resp.reply();
       });
 
@@ -246,6 +247,12 @@ TEST_CASE("delay reply, server stop, form-urlencode") {
         resp.set_status_and_content(status_type::ok, "form-urlencode");
       });
 
+  server.set_http_handler<cinatra::GET>(
+      "/throw", [](coro_http_request &req, coro_http_response &resp) {
+        throw std::invalid_argument("invalid arguments");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
@@ -254,16 +261,23 @@ TEST_CASE("delay reply, server stop, form-urlencode") {
     coro_http_client client{};
     result = client.get("http://127.0.0.1:9001/delay");
     CHECK(result.status == 200);
+    CHECK(result.resp_body == "delay reply");
   }
 
   coro_http_client client1{};
+  client1.set_req_timeout(1000s);
   result = client1.get("http://127.0.0.1:9001/delay2");
   CHECK(result.status == 200);
+  CHECK(result.resp_body == "delay reply in coro");
 
   result = client1.post("http://127.0.0.1:9001/form-urlencode",
                         "theCityName=58367&aa=%22bbb%22",
                         req_content_type::form_url_encode);
   CHECK(result.status == 200);
+  CHECK(result.resp_body == "form-urlencode");
+
+  result = client1.get("http://127.0.0.1:9001/throw");
+  CHECK(result.status == 503);
 
   server.stop();
   std::cout << "ok\n";
