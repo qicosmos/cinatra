@@ -11,7 +11,7 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
-#include "cinatra/coro_connection.hpp"
+#include "cinatra/coro_http_connection.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
 #include "cinatra/utils.hpp"
