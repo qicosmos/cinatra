@@ -10,6 +10,7 @@
 #include "asio/streambuf.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
+#include "cinatra/response_cv.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
@@ -30,7 +31,8 @@ class coro_http_connection {
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
       : executor_(executor),
         socket_(std::move(socket)),
-        request_(parser_, this) {
+        request_(parser_, this),
+        response_(this) {
     buffers_.reserve(3);
     response_.set_response_cb([this]() -> async_simple::coro::Lazy<void> {
       co_await reply();
@@ -59,7 +61,9 @@ class coro_http_connection {
       head_buf_.consume(size);
       keep_alive_ = check_keep_alive();
 
-      if (!parser_.is_chunked()) {
+      bool is_chunked = parser_.is_chunked();
+
+      if (!is_chunked) {
         size_t body_len = parser_.body_len();
         if (body_len <= head_buf_.size()) {
           if (body_len > 0) {
@@ -120,20 +124,42 @@ class coro_http_connection {
     }
   }
 
-  async_simple::coro::Lazy<void> reply() {
+  async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
     // avoid duplicate reply
-    response_.to_buffers(buffers_);
+    if (need_to_bufffer) {
+      response_.to_buffers(buffers_);
+    }
     auto [ec, _] = co_await async_write(buffers_);
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
-      co_return;
+      co_return false;
     }
 
     if (!keep_alive_) {
       // now in io thread, so can close socket immediately.
       close();
     }
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<bool> begin_chunked() {
+    response_.set_delay(true);
+    response_.set_status(status_type::ok);
+    co_return co_await reply();
+  }
+
+  async_simple::coro::Lazy<bool> write_chunked(std::string_view chunked_data,
+                                               bool eof = false) {
+    response_.set_delay(true);
+    buffers_.clear();
+    response_.to_chunked_buffers(buffers_, chunked_data, eof);
+    co_return co_await reply(false);
+  }
+
+  async_simple::coro::Lazy<bool> end_chunked() {
+    co_return co_await write_chunked("", true);
   }
 
   async_simple::coro::Lazy<chunked_result> read_chunked() {
@@ -257,8 +283,8 @@ class coro_http_connection {
   asio::streambuf chunked_buf_;
   http_parser parser_;
   bool keep_alive_;
-  coro_http_response response_;
   coro_http_request request_;
+  coro_http_response response_;
   std::vector<asio::const_buffer> buffers_;
   std::atomic<bool> has_closed_{false};
   uint64_t conn_id_{0};

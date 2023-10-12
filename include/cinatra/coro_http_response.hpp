@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -29,14 +30,17 @@ enum class format_type {
   chunked,
 };
 
+class coro_http_connection;
 class coro_http_response {
  public:
-  coro_http_response()
+  coro_http_response(coro_http_connection* conn)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
-        delay_(false) {
+        delay_(false),
+        conn_(conn) {
     head_.reserve(128);
   }
+
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) { content_ = std::move(content); }
   void set_status_and_content(status_type status, std::string content) {
@@ -144,6 +148,8 @@ class coro_http_response {
     head_.append(CRCF);
   }
 
+  coro_http_connection* get_conn() { return conn_; }
+
   void clear() {
     head_.clear();
     content_.clear();
@@ -178,5 +184,6 @@ class coro_http_response {
   std::vector<resp_header> resp_headers_;
   std::vector<resp_header_sv> resp_headers_sv_;
   std::function<async_simple::coro::Lazy<void>()> response_cb_;
+  coro_http_connection* conn_;
 };
 }  // namespace cinatra

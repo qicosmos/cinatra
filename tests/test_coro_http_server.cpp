@@ -1,10 +1,13 @@
 #include <chrono>
+#include <fstream>
 #include <future>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <system_error>
 #include <thread>
+#include <vector>
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
@@ -271,7 +274,6 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   }
 
   coro_http_client client1{};
-  client1.set_req_timeout(1000s);
   result = client1.get("http://127.0.0.1:9001/delay2");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "delay reply in coro");
@@ -316,6 +318,27 @@ TEST_CASE("chunked request") {
         resp.set_status_and_content(status_type::ok, "chunked ok");
       });
 
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/write_chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_format_type(format_type::chunked);
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " ok"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_chunked(str); !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_chunked();
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
@@ -326,6 +349,10 @@ TEST_CASE("chunked request") {
       "http://127.0.0.1:9001/chunked"sv, http_method::POST, ss));
   CHECK(result.status == 200);
   CHECK(result.resp_body == "chunked ok");
+
+  result = client.get("http://127.0.0.1:9001/write_chunked");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world ok");
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
