@@ -66,25 +66,30 @@ TEST_CASE("set http handler") {
 
   server.set_http_handler<cinatra::GET>(
       "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
       });
   CHECK(handlers.size() == 1);
   server.set_http_handler<cinatra::GET>(
       "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
       });
   CHECK(handlers.size() == 1);
   server.set_http_handler<cinatra::GET>(
       "/aa", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
       });
   CHECK(handlers.size() == 2);
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/bb", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
       });
   CHECK(handlers.size() == 4);
 
   auto coro_func =
       [](coro_http_request &req,
          coro_http_response &response) -> async_simple::coro::Lazy<void> {
+    response.set_status_and_content(status_type::ok, "ok");
     co_return;
   };
 
@@ -224,6 +229,8 @@ TEST_CASE("get post") {
   client.add_header("Connection", "close");
   result = client.get("http://127.0.0.1:9001/close");
   CHECK(result.status == 200);
+
+  server.stop();
 }
 
 TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
@@ -353,6 +360,8 @@ TEST_CASE("chunked request") {
   result = client.get("http://127.0.0.1:9001/write_chunked");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world ok");
+
+  server.stop();
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
