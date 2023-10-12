@@ -25,7 +25,7 @@ struct chunked_result {
   std::string_view data;
 };
 
-class coro_http_connection {
+class coro_http_connection: public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
@@ -252,7 +252,7 @@ class coro_http_connection {
       return;
     }
 
-    asio::dispatch(socket_.get_executor(), [this] {
+    asio::dispatch(socket_.get_executor(), [this, self = shared_from_this()] {
       std::error_code ec;
       socket_.shutdown(asio::socket_base::shutdown_both, ec);
       socket_.close(ec);

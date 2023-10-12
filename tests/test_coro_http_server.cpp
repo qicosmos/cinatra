@@ -360,8 +360,6 @@ TEST_CASE("chunked request") {
   result = client.get("http://127.0.0.1:9001/write_chunked");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world ok");
-
-  server.stop();
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
