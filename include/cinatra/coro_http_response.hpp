@@ -55,15 +55,6 @@ class coro_http_response {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
 
-  void set_response_cb(
-      std::function<async_simple::coro::Lazy<void>()> response_cb) {
-    response_cb_ = std::move(response_cb);
-  }
-
-  async_simple::coro::Lazy<void> reply() { co_await response_cb_(); }
-
-  void sync_reply() { async_simple::coro::syncAwait(reply()); }
-
   void set_keepalive(bool r) { keepalive_ = r; }
 
   void to_buffers(std::vector<asio::const_buffer>& buffers) {
@@ -183,7 +174,6 @@ class coro_http_response {
   char buf_[32];
   std::vector<resp_header> resp_headers_;
   std::vector<resp_header_sv> resp_headers_sv_;
-  std::function<async_simple::coro::Lazy<void>()> response_cb_;
   coro_http_connection* conn_;
 };
 }  // namespace cinatra

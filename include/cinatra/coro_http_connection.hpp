@@ -34,9 +34,6 @@ class coro_http_connection {
         request_(parser_, this),
         response_(this) {
     buffers_.reserve(3);
-    response_.set_response_cb([this]() -> async_simple::coro::Lazy<void> {
-      co_await reply();
-    });
   }
 
   ~coro_http_connection() { close(); }
@@ -143,6 +140,8 @@ class coro_http_connection {
 
     co_return true;
   }
+
+  bool sync_reply() { return async_simple::coro::syncAwait(reply()); }
 
   async_simple::coro::Lazy<bool> begin_chunked() {
     response_.set_delay(true);

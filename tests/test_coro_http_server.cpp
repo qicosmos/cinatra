@@ -234,7 +234,7 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         std::thread([&resp] {
           std::this_thread::sleep_for(200ms);
           resp.set_status_and_content(status_type::ok, "delay reply");
-          resp.sync_reply();
+          resp.get_conn()->sync_reply();
         }).detach();
       });
 
@@ -245,7 +245,7 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         resp.set_delay(true);
         std::this_thread::sleep_for(200ms);
         resp.set_status_and_content(status_type::ok, "delay reply in coro");
-        co_await resp.reply();
+        co_await resp.get_conn()->reply();
       });
 
   server.set_http_handler<cinatra::POST>(
