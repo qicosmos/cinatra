@@ -3,11 +3,13 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
+#include <system_error>
 #include <thread>
 
 #include "asio/dispatch.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/cinatra_log_wrapper.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
@@ -156,15 +158,16 @@ class coro_http_connection {
     size_t additional_size = buf_size - size;
     const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
     std::string_view size_str(data_ptr, size - CRCF.size());
-    auto chunk_size = hex_to_int(size_str);
-    chunked_buf_.consume(size);
-    if (chunk_size < 0) {
-      CINATRA_LOG_DEBUG << "bad chunked size";
-      ec = asio::error::make_error_code(
-          asio::error::basic_errors::invalid_argument);
-      result.ec = ec;
+    size_t chunk_size;
+    auto [ptr, err] = std::from_chars(
+        size_str.data(), size_str.data() + size_str.size(), chunk_size, 16);
+    if (err != std::errc{}) {
+      CINATRA_LOG_ERROR << "bad chunked size";
+      result.ec = std::make_error_code(std::errc::invalid_argument);
       co_return result;
     }
+
+    chunked_buf_.consume(size);
 
     if (chunk_size == 0) {
       // all finished, no more data

@@ -312,6 +312,7 @@ TEST_CASE("chunked request") {
         }
 
         std::cout << content << "\n";
+        resp.set_format_type(format_type::chunked);
         resp.set_status_and_content(status_type::ok, "chunked ok");
       });
 

@@ -24,9 +24,17 @@ struct resp_header_sv {
   std::string_view value;
 };
 
+enum class format_type {
+  normal,
+  chunked,
+};
+
 class coro_http_response {
  public:
-  coro_http_response() : status_(status_type::not_implemented), delay_(false) {
+  coro_http_response()
+      : status_(status_type::not_implemented),
+        fmt_type_(format_type::normal),
+        delay_(false) {
     head_.reserve(128);
   }
   void set_status(cinatra::status_type status) { status_ = status; }
@@ -37,6 +45,7 @@ class coro_http_response {
   }
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
+  void set_format_type(format_type type) { fmt_type_ = type; }
 
   void add_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
@@ -59,7 +68,38 @@ class coro_http_response {
     buffers.push_back(asio::buffer(to_rep_string(status_)));
     buffers.push_back(asio::buffer(head_));
     if (!content_.empty()) {
-      buffers.push_back(asio::buffer(content_));
+      if (fmt_type_ == format_type::chunked) {
+        to_chunked_buffers(buffers, content_, true);
+      }
+      else {
+        buffers.push_back(asio::buffer(content_));
+      }
+    }
+  }
+
+  std::string_view to_hex_string(size_t val) {
+    static char buf[20];
+    auto [ptr, ec] = std::to_chars(std::begin(buf), std::end(buf), val, 16);
+    return std::string_view{buf, size_t(std::distance(buf, ptr))};
+  }
+
+  void to_chunked_buffers(std::vector<asio::const_buffer>& buffers,
+                          std::string_view chunk_data, bool eof) {
+    if (!chunk_data.empty()) {
+      // convert bytes transferred count to a hex string.
+      auto chunk_size = to_hex_string(chunk_data.size());
+
+      // Construct chunk based on rfc2616 section 3.6.1
+      buffers.push_back(asio::buffer(chunk_size));
+      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio::buffer(chunk_data));
+      buffers.push_back(asio::buffer(crlf));
+    }
+
+    // append last-chunk
+    if (eof) {
+      buffers.push_back(asio::buffer(last_chunk));
+      buffers.push_back(asio::buffer(crlf));
     }
   }
 
@@ -75,13 +115,20 @@ class coro_http_response {
       content_.append(to_string(status_));
     }
 
-    if (!content_.empty()) {
-      auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
-      resp_headers_sv_.emplace_back(resp_header_sv{
-          "Content-Length", std::string_view(buf_, std::distance(buf_, ptr))});
+    if (fmt_type_ == format_type::chunked) {
+      resp_headers_sv_.emplace_back(
+          resp_header_sv{"Transfer-Encoding", "chunked"});
     }
     else {
-      resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
+      if (!content_.empty()) {
+        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
+        resp_headers_sv_.emplace_back(
+            resp_header_sv{"Content-Length",
+                           std::string_view(buf_, std::distance(buf_, ptr))});
+      }
+      else {
+        resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
+      }
     }
 
     resp_headers_sv_.emplace_back(resp_header_sv{"Date", get_gmt_time_str()});
@@ -107,6 +154,8 @@ class coro_http_response {
     resp_headers_sv_.clear();
     keepalive_ = {};
     delay_ = false;
+    status_ = status_type::init;
+    fmt_type_ = format_type::normal;
   }
 
   void append_head(auto& headers) {
@@ -120,6 +169,7 @@ class coro_http_response {
 
  private:
   status_type status_;
+  format_type fmt_type_;
   std::string head_;
   std::string content_;
   std::optional<bool> keepalive_;
