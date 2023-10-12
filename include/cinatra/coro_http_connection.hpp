@@ -25,7 +25,8 @@ struct chunked_result {
   std::string_view data;
 };
 
-class coro_http_connection: public std::enable_shared_from_this<coro_http_connection> {
+class coro_http_connection
+    : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
