@@ -5,6 +5,7 @@
 #include <asio/buffer.hpp>
 #include <thread>
 
+#include "asio/dispatch.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "coro_http_request.hpp"
@@ -15,11 +16,19 @@
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
+struct chunked_result {
+  std::error_code ec;
+  bool eof = false;
+  std::string_view data;
+};
+
 class coro_http_connection {
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
-      : executor_(executor), socket_(std::move(socket)), request_(parser_) {
+      : executor_(executor),
+        socket_(std::move(socket)),
+        request_(parser_, this) {
     buffers_.reserve(3);
     response_.set_response_cb([this]() -> async_simple::coro::Lazy<void> {
       co_await reply();
@@ -48,29 +57,32 @@ class coro_http_connection {
       head_buf_.consume(size);
       keep_alive_ = check_keep_alive();
 
-      size_t body_len = parser_.body_len();
-      if (body_len <= head_buf_.size()) {
-        if (body_len > 0) {
-          detail::resize(body_, body_len);
-          auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-          memcpy(body_.data(), data_ptr, body_len);
-          head_buf_.consume(head_buf_.size());
+      if (!parser_.is_chunked()) {
+        size_t body_len = parser_.body_len();
+        if (body_len <= head_buf_.size()) {
+          if (body_len > 0) {
+            detail::resize(body_, body_len);
+            auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+            memcpy(body_.data(), data_ptr, body_len);
+            head_buf_.consume(head_buf_.size());
+          }
         }
-      }
-      else {
-        size_t part_size = head_buf_.size();
-        size_t size_to_read = body_len - part_size;
-        auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-        detail::resize(body_, body_len);
-        memcpy(body_.data(), data_ptr, part_size);
-        head_buf_.consume(part_size);
+        else {
+          size_t part_size = head_buf_.size();
+          size_t size_to_read = body_len - part_size;
+          auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+          detail::resize(body_, body_len);
+          memcpy(body_.data(), data_ptr, part_size);
+          head_buf_.consume(part_size);
 
-        auto [ec, size] = co_await async_read(
-            asio::buffer(body_.data() + part_size, size_to_read), size_to_read);
-        if (ec) {
-          CINATRA_LOG_ERROR << "async_read error: " << ec.message();
-          close();
-          break;
+          auto [ec, size] = co_await async_read(
+              asio::buffer(body_.data() + part_size, size_to_read),
+              size_to_read);
+          if (ec) {
+            CINATRA_LOG_ERROR << "async_read error: " << ec.message();
+            close();
+            break;
+          }
         }
       }
 
@@ -120,6 +132,63 @@ class coro_http_connection {
       // now in io thread, so can close socket immediately.
       close();
     }
+  }
+
+  async_simple::coro::Lazy<chunked_result> read_chunked() {
+    if (head_buf_.size() > 0) {
+      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      chunked_buf_.sputn(data_ptr, head_buf_.size());
+      head_buf_.consume(head_buf_.size());
+    }
+
+    chunked_result result{};
+    std::error_code ec{};
+    size_t size = 0;
+
+    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
+        ec) {
+      result.ec = ec;
+      close();
+      co_return result;
+    }
+
+    size_t buf_size = chunked_buf_.size();
+    size_t additional_size = buf_size - size;
+    const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    std::string_view size_str(data_ptr, size - CRCF.size());
+    auto chunk_size = hex_to_int(size_str);
+    chunked_buf_.consume(size);
+    if (chunk_size < 0) {
+      CINATRA_LOG_DEBUG << "bad chunked size";
+      ec = asio::error::make_error_code(
+          asio::error::basic_errors::invalid_argument);
+      result.ec = ec;
+      co_return result;
+    }
+
+    if (chunk_size == 0) {
+      // all finished, no more data
+      chunked_buf_.consume(CRCF.size());
+      result.eof = true;
+      co_return result;
+    }
+
+    if (additional_size < size_t(chunk_size + 2)) {
+      // not a complete chunk, read left chunk data.
+      size_t size_to_read = chunk_size + 2 - additional_size;
+      if (std::tie(ec, size) = co_await async_read(chunked_buf_, size_to_read);
+          ec) {
+        result.ec = ec;
+        close();
+        co_return result;
+      }
+    }
+
+    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    result.data = std::string_view{data_ptr, (size_t)chunk_size};
+    chunked_buf_.consume(chunk_size + CRCF.size());
+
+    co_return result;
   }
 
   auto &socket() { return socket_; }
@@ -182,6 +251,7 @@ class coro_http_connection {
   asio::ip::tcp::socket socket_;
   asio::streambuf head_buf_;
   std::string body_;
+  asio::streambuf chunked_buf_;
   http_parser parser_;
   bool keep_alive_;
   coro_http_response response_;

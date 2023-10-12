@@ -1,11 +1,17 @@
 #include <chrono>
 #include <future>
+#include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <system_error>
 #include <thread>
 
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
+#include "cinatra/coro_connection.hpp"
+#include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
+#include "cinatra/utils.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
@@ -281,6 +287,44 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
 
   server.stop();
   std::cout << "ok\n";
+}
+
+TEST_CASE("chunked request") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::chunked);
+        chunked_result result{};
+        std::string content;
+
+        while (true) {
+          result = co_await req.get_conn()->read_chunked();
+          if (result.ec) {
+            co_return;
+          }
+          if (result.eof) {
+            break;
+          }
+
+          content.append(result.data);
+        }
+
+        std::cout << content << "\n";
+        resp.set_status_and_content(status_type::ok, "chunked ok");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  auto ss = std::make_shared<std::stringstream>();
+  *ss << "hello world";
+  auto result = async_simple::coro::syncAwait(client.async_upload_chunked(
+      "http://127.0.0.1:9001/chunked"sv, http_method::POST, ss));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "chunked ok");
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

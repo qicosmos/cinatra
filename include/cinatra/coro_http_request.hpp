@@ -1,11 +1,14 @@
 #pragma once
+#include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
 
 namespace cinatra {
+class coro_http_connection;
 class coro_http_request {
  public:
-  coro_http_request(http_parser& parser) : parser_(parser) {}
+  coro_http_request(http_parser& parser, coro_http_connection* conn)
+      : parser_(parser), conn_(conn) {}
 
   std::string_view get_header_value(std::string_view key) {
     auto headers = parser_.get_headers();
@@ -81,8 +84,11 @@ class coro_http_request {
     return content_type::unknown;
   }
 
+  coro_http_connection* get_conn() { return conn_; }
+
  private:
   http_parser& parser_;
   std::string_view body_;
+  coro_http_connection* conn_;
 };
 }  // namespace cinatra
