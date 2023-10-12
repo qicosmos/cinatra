@@ -686,6 +686,16 @@ class connection : public base_connection,
       return;
     }
 
+    if (req_.get_content_type() == content_type::websocket &&
+        !req_.get_websocket_state()) {
+      req_.set_websocket_state(true);
+      std::string close_reason = "server close\n";
+      std::string close_msg = ws_.format_close_payload(
+          close_code::normal, close_reason.data(), close_reason.size());
+      auto header = ws_.format_header(close_msg.length(), opcode::close);
+      send_msg(std::move(header), std::move(close_msg));
+    }
+
     req_.close_upload_file();
     shutdown();
     std::error_code ec;
@@ -1133,7 +1143,9 @@ class connection : public base_connection,
         [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             cancel_timer();
-            req_.call_event(data_proc_state::data_error);
+
+            if (!req_.get_websocket_state())
+              req_.call_event(data_proc_state::data_error);
 
             close();
             return;
@@ -1239,6 +1251,7 @@ class connection : public base_connection,
             close_code::normal, close_frame.message, len);
         auto header = ws_.format_header(close_msg.length(), opcode::close);
         send_msg(std::move(header), std::move(close_msg));
+        req_.set_websocket_state(true);
       } break;
       case cinatra::ws_frame_type::WS_PING_FRAME: {
         auto header = ws_.format_header(payload.length(), opcode::pong);
