@@ -327,6 +327,7 @@ class connection : public base_connection,
   void async_close() {
     auto self = this->shared_from_this();
     asio::dispatch(socket_.get_executor(), [this, self] {
+      active_close_websocket();
       close();
     });
   }
@@ -686,16 +687,6 @@ class connection : public base_connection,
       return;
     }
 
-    if (req_.get_content_type() == content_type::websocket &&
-        !req_.get_websocket_state()) {
-      req_.set_websocket_state(true);
-      std::string close_reason = "server close\n";
-      std::string close_msg = ws_.format_close_payload(
-          close_code::normal, close_reason.data(), close_reason.size());
-      auto header = ws_.format_header(close_msg.length(), opcode::close);
-      send_msg(std::move(header), std::move(close_msg));
-    }
-
     req_.close_upload_file();
     shutdown();
     std::error_code ec;
@@ -706,6 +697,18 @@ class connection : public base_connection,
     }
     has_closed_ = true;
     has_shake_ = false;
+  }
+
+  void active_close_websocket() {
+    if (req_.get_content_type() == content_type::websocket &&
+        !req_.get_websocket_state()) {
+      req_.set_websocket_state(true);
+      std::string close_reason = "server close";
+      std::string close_msg = ws_.format_close_payload(
+          close_code::normal, close_reason.data(), close_reason.size());
+      auto header = ws_.format_header(close_msg.length(), opcode::close);
+      send_msg(std::move(header), std::move(close_msg));
+    }
   }
 
   /****************** begin handle http body data *****************/
@@ -1432,7 +1435,8 @@ class connection : public base_connection,
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
             call_back();
-            close();
+            if (req_.get_websocket_state())
+              close();
           }
         });
   }
