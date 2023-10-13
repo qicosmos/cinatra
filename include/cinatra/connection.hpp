@@ -707,6 +707,7 @@ class connection : public base_connection,
       std::string close_msg = ws_.format_close_payload(
           close_code::normal, close_reason.data(), close_reason.size());
       auto header = ws_.format_header(close_msg.length(), opcode::close);
+      is_active_close_ = true;
       send_msg(std::move(header), std::move(close_msg));
     }
   }
@@ -1435,7 +1436,7 @@ class connection : public base_connection,
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
             call_back();
-            if (req_.get_websocket_state())
+            if (!is_active_close_)
               close();
           }
         });
@@ -1495,6 +1496,8 @@ class connection : public base_connection,
 
   QuitCallback quit_callback_ = nullptr;
   uint64_t conn_id_ = 0;
+
+  bool is_active_close_ = false;
 };
 
 inline constexpr data_proc_state ws_open = data_proc_state::data_begin;
