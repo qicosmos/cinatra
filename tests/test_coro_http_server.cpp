@@ -362,6 +362,30 @@ TEST_CASE("chunked request") {
   CHECK(result.resp_body == "hello world ok");
 }
 
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("test ssl server") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.init_ssl("../../include/cinatra/server.crt",
+                  "../../include/cinatra/server.key", "test");
+  server.set_http_handler<GET, POST>(
+      "/ssl", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ssl");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  [[maybe_unused]] auto r = client.init_ssl();
+
+  auto result = client.get("https://127.0.0.1:9001/ssl");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "ssl");
+  std::cout << "ssl ok\n";
+}
+#endif
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

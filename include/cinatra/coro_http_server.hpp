@@ -30,6 +30,16 @@ class coro_http_server {
 
   void set_no_delay(bool r) { no_delay_ = r; }
 
+#ifdef CINATRA_ENABLE_SSL
+  void init_ssl(const std::string &cert_file, const std::string &key_file,
+                const std::string &passwd) {
+    cert_file_ = cert_file;
+    key_file_ = key_file;
+    passwd_ = passwd;
+    use_ssl_ = true;
+  }
+#endif
+
   // only call once, not thread safe.
   std::errc sync_start() noexcept {
     auto ret = async_start();
@@ -159,8 +169,14 @@ class coro_http_server {
       auto conn =
           std::make_shared<coro_http_connection>(executor, std::move(socket));
       if (no_delay_) {
-        conn->socket().set_option(asio::ip::tcp::no_delay(true));
+        conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
+
+#ifdef CINATRA_ENABLE_SSL
+      if (use_ssl_) {
+        conn->init_ssl(cert_file_, key_file_, passwd_);
+      }
+#endif
 
       conn->set_quit_callback(
           [this](const uint64_t &id) {
@@ -205,5 +221,11 @@ class coro_http_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::mutex conn_mtx_;
+#ifdef CINATRA_ENABLE_SSL
+  std::string cert_file_;
+  std::string key_file_;
+  std::string passwd_;
+  bool use_ssl_ = false;
+#endif
 };
 }  // namespace cinatra

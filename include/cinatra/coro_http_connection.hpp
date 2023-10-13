@@ -39,8 +39,61 @@ class coro_http_connection
 
   ~coro_http_connection() { close(); }
 
+#ifdef CINATRA_ENABLE_SSL
+  bool init_ssl(const std::string &cert_file, const std::string &key_file,
+                std::string passwd) {
+    unsigned long ssl_options = asio::ssl::context::default_workarounds |
+                                asio::ssl::context::no_sslv2 |
+                                asio::ssl::context::single_dh_use;
+    try {
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+
+      ssl_ctx_->set_options(ssl_options);
+      if (!passwd.empty()) {
+        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+          return pwd;
+        });
+      }
+
+      std::error_code ec;
+      if (fs::exists(cert_file, ec)) {
+        ssl_ctx_->use_certificate_chain_file(std::move(cert_file));
+      }
+
+      if (fs::exists(key_file, ec)) {
+        ssl_ctx_->use_private_key_file(std::move(key_file),
+                                       asio::ssl::context::pem);
+      }
+
+      ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_, *ssl_ctx_);
+      use_ssl_ = true;
+    } catch (const std::exception &e) {
+      CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
+      return false;
+    }
+    return true;
+  }
+#endif
+
   async_simple::coro::Lazy<void> start() {
+    bool has_shake = false;
     while (true) {
+#ifdef CINATRA_ENABLE_SSL
+      if (use_ssl_ && !has_shake) {
+        auto ec = co_await coro_io::async_handshake(
+            ssl_stream_, asio::ssl::stream_base::server);
+        if (ec) {
+          CINATRA_LOG_ERROR << "handle_shake error: " << ec.message();
+          close();
+          break;
+        }
+
+        has_shake = true;
+      }
+#endif
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
       if (ec) {
         CINATRA_LOG_ERROR << "read http header error: " << ec.message();
@@ -220,7 +273,7 @@ class coro_http_connection
     co_return result;
   }
 
-  auto &socket() { return socket_; }
+  auto &tcp_socket() { return socket_; }
 
   void set_quit_callback(std::function<void(const uint64_t &conn_id)> callback,
                          uint64_t conn_id) {
@@ -229,21 +282,48 @@ class coro_http_connection
   }
 
   template <typename AsioBuffer>
-  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
-      AsioBuffer &buffer, asio::string_view delim) noexcept {
-    return coro_io::async_read_until(socket_, buffer, delim);
-  }
-
-  template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
-    return coro_io::async_read(socket_, buffer, size_to_read);
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
+    }
+    else {
+#endif
+      return coro_io::async_read(socket_, buffer, size_to_read);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
   }
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
-    return coro_io::async_write(socket_, buffer);
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      return coro_io::async_write(*ssl_stream_, buffer);
+    }
+    else {
+#endif
+      return coro_io::async_write(socket_, buffer);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
+  }
+
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+      AsioBuffer &buffer, asio::string_view delim) noexcept {
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      return coro_io::async_read_until(*ssl_stream_, buffer, delim);
+    }
+    else {
+#endif
+      return coro_io::async_read_until(socket_, buffer, delim);
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
   }
 
   auto &get_executor() { return *executor_; }
@@ -289,5 +369,11 @@ class coro_http_connection
   std::atomic<bool> has_closed_{false};
   uint64_t conn_id_{0};
   std::function<void(const uint64_t &conn_id)> quit_cb_ = nullptr;
+
+#ifdef CINATRA_ENABLE_SSL
+  std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
+  bool use_ssl_ = false;
+#endif
 };
 }  // namespace cinatra
