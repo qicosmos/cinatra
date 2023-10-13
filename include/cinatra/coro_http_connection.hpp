@@ -268,7 +268,7 @@ class coro_http_connection
   bool check_keep_alive() {
     bool keep_alive = true;
     auto val = request_.get_header_value("connection");
-    if (!val.empty() && iequal(val, "close")) {
+    if (!val.empty() && iequal0(val, "close")) {
       keep_alive = false;
     }
 

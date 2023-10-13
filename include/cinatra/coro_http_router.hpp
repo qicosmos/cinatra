@@ -12,7 +12,6 @@
 #include "cinatra/coro_http_request.hpp"
 #include "cinatra/function_traits.hpp"
 #include "cinatra/response_cv.hpp"
-#include "cinatra/utils.hpp"
 #include "coro_http_response.hpp"
 
 namespace cinatra {
