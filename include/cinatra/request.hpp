@@ -588,6 +588,10 @@ class request {
 
   data_proc_state get_state() const { return state_; }
 
+  void set_websocket_state(bool is_closed) { is_websocket_closed_ = is_closed; }
+
+  bool get_websocket_state() { return is_websocket_closed_; }
+
   void set_part_data(std::string_view data) {
 #ifdef CINATRA_ENABLE_GZIP
     if (has_gzip_) {
@@ -944,5 +948,7 @@ class request {
       event_call_backs_ = {};
   std::smatch matches_;
   std::unordered_map<std::string, int> restful_params_;
+
+  bool is_websocket_closed_ = false;
 };
 }  // namespace cinatra
