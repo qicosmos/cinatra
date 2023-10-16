@@ -34,6 +34,7 @@ TEST_CASE("coro_server example, will block") {
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/", [](coro_http_request &req, coro_http_response &resp) {
         // response in io thread.
+        std::this_thread::sleep_for(10ms);
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
 
@@ -41,10 +42,18 @@ TEST_CASE("coro_server example, will block") {
       "/coro",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        co_await coro_io::post([&] {
+        co_await coro_io::post([&]() {
           // coroutine in other thread.
+          std::this_thread::sleep_for(10ms);
           resp.set_status_and_content(cinatra::status_type::ok, "hello world");
         });
+        co_return;
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/echo", [](coro_http_request &req, coro_http_response &resp) {
+        // response in io thread.
+        resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
   server.sync_start();
   CHECK(server.port() > 0);
