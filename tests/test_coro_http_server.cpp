@@ -30,12 +30,10 @@ using namespace std::chrono_literals;
 
 TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(std::thread::hardware_concurrency(), 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/", [](coro_http_request &req, coro_http_response &resp) {
         // response in io thread.
-        std::cout << std::this_thread::get_id() << "\n";
-        resp.set_keepalive(true);
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
 
@@ -43,16 +41,10 @@ TEST_CASE("coro_server example, will block") {
       "/coro",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        std::cout << std::this_thread::get_id() << "\n";
-
         co_await coro_io::post([&] {
           // coroutine in other thread.
-          std::cout << std::this_thread::get_id() << "\n";
-          resp.set_status(cinatra::status_type::ok);
-          resp.set_content("hello world in coro");
+          resp.set_status_and_content(cinatra::status_type::ok, "hello world");
         });
-        std::cout << std::this_thread::get_id() << "\n";
-        co_return;
       });
   server.sync_start();
   CHECK(server.port() > 0);

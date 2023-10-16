@@ -27,7 +27,7 @@ if(ENABLE_FILE_IO_URING)
 endif()
 
 if (UNIX)
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pthread")
 endif()
 
 ## manual import
