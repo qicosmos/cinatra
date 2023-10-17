@@ -197,7 +197,6 @@ TEST_CASE("get post") {
       });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
   resp_data result;
@@ -271,7 +270,6 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
       });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   resp_data result;
   {
@@ -348,7 +346,6 @@ TEST_CASE("chunked request") {
       });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
   auto ss = std::make_shared<std::stringstream>();
@@ -375,7 +372,6 @@ TEST_CASE("test ssl server") {
       });
 
   server.async_start();
-  std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
   [[maybe_unused]] auto r = client.init_ssl();
