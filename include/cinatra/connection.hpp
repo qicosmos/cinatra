@@ -1258,6 +1258,7 @@ class connection : public base_connection,
         req_.set_websocket_state(true);
       } break;
       case cinatra::ws_frame_type::WS_PING_FRAME: {
+        reset_timer();
         auto header = ws_.format_header(payload.length(), opcode::pong);
         send_msg(std::move(header), std::move(payload));
       } break;
