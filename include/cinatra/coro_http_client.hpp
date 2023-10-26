@@ -81,12 +81,12 @@ struct http_header;
 
 struct resp_data {
   std::error_code net_err;
-  int status;
+  int status = 0;
+  bool eof = false;
   std::string_view resp_body;
   std::span<http_header> resp_headers;
-  bool eof;
 #ifdef BENCHMARK_TEST
-  uint64_t total;
+  uint64_t total = 0;
 #endif
 };
 
