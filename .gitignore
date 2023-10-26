@@ -50,3 +50,4 @@ CMakeUserPresets.json
 node_modules
 /CMakeSettings.json
 !cmake/build.cmake
+/example/example.vcxproj.user
