@@ -363,6 +363,167 @@ TEST_CASE("chunked request") {
   CHECK(result.resp_body == "hello world ok");
 }
 
+TEST_CASE("Test server stop function") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_http_handler<cinatra::GET>(
+      "/test_stop", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(cinatra::status_type::ok,
+                                    "Server is running");
+      });
+
+  server.async_start();
+  cinatra::coro_http_client client;
+
+  auto resp = client.get("http://localhost:9001/test_stop");
+  CHECK(resp.status == static_cast<int>(cinatra::status_type::ok));
+  CHECK(resp.resp_body == "Server is running");
+
+  server.stop();
+
+  // Attempt to make another request after server stopped. This should fail.
+  auto resp_after_stop = client.get("http://localhost:9001/test_stop");
+  CHECK(resp_after_stop.status ==
+        static_cast<int>(cinatra::status_type::not_found));
+}
+
+TEST_CASE("Test invalid route") {
+  cinatra::coro_http_server server(1,
+                                   9003);
+
+  server.set_http_handler<cinatra::GET>(
+      "/valid_route", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(cinatra::status_type::ok, "Valid route");
+      });
+
+  server.async_start();
+  cinatra::coro_http_client client;
+
+  auto resp = client.get("http://localhost:9003/invalid_route");
+  CHECK(resp.status == static_cast<int>(cinatra::status_type::not_found));
+
+  server.stop();
+}
+
+TEST_CASE("Test coro_http_client with no server running") {
+  cinatra::coro_http_client client;
+
+  auto resp = client.get("http://localhost:9005/non_existent_route");
+  CHECK(resp.status == static_cast<int>(cinatra::status_type::not_found));
+}
+
+TEST_CASE("Test coro_http_response functionalities") {
+  cinatra::coro_http_server server(1,
+                                   9006);
+
+  server.set_http_handler<cinatra::GET>(
+      "/test_response", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status(cinatra::status_type::ok);
+        resp.add_header("Test-Header", "Test-Value");
+        resp.set_content("Test content");
+      });
+
+  server.async_start();
+  cinatra::coro_http_client client;
+
+  auto resp = client.get("http://localhost:9006/test_response");
+  CHECK(resp.status == static_cast<int>(cinatra::status_type::ok));
+
+  // Checking headers
+  bool header_found = false;
+  for (const auto &header : resp.resp_headers) {
+    if (header.name == "Test-Header" && header.value == "Test-Value") {
+      header_found = true;
+      break;
+    }
+  }
+  CHECK(header_found);
+
+  CHECK(resp.resp_body == "Test content");
+
+  server.stop();
+}
+
+
+TEST_CASE("Test custom HTTP handlers") {
+  cinatra::coro_http_server server(1, 9007);
+
+  bool custom_handler_executed = false;
+
+  server.set_http_handler<cinatra::GET>(
+      "/custom_handler", [&custom_handler_executed](coro_http_request &req,
+                                                    coro_http_response &resp) {
+        resp.set_status_and_content(cinatra::status_type::ok,
+                                    "Custom handler executed");
+        custom_handler_executed = true;
+      });
+
+  server.async_start();
+  cinatra::coro_http_client client;
+
+  auto resp = client.get("http://localhost:9007/custom_handler");
+  CHECK(custom_handler_executed);
+  CHECK(resp.resp_body == "Custom handler executed");
+
+  server.stop();
+}
+
+TEST_CASE("Integrated server and client test") {
+  const int server_port = 8085;
+  cinatra::coro_http_server server(1, server_port);
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test_client",
+      [](cinatra::coro_http_request &req, cinatra::coro_http_response &resp) {
+        resp.set_status_and_content(cinatra::status_type::ok,
+                                    "Response from /test_client");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  cinatra::coro_http_client client;
+
+  SUBCASE("GET request") {
+    auto result = client.get("http://localhost:" + std::to_string(server_port) +
+                             "/test_client");
+    CHECK(!result.net_err);
+    CHECK(result.status == static_cast<int>(cinatra::status_type::ok));
+    CHECK(result.resp_body == "Response from /test_client");
+  }
+
+  SUBCASE("POST request") {
+    auto result = client.post(
+        "http://localhost:" + std::to_string(server_port) + "/test_client",
+        "hello", cinatra::req_content_type::json);
+    CHECK(!result.net_err);
+    CHECK(result.status == static_cast<int>(cinatra::status_type::ok));
+    CHECK(result.resp_body == "Response from /test_client");
+  }
+
+  // Asynchronous client tests
+  SUBCASE("Async GET request") {
+    auto result = async_simple::coro::syncAwait(client.async_get(
+        "http://localhost:" + std::to_string(server_port) + "/test_client"));
+    CHECK(!result.net_err);
+    CHECK(result.status == static_cast<int>(cinatra::status_type::ok));
+    CHECK(result.resp_body == "Response from /test_client");
+  }
+
+  SUBCASE("Async POST request") {
+    auto result = async_simple::coro::syncAwait(client.async_post(
+        "http://localhost:" + std::to_string(server_port) + "/test_client",
+        "hello", cinatra::req_content_type::json));
+    CHECK(!result.net_err);
+    CHECK(result.status == static_cast<int>(cinatra::status_type::ok));
+    CHECK(result.resp_body == "Response from /test_client");
+  }
+
+  server.stop();
+}
+
+
+
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl server") {
   cinatra::coro_http_server server(1, 9001);
@@ -386,6 +547,8 @@ TEST_CASE("test ssl server") {
   std::cout << "ssl ok\n";
 }
 #endif
+
+
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
