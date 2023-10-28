@@ -59,6 +59,19 @@ TEST_CASE("coro_server example, will block") {
   CHECK(server.port() > 0);
 }
 
+class my_object {
+ public:
+  void normal(coro_http_request &req, coro_http_response &response) {
+    response.set_status_and_content(status_type::ok, "ok");
+  }
+
+  async_simple::coro::Lazy<void> lazy(coro_http_request &req,
+                                      coro_http_response &response) {
+    response.set_status_and_content(status_type::ok, "ok");
+    co_return;
+  }
+};
+
 TEST_CASE("set http handler") {
   cinatra::coro_http_server server(1, 9001);
 
@@ -109,6 +122,13 @@ TEST_CASE("set http handler") {
   CHECK(router.get_handler("GET /cc") == nullptr);
   CHECK(router.get_coro_handler("POST /bb") != nullptr);
   CHECK(router.get_coro_handler("POST /cc") == nullptr);
+
+  my_object o;
+  server.set_http_handler<cinatra::GET>("/normal", &my_object::normal, &o);
+  server.set_http_handler<cinatra::GET>("/lazy", &my_object::lazy, &o);
+
+  CHECK(router.get_handler("GET /normal") != nullptr);
+  CHECK(router.get_handler("GET /lazy") == nullptr);
 }
 
 TEST_CASE("test server start and stop") {

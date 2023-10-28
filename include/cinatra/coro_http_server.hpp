@@ -115,6 +115,24 @@ class coro_http_server {
     }
   }
 
+  template <http_method... method, typename Func>
+  void set_http_handler(std::string key, Func handler, auto owner) {
+    using return_type = typename timax::function_traits<Func>::result_type;
+    if constexpr (is_lazy_v<return_type>) {
+      std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
+                                                   coro_http_response & resp)>
+          f = std::bind(handler, owner, std::placeholders::_1,
+                        std::placeholders::_2);
+      set_http_handler<method...>(std::move(key), std::move(f));
+    }
+    else {
+      std::function<void(coro_http_request & req, coro_http_response & resp)>
+          f = std::bind(handler, owner, std::placeholders::_1,
+                        std::placeholders::_2);
+      set_http_handler<method...>(std::move(key), std::move(f));
+    }
+  }
+
  private:
   std::errc listen() {
     CINATRA_LOG_INFO << "begin to listen";

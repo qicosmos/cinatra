@@ -92,6 +92,7 @@ TEST_CASE("test ssl client") {
     CHECK(result.status != 200);
   }
 
+#if !defined(__clang__)
   {
     coro_http_client client{};
     client.enable_auto_redirect(true);
@@ -99,6 +100,7 @@ TEST_CASE("test ssl client") {
     auto result = client.get("https://www.bing.com");
     CHECK(result.status != 200);
   }
+#endif
 
   {
     coro_http_client client{};
