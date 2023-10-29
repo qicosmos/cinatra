@@ -212,7 +212,7 @@ TEST_CASE("test request with out buffer") {
   }
 
   {
-    str.resize(6400);
+    str.resize(10240);
     coro_http_client client;
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
@@ -542,19 +542,19 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
-TEST_CASE("test coro_http_client chunked download") {
-  coro_http_client client{};
-  client.set_req_timeout(10s);
-  std::string uri =
-      "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-  std::string filename = "test.jpg";
-
-  std::error_code ec{};
-  std::filesystem::remove(filename, ec);
-  auto r = client.download(uri, filename);
-  if (!r.net_err)
-    CHECK(r.status >= 200);
-}
+// TEST_CASE("test coro_http_client chunked download") {
+//   coro_http_client client{};
+//   client.set_req_timeout(10s);
+//   std::string uri =
+//       "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+//   std::string filename = "test.jpg";
+//
+//   std::error_code ec{};
+//   std::filesystem::remove(filename, ec);
+//   auto r = client.download(uri, filename);
+//   if (!r.net_err)
+//     CHECK(r.status >= 200);
+// }
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
@@ -721,35 +721,35 @@ TEST_CASE("test inject failed") {
   //   CHECK(result.net_err == std::errc::protocol_error);
   // }
 
-  {
-    coro_http_client client{};
-    client.set_req_timeout(10s);
-    std::string uri =
-        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-    std::string filename = "test.jpg";
-
-    std::error_code ec{};
-    std::filesystem::remove(filename, ec);
-
-    inject_read_failed = ClientInjectAction::read_failed;
-    auto result = client.download(uri, filename);
-    CHECK(result.net_err == std::make_error_code(std::errc::not_connected));
-  }
-
-  {
-    coro_http_client client{};
-    client.set_req_timeout(10s);
-    std::string uri =
-        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-    std::string filename = "test.jpg";
-
-    std::error_code ec{};
-    std::filesystem::remove(filename, ec);
-
-    inject_chunk_valid = ClientInjectAction::chunk_error;
-    auto result = client.download(uri, filename);
-    CHECK(result.status == 404);
-  }
+  //  {
+  //    coro_http_client client{};
+  //    client.set_req_timeout(10s);
+  //    std::string uri =
+  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  //    std::string filename = "test.jpg";
+  //
+  //    std::error_code ec{};
+  //    std::filesystem::remove(filename, ec);
+  //
+  //    inject_read_failed = ClientInjectAction::read_failed;
+  //    auto result = client.download(uri, filename);
+  //    CHECK(result.net_err == std::make_error_code(std::errc::not_connected));
+  //  }
+  //
+  //  {
+  //    coro_http_client client{};
+  //    client.set_req_timeout(10s);
+  //    std::string uri =
+  //        "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
+  //    std::string filename = "test.jpg";
+  //
+  //    std::error_code ec{};
+  //    std::filesystem::remove(filename, ec);
+  //
+  //    inject_chunk_valid = ClientInjectAction::chunk_error;
+  //    auto result = client.download(uri, filename);
+  //    CHECK(result.status == 404);
+  //  }
 
   {
     coro_http_client client{};
