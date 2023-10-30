@@ -383,6 +383,27 @@ TEST_CASE("chunked request") {
   CHECK(result.resp_body == "hello world ok");
 }
 
+TEST_CASE("check connecton timeout") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_check_duration(std::chrono::microseconds(600));
+  server.set_timeout_duration(std::chrono::microseconds(500));
+  server.set_http_handler<cinatra::GET>(
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.async_start();
+  coro_http_client client;
+  client.get("http://127.0.0.1:9001/");
+
+  coro_http_client client1;
+  client1.get("http://127.0.0.1:9001/");
+
+  // wait for timeout, the timeout connections will be removed by server.
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  CHECK(server.connection_count() == 0);
+}
+
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl server") {
   cinatra::coro_http_server server(1, 9001);

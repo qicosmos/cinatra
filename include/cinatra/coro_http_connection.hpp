@@ -284,6 +284,7 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read(*ssl_stream_, buffer, size_to_read);
@@ -299,6 +300,7 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
       AsioBuffer &&buffer) {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_write(*ssl_stream_, buffer);
@@ -314,6 +316,7 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
+    set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read_until(*ssl_stream_, buffer, delim);
@@ -326,23 +329,36 @@ class coro_http_connection
 #endif
   }
 
+  void set_last_time() {
+    if (checkout_timeout_) {
+      last_rwtime_ = std::chrono::system_clock::now();
+    }
+  }
+
+  std::chrono::system_clock::time_point get_last_rwtime() {
+    return last_rwtime_;
+  }
+
   auto &get_executor() { return *executor_; }
 
-  void close() {
+  void close(bool need_cb = true) {
     if (has_closed_) {
       return;
     }
 
-    asio::dispatch(socket_.get_executor(), [this, self = shared_from_this()] {
-      std::error_code ec;
-      socket_.shutdown(asio::socket_base::shutdown_both, ec);
-      socket_.close(ec);
-      if (quit_cb_) {
-        quit_cb_(conn_id_);
-      }
-      has_closed_ = true;
-    });
+    asio::dispatch(socket_.get_executor(),
+                   [this, need_cb, self = shared_from_this()] {
+                     std::error_code ec;
+                     socket_.shutdown(asio::socket_base::shutdown_both, ec);
+                     socket_.close(ec);
+                     if (need_cb && quit_cb_) {
+                       quit_cb_(conn_id_);
+                     }
+                     has_closed_ = true;
+                   });
   }
+
+  bool set_check_timeout(bool r) { checkout_timeout_ = r; }
 
  private:
   bool check_keep_alive() {
@@ -369,6 +385,8 @@ class coro_http_connection
   std::atomic<bool> has_closed_{false};
   uint64_t conn_id_{0};
   std::function<void(const uint64_t &conn_id)> quit_cb_ = nullptr;
+  bool checkout_timeout_ = false;
+  std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
 
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
