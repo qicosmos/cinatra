@@ -358,7 +358,7 @@ class coro_http_connection
                    });
   }
 
-  bool set_check_timeout(bool r) { checkout_timeout_ = r; }
+  void set_check_timeout(bool r) { checkout_timeout_ = r; }
 
  private:
   bool check_keep_alive() {
