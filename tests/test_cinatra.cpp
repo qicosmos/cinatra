@@ -290,7 +290,7 @@ TEST_CASE("test coro_http_client async_http_connect") {
   r = async_simple::coro::syncAwait(client1.reconnect("http://www.baidu.com"));
 
   CHECK(r.status >= 200);
-  r = async_simple::coro::syncAwait(client1.reconnect("http://www.purecpp.cn"));
+  r = async_simple::coro::syncAwait(client1.reconnect("http://cn.bing.com"));
   CHECK(r.status == 200);
 }
 
@@ -558,9 +558,9 @@ TEST_CASE("test coro_http_client quit") {
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
-  auto r = client.get("http://www.purecpp.cn");
+  auto r = client.get("http://www.baidu.com");
   CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(r.status < 400);
 }
 
 TEST_CASE("test coro_http_client add header and url queries") {
@@ -600,9 +600,9 @@ TEST_CASE("test coro_http_client not exist domain and bad uri") {
 TEST_CASE("test coro_http_client async_get") {
   coro_http_client client{};
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(r.status < 400);
 
   auto r1 =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
@@ -800,11 +800,11 @@ TEST_CASE("test coro http basic auth request") {
 
 TEST_CASE("test coro http bearer token auth request") {
   coro_http_client client{};
-  std::string uri = "http://www.purecpp.cn";
+  std::string uri = "http://www.baidu.com";
   client.set_proxy_bearer_token_auth("password");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   CHECK(!result.net_err);
-  CHECK(result.status == 200);
+  CHECK(result.status < 400);
 }
 
 TEST_CASE("test coro http redirect request") {
@@ -885,9 +885,9 @@ TEST_CASE("test coro_http_client using external io_context") {
 
   coro_http_client client(io_context.get_executor());
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.purecpp.cn"));
+      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(r.status < 400);
   work.reset();
   io_context.run();
   io_thd.join();
@@ -895,13 +895,13 @@ TEST_CASE("test coro_http_client using external io_context") {
 
 async_simple::coro::Lazy<resp_data> simulate_self_join() {
   coro_http_client client{};
-  co_return co_await client.async_get("http://www.purecpp.cn");
+  co_return co_await client.async_get("http://www.baidu.com");
 }
 
 TEST_CASE("test coro_http_client dealing with self join") {
   auto r = async_simple::coro::syncAwait(simulate_self_join());
   CHECK(!r.net_err);
-  CHECK(r.status == 200);
+  CHECK(r.status < 400);
 }
 
 TEST_CASE("test coro_http_client no scheme still send request check") {

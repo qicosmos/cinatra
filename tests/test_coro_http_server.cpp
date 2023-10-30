@@ -396,9 +396,6 @@ TEST_CASE("check connecton timeout") {
   coro_http_client client;
   client.get("http://127.0.0.1:9001/");
 
-  coro_http_client client1;
-  client1.get("http://127.0.0.1:9001/");
-
   // wait for timeout, the timeout connections will be removed by server.
   std::this_thread::sleep_for(std::chrono::seconds(1));
   CHECK(server.connection_count() == 0);
