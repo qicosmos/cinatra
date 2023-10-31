@@ -104,7 +104,7 @@ struct multipart_t {
   size_t size = 0;
 };
 
-class coro_http_client {
+class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
   struct config {
     std::optional<std::chrono::steady_clock::duration> conn_timeout_duration;
@@ -1578,6 +1578,7 @@ class coro_http_client {
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
 
+    auto self = this->shared_from_this();
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
