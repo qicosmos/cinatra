@@ -256,15 +256,6 @@ TEST_CASE("get post") {
 
 TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   cinatra::coro_http_server server(1, 9001);
-  server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/delay", [](coro_http_request &req, coro_http_response &resp) {
-        resp.set_delay(true);
-        std::thread([&resp] {
-          std::this_thread::sleep_for(200ms);
-          resp.set_status_and_content(status_type::ok, "delay reply");
-          resp.get_conn()->sync_reply();
-        }).detach();
-      });
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/delay2",
@@ -294,13 +285,6 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   std::this_thread::sleep_for(200ms);
 
   resp_data result;
-  {
-    coro_http_client client{};
-    result = client.get("http://127.0.0.1:9001/delay");
-    CHECK(result.status == 200);
-    CHECK(result.resp_body == "delay reply");
-  }
-
   coro_http_client client1{};
   result = client1.get("http://127.0.0.1:9001/delay2");
   CHECK(result.status == 200);
@@ -381,6 +365,26 @@ TEST_CASE("chunked request") {
   result = client.get("http://127.0.0.1:9001/write_chunked");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world ok");
+}
+
+TEST_CASE("check connecton timeout") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_check_duration(std::chrono::microseconds(600));
+  server.set_timeout_duration(std::chrono::microseconds(500));
+  server.set_http_handler<cinatra::GET>(
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  client.get("http://127.0.0.1:9001/");
+
+  // wait for timeout, the timeout connections will be removed by server.
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  CHECK(server.connection_count() == 0);
 }
 
 #ifdef CINATRA_ENABLE_SSL

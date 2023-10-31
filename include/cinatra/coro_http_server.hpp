@@ -21,7 +21,8 @@ class coro_http_server {
   coro_http_server(size_t thread_num, unsigned short port)
       : pool_(thread_num),
         port_(port),
-        acceptor_(pool_.get_executor()->get_asio_executor()) {}
+        acceptor_(pool_.get_executor()->get_asio_executor()),
+        check_timer_(pool_.get_executor()->get_asio_executor()) {}
 
   ~coro_http_server() {
     CINATRA_LOG_INFO << "coro_http_server will quit";
@@ -80,13 +81,18 @@ class coro_http_server {
     if (!thd_.joinable()) {
       return;
     }
+
+    stop_timer_ = true;
+    std::error_code ec;
+    check_timer_.cancel(ec);
+
     close_acceptor();
 
     // close current connections.
     {
       std::scoped_lock lock(conn_mtx_);
       for (auto &conn : connections_) {
-        conn.second->close();
+        conn.second->close(false);
       }
       connections_.clear();
     }
@@ -131,6 +137,22 @@ class coro_http_server {
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f));
     }
+  }
+
+  void set_check_duration(auto duration) { check_duration_ = duration; }
+
+  void set_timeout_duration(
+      std::chrono::steady_clock::duration timeout_duration) {
+    if (timeout_duration > std::chrono::steady_clock::duration::zero()) {
+      need_check_ = true;
+      timeout_duration_ = timeout_duration;
+      start_check_timer();
+    }
+  }
+
+  size_t connection_count() {
+    std::scoped_lock lock(conn_mtx_);
+    return connections_.size();
   }
 
  private:
@@ -189,6 +211,9 @@ class coro_http_server {
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
+      if (need_check_) {
+        conn->set_check_timeout(true);
+      }
 
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
@@ -227,6 +252,39 @@ class coro_http_server {
     acceptor_close_waiter_.get_future().wait();
   }
 
+  void start_check_timer() {
+    check_timer_.expires_after(check_duration_);
+    check_timer_.async_wait([this](auto ec) {
+      if (ec || stop_timer_) {
+        return;
+      }
+
+      check_timeout();
+      start_check_timer();
+    });
+  }
+
+  void check_timeout() {
+    auto cur_time = std::chrono::system_clock::now();
+
+    std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>> conns;
+
+    {
+      std::scoped_lock lock(conn_mtx_);
+      for (auto it = connections_.begin();
+           it != connections_.end();)  // no "++"!
+      {
+        if (cur_time - it->second->get_last_rwtime() > timeout_duration_) {
+          it->second->close(false);
+          connections_.erase(it++);
+        }
+        else {
+          ++it;
+        }
+      }
+    }
+  }
+
  private:
   coro_io::io_context_pool pool_;
   uint16_t port_;
@@ -239,6 +297,12 @@ class coro_http_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::mutex conn_mtx_;
+  std::chrono::steady_clock::duration check_duration_ =
+      std::chrono::seconds(15);
+  std::chrono::steady_clock::duration timeout_duration_{};
+  asio::steady_timer check_timer_;
+  bool need_check_ = false;
+  std::atomic<bool> stop_timer_ = false;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
