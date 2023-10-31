@@ -377,6 +377,8 @@ TEST_CASE("check connecton timeout") {
       });
 
   server.async_start();
+  std::this_thread::sleep_for(200ms);
+
   coro_http_client client;
   client.get("http://127.0.0.1:9001/");
 

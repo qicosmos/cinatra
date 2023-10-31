@@ -82,6 +82,7 @@ class coro_http_server {
       return;
     }
 
+    stop_timer_ = true;
     std::error_code ec;
     check_timer_.cancel(ec);
 
@@ -254,7 +255,7 @@ class coro_http_server {
   void start_check_timer() {
     check_timer_.expires_after(check_duration_);
     check_timer_.async_wait([this](auto ec) {
-      if (ec) {
+      if (ec || stop_timer_) {
         return;
       }
 
@@ -301,6 +302,7 @@ class coro_http_server {
   std::chrono::steady_clock::duration timeout_duration_{};
   asio::steady_timer check_timer_;
   bool need_check_ = false;
+  std::atomic<bool> stop_timer_ = false;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
