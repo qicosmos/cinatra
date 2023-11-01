@@ -348,6 +348,42 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return data;
   }
 
+  async_simple::coro::Lazy<resp_data> async_send_ws_multiple(
+      std::string msg, bool need_mask = true, opcode op = opcode::text) {
+    resp_data data{};
+    size_t msg_length = msg.length();
+    int msg_offset = 0;
+
+    websocket ws{};
+    if (op == opcode::close) {
+      msg = ws.format_close_payload(close_code::normal, msg.data(), msg.size());
+      data = co_await async_send_ws(msg, need_mask, op);
+      co_return data;
+    }
+
+    while (msg_length > 0) {
+      if (msg_length > websocket_split_part_size_) {
+        std::string part(msg.data() + msg_offset, websocket_split_part_size_);
+        data = co_await async_send_ws(part, need_mask, op);
+        if (data.net_err) {
+          co_return data;
+        }
+        msg_offset += websocket_split_part_size_;
+        msg_length -= websocket_split_part_size_;
+      }
+      else {
+        std::string part(msg.data() + msg_offset, msg_length);
+        msg_length = 0;
+        data = co_await async_send_ws(part, need_mask, op);
+        if (data.net_err) {
+          co_return data;
+        }
+      }
+    }
+    data.eof = true;
+    co_return data;
+  }
+
   async_simple::coro::Lazy<resp_data> async_send_ws_close(
       std::string msg = "") {
     return async_send_ws(std::move(msg), false, opcode::close);
@@ -1781,6 +1817,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
+  static constexpr uint64_t websocket_split_part_size_ = 3145728;
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;

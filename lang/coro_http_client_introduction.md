@@ -465,6 +465,18 @@ enum opcode : std::uint8_t {
 async_simple::coro::Lazy<resp_data> async_send_ws(std::string msg,
                                                   bool need_mask = true,
                                                   opcode op = opcode::text);
+
+/// 后两个api是为了解决待发送的websocket数据过大的问题，
+/// websocket数据过大情况下一次性传入所有buffer到asio::async_write会出错
+
+/// 多批次发送websocket 数据,
+/// 内部由websocket_split_part_size_变量限制为3M。超过3M分割为多个websocket请求发送
+/// \param msg 要发送的websocket 数据
+/// \param need_mask 是否需要对数据进行mask，默认会mask
+/// \param op opcode 一般为text、binary或 close 等类型
+async_simple::coro::Lazy<resp_data> async_send_ws_multiple(std::string msg,
+                                                  bool need_mask = true,
+                                                  opcode op = opcode::text);
 ```
 
 websocket 例子:
