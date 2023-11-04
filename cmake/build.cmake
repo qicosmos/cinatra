@@ -9,11 +9,12 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+# libc++ or libstdc++&clang
+option(BUILD_WITH_LIBCXX "Build with libc++" OFF)
+message(STATUS "BUILD_WITH_LIBCXX: ${BUILD_WITH_LIBCXX}")
+if(BUILD_WITH_LIBCXX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-    message(STATUS "Build with libc++")
 else()
-    message(STATUS "Build with libstdc++")
 endif()
 
 if (MSVC)
