@@ -331,7 +331,7 @@ class coro_http_connection
             result.ec = ec;
             break;
           }
-          payload = {body_.begin(), body_.end()};
+          payload = std::span<char>{body_.begin(), body_.end()};
         }
         ws_frame_type ret = ws_.parse_payload(payload);
 
