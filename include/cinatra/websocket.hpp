@@ -79,6 +79,34 @@ class websocket {
     return left_header_len_ == 0 ? 0 : -2;
   }
 
+  ws_frame_type parse_payload(std::span<char> buf) {
+    // unmask data:
+    if (*(uint32_t *)mask_ != 0) {
+      for (size_t i = 0; i < payload_length_; i++) {
+        buf[i] = buf[i] ^ mask_[i % 4];
+      }
+    }
+
+    if (msg_opcode_ == 0x0)
+      return (msg_fin_)
+                 ? ws_frame_type::WS_TEXT_FRAME
+                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;  // continuation
+    // frame ?
+    if (msg_opcode_ == 0x1)
+      return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
+                        : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;
+    if (msg_opcode_ == 0x2)
+      return (msg_fin_) ? ws_frame_type::WS_BINARY_FRAME
+                        : ws_frame_type::WS_INCOMPLETE_BINARY_FRAME;
+    if (msg_opcode_ == 0x8)
+      return ws_frame_type::WS_CLOSE_FRAME;
+    if (msg_opcode_ == 0x9)
+      return ws_frame_type::WS_PING_FRAME;
+    if (msg_opcode_ == 0xA)
+      return ws_frame_type::WS_PONG_FRAME;
+    return ws_frame_type::WS_BINARY_FRAME;
+  }
+
   ws_frame_type parse_payload(const char *buf, size_t size,
                               std::string &outbuf) {
     const unsigned char *inp = (const unsigned char *)(buf);

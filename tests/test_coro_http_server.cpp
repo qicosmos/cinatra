@@ -367,6 +367,56 @@ TEST_CASE("chunked request") {
   CHECK(result.resp_body == "hello world ok");
 }
 
+TEST_CASE("test websocket") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_echo",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            CHECK(result.data.empty());
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_TEXT_FRAME) {
+            CHECK(result.data == "test_ws");
+          }
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+  server.async_start();
+
+  auto client = std::make_shared<coro_http_client>();
+  client->on_ws_msg([](resp_data data) {
+    if (data.net_err) {
+      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+      return;
+    }
+
+    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
+    CHECK(data.resp_body == "test_ws");
+  });
+
+  async_simple::coro::syncAwait(
+      client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+  async_simple::coro::syncAwait(client->async_send_ws("test_ws"));
+
+  async_simple::coro::syncAwait(client->async_send_ws_close());
+}
+
 TEST_CASE("check connecton timeout") {
   cinatra::coro_http_server server(1, 9001);
   server.set_check_duration(std::chrono::microseconds(600));
