@@ -331,7 +331,7 @@ class coro_http_connection
             result.ec = ec;
             break;
           }
-          payload = body_;
+          payload = {body_.begin(), body_.end()};
         }
         ws_frame_type ret = ws_.parse_payload(payload);
 
@@ -382,7 +382,7 @@ class coro_http_connection
         if (ec) {
           close();
           result.ec = ec;
-          co_return result;
+          break;
         }
         continue;
       }
@@ -392,6 +392,8 @@ class coro_http_connection
         co_return result;
       }
     }
+
+    co_return result;
   }
 
   auto &tcp_socket() { return socket_; }
