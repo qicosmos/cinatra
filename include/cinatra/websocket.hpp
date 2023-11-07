@@ -3,6 +3,11 @@
 #include "ws_define.h"
 
 namespace cinatra {
+enum ws_header_status {
+  error = -1,
+  complete = 0,
+  incomplete = -2,
+};
 class websocket {
  public:
   void sec_ws_key(std::string_view sec_key) { sec_ws_key_ = sec_key; }
@@ -40,7 +45,8 @@ class websocket {
   Payload length:  7 bits, 7+16 bits, or 7+64 bits
   Masking-key:  0 or 4 bytes
   */
-  int parse_header(const char *buf, size_t size, bool is_server = true) {
+  ws_header_status parse_header(const char *buf, size_t size,
+                                bool is_server = true) {
     const unsigned char *inp = (const unsigned char *)(buf);
 
     msg_opcode_ = inp[0] & 0x0F;
@@ -69,14 +75,43 @@ class websocket {
           is_server ? LONG_HEADER - size : CLIENT_LONG_HEADER - size;
     }
     else {
-      return -1;
+      return ws_header_status::error;
     }
 
     if (msg_masked) {
       std::memcpy(mask_, inp + pos, 4);
     }
 
-    return left_header_len_ == 0 ? 0 : -2;
+    return left_header_len_ == 0 ? ws_header_status::complete
+                                 : ws_header_status::incomplete;
+  }
+
+  ws_frame_type parse_payload(std::span<char> buf) {
+    // unmask data:
+    if (*(uint32_t *)mask_ != 0) {
+      for (size_t i = 0; i < payload_length_; i++) {
+        buf[i] = buf[i] ^ mask_[i % 4];
+      }
+    }
+
+    if (msg_opcode_ == 0x0)
+      return (msg_fin_)
+                 ? ws_frame_type::WS_TEXT_FRAME
+                 : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;  // continuation
+    // frame ?
+    if (msg_opcode_ == 0x1)
+      return (msg_fin_) ? ws_frame_type::WS_TEXT_FRAME
+                        : ws_frame_type::WS_INCOMPLETE_TEXT_FRAME;
+    if (msg_opcode_ == 0x2)
+      return (msg_fin_) ? ws_frame_type::WS_BINARY_FRAME
+                        : ws_frame_type::WS_INCOMPLETE_BINARY_FRAME;
+    if (msg_opcode_ == 0x8)
+      return ws_frame_type::WS_CLOSE_FRAME;
+    if (msg_opcode_ == 0x9)
+      return ws_frame_type::WS_PING_FRAME;
+    if (msg_opcode_ == 0xA)
+      return ws_frame_type::WS_PONG_FRAME;
+    return ws_frame_type::WS_BINARY_FRAME;
   }
 
   ws_frame_type parse_payload(const char *buf, size_t size,
