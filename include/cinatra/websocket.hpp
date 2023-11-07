@@ -3,6 +3,11 @@
 #include "ws_define.h"
 
 namespace cinatra {
+enum ws_header_status {
+  error = -1,
+  complete = 0,
+  incomplete = -2,
+};
 class websocket {
  public:
   void sec_ws_key(std::string_view sec_key) { sec_ws_key_ = sec_key; }
@@ -40,7 +45,8 @@ class websocket {
   Payload length:  7 bits, 7+16 bits, or 7+64 bits
   Masking-key:  0 or 4 bytes
   */
-  int parse_header(const char *buf, size_t size, bool is_server = true) {
+  ws_header_status parse_header(const char *buf, size_t size,
+                                bool is_server = true) {
     const unsigned char *inp = (const unsigned char *)(buf);
 
     msg_opcode_ = inp[0] & 0x0F;
@@ -69,14 +75,15 @@ class websocket {
           is_server ? LONG_HEADER - size : CLIENT_LONG_HEADER - size;
     }
     else {
-      return -1;
+      return ws_header_status::error;
     }
 
     if (msg_masked) {
       std::memcpy(mask_, inp + pos, 4);
     }
 
-    return left_header_len_ == 0 ? 0 : -2;
+    return left_header_len_ == 0 ? ws_header_status::complete
+                                 : ws_header_status::incomplete;
   }
 
   ws_frame_type parse_payload(std::span<char> buf) {

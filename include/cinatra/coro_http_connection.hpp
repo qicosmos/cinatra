@@ -316,8 +316,8 @@ class coro_http_connection
 
     while (true) {
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-      int ret = ws_.parse_header(data_ptr, SHORT_HEADER);
-      if (ret == 0) {
+      auto status = ws_.parse_header(data_ptr, SHORT_HEADER);
+      if (status == ws_header_status::complete) {
         head_buf_.consume(head_buf_.size());
 
         std::span<char> payload{};
@@ -333,9 +333,9 @@ class coro_http_connection
           }
           payload = body_;
         }
-        ws_frame_type ret = ws_.parse_payload(payload);
+        ws_frame_type type = ws_.parse_payload(payload);
 
-        switch (ret) {
+        switch (type) {
           case cinatra::ws_frame_type::WS_ERROR_FRAME:
             result.ec = std::make_error_code(std::errc::protocol_error);
             break;
@@ -374,10 +374,10 @@ class coro_http_connection
             break;
         }
 
-        result.type = ret;
+        result.type = type;
         co_return result;
       }
-      else if (ret == -2) {
+      else if (status == ws_header_status::incomplete) {
         auto [ec, sz] = co_await async_read(head_buf_, ws_.left_header_len());
         if (ec) {
           close();
