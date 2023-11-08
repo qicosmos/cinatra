@@ -443,7 +443,7 @@ TEST_CASE("check small ws file") {
 
   file.read(str.data(), str.size());
   CHECK(str == "test2fdsaf");
-  std::filesystem::remove(filename);
+  std::filesystem::remove(filename, ec);
 }
 
 TEST_CASE("test websocket with different message sizes") {
