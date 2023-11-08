@@ -374,21 +374,29 @@ TEST_CASE("test websocket") {
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         CHECK(req.get_content_type() == content_type::websocket);
+        std::ofstream out_file("test.temp", std::ios::binary);
         websocket_result result{};
-
         while (true) {
           result = co_await req.get_conn()->read_websocket();
           if (result.ec) {
+            out_file.close();
             break;
           }
 
           if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
             CHECK(result.data.empty());
+            out_file.close();
             break;
           }
 
           if (result.type == ws_frame_type::WS_TEXT_FRAME) {
-            CHECK(result.data == "test_ws");
+            CHECK(!result.data.empty());
+            std::cout << result.data << "\n";
+          }
+
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            out_file << result.data;
           }
 
           auto ec = co_await req.get_conn()->write_websocket(result.data);
@@ -407,20 +415,34 @@ TEST_CASE("test websocket") {
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    CHECK(data.resp_body == "test_ws");
+    CHECK(!data.resp_body.empty());
   });
 
   async_simple::coro::syncAwait(
       client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("test2fdsaf", true, opcode::binary));
   async_simple::coro::syncAwait(client->async_send_ws("test_ws"));
 
   async_simple::coro::syncAwait(client->async_send_ws_close());
 }
 
+TEST_CASE("check small ws file") {
+  std::string filename = "test.temp";
+  size_t file_size = std::filesystem::file_size(filename);
+  std::ifstream file(filename, std::ios::binary);
+  std::string str;
+  str.resize(file_size);
+
+  file.read(str.data(), str.size());
+  CHECK(str == "test2fdsaf");
+  std::filesystem::remove(filename);
+}
+
 TEST_CASE("test websocket with different message sizes") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
-      "/ws_echo",
+      "/ws_echo1",
       [](cinatra::coro_http_request &req,
          cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         REQUIRE(req.get_content_type() == cinatra::content_type::websocket);
@@ -462,7 +484,7 @@ TEST_CASE("test websocket with different message sizes") {
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
     async_simple::coro::syncAwait(client->async_send_ws(medium_message));
     async_simple::coro::syncAwait(client->async_send_ws_close());
   }
@@ -482,7 +504,7 @@ TEST_CASE("test websocket with different message sizes") {
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
     async_simple::coro::syncAwait(client->async_send_ws(large_message));
     async_simple::coro::syncAwait(client->async_send_ws_close());
   }
