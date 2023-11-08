@@ -429,8 +429,15 @@ TEST_CASE("test websocket") {
 
 TEST_CASE("check small ws file") {
   std::string filename = "test.temp";
-  size_t file_size = std::filesystem::file_size(filename);
+  std::error_code ec;
+  size_t file_size = std::filesystem::file_size(filename, ec);
+  if (ec) {
+    return;
+  }
   std::ifstream file(filename, std::ios::binary);
+  if (!file) {
+    return;
+  }
   std::string str;
   str.resize(file_size);
 

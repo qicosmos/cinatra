@@ -21,10 +21,16 @@ jobs:
           sudo apt-get install libssl-dev
           sudo apt-get install llvm
 
+      - name: Install newer Clang
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh 17
+
       - name: Run Coverage
         run: |
           mkdir build && cd build
-          CC=clang CXX=clang++ cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
+          CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
           make -j test_cinatra test_corofile
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           cd tests
