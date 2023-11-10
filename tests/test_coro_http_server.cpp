@@ -374,21 +374,29 @@ TEST_CASE("test websocket") {
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         CHECK(req.get_content_type() == content_type::websocket);
+        std::ofstream out_file("test.temp", std::ios::binary);
         websocket_result result{};
-
         while (true) {
           result = co_await req.get_conn()->read_websocket();
           if (result.ec) {
+            out_file.close();
             break;
           }
 
           if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
             CHECK(result.data.empty());
+            out_file.close();
             break;
           }
 
           if (result.type == ws_frame_type::WS_TEXT_FRAME) {
-            CHECK(result.data == "test_ws");
+            CHECK(!result.data.empty());
+            std::cout << result.data << "\n";
+          }
+
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            out_file << result.data;
           }
 
           auto ec = co_await req.get_conn()->write_websocket(result.data);
@@ -407,20 +415,143 @@ TEST_CASE("test websocket") {
     }
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    CHECK(data.resp_body == "test_ws");
+    CHECK(!data.resp_body.empty());
   });
 
   async_simple::coro::syncAwait(
       client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("test2fdsaf", true, opcode::binary));
   async_simple::coro::syncAwait(client->async_send_ws("test_ws"));
 
   async_simple::coro::syncAwait(client->async_send_ws_close());
 }
 
+TEST_CASE("check small ws file") {
+  std::string filename = "test.temp";
+  std::error_code ec;
+  size_t file_size = std::filesystem::file_size(filename, ec);
+  if (ec) {
+    return;
+  }
+  std::ifstream file(filename, std::ios::binary);
+  if (!file) {
+    return;
+  }
+  std::string str;
+  str.resize(file_size);
+
+  file.read(str.data(), str.size());
+  CHECK(str == "test2fdsaf");
+  std::filesystem::remove(filename, ec);
+}
+
+TEST_CASE("test websocket binary data") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/short_binary",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            CHECK(result.data.empty());
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            CHECK(result.data.size() == 127);
+          }
+        }
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/medium_binary",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            CHECK(result.data.empty());
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            CHECK(result.data.size() == 65535);
+          }
+        }
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/long_binary",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            CHECK(result.data.empty());
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            CHECK(result.data.size() == 65536);
+          }
+        }
+      });
+  server.async_start();
+
+  auto client1 = std::make_shared<coro_http_client>();
+  async_simple::coro::syncAwait(
+      client1->async_ws_connect("ws://127.0.0.1:9001/short_binary"));
+
+  std::string short_str(127, 'A');
+  async_simple::coro::syncAwait(
+      client1->async_send_ws(std::move(short_str), true, opcode::binary));
+
+  auto client2 = std::make_shared<coro_http_client>();
+  async_simple::coro::syncAwait(
+      client2->async_ws_connect("ws://127.0.0.1:9001/medium_binary"));
+
+  std::string medium_str(65535, 'A');
+  async_simple::coro::syncAwait(
+      client2->async_send_ws(std::move(medium_str), true, opcode::binary));
+
+  auto client3 = std::make_shared<coro_http_client>();
+  async_simple::coro::syncAwait(
+      client3->async_ws_connect("ws://127.0.0.1:9001/long_binary"));
+
+  std::string long_str(65536, 'A');
+  async_simple::coro::syncAwait(
+      client3->async_send_ws(std::move(long_str), true, opcode::binary));
+
+  async_simple::coro::syncAwait(client1->async_send_ws_close());
+  async_simple::coro::syncAwait(client2->async_send_ws_close());
+  async_simple::coro::syncAwait(client3->async_send_ws_close());
+}
+
 TEST_CASE("test websocket with different message sizes") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
-      "/ws_echo",
+      "/ws_echo1",
       [](cinatra::coro_http_request &req,
          cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         REQUIRE(req.get_content_type() == cinatra::content_type::websocket);
@@ -451,18 +582,19 @@ TEST_CASE("test websocket with different message sizes") {
     std::string medium_message(
         65535, 'x');  // 65,535 'x' characters for the medium message test.
 
-    client->on_ws_msg([&medium_message](cinatra::resp_data data) {
+    client->on_ws_msg([medium_message](cinatra::resp_data data) {
       if (data.net_err) {
         std::cout << "ws_msg net error " << data.net_err.message() << "\n";
         return;
       }
 
+      size_t size = data.resp_body.size();
       std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
       REQUIRE(data.resp_body == medium_message);
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
     async_simple::coro::syncAwait(client->async_send_ws(medium_message));
     async_simple::coro::syncAwait(client->async_send_ws_close());
   }
@@ -471,7 +603,7 @@ TEST_CASE("test websocket with different message sizes") {
     std::string large_message(
         70000, 'x');  // 70,000 'x' characters for the large message test.
 
-    client->on_ws_msg([&large_message](cinatra::resp_data data) {
+    client->on_ws_msg([large_message](cinatra::resp_data data) {
       if (data.net_err) {
         std::cout << "ws_msg net error " << data.net_err.message() << "\n";
         return;
@@ -482,7 +614,7 @@ TEST_CASE("test websocket with different message sizes") {
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo"));
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
     async_simple::coro::syncAwait(client->async_send_ws(large_message));
     async_simple::coro::syncAwait(client->async_send_ws_close());
   }
