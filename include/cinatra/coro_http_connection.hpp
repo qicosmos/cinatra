@@ -316,7 +316,7 @@ class coro_http_connection
 
     while (true) {
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-      auto status = ws_.parse_header(data_ptr, SHORT_HEADER);
+      auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
       if (status == ws_header_status::complete) {
         head_buf_.consume(head_buf_.size());
 

@@ -58,10 +58,12 @@ class websocket {
 
     left_header_len_ = 0;
     if (length_field <= 125) {
+      len_bytes_ = SHORT_HEADER;
       payload_length_ = length_field;
     }
     else if (length_field == 126)  // msglen is 16bit!
     {
+      len_bytes_ = MEDIUM_HEADER;
       payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
       pos += 2;
       left_header_len_ =
@@ -69,12 +71,14 @@ class websocket {
     }
     else if (length_field == 127)  // msglen is 64bit!
     {
+      len_bytes_ = LONG_HEADER;
       payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
       pos += 8;
       left_header_len_ =
           is_server ? LONG_HEADER - size : CLIENT_LONG_HEADER - size;
     }
     else {
+      len_bytes_ = INVALID_HEADER;
       return ws_header_status::error;
     }
 
@@ -85,6 +89,8 @@ class websocket {
     return left_header_len_ == 0 ? ws_header_status::complete
                                  : ws_header_status::incomplete;
   }
+
+  int len_bytes() const { return len_bytes_; }
 
   ws_frame_type parse_payload(std::span<char> buf) {
     // unmask data:
@@ -302,6 +308,7 @@ class websocket {
   unsigned char msg_fin_ = 0;
 
   char msg_header_[10];
+  ws_head_len len_bytes_ = SHORT_HEADER;
 };
 
 }  // namespace cinatra
