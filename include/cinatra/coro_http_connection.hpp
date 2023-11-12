@@ -333,6 +333,16 @@ class coro_http_connection
           }
           payload = body_;
         }
+
+        if (max_part_size_ != 0 && payload_length > max_part_size_) {
+          std::string close_reason = "message_too_big";
+          std::string close_msg = ws_.format_close_payload(
+              close_code::too_big, close_reason.data(), close_reason.size());
+          co_await write_websocket(close_msg, opcode::close);
+          close();
+          break;
+        }
+
         ws_frame_type type = ws_.parse_payload(payload);
 
         switch (type) {
@@ -403,6 +413,8 @@ class coro_http_connection
     quit_cb_ = std::move(callback);
     conn_id_ = conn_id;
   }
+
+  void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
@@ -535,6 +547,7 @@ class coro_http_connection
   std::function<void(const uint64_t &conn_id)> quit_cb_ = nullptr;
   bool checkout_timeout_ = false;
   std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
+  uint64_t max_part_size_ = 8 * 1024 * 1024;
 
   websocket ws_;
 #ifdef CINATRA_ENABLE_SSL

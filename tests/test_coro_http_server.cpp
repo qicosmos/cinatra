@@ -642,6 +642,84 @@ TEST_CASE("check connecton timeout") {
   CHECK(server.connection_count() == 0);
 }
 
+TEST_CASE("test websocket with message max_size limit") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_echo1",
+      [](cinatra::coro_http_request &req,
+         cinatra::coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        REQUIRE(req.get_content_type() == cinatra::content_type::websocket);
+        cinatra::websocket_result result{};
+
+        while (true) {
+          req.get_conn()->set_ws_max_size(65536);
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == cinatra::ws_frame_type::WS_CLOSE_FRAME) {
+            REQUIRE(result.data.empty());
+            break;
+          }
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+  server.async_start();
+
+  auto client = std::make_shared<cinatra::coro_http_client>();
+
+  SUBCASE("medium message - 16 bit length") {
+    std::string medium_message(
+        65535, 'x');  // 65,535 'x' characters for the medium message test.
+
+    client->on_ws_msg([medium_message](cinatra::resp_data data) {
+      if (data.net_err) {
+        std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+        return;
+      }
+
+      size_t size = data.resp_body.size();
+      std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
+      REQUIRE(data.resp_body == medium_message);
+    });
+
+    async_simple::coro::syncAwait(
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
+    async_simple::coro::syncAwait(client->async_send_ws(medium_message));
+    async_simple::coro::syncAwait(client->async_send_ws_close());
+  }
+
+  SUBCASE("large message - 64 bit length") {
+    std::string large_message(
+        70000, 'x');  // 70,000 'x' characters for the large message test.
+
+    client->on_ws_msg([large_message](cinatra::resp_data data) {
+      if (data.net_err) {
+        std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+        return;
+      }
+
+      std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
+    });
+
+    client->on_ws_close([](std::string_view reason) {
+      REQUIRE(reason.size() > 0);
+    });
+
+    async_simple::coro::syncAwait(
+        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
+    async_simple::coro::syncAwait(client->async_send_ws(large_message));
+    async_simple::coro::syncAwait(client->async_send_ws_close());
+  }
+
+  server.stop();
+}
+
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl server") {
   cinatra::coro_http_server server(1, 9001);
