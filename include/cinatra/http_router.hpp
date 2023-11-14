@@ -6,12 +6,12 @@
 #include <utility>
 #include <vector>
 
-#include "function_traits.hpp"
 #include "mime_types.hpp"
 #include "request.hpp"
 #include "response.hpp"
 #include "session.hpp"
 #include "utils.hpp"
+#include "ylt/util/type_traits.h"
 namespace cinatra {
 namespace {
 constexpr char DOT = '.';
@@ -250,7 +250,7 @@ class http_router {
   template <typename Function, typename Self, typename... AP>
   void invoke_mem(request &req, response &res, Function f, Self self,
                   AP... ap) {
-    using result_type = typename timax::function_traits<Function>::result_type;
+    using result_type = typename util::function_traits<Function>::return_type;
     std::tuple<AP...> tp(std::move(ap)...);
     bool r = do_ap_before(req, res, tp);
 

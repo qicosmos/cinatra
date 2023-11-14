@@ -18,6 +18,7 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 
+#include "../util/type_traits.h"
 #include "io_context_pool.hpp"
 
 namespace coro_io {
@@ -269,17 +270,33 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
 }
 
 template <typename Func>
-inline async_simple::coro::Lazy<void> post(
-    Func func,
-    coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
-  callback_awaitor<void> awaitor;
+inline async_simple::coro::Lazy<
+    async_simple::Try<typename util::function_traits<Func>::return_type>>
+post(Func func,
+     coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
+  using R =
+      async_simple::Try<typename util::function_traits<Func>::return_type>;
+
+  callback_awaitor<R> awaitor;
 
   co_return co_await awaitor.await_resume(
       [e, func = std::move(func)](auto handler) {
         auto executor = e->get_asio_executor();
         asio::post(executor, [=, func = std::move(func)]() {
-          func();
-          handler.resume();
+          try {
+            if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
+              func();
+              handler.resume();
+            }
+            else {
+              auto r = func();
+              handler.set_value_then_resume(std::move(r));
+            }
+          } catch (const std::exception &e) {
+            R er;
+            er.setException(std::current_exception());
+            handler.set_value_then_resume(std::move(er));
+          }
         });
       });
 }
