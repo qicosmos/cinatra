@@ -39,7 +39,6 @@
 #include "asio/error.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "coro_io.hpp"
-#include "coro_file_op.hpp"
 
 namespace coro_io {
 #if defined(ENABLE_FILE_IO_URING)
