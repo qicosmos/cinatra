@@ -28,6 +28,35 @@ using namespace cinatra;
 
 using namespace std::chrono_literals;
 
+TEST_CASE("coro_io post") {
+  auto t1 = async_simple::coro::syncAwait(coro_io::post([] {
+  }));
+  CHECK(!t1.hasError());
+  auto t2 = async_simple::coro::syncAwait(coro_io::post([] {
+    throw std::invalid_argument("e");
+  }));
+  CHECK(t2.hasError());
+
+  auto t3 = async_simple::coro::syncAwait(coro_io::post([] {
+    return 1;
+  }));
+  int r3 = t3.value();
+  CHECK(r3 == 1);
+
+  auto t4 = async_simple::coro::syncAwait(coro_io::post([] {
+    throw std::invalid_argument("e");
+    return 1;
+  }));
+  CHECK(t4.hasError());
+
+  try {
+    std::rethrow_exception(t4.getException());
+  } catch (const std::exception &e) {
+    CHECK(e.what() == std::string("e"));
+    std::cout << e.what() << "\n";
+  }
+}
+
 TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(std::thread::hardware_concurrency(), 9001);

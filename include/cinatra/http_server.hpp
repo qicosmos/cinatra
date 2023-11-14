@@ -5,7 +5,6 @@
 
 #include "connection.hpp"
 #include "cookie.hpp"
-#include "function_traits.hpp"
 #include "http_cache.hpp"
 #include "http_router.hpp"
 #include "io_service_pool.hpp"
