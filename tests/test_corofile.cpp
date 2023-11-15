@@ -11,7 +11,7 @@
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/ylt/coro_io/coro_file.hpp"
-#include "cinatra/ylt/coro_io/coro_io.hpp"
+#include "cinatra/ylt/coro_io/coro_file_op.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #include "doctest/doctest.h"
 
@@ -60,6 +60,172 @@ void create_file(std::string filename, size_t file_size,
   }
   file.flush();  // can throw
   return;
+}
+
+void create_files(const std::vector<std::string>& files, size_t file_size) {
+  std::string content(file_size, 'A');
+  for (auto& filename : files) {
+    std::ofstream out(filename, std::ios::binary);
+    out.write(content.data(), content.size());
+  }
+}
+
+TEST_CASE("coro_file_op basic test") {
+  std::string filename = "test.txt";
+  create_files({filename}, 190);
+  {
+    auto fptr = coro_file_io::fopen(filename, "rb");
+
+    char buf[100];
+    auto result =
+        async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf, 100));
+    CHECK(result.eof == false);
+    CHECK(result.size == 100);
+    CHECK(result.err_code == 0);
+    result =
+        async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf, 100));
+    CHECK(result.eof == true);
+    CHECK(result.size == 90);
+    CHECK(result.err_code == 0);
+
+    result =
+        async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf, 100));
+    CHECK(result.eof == true);
+    CHECK(result.size == 0);
+    CHECK(result.err_code == 0);
+    coro_file_io::fclose(fptr);
+  }
+
+  {
+    auto file_ptr = coro_file_io::fopen_shared(filename, "rb");
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_read(file_ptr.get(), buf, 100));
+    CHECK(result.eof == false);
+    CHECK(result.size == 100);
+    CHECK(result.err_code == 0);
+    file_ptr.reset();
+    CHECK(file_ptr == nullptr);
+  }
+
+  {
+    auto fptr = coro_file_io::fopen(filename, "rb");
+
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_read_at(fptr, 100, buf, 100));
+    CHECK(result.eof == true);
+    CHECK(result.size == 90);
+    CHECK(result.err_code == 0);
+    coro_file_io::fclose(fptr);
+  }
+
+  {
+    auto fptr = coro_file_io::fopen(filename, "r+");
+
+    std::string buf = "bbbbbbbbbb";
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_write(fptr, buf.data(), buf.size()));
+    CHECK(result.size == 10);
+    CHECK(result.err_code == 0);
+    coro_file_io::fclose(fptr);
+  }
+  {
+    auto fptr = coro_file_io::fopen(filename, "rb");
+
+    char buf[100];
+    auto result =
+        async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf, 10));
+    CHECK(std::string_view(buf, result.size) == "bbbbbbbbbb");
+    coro_file_io::fclose(fptr);
+  }
+  {
+    auto fptr = coro_file_io::fopen(filename, "r+");
+    std::string buf = "BBBBBBBBBB";
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_write_at(fptr, 10, buf.data(), buf.size()));
+    CHECK(result.size == 10);
+    CHECK(result.err_code == 0);
+
+    coro_file_io::fclose(fptr);
+  }
+  {
+    auto fptr = coro_file_io::fopen(filename, "rb");
+
+    char buf[100];
+    auto result =
+        async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf, 20));
+    CHECK(std::string_view(buf, result.size) == "bbbbbbbbbbBBBBBBBBBB");
+    coro_file_io::fclose(fptr);
+  }
+#ifdef __GNUC__
+  {
+    auto fdptr = coro_file_io::open_shared(filename.data(), O_RDONLY);
+    int fd = *fdptr;
+    CHECK(coro_file_io::fd_is_valid(fd));
+
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 0, buf, 10));
+    CHECK(std::string_view(buf, result.size) == "bbbbbbbbbb");
+    fdptr.reset();
+    CHECK(!coro_file_io::fd_is_valid(fd));
+  }
+  {
+    int fd = open(filename.data(), O_RDONLY);
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 0, buf, 10));
+    CHECK(std::string_view(buf, result.size) == "bbbbbbbbbb");
+
+    char buf1[200];
+    result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 10, buf1, 10));
+    CHECK(std::string_view(buf1, result.size) == "BBBBBBBBBB");
+
+    result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 0, buf1, 200));
+    CHECK(result.eof == false);
+    CHECK(result.size == 190);
+    CHECK(result.err_code == 0);
+
+    result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 190, buf1, 200));
+    CHECK(result.eof == true);
+    CHECK(result.size == 0);
+    CHECK(result.err_code == 0);
+
+    close(fd);
+  }
+  {
+    int fd = open(filename.data(), O_WRONLY);
+    std::string buf = "cccccccccc";
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_pwrite(fd, 0, buf.data(), buf.size()));
+    CHECK(result.size == 10);
+    CHECK(result.err_code == 0);
+
+    std::string buf1 = "dddddddddd";
+    result = async_simple::coro::syncAwait(
+        coro_file_io::async_pwrite(fd, 10, buf1.data(), buf1.size()));
+    CHECK(result.size == 10);
+    CHECK(result.err_code == 0);
+    close(fd);
+  }
+  {
+    int fd = open(filename.data(), O_RDONLY);
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 0, buf, 10));
+    CHECK(std::string_view(buf, result.size) == "cccccccccc");
+
+    char buf1[100];
+    auto result1 = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 10, buf1, 10));
+    CHECK(std::string_view(buf1, result.size) == "dddddddddd");
+    close(fd);
+  }
+#endif
 }
 
 TEST_CASE("multithread for balance") {

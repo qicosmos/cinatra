@@ -269,6 +269,30 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
   }
 }
 
+template <typename R, typename Func>
+struct post_helper {
+  void operator()(auto handler) const {
+    asio::post(e->get_asio_executor(), [this, handler]() {
+      try {
+        if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
+          func();
+          handler.resume();
+        }
+        else {
+          auto r = func();
+          handler.set_value_then_resume(std::move(r));
+        }
+      } catch (const std::exception &e) {
+        R er;
+        er.setException(std::current_exception());
+        handler.set_value_then_resume(std::move(er));
+      }
+    });
+  }
+  coro_io::ExecutorWrapper<> *e;
+  Func func;
+};
+
 template <typename Func>
 inline async_simple::coro::Lazy<
     async_simple::Try<typename util::function_traits<Func>::return_type>>
@@ -279,26 +303,8 @@ post(Func func,
 
   callback_awaitor<R> awaitor;
 
-  co_return co_await awaitor.await_resume(
-      [e, func = std::move(func)](auto handler) {
-        auto executor = e->get_asio_executor();
-        asio::post(executor, [=, func = std::move(func)]() {
-          try {
-            if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
-              func();
-              handler.resume();
-            }
-            else {
-              auto r = func();
-              handler.set_value_then_resume(std::move(r));
-            }
-          } catch (const std::exception &e) {
-            R er;
-            er.setException(std::current_exception());
-            handler.set_value_then_resume(std::move(er));
-          }
-        });
-      });
+  post_helper<R, Func> helper{e, std::move(func)};
+  co_return co_await awaitor.await_resume(helper);
 }
 
 template <typename Socket, typename AsioBuffer>
