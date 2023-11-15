@@ -105,6 +105,7 @@ TEST_CASE("coro_file_op basic test") {
     CHECK(result.eof == true);
     CHECK(result.size == 90);
     CHECK(result.err_code == 0);
+    coro_file_io::fclose(fptr);
   }
 
   {
