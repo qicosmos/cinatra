@@ -24,6 +24,21 @@ inline FILE* fopen(std::string_view filename, std::string_view mode) {
 
 inline int fclose(FILE* file) { return std::fclose(file); }
 
+inline std::shared_ptr<FILE> fopen_shared(const char* filename,
+                                          const char* mode) {
+  FILE* file_ptr = fopen(filename, mode);
+  if (file_ptr == nullptr) {
+    return nullptr;
+  }
+
+  return std::shared_ptr<FILE>(file_ptr, fclose);
+}
+
+inline std::shared_ptr<FILE> fopen_shared(std::string_view filename,
+                                          std::string_view mode) {
+  return fopen_shared(filename.data(), mode.data());
+}
+
 inline async_simple::coro::Lazy<file_result> async_op(auto io_func,
                                                       bool is_read,
                                                       FILE* stream, char* buf,
@@ -93,6 +108,34 @@ inline async_simple::coro::Lazy<file_result> async_write_at(
 }
 
 #ifdef __GNUC__
+inline int open(const char* file, int mode) { return ::open(file, mode); }
+
+inline int close(int fd) { return ::close(fd); }
+
+inline int open(std::string_view file, int mode) {
+  return ::open(file.data(), mode);
+}
+
+inline int fd_is_valid(int fd) {
+  return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+inline std::shared_ptr<int> open_shared(const char* file, int mode) {
+  int fd = open(file, mode);
+  if (fd < 0) {
+    return nullptr;
+  }
+
+  return std::shared_ptr<int>(new int(fd), [](int* ptr) {
+    ::close(*ptr);
+    delete ptr;
+  });
+}
+
+inline std::shared_ptr<int> open_shared(std::string_view file, int mode) {
+  return open_shared(file.data(), mode);
+}
+
 inline async_simple::coro::Lazy<file_result> async_prw(auto io_func,
                                                        bool is_read, int fd,
                                                        size_t offset, char* buf,

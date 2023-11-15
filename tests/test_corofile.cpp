@@ -97,6 +97,18 @@ TEST_CASE("coro_file_op basic test") {
   }
 
   {
+    auto file_ptr = coro_file_io::fopen_shared(filename, "rb");
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_read(file_ptr.get(), buf, 100));
+    CHECK(result.eof == false);
+    CHECK(result.size == 100);
+    CHECK(result.err_code == 0);
+    file_ptr.reset();
+    CHECK(file_ptr == nullptr);
+  }
+
+  {
     auto fptr = coro_file_io::fopen(filename, "rb");
 
     char buf[100];
@@ -147,6 +159,18 @@ TEST_CASE("coro_file_op basic test") {
     coro_file_io::fclose(fptr);
   }
 #ifdef __GNUC__
+  {
+    auto fdptr = coro_file_io::open_shared(filename.data(), O_RDONLY);
+    int fd = *fdptr;
+    CHECK(coro_file_io::fd_is_valid(fd));
+
+    char buf[100];
+    auto result = async_simple::coro::syncAwait(
+        coro_file_io::async_pread(fd, 0, buf, 10));
+    CHECK(std::string_view(buf, result.size) == "bbbbbbbbbb");
+    fdptr.reset();
+    CHECK(!coro_file_io::fd_is_valid(fd));
+  }
   {
     int fd = open(filename.data(), O_RDONLY);
     char buf[100];
@@ -203,61 +227,6 @@ TEST_CASE("coro_file_op basic test") {
   }
 #endif
 }
-
-// TEST_CASE("coro_file_op error test") {
-//   std::string filename = "test.txt";
-//   create_files({filename}, 190);
-//
-//   {
-//     auto fptr = coro_file_io::fopen(filename, "rb");
-//     coro_file_io::fclose(fptr);
-//
-//     char buf[100];
-//     auto result =
-//         async_simple::coro::syncAwait(coro_file_io::async_read(fptr, buf,
-//         100));
-//     CHECK(result.size == 0);
-//     CHECK(result.err_code != 0);
-//     CHECK(result.eof == false);
-//
-//     result = async_simple::coro::syncAwait(
-//         coro_file_io::async_read_at(fptr, 100, buf, 100));
-//     CHECK(result.size == 0);
-//     CHECK(result.err_code != 0);
-//     CHECK(result.eof == false);
-//
-//     //    std::string str = "bbbbbbbbbb";
-//     //    result = async_simple::coro::syncAwait(
-//     //        coro_file_io::async_write(fptr, str.data(), str.size()));
-//     //    CHECK(result.err_code != 0);
-//     //    coro_file_io::fclose(fptr);
-//     //
-//     //    result = async_simple::coro::syncAwait(
-//     //        coro_file_io::async_write_at(fptr, 10, str.data(),
-//     str.size()));
-//     //    CHECK(result.err_code != 0);
-//     //    coro_file_io::fclose(fptr);
-//   }
-//
-//#ifdef __GNUC__
-//   {
-//     int fd = open(filename.data(), O_RDONLY);
-//     close(fd);
-//
-//     char buf[100];
-//     auto result = async_simple::coro::syncAwait(
-//         coro_file_io::async_pread(fd, 10, buf, 10));
-//     CHECK(result.size == 0);
-//     CHECK(result.err_code != 0);
-//
-//     std::string str = "cccccccccc";
-//     result = async_simple::coro::syncAwait(
-//         coro_file_io::async_pwrite(fd, 0, str.data(), str.size()));
-//     CHECK(result.size == 0);
-//     CHECK(result.err_code != 0);
-//   }
-//#endif
-// }
 
 TEST_CASE("multithread for balance") {
   size_t total = 100;
