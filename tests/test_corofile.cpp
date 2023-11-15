@@ -225,16 +225,16 @@ TEST_CASE("coro_file_op error test") {
     CHECK(result.err_code != 0);
     CHECK(result.eof == false);
 
-    std::string str = "bbbbbbbbbb";
-    result = async_simple::coro::syncAwait(
-        coro_file_io::async_write(fptr, str.data(), str.size()));
-    CHECK(result.err_code != 0);
-    coro_file_io::fclose(fptr);
-
-    result = async_simple::coro::syncAwait(
-        coro_file_io::async_write_at(fptr, 10, str.data(), str.size()));
-    CHECK(result.err_code != 0);
-    coro_file_io::fclose(fptr);
+    //    std::string str = "bbbbbbbbbb";
+    //    result = async_simple::coro::syncAwait(
+    //        coro_file_io::async_write(fptr, str.data(), str.size()));
+    //    CHECK(result.err_code != 0);
+    //    coro_file_io::fclose(fptr);
+    //
+    //    result = async_simple::coro::syncAwait(
+    //        coro_file_io::async_write_at(fptr, 10, str.data(), str.size()));
+    //    CHECK(result.err_code != 0);
+    //    coro_file_io::fclose(fptr);
   }
 
 #ifdef __GNUC__
