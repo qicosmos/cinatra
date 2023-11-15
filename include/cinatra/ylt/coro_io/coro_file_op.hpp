@@ -109,9 +109,6 @@ inline async_simple::coro::Lazy<file_result> async_prw(auto io_func,
     if (is_read) {
       result.eof = true;
     }
-    else {
-      result.eof = true;
-    }
   }
   else if (len > 0) {
     result.size = len;
