@@ -334,7 +334,7 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
 }
 
 bool create_file(std::string_view filename, size_t file_size = 1024) {
-  std::ofstream out(filename, std::ios::binary);
+  std::ofstream out(filename.data(), std::ios::binary);
   if (!out.is_open()) {
     return false;
   }
