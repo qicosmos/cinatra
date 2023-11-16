@@ -22,6 +22,7 @@
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_server.hpp"
+#include "cinatra/ylt/coro_io/coro_file_op.hpp"
 #include "doctest/doctest.h"
 
 using namespace cinatra;
@@ -332,6 +333,44 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   std::cout << "ok\n";
 }
 
+bool create_file(std::string_view filename, size_t file_size = 1024) {
+  std::ofstream out(filename.data(), std::ios::binary);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  out.write(str.data(), str.size());
+  return true;
+}
+
+struct read_result {
+  std::string_view buf;
+  bool eof;
+  int err;
+};
+
+async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
+  std::string filename = "test.txt";
+  create_file(filename, 1010);
+
+  auto fptr = coro_file_io::fopen_shared(filename, "rb");
+  std::string buf;
+  detail::resize(buf, 100);
+
+  auto fn = [file = fptr.get(),
+             &buf]() -> async_simple::coro::Lazy<read_result> {
+    coro_file_io::file_result result =
+        co_await coro_file_io::async_read(file, buf.data(), buf.size());
+    co_return read_result{std::string_view(buf.data(), result.size), result.eof,
+                          result.err};
+  };
+
+  auto result = co_await client.async_upload_chunked(
+      "http://127.0.0.1:9001/chunked"sv, http_method::POST, std::move(fn));
+  co_return result;
+}
+
 TEST_CASE("chunked request") {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
@@ -354,6 +393,7 @@ TEST_CASE("chunked request") {
           content.append(result.data);
         }
 
+        std::cout << "content size: " << content.size() << "\n";
         std::cout << content << "\n";
         resp.set_format_type(format_type::chunked);
         resp.set_status_and_content(status_type::ok, "chunked ok");
@@ -384,6 +424,10 @@ TEST_CASE("chunked request") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
+  auto r = async_simple::coro::syncAwait(chunked_upload1(client));
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "chunked ok");
+
   auto ss = std::make_shared<std::stringstream>();
   *ss << "hello world";
   auto result = async_simple::coro::syncAwait(client.async_upload_chunked(
