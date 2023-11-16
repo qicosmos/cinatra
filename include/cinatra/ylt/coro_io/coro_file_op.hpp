@@ -9,7 +9,7 @@
 
 namespace coro_file_io {
 struct file_result {
-  int err_code = 0;
+  int err = 0;
   bool eof = false;
   size_t size = 0;
 };
@@ -51,7 +51,7 @@ inline async_simple::coro::Lazy<file_result> async_op(auto io_func,
 
   auto len_val = co_await coro_io::post(std::move(func), executor);
   result.size = len_val.value();
-  result.err_code = ferror(stream);
+  result.err = ferror(stream);
   if (is_read) {
     result.eof = feof(stream);
   }
@@ -77,7 +77,7 @@ inline async_simple::coro::Lazy<file_result> async_op_at(auto io_func,
   file_result result{};
   int ret = std::fseek(stream, offset, SEEK_CUR);
   if (ret != 0) {
-    result.err_code = ret;
+    result.err = ret;
     co_return result;
   }
 
@@ -157,7 +157,7 @@ inline async_simple::coro::Lazy<file_result> async_prw(auto io_func,
     result.size = len;
   }
   else {
-    result.err_code = len;
+    result.err = len;
   }
 
   co_return result;
