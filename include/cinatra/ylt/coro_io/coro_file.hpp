@@ -97,7 +97,7 @@ class coro_file {
                                             open_mode flags = open_mode::read) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(
-          executor_wrapper_->get_asio_executor());
+          executor_wrapper_.get_asio_executor());
     } catch (std::exception& ex) {
       std::cout << ex.what() << "\n";
       co_return false;
