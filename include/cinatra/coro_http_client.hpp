@@ -1570,7 +1570,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_await file.async_open(part.filename, coro_io::open_mode::read);
       assert(file.is_open());
       std::string file_data;
-      file_data.resize(max_single_part_size_);
+      detail::resize(file_data, max_single_part_size_);
       while (!file.eof()) {
         auto [rd_ec, rd_size] =
             co_await file.async_read(file_data.data(), file_data.size());

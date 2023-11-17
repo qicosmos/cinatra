@@ -55,7 +55,7 @@ class coro_file {
 #if defined(ENABLE_FILE_IO_URING)
   coro_file(
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor())
-      : coro_file(filepath, flags, executor->get_asio_executor()) {}
+      : coro_file(executor->get_asio_executor()) {}
 
   coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
