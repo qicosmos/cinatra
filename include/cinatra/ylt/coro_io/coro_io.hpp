@@ -5,6 +5,7 @@
 #include <chrono>
 #include <deque>
 
+#include "asio/dispatch.hpp"
 #include "async_simple/Executor.h"
 #include "async_simple/coro/Sleep.h"
 
@@ -272,7 +273,7 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
 template <typename R, typename Func>
 struct post_helper {
   void operator()(auto handler) const {
-    asio::post(e->get_asio_executor(), [this, handler]() {
+    asio::dispatch(e->get_asio_executor(), [this, handler]() {
       try {
         if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
           func();
