@@ -244,8 +244,8 @@ class coro_file {
   std::atomic<size_t> seek_offset_ = 0;
 #else
   std::unique_ptr<std::fstream> stream_file_;
-  coro_io::ExecutorWrapper<> executor_wrapper_;
 #endif
+  coro_io::ExecutorWrapper<> executor_wrapper_;
 
   std::atomic<bool> eof_ = false;
 };
