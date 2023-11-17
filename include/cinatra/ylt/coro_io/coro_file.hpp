@@ -96,7 +96,8 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
                                             open_mode flags = open_mode::read) {
     try {
-      stream_file_ = std::make_unique<asio::stream_file>(executor);
+      stream_file_ = std::make_unique<asio::stream_file>(
+          executor_wrapper_->get_asio_executor());
     } catch (std::exception& ex) {
       std::cout << ex.what() << "\n";
       co_return false;
