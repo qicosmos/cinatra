@@ -129,6 +129,15 @@ class coro_file {
     co_return true;
   }
 
+  bool seek(long offset, int whence) {
+    std::error_code seek_ec;
+    stream_file_->seek(offset, whence, seek_ec);
+    if (seek_ec) {
+      return false;
+    }
+    return true;
+  }
+
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       char* data, size_t size) {
     size_t left_size = size;
