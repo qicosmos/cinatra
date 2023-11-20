@@ -131,7 +131,8 @@ class coro_file {
 
   bool seek(long offset, int whence) {
     std::error_code seek_ec;
-    stream_file_->seek(offset, whence, seek_ec);
+    stream_file_->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
+                       seek_ec);
     if (seek_ec) {
       return false;
     }
