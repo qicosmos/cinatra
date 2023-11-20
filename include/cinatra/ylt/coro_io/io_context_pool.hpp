@@ -30,6 +30,11 @@
 
 namespace coro_io {
 
+inline asio::io_context **get_current() {
+  static thread_local asio::io_context *current = nullptr;
+  return &current;
+}
+
 template <typename ExecutorImpl = asio::io_context::executor_type>
 class ExecutorWrapper : public async_simple::Executor {
  private:
@@ -70,10 +75,22 @@ class ExecutorWrapper : public async_simple::Executor {
 
   operator ExecutorImpl() { return executor_; }
 
+  bool currentThreadInExecutor() const override {
+    auto ctx = get_current();
+    return *ctx == &executor_.context();
+  }
+
+  size_t currentContextId() const override {
+    auto ctx = get_current();
+    auto ptr = *ctx;
+    return ptr ? (size_t)ptr : 0;
+  }
+
  private:
   void schedule(Func func, Duration dur) override {
-    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
-    timer->async_wait([fn = std::move(func), timer](auto ec) {
+    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
+    auto tm = timer.get();
+    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
       fn();
     });
   }
@@ -81,7 +98,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
 template <typename ExecutorImpl = asio::io_context>
 inline async_simple::coro::Lazy<typename ExecutorImpl::executor_type>
-get_executor() {
+get_current_executor() {
   auto executor = co_await async_simple::CurrentExecutor{};
   assert(executor != nullptr);
   co_return static_cast<ExecutorImpl *>(executor->checkout())->get_executor();
@@ -117,6 +134,8 @@ class io_context_pool {
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
           [](io_context_ptr svr) {
+            auto ctx = get_current();
+            *ctx = svr.get();
             svr->run();
           },
           io_contexts_[i]));
