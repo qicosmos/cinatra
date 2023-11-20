@@ -42,6 +42,29 @@
 #include "coro_io.hpp"
 
 namespace coro_io {
+
+enum flags {
+#if defined(ASIO_WINDOWS)
+  read_only = 1,
+  write_only = 2,
+  read_write = 4,
+  append = 8,
+  create = 16,
+  exclusive = 32,
+  truncate = 64,
+  sync_all_on_write = 128
+#else   // defined(ASIO_WINDOWS)
+  read_only = O_RDONLY,
+  write_only = O_WRONLY,
+  read_write = O_RDWR,
+  append = O_APPEND,
+  create = O_CREAT,
+  exclusive = O_EXCL,
+  truncate = O_TRUNC,
+  sync_all_on_write = O_SYNC
+#endif  // defined(ASIO_WINDOWS)
+};
+
 class coro_file {
  public:
 #if defined(ENABLE_FILE_IO_URING)
@@ -85,8 +108,8 @@ class coro_file {
   }
 
 #if defined(ENABLE_FILE_IO_URING)
-  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
-                                            int open_mode = O_RDWR) {
+  async_simple::coro::Lazy<bool> async_open(
+      std::string_view filepath, flags open_mode = flags::read_write) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(
           executor_wrapper_.get_asio_executor());
@@ -96,8 +119,7 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath.data(),
-                       static_cast<sio::file_base::flags>(open_mode), ec);
+    stream_file_->open(filepath.data(), open_mode, ec);
     if (ec) {
       std::cout << ec.message() << "\n";
       co_return false;
@@ -196,8 +218,8 @@ class coro_file {
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
 
-  async_simple::coro::Lazy<bool> async_open(std::string filepath,
-                                            int open_mode = O_RDWR) {
+  async_simple::coro::Lazy<bool> async_open(
+      std::string filepath, flags open_mode = flags::read_write) {
     if (stream_file_ != nullptr) {
       co_return true;
     }
