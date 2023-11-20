@@ -197,17 +197,17 @@ class coro_file {
     co_return std::error_code{};
   }
 #else
-  std::string str_mode(int open_mode) {
+  std::string str_mode(flags open_mode) {
     switch (open_mode) {
-      case O_RDONLY:
+      case flags::read_only:
         return "r";
-      case O_WRONLY:
+      case flags::write_only:
         return "w";
-      case O_RDWR:
+      case flags::read_write:
         return "r+";
-      case O_APPEND:
+      case flags::append:
         return "a";
-      case O_TRUNC:
+      case flags::truncate:
         return "w+";
       default:
         return "r+";
