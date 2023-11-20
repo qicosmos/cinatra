@@ -96,7 +96,8 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath.data(), open_mode, ec);
+    stream_file_->open(filepath.data(),
+                       static_cast<sio::file_base::flags>(open_mode), ec);
     if (ec) {
       std::cout << ec.message() << "\n";
       co_return false;
