@@ -249,7 +249,7 @@ TEST_CASE("coro_file_op basic test") {
     close(fd);
   }
   {
-    int fd = open(filename.data(), coro_io::flags::write_only);
+    int fd = open(filename.data(), coro_io::flags::create_write);
     std::string buf = "cccccccccc";
     auto result = async_simple::coro::syncAwait(
         coro_file_io::async_pwrite(fd, 0, buf.data(), buf.size()));
@@ -300,7 +300,7 @@ TEST_CASE("multithread for balance") {
     coro_io::coro_file file(coro_io::get_global_block_executor<
                             coro_io::multithread_context_pool>());
     async_simple::coro::syncAwait(
-        file.async_open(filename, coro_io::flags::write_only));
+        file.async_open(filename, coro_io::flags::create_write));
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -391,7 +391,7 @@ TEST_CASE("read write 100 small files") {
           int index) mutable -> async_simple::coro::Lazy<void> {
     coro_io::coro_file file(pool.get_executor());
     async_simple::coro::syncAwait(
-        file.async_open(filename, coro_io::flags::write_only));
+        file.async_open(filename, coro_io::flags::create_write));
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -648,7 +648,7 @@ TEST_CASE("small_file_write_test") {
 
   coro_io::coro_file file(ioc.get_executor());
   async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::write_only));
+      file.async_open(filename, coro_io::flags::create_write));
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -717,7 +717,7 @@ TEST_CASE("large_file_write_test") {
 
   coro_io::coro_file file(ioc.get_executor());
   async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::write_only));
+      file.async_open(filename, coro_io::flags::create_write));
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_test");
@@ -772,7 +772,7 @@ TEST_CASE("empty_file_write_test") {
 
   coro_io::coro_file file(ioc.get_executor());
   async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::write_only));
+      file.async_open(filename, coro_io::flags::create_write));
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -808,7 +808,7 @@ TEST_CASE("small_file_write_with_pool_test") {
 
   coro_io::coro_file file(pool.get_executor());
   async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::write_only));
+      file.async_open(filename, coro_io::flags::create_write));
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -875,7 +875,7 @@ TEST_CASE("large_file_write_with_pool_test") {
 
   coro_io::coro_file file(pool.get_executor());
   async_simple::coro::syncAwait(
-      file.async_open(filename, coro_io::flags::write_only));
+      file.async_open(filename, coro_io::flags::create_write));
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_with_pool_test");

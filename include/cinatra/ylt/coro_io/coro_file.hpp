@@ -43,6 +43,23 @@
 
 namespace coro_io {
 
+/*
+              ┌─────────────┬───────────────────────────────┐
+              │fopen() mode │ open() flags                  │
+              ├─────────────┼───────────────────────────────┤
+              │     r       │ O_RDONLY                      │
+              ├─────────────┼───────────────────────────────┤
+              │     w       │ O_WRONLY | O_CREAT | O_TRUNC  │
+              ├─────────────┼───────────────────────────────┤
+              │     a       │ O_WRONLY | O_CREAT | O_APPEND │
+              ├─────────────┼───────────────────────────────┤
+              │     r+      │ O_RDWR                        │
+              ├─────────────┼───────────────────────────────┤
+              │     w+      │ O_RDWR | O_CREAT | O_TRUNC    │
+              ├─────────────┼───────────────────────────────┤
+              │     a+      │ O_RDWR | O_CREAT | O_APPEND   │
+              └─────────────┴───────────────────────────────┘
+*/
 enum flags {
 #if defined(ASIO_WINDOWS)
   read_only = 1,
@@ -52,6 +69,10 @@ enum flags {
   create = 16,
   exclusive = 32,
   truncate = 64,
+  create_write = create | write_only,
+  create_write_trunc = create | write_only | truncate,
+  create_read_write_trunc = read_write | create | truncate,
+  create_read_write_append = read_write | create | append,
   sync_all_on_write = 128
 #else   // defined(ASIO_WINDOWS)
   read_only = O_RDONLY,
@@ -61,6 +82,10 @@ enum flags {
   create = O_CREAT,
   exclusive = O_EXCL,
   truncate = O_TRUNC,
+  create_write = O_CREAT | O_WRONLY,
+  create_write_trunc = O_WRONLY | O_CREAT | O_TRUNC,
+  create_read_write_trunc = O_RDWR | O_CREAT | O_TRUNC,
+  create_read_write_append = O_RDWR | O_CREAT | O_APPEND,
   sync_all_on_write = O_SYNC
 #endif  // defined(ASIO_WINDOWS)
 };
@@ -108,8 +133,8 @@ class coro_file {
   }
 
 #if defined(ENABLE_FILE_IO_URING)
-  async_simple::coro::Lazy<bool> async_open(
-      std::string_view filepath, flags open_mode = flags::read_write) {
+  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
+                                            int open_mode = flags::read_write) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(
           executor_wrapper_.get_asio_executor());
@@ -208,16 +233,19 @@ class coro_file {
     co_return std::error_code{};
   }
 #else
-  std::string str_mode(flags open_mode) {
+  std::string str_mode(int open_mode) {
     switch (open_mode) {
       case flags::read_only:
         return "r";
+      case flags::create_write:
       case flags::write_only:
         return "w";
       case flags::read_write:
         return "r+";
       case flags::append:
         return "a";
+      case flags::create_read_write_append:
+        return "a+";
       case flags::truncate:
         return "w+";
       default:
@@ -229,8 +257,8 @@ class coro_file {
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
 
-  async_simple::coro::Lazy<bool> async_open(
-      std::string filepath, flags open_mode = flags::read_write) {
+  async_simple::coro::Lazy<bool> async_open(std::string filepath,
+                                            int open_mode = flags::read_write) {
     if (stream_file_ != nullptr) {
       co_return true;
     }

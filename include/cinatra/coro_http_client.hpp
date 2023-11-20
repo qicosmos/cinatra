@@ -682,7 +682,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                      std::string range = "") {
     resp_data data{};
     auto file = std::make_shared<coro_io::coro_file>();
-    co_await file->async_open(filename, coro_io::flags::write_only);
+    co_await file->async_open(filename, coro_io::flags::create_write);
     if (!file->is_open()) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
       data.status = 404;
