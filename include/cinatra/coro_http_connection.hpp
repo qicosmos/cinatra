@@ -104,7 +104,9 @@ class coro_http_connection
 #endif
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
       if (ec) {
-        CINATRA_LOG_ERROR << "read http header error: " << ec.message();
+        if (ec != asio::error::eof) {
+          CINATRA_LOG_ERROR << "read http header error: " << ec.message();
+        }
         close();
         break;
       }
