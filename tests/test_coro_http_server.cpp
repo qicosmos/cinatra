@@ -22,7 +22,6 @@
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_server.hpp"
-#include "cinatra/ylt/coro_io/coro_file_op.hpp"
 #include "doctest/doctest.h"
 
 using namespace cinatra;
@@ -344,26 +343,19 @@ bool create_file(std::string_view filename, size_t file_size = 1024) {
   return true;
 }
 
-struct read_result {
-  std::string_view buf;
-  bool eof;
-  int err;
-};
-
 async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
   std::string filename = "test.txt";
   create_file(filename, 1010);
 
-  auto fptr = coro_file_io::fopen_shared(filename, "rb");
+  coro_io::coro_file file{};
+  co_await file.async_open(filename, coro_io::flags::read_only);
+
   std::string buf;
   detail::resize(buf, 100);
 
-  auto fn = [file = fptr.get(),
-             &buf]() -> async_simple::coro::Lazy<read_result> {
-    coro_file_io::file_result result =
-        co_await coro_file_io::async_read(file, buf.data(), buf.size());
-    co_return read_result{std::string_view(buf.data(), result.size), result.eof,
-                          result.err};
+  auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
+    auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
+    co_return read_result{std::string_view(buf.data(), size), file.eof(), ec};
   };
 
   auto result = co_await client.async_upload_chunked(

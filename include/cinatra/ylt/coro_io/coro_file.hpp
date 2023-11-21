@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <asio/io_context.hpp>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 
@@ -41,14 +42,53 @@
 #include "coro_io.hpp"
 
 namespace coro_io {
-#if defined(ENABLE_FILE_IO_URING)
-inline asio::file_base::flags default_flags() {
-  return asio::stream_file::read_write | asio::stream_file::append |
-         asio::stream_file::create;
-}
-#endif
 
-enum class open_mode { read, write };
+/*
+              ┌─────────────┬───────────────────────────────┐
+              │fopen() mode │ open() flags                  │
+              ├─────────────┼───────────────────────────────┤
+              │     r       │ O_RDONLY                      │
+              ├─────────────┼───────────────────────────────┤
+              │     w       │ O_WRONLY | O_CREAT | O_TRUNC  │
+              ├─────────────┼───────────────────────────────┤
+              │     a       │ O_WRONLY | O_CREAT | O_APPEND │
+              ├─────────────┼───────────────────────────────┤
+              │     r+      │ O_RDWR                        │
+              ├─────────────┼───────────────────────────────┤
+              │     w+      │ O_RDWR | O_CREAT | O_TRUNC    │
+              ├─────────────┼───────────────────────────────┤
+              │     a+      │ O_RDWR | O_CREAT | O_APPEND   │
+              └─────────────┴───────────────────────────────┘
+*/
+enum flags {
+#if defined(ASIO_WINDOWS)
+  read_only = 1,
+  write_only = 2,
+  read_write = 4,
+  append = 8,
+  create = 16,
+  exclusive = 32,
+  truncate = 64,
+  create_write = create | write_only,
+  create_write_trunc = create | write_only | truncate,
+  create_read_write_trunc = read_write | create | truncate,
+  create_read_write_append = read_write | create | append,
+  sync_all_on_write = 128
+#else   // defined(ASIO_WINDOWS)
+  read_only = O_RDONLY,
+  write_only = O_WRONLY,
+  read_write = O_RDWR,
+  append = O_APPEND,
+  create = O_CREAT,
+  exclusive = O_EXCL,
+  truncate = O_TRUNC,
+  create_write = O_CREAT | O_WRONLY,
+  create_write_trunc = O_WRONLY | O_CREAT | O_TRUNC,
+  create_read_write_trunc = O_RDWR | O_CREAT | O_TRUNC,
+  create_read_write_append = O_RDWR | O_CREAT | O_APPEND,
+  sync_all_on_write = O_SYNC
+#endif  // defined(ASIO_WINDOWS)
+};
 
 class coro_file {
  public:
@@ -69,15 +109,20 @@ class coro_file {
       : executor_wrapper_(executor) {}
 #endif
 
-  bool is_open() { return stream_file_ && stream_file_->is_open(); }
+  bool is_open() { return stream_file_ != nullptr; }
 
   void flush() {
 #if defined(ENABLE_FILE_IO_URING)
 
 #else
     if (stream_file_) {
-      stream_file_->flush();
-      stream_file_->sync();
+      auto fptr = stream_file_.get();
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+      int fd = *stream_file_;
+      fsync(fd);
+#else
+      fflush(fptr);
+#endif
     }
 #endif
   }
@@ -94,7 +139,7 @@ class coro_file {
 
 #if defined(ENABLE_FILE_IO_URING)
   async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
-                                            open_mode flags = open_mode::read) {
+                                            int open_mode = flags::read_write) {
     try {
       stream_file_ = std::make_unique<asio::stream_file>(
           executor_wrapper_.get_asio_executor());
@@ -104,13 +149,24 @@ class coro_file {
     }
 
     std::error_code ec;
-    stream_file_->open(filepath.data(), default_flags(), ec);
+    stream_file_->open(filepath.data(),
+                       static_cast<asio::file_base::flags>(open_mode), ec);
     if (ec) {
       std::cout << ec.message() << "\n";
       co_return false;
     }
 
     co_return true;
+  }
+
+  bool seek(long offset, int whence) {
+    std::error_code seek_ec;
+    stream_file_->seek(offset, static_cast<asio::file_base::seek_basis>(whence),
+                       seek_ec);
+    if (seek_ec) {
+      return false;
+    }
+    return true;
   }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
@@ -182,25 +238,106 @@ class coro_file {
     co_return std::error_code{};
   }
 #else
-  async_simple::coro::Lazy<bool> async_open(std::string_view filepath,
-                                            open_mode flags = open_mode::read) {
+  std::string str_mode(int open_mode) {
+    switch (open_mode) {
+      case flags::read_only:
+        return "r";
+      case flags::create_write:
+      case flags::write_only:
+        return "w";
+      case flags::read_write:
+        return "r+";
+      case flags::append:
+        return "a";
+      case flags::create_read_write_append:
+        return "a+";
+      case flags::truncate:
+        return "w+";
+      default:
+        return "r+";
+    }
+  }
+
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+  async_simple::coro::Lazy<bool> async_open(std::string filepath,
+                                            int open_mode = flags::read_write) {
+    if (stream_file_) {
+      co_return true;
+    }
+
+    int fd = open(filepath.data(), open_mode);
+    if (fd < 0) {
+      co_return false;
+    }
+
+    stream_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+      ::close(*ptr);
+      delete ptr;
+    });
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
+      auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
+    std::function<int()> func = [=, this] {
+      int fd = *stream_file_;
+      return io_func(fd, buf, size, offset);
+    };
+
+    std::error_code ec{};
+    size_t op_size = 0;
+
+    auto len_val = co_await coro_io::post(std::move(func), &executor_wrapper_);
+    int len = len_val.value();
+    if (len == 0) {
+      if (is_read) {
+        eof_ = true;
+      }
+    }
+    else if (len > 0) {
+      op_size = len;
+    }
+    else {
+      ec = std::make_error_code(std::errc::io_error);
+    }
+
+    co_return std::make_pair(ec, op_size);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+      size_t offset, char* data, size_t size) {
+    co_return co_await async_prw(pread, true, offset, data, size);
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write(size_t offset,
+                                                        const char* data,
+                                                        size_t size) {
+    auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
+    co_return result.first;
+  }
+#else
+  bool seek(long offset, int whence) {
+    return fseek(stream_file_.get(), offset, whence) == 0;
+  }
+
+  async_simple::coro::Lazy<bool> async_open(std::string filepath,
+                                            int open_mode = flags::read_write) {
     if (stream_file_ != nullptr) {
       co_return true;
     }
 
     auto result = co_await coro_io::post(
-        [this, filepath, flags] {
-          std::ios::openmode open_flags = flags == open_mode::read
-                                              ? std::ios::binary | std::ios::in
-                                              : std::ios::out | std::ios::app;
-          stream_file_ = std::make_unique<std::fstream>(
-              std::filesystem::path(filepath), open_flags);
-          if (!stream_file_->is_open()) {
+        [this, &filepath, open_mode] {
+          auto fptr = fopen(filepath.data(), str_mode(open_mode).data());
+          if (fptr == nullptr) {
             std::cout << "open file " << filepath << " failed "
                       << "\n";
-            stream_file_.reset();
             return false;
           }
+          stream_file_ = std::shared_ptr<FILE>(fptr, [](FILE* ptr) {
+            fclose(ptr);
+          });
           return true;
         },
         &executor_wrapper_);
@@ -211,13 +348,13 @@ class coro_file {
       char* data, size_t size) {
     auto result = co_await coro_io::post(
         [this, data, size] {
-          stream_file_->read(data, size);
-          size_t read_size = stream_file_->gcount();
-          if (!stream_file_ && read_size == 0) {
+          auto fptr = stream_file_.get();
+          size_t read_size = fread(data, sizeof(char), size, fptr);
+          if (ferror(fptr)) {
             return std::pair<std::error_code, size_t>(
                 std::make_error_code(std::errc::io_error), 0);
           }
-          eof_ = stream_file_->eof();
+          eof_ = feof(fptr);
           return std::pair<std::error_code, size_t>(std::error_code{},
                                                     read_size);
         },
@@ -230,7 +367,11 @@ class coro_file {
                                                         size_t size) {
     auto result = co_await coro_io::post(
         [this, data, size] {
-          stream_file_->write(data, size);
+          auto fptr = stream_file_.get();
+          fwrite(data, sizeof(char), size, fptr);
+          if (ferror(fptr)) {
+            return std::make_error_code(std::errc::io_error);
+          }
           return std::error_code{};
         },
         &executor_wrapper_);
@@ -239,12 +380,19 @@ class coro_file {
   }
 #endif
 
+#endif
+
  private:
 #if defined(ENABLE_FILE_IO_URING)
   std::unique_ptr<asio::stream_file> stream_file_;
   std::atomic<size_t> seek_offset_ = 0;
 #else
-  std::unique_ptr<std::fstream> stream_file_;
+
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+  std::shared_ptr<int> stream_file_;
+#else
+  std::shared_ptr<FILE> stream_file_;
+#endif
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
 

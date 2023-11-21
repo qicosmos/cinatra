@@ -26,6 +26,12 @@ if(ENABLE_FILE_IO_URING)
     add_definitions(-DASIO_HAS_IO_URING)
 endif()
 
+option(USE_PREAD_WRITE "enable pread and pwrite" OFF)
+if(USE_PREAD_WRITE)
+	message(STATUS "use pread and pwrite")
+    add_definitions(-DUSE_PREAD_WRITE)
+endif()
+
 if (UNIX)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pthread")
 endif()

@@ -104,6 +104,12 @@ struct multipart_t {
   size_t size = 0;
 };
 
+struct read_result {
+  std::string_view buf;
+  bool eof;
+  std::error_code err;
+};
+
 class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
   struct config {
@@ -682,7 +688,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                      std::string range = "") {
     resp_data data{};
     auto file = std::make_shared<coro_io::coro_file>();
-    co_await file->async_open(filename, coro_io::open_mode::write);
+    co_await file->async_open(filename, coro_io::flags::create_write);
     if (!file->is_open()) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
       data.status = 404;
@@ -834,7 +840,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
                        std::is_same_v<Source, std::string_view>) {
-      coro_io::coro_file coro_file(source, coro_io::open_mode::read);
+      coro_io::coro_file coro_file(source, coro_io::flags::read_only);
       while (!coro_file.eof()) {
         auto [rd_ec, rd_size] =
             co_await coro_file.async_read(file_data.data(), file_data.size());
@@ -1567,7 +1573,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     if (is_file) {
       coro_io::coro_file file{};
-      co_await file.async_open(part.filename, coro_io::open_mode::read);
+      co_await file.async_open(part.filename, coro_io::flags::read_only);
       assert(file.is_open());
       std::string file_data;
       detail::resize(file_data, max_single_part_size_);
