@@ -117,7 +117,12 @@ class coro_file {
 #else
     if (stream_file_) {
       auto fptr = stream_file_.get();
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+      int fd = *stream_file_;
+      fsync(fd);
+#else
       fflush(fptr);
+#endif
     }
 #endif
   }
@@ -253,6 +258,65 @@ class coro_file {
     }
   }
 
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+  async_simple::coro::Lazy<bool> async_open(std::string filepath,
+                                            int open_mode = flags::read_write) {
+    if (stream_file_) {
+      co_return true;
+    }
+
+    int fd = open(filepath.data(), open_mode);
+    if (fd < 0) {
+      co_return false;
+    }
+
+    stream_file_ = std::shared_ptr<int>(new int(fd), [](int* ptr) {
+      ::close(*ptr);
+      delete ptr;
+    });
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_prw(
+      auto io_func, bool is_read, size_t offset, char* buf, size_t size) {
+    std::function<int()> func = [=, this] {
+      int fd = *stream_file_;
+      return io_func(fd, buf, size, offset);
+    };
+
+    std::error_code ec{};
+    size_t op_size = 0;
+
+    auto len_val = co_await coro_io::post(std::move(func), &executor_wrapper_);
+    int len = len_val.value();
+    if (len == 0) {
+      if (is_read) {
+        eof_ = true;
+      }
+    }
+    else if (len > 0) {
+      op_size = len;
+    }
+    else {
+      ec = std::make_error_code(std::errc::io_error);
+    }
+
+    co_return std::make_pair(ec, op_size);
+  }
+
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
+      size_t offset, char* data, size_t size) {
+    co_return co_await async_prw(pread, true, offset, data, size);
+  }
+
+  async_simple::coro::Lazy<std::error_code> async_write(size_t offset,
+                                                        const char* data,
+                                                        size_t size) {
+    auto result = co_await async_prw(pwrite, false, offset, (char*)data, size);
+    co_return result.first;
+  }
+#else
   bool seek(long offset, int whence) {
     return fseek(stream_file_.get(), offset, whence) == 0;
   }
@@ -316,12 +380,19 @@ class coro_file {
   }
 #endif
 
+#endif
+
  private:
 #if defined(ENABLE_FILE_IO_URING)
   std::unique_ptr<asio::stream_file> stream_file_;
   std::atomic<size_t> seek_offset_ = 0;
 #else
+
+#if defined(__GNUC__) and defined(USE_PREAD_WRITE)
+  std::shared_ptr<int> stream_file_;
+#else
   std::shared_ptr<FILE> stream_file_;
+#endif
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
 
