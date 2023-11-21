@@ -104,6 +104,12 @@ struct multipart_t {
   size_t size = 0;
 };
 
+struct read_result {
+  std::string_view buf;
+  bool eof;
+  std::error_code err;
+};
+
 class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
  public:
   struct config {
