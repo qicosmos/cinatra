@@ -509,7 +509,7 @@ TEST_CASE("test websocket with chunked") {
   };
 
   async_simple::coro::syncAwait(
-      client->async_send_ws(source_fn, true, opcode::binary));
+      client->async_send_ws(std::move(source_fn), true, opcode::binary));
 
   promise.get_future().wait();
 
