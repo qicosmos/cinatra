@@ -1247,7 +1247,7 @@ class connection : public base_connection,
       case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
         close_frame close_frame =
             ws_.parse_close_payload(payload.data(), payload.length());
-        size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, payload.length());
+        size_t len = std::min<size_t>(MAX_CLOSE_PAYLOAD, close_frame.length);
         req_.set_part_data({close_frame.message, len});
         req_.call_event(data_proc_state::data_close);
 

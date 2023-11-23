@@ -254,6 +254,9 @@ class websocket {
 
   std::string format_close_payload(uint16_t code, char *message,
                                    size_t length) {
+    if (length == 0) {
+      return "";
+    }
     std::string close_payload;
     if (code) {
       close_payload.resize(length + 2);
