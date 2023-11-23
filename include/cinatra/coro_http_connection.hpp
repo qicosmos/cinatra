@@ -359,7 +359,6 @@ class coro_http_connection
             result.eof = false;
             result.data = {payload.data(), payload.size()};
             break;
-            ;
           case cinatra::ws_frame_type::WS_TEXT_FRAME:
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
             result.eof = true;

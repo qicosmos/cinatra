@@ -397,6 +397,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         if (ec) {
           data.net_err = ec;
           data.status = 404;
+          break;
         }
 
         if (result.eof) {
