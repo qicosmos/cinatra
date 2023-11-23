@@ -31,6 +31,7 @@ struct websocket_result {
   std::error_code ec;
   ws_frame_type type;
   std::string_view data;
+  bool eof;
 };
 
 class coro_http_connection
@@ -320,8 +321,8 @@ class coro_http_connection
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
       if (status == ws_header_status::complete) {
+        ws_.reset_len_bytes();
         head_buf_.consume(head_buf_.size());
-
         std::span<char> payload{};
         auto payload_length = ws_.payload_length();
         if (payload_length > 0) {
@@ -353,8 +354,15 @@ class coro_http_connection
             break;
           case cinatra::ws_frame_type::WS_OPENING_FRAME:
             continue;
+          case ws_frame_type::WS_INCOMPLETE_TEXT_FRAME:
+          case ws_frame_type::WS_INCOMPLETE_BINARY_FRAME:
+            result.eof = false;
+            result.data = {payload.data(), payload.size()};
+            break;
+            ;
           case cinatra::ws_frame_type::WS_TEXT_FRAME:
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
+            result.eof = true;
             result.data = {payload.data(), payload.size()};
           } break;
           case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
