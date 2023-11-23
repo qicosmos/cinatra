@@ -351,7 +351,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<resp_data> async_send_ws(std::string data,
                                                     bool need_mask = true,
                                                     opcode op = opcode::text) {
-    return async_send_ws(std::span<char>(data), need_mask, op);
+    co_return co_await async_send_ws(std::span<char>(data), need_mask, op);
   }
 
   template <typename Source>
@@ -411,7 +411,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> async_send_ws_close(
       std::string msg = "") {
-    return async_send_ws(std::move(msg), false, opcode::close);
+    co_return co_await async_send_ws(std::move(msg), false, opcode::close);
   }
 
   void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
