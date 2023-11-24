@@ -44,6 +44,7 @@ jobs:
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
+        if: failure()
         with: 
           name: LastTest.log
           if-no-files-found: ignore
