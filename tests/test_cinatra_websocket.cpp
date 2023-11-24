@@ -76,6 +76,8 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
       return;
     }
 
+    std::cout << "client get ws msg: " << data.resp_body << "\n";
+
     bool r = data.resp_body.find("hello websocket") != std::string::npos ||
              data.resp_body.find("test again") != std::string::npos;
     CHECK(r);
@@ -89,47 +91,34 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
 
   auto result = co_await client.async_send_ws("hello websocket");
   std::cout << result.net_err << "\n";
-  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
+  result = co_await client.async_send_ws("test again", /*need_mask = */
+                                         false);
   std::cout << result.net_err << "\n";
   result = co_await client.async_send_ws_close("ws close");
   std::cout << result.net_err << "\n";
 }
 
 TEST_CASE("test websocket") {
-  http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
-  server.enable_timeout(false);
-  server.set_http_handler<GET, POST>("/ws", [](request &req, response &res) {
-    assert(req.get_content_type() == content_type::websocket);
+  cinatra::coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::GET>(
+      "/ws",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
 
-    req.on(ws_open, [](request &req) {
-      std::cout << "websocket start" << std::endl;
-    });
-
-    req.on(ws_message, [](request &req) {
-      auto part_data = req.get_part_data();
-      // echo
-      std::string str = std::string(part_data.data(), part_data.length());
-      req.get_conn<cinatra::NonSSL>()->send_ws_string(str);
-      std::cout << part_data.data() << std::endl;
-    });
-
-    req.on(ws_error, [](request &req) {
-      std::cout << "websocket pack error or network error" << std::endl;
-    });
-  });
-
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+  server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -138,12 +127,9 @@ TEST_CASE("test websocket") {
 
   async_simple::coro::syncAwait(test_websocket(*client));
 
-  client->async_close();
-
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-  server.stop();
-  server_thread.join();
+  // client->async_close();
 }
 
 void test_websocket_content(size_t len) {

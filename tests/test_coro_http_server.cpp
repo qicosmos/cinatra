@@ -355,7 +355,7 @@ async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
 
   auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
     auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
-    co_return read_result{std::string_view(buf.data(), size), file.eof(), ec};
+    co_return read_result{buf, file.eof(), ec};
   };
 
   auto result = co_await client.async_upload_chunked(
@@ -430,6 +430,90 @@ TEST_CASE("chunked request") {
   result = client.get("http://127.0.0.1:9001/write_chunked");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world ok");
+}
+
+TEST_CASE("test websocket with chunked") {
+  int ws_chunk_size = 100;
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_source",
+      [ws_chunk_size](coro_http_request &req, coro_http_response &resp)
+          -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        std::string out_str;
+        websocket_result result{};
+        while (!result.eof) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            CHECK(result.data.empty());
+            break;
+          }
+
+          if (result.data.size() < ws_chunk_size) {
+            CHECK(result.data.size() == 24);
+            CHECK(result.eof);
+          }
+          else {
+            CHECK(result.data.size() == ws_chunk_size);
+            CHECK(!result.eof);
+          }
+          out_str.append(result.data);
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            continue;
+          }
+        }
+
+        CHECK(out_str.size() == 1024);
+        std::cout << out_str << "\n";
+      });
+  server.async_start();
+
+  std::promise<void> promise;
+  auto client = std::make_shared<coro_http_client>();
+  client->on_ws_msg([&promise](resp_data data) {
+    if (data.net_err) {
+      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+      return;
+    }
+
+    size_t msg_len = data.resp_body.size();
+    if (msg_len == 24) {
+      promise.set_value();
+    }
+
+    std::cout << "ws msg len: " << msg_len << std::endl;
+    CHECK(!data.resp_body.empty());
+  });
+
+  async_simple::coro::syncAwait(
+      client->async_ws_connect("ws://127.0.0.1:9001/ws_source"));
+
+  std::string filename = "test.tmp";
+  create_file(filename);
+  std::ifstream in(filename, std::ios::binary);
+
+  std::string str;
+  str.resize(ws_chunk_size);
+
+  auto source_fn = [&]() -> async_simple::coro::Lazy<read_result> {
+    size_t size = in.read(str.data(), str.size()).gcount();
+    bool eof = in.eof();
+    co_return read_result{{str.data(), size}, eof};
+  };
+
+  async_simple::coro::syncAwait(
+      client->async_send_ws(std::move(source_fn), true, opcode::binary));
+
+  promise.get_future().wait();
+
+  server.stop();
 }
 
 TEST_CASE("test websocket") {

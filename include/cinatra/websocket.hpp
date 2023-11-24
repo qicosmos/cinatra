@@ -91,6 +91,7 @@ class websocket {
   }
 
   int len_bytes() const { return len_bytes_; }
+  void reset_len_bytes() { len_bytes_ = SHORT_HEADER; }
 
   ws_frame_type parse_payload(std::span<char> buf) {
     // unmask data:
@@ -172,12 +173,12 @@ class websocket {
             asio::buffer(src, length)};
   }
 
-  inline std::string encode_frame(std::string &data, opcode op,
-                                  bool need_mask) {
+  std::string encode_frame(std::span<char> &data, opcode op, bool need_mask,
+                           bool eof = true) {
     std::string header;
     /// Base header.
     frame_header hdr{};
-    hdr.fin = 1;
+    hdr.fin = eof;
     hdr.rsv1 = 0;
     hdr.rsv2 = 0;
     hdr.rsv3 = 0;
@@ -253,6 +254,9 @@ class websocket {
 
   std::string format_close_payload(uint16_t code, char *message,
                                    size_t length) {
+    if (length == 0) {
+      return "";
+    }
     std::string close_payload;
     if (code) {
       close_payload.resize(length + 2);
