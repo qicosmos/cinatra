@@ -5,6 +5,7 @@
 #include <chrono>
 #include <deque>
 
+#include "asio/dispatch.hpp"
 #include "async_simple/Executor.h"
 #include "async_simple/coro/Sleep.h"
 
@@ -18,6 +19,7 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 
+#include "../util/type_traits.h"
 #include "io_context_pool.hpp"
 
 namespace coro_io {
@@ -207,7 +209,7 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 template <typename Socket>
 inline async_simple::coro::Lazy<void> async_close(Socket &socket) noexcept {
   callback_awaitor<void> awaitor;
-  auto &executor = socket.get_executor();
+  auto executor = socket.get_executor();
   co_return co_await awaitor.await_resume([&](auto handler) {
     asio::post(executor, [&, handler]() {
       asio::error_code ignored_ec;
@@ -266,6 +268,44 @@ inline async_simple::coro::Lazy<void> sleep_for(const Duration &d) {
     co_return co_await sleep_for(d,
                                  coro_io::g_io_context_pool().get_executor());
   }
+}
+
+template <typename R, typename Func>
+struct post_helper {
+  void operator()(auto handler) const {
+    asio::dispatch(e->get_asio_executor(), [this, handler]() {
+      try {
+        if constexpr (std::is_same_v<R, async_simple::Try<void>>) {
+          func();
+          handler.resume();
+        }
+        else {
+          auto r = func();
+          handler.set_value_then_resume(std::move(r));
+        }
+      } catch (const std::exception &e) {
+        R er;
+        er.setException(std::current_exception());
+        handler.set_value_then_resume(std::move(er));
+      }
+    });
+  }
+  coro_io::ExecutorWrapper<> *e;
+  Func func;
+};
+
+template <typename Func>
+inline async_simple::coro::Lazy<
+    async_simple::Try<typename util::function_traits<Func>::return_type>>
+post(Func func,
+     coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
+  using R =
+      async_simple::Try<typename util::function_traits<Func>::return_type>;
+
+  callback_awaitor<R> awaitor;
+
+  post_helper<R, Func> helper{e, std::move(func)};
+  co_return co_await awaitor.await_resume(helper);
 }
 
 template <typename Socket, typename AsioBuffer>

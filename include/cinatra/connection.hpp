@@ -122,16 +122,18 @@ class connection : public base_connection,
   }
 
   std::string remote_address() {
+    static std::string remote_addr;
     if (has_closed_) {
-      return "";
+      return remote_addr;
     }
 
     std::stringstream ss;
     std::error_code ec;
     ss << socket_.remote_endpoint(ec);
     if (ec) {
-      return "";
+      return remote_addr;
     }
+    remote_addr = ss.str();
     return ss.str();
   }
 
@@ -325,6 +327,7 @@ class connection : public base_connection,
   void async_close() {
     auto self = this->shared_from_this();
     asio::dispatch(socket_.get_executor(), [this, self] {
+      active_close_websocket();
       close();
     });
   }
@@ -694,6 +697,19 @@ class connection : public base_connection,
     }
     has_closed_ = true;
     has_shake_ = false;
+  }
+
+  void active_close_websocket() {
+    if (req_.get_content_type() == content_type::websocket &&
+        !req_.get_websocket_state()) {
+      req_.set_websocket_state(true);
+      std::string close_reason = "server close";
+      std::string close_msg = ws_.format_close_payload(
+          close_code::normal, close_reason.data(), close_reason.size());
+      auto header = ws_.format_header(close_msg.length(), opcode::close);
+      is_active_close_ = true;
+      send_msg(std::move(header), std::move(close_msg));
+    }
   }
 
   /****************** begin handle http body data *****************/
@@ -1131,7 +1147,9 @@ class connection : public base_connection,
         [this, self](const std::error_code &ec, size_t bytes_transferred) {
           if (ec) {
             cancel_timer();
-            req_.call_event(data_proc_state::data_error);
+
+            if (!req_.get_websocket_state())
+              req_.call_event(data_proc_state::data_error);
 
             close();
             return;
@@ -1237,8 +1255,10 @@ class connection : public base_connection,
             close_code::normal, close_frame.message, len);
         auto header = ws_.format_header(close_msg.length(), opcode::close);
         send_msg(std::move(header), std::move(close_msg));
+        req_.set_websocket_state(true);
       } break;
       case cinatra::ws_frame_type::WS_PING_FRAME: {
+        reset_timer();
         auto header = ws_.format_header(payload.length(), opcode::pong);
         send_msg(std::move(header), std::move(payload));
       } break;
@@ -1417,7 +1437,8 @@ class connection : public base_connection,
               send_failed_cb_(ec);
             req_.set_state(data_proc_state::data_error);
             call_back();
-            close();
+            if (!is_active_close_)
+              close();
           }
         });
   }
@@ -1476,6 +1497,8 @@ class connection : public base_connection,
 
   QuitCallback quit_callback_ = nullptr;
   uint64_t conn_id_ = 0;
+
+  bool is_active_close_ = false;
 };
 
 inline constexpr data_proc_state ws_open = data_proc_state::data_begin;

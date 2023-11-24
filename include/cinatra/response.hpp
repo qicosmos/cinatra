@@ -5,6 +5,7 @@
 #ifndef CINATRA_RESPONSE_HPP
 #define CINATRA_RESPONSE_HPP
 #include <chrono>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -278,9 +279,7 @@ class response {
 
   std::string_view get_url() { return raw_url_; }
 
-  void set_headers(std::pair<phr_header *, size_t> headers) {
-    req_headers_ = headers;
-  }
+  void set_headers(std::span<http_header> headers) { req_headers_ = headers; }
 
   void render_string(std::string &&content) {
 #ifdef CINATRA_ENABLE_GZIP
@@ -314,14 +313,10 @@ class response {
 
  private:
   std::string_view get_header_value(std::string_view key) const {
-    phr_header *headers = req_headers_.first;
-    size_t num_headers = req_headers_.second;
-    for (size_t i = 0; i < num_headers; i++) {
-      if (iequal(headers[i].name, headers[i].name_len, key.data(),
-                 key.length()))
-        return std::string_view(headers[i].value, headers[i].value_len);
+    for (auto &e : req_headers_) {
+      if (iequal(e.name, key))
+        return std::string_view(e.value);
     }
-
     return {};
   }
 
@@ -335,7 +330,7 @@ class response {
 
   bool delay_ = false;
 
-  std::pair<phr_header *, size_t> req_headers_;
+  std::span<http_header> req_headers_;
   std::string_view domain_;
   std::string_view path_;
   std::shared_ptr<cinatra::session> session_ = nullptr;

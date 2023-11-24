@@ -1,14 +1,15 @@
 #pragma once
-#include "function_traits.hpp"
-#include "utils.hpp"
 #include <map>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "utils.hpp"
+
 namespace cinatra {
-template <typename... Args> class router {
-public:
+template <typename... Args>
+class router {
+ public:
   template <http_method... Is, typename Function>
   void register_handler(std::string_view name, Function &&f) {
     if constexpr (sizeof...(Is) > 0) {
@@ -17,7 +18,8 @@ public:
       for (auto &s : arr) {
         register_nonmember_func(s, std::forward<Function>(f));
       }
-    } else {
+    }
+    else {
       register_nonmember_func(std::string(name.data(), name.length()),
                               std::forward<Function>(f));
     }
@@ -46,7 +48,7 @@ public:
 
   void remove_handler(std::string name) { this->map_invokers_.erase(name); }
 
-private:
+ private:
   template <typename Function>
   void register_nonmember_func(const std::string &name, Function &&f) {
     this->map_invokers_[name] = [this, f = std::move(f)](Args &&...args) {
@@ -62,7 +64,8 @@ private:
       for (auto &s : arr) {
         register_member_func(s, f, t);
       }
-    } else {
+    }
+    else {
       register_member_func(std::string(name.data(), name.length()), f, t);
     }
   }
@@ -80,4 +83,4 @@ private:
   typedef std::function<void(Args...)> invoker_function;
   std::map<std::string, invoker_function> map_invokers_;
 };
-} // namespace cinatra
+}  // namespace cinatra

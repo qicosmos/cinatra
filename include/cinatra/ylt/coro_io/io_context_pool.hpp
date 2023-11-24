@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alibaba Group Holding Limited;
+ * Copyright (c) 2023, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 #include <async_simple/Executor.h>
+#include <async_simple/coro/Lazy.h>
 
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
@@ -22,13 +23,17 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
 
-#include "async_simple/coro/Lazy.h"
-
 namespace coro_io {
+
+inline asio::io_context **get_current() {
+  static thread_local asio::io_context *current = nullptr;
+  return &current;
+}
 
 template <typename ExecutorImpl = asio::io_context::executor_type>
 class ExecutorWrapper : public async_simple::Executor {
@@ -70,10 +75,22 @@ class ExecutorWrapper : public async_simple::Executor {
 
   operator ExecutorImpl() { return executor_; }
 
+  bool currentThreadInExecutor() const override {
+    auto ctx = get_current();
+    return *ctx == &executor_.context();
+  }
+
+  size_t currentContextId() const override {
+    auto ctx = get_current();
+    auto ptr = *ctx;
+    return ptr ? (size_t)ptr : 0;
+  }
+
  private:
   void schedule(Func func, Duration dur) override {
-    auto timer = std::make_shared<asio::steady_timer>(executor_, dur);
-    timer->async_wait([fn = std::move(func), timer](auto ec) {
+    auto timer = std::make_unique<asio::steady_timer>(executor_, dur);
+    auto tm = timer.get();
+    tm->async_wait([fn = std::move(func), timer = std::move(timer)](auto ec) {
       fn();
     });
   }
@@ -81,7 +98,7 @@ class ExecutorWrapper : public async_simple::Executor {
 
 template <typename ExecutorImpl = asio::io_context>
 inline async_simple::coro::Lazy<typename ExecutorImpl::executor_type>
-get_executor() {
+get_current_executor() {
   auto executor = co_await async_simple::CurrentExecutor{};
   assert(executor != nullptr);
   co_return static_cast<ExecutorImpl *>(executor->checkout())->get_executor();
@@ -96,7 +113,7 @@ class io_context_pool {
     }
 
     for (std::size_t i = 0; i < pool_size; ++i) {
-      io_context_ptr io_context(new asio::io_context);
+      io_context_ptr io_context(new asio::io_context(1));
       work_ptr work(new asio::io_context::work(*io_context));
       io_contexts_.push_back(io_context);
       auto executor = std::make_unique<coro_io::ExecutorWrapper<>>(
@@ -107,10 +124,18 @@ class io_context_pool {
   }
 
   void run() {
+    bool has_run_or_stop = false;
+    bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+    if (!ok) {
+      return;
+    }
+
     std::vector<std::shared_ptr<std::thread>> threads;
     for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
       threads.emplace_back(std::make_shared<std::thread>(
           [](io_context_ptr svr) {
+            auto ctx = get_current();
+            *ctx = svr.get();
             svr->run();
           },
           io_contexts_[i]));
@@ -123,15 +148,28 @@ class io_context_pool {
   }
 
   void stop() {
-    work_.clear();
-    promise_.get_future().wait();
-    return;
+    std::call_once(flag_, [this] {
+      bool has_run_or_stop = false;
+      bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+
+      work_.clear();
+
+      if (ok) {
+        // clear all unfinished work
+        for (auto &e : io_contexts_) {
+          e->run();
+        }
+        return;
+      }
+
+      promise_.get_future().wait();
+    });
   }
 
-  // ~io_context_pool() {
-  //   if (!has_stop())
-  //     stop();
-  // }
+  ~io_context_pool() {
+    if (!has_stop())
+      stop();
+  }
 
   std::size_t pool_size() const noexcept { return io_contexts_.size(); }
 
@@ -157,6 +195,8 @@ class io_context_pool {
   std::vector<work_ptr> work_;
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
+  std::atomic<bool> has_run_or_stop_ = false;
+  std::once_flag flag_;
 };
 
 class multithread_context_pool {
@@ -231,13 +271,15 @@ inline T &g_block_io_context_pool(
 }
 
 template <typename T = io_context_pool>
-inline auto get_global_executor() {
-  return g_io_context_pool<T>().get_executor();
+inline auto get_global_executor(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  return g_io_context_pool<T>(pool_size).get_executor();
 }
 
 template <typename T = io_context_pool>
-inline auto get_global_block_executor() {
-  return g_block_io_context_pool<T>().get_executor();
+inline auto get_global_block_executor(
+    unsigned pool_size = std::thread::hardware_concurrency()) {
+  return g_block_io_context_pool<T>(pool_size).get_executor();
 }
 
 }  // namespace coro_io
