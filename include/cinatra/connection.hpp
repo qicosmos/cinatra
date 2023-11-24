@@ -282,6 +282,38 @@ class connection : public base_connection,
                       });
   }
 
+  void write_chunked_data_v2(std::string_view buf, bool eof) {
+    std::vector<asio::const_buffer> buffers =
+        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
+                                               chunk_size_str_, eof);
+
+    if (buffers.empty()) {
+      handle_write(std::error_code{});
+      return;
+    }
+
+    auto self = this->shared_from_this();
+    asio::async_write(socket(), buffers,
+                      [this, self, buf = std::move(buf), eof](
+                          const std::error_code &ec, size_t) {
+                        if (ec) {
+                          return;
+                        }
+
+                        if (eof) {
+                          req_.set_state(data_proc_state::data_end);
+                        }
+                        else {
+                          req_.set_state(data_proc_state::data_continue);
+                        }
+
+                        call_back();
+                        if (keep_alive_) {
+                          do_read();
+                        }
+                      });
+  }
+
   void write_ranges_data(std::string &&buf, bool eof) {
     reset_timer();
 

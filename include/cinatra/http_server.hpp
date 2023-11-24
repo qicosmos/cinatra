@@ -177,6 +177,10 @@ class http_server_ : private noncopyable {
     download_display_file_dir_ = path;
   }
 
+  void set_file_mapping(std::size_t file_max_size = 3145728) {
+    build_file_to_content_mapping(file_max_size);
+  }
+
   const std::string &static_dir() const { return static_dir_; }
 
   // xM
@@ -359,6 +363,8 @@ class http_server_ : private noncopyable {
             }
           }
 
+          bool is_cache_store = false;
+          std::string cache_file_name = "";
           auto state = req.get_state();
           switch (state) {
             case cinatra::data_proc_state::data_begin: {
@@ -367,50 +373,64 @@ class http_server_ : private noncopyable {
               std::string relative_file_name(u8relative_file_name.begin(),
                                              u8relative_file_name.end());
 
-              std::string fullpath = static_dir_ + relative_file_name;
+              cache_file_name = relative_file_name.substr(1);
+              is_cache_store = (file_content_map_.find(cache_file_name) !=
+                                file_content_map_.end());
+              if (is_cache_store) {
+                auto mime = req.get_mime(relative_file_name);
+                send_small_file(res, file_content_map_[cache_file_name], mime);
+                write_chunked_header(req, mime);
+                write_chunked_body(req, file_content_map_[cache_file_name]);
+                break;
+              }
+              else {
+                std::string fullpath = static_dir_ + relative_file_name;
 
-              auto mime = req.get_mime(relative_file_name);
-              auto in = std::make_shared<std::ifstream>(fullpath,
-                                                        std::ios_base::binary);
-              if (!in->is_open()) {
-                if (not_found_) {
-                  not_found_(req, res);
+                auto mime = req.get_mime(relative_file_name);
+                auto in = std::make_shared<std::ifstream>(
+                    fullpath, std::ios_base::binary);
+                if (!in->is_open()) {
+                  if (not_found_) {
+                    not_found_(req, res);
+                    return;
+                  }
+                  res.set_status_and_content(
+                      status_type::not_found,
+                      std::string(relative_file_name) + " not found");
                   return;
                 }
-                res.set_status_and_content(
-                    status_type::not_found,
-                    std::string(relative_file_name) + " not found");
-                return;
-              }
 
-              auto start_sv = req.get_header_value("cinatra_start_pos");
-              if (!start_sv.empty()) {
-                std::string start_str(start_sv);
-                int64_t start = (int64_t)atoll(start_str.data());
-                std::error_code code;
-                int64_t file_size = fs::file_size(fullpath, code);
-                if (start > 0 && !code && file_size >= start) {
-                  in->seekg(start);
+                auto start_sv = req.get_header_value("cinatra_start_pos");
+                if (!start_sv.empty()) {
+                  std::string start_str(start_sv);
+                  int64_t start = (int64_t)atoll(start_str.data());
+                  std::error_code code;
+                  int64_t file_size = fs::file_size(fullpath, code);
+                  if (start > 0 && !code && file_size >= start) {
+                    in->seekg(start);
+                  }
                 }
+
+                req.get_conn<ScoketType>()->set_tag(in);
+
+                if (is_small_file(in.get(), req)) {
+                  send_small_file(res, in.get(), mime);
+                  return;
+                }
+
+                if (transfer_type_ == transfer_type::CHUNKED)
+                  write_chunked_header(req, in, mime);
+                else
+                  write_ranges_header(
+                      req, mime,
+                      fs::path(relative_file_name).filename().string(),
+                      std::to_string(fs::file_size(fullpath)));
               }
-
-              req.get_conn<ScoketType>()->set_tag(in);
-
-              if (is_small_file(in.get(), req)) {
-                send_small_file(res, in.get(), mime);
-                return;
-              }
-
-              if (transfer_type_ == transfer_type::CHUNKED)
-                write_chunked_header(req, in, mime);
-              else
-                write_ranges_header(
-                    req, mime, fs::path(relative_file_name).filename().string(),
-                    std::to_string(fs::file_size(fullpath)));
             } break;
             case cinatra::data_proc_state::data_continue: {
-              if (transfer_type_ == transfer_type::CHUNKED)
+              if (transfer_type_ == transfer_type::CHUNKED) {
                 write_chunked_body(req);
+              }
               else
                 write_ranges_data(req);
             } break;
@@ -462,6 +482,26 @@ class http_server_ : private noncopyable {
 #endif
   }
 
+  void send_small_file(response &res, std::string_view in,
+                       std::string_view mime) {
+    res.add_header("Access-Control-Allow-origin", "*");
+    res.add_header("Content-type",
+                   std::string(mime.data(), mime.size()) + "; charset=utf8");
+    std::stringstream file_buffer;
+    file_buffer << std::string(in.data(), in.size());
+    if (static_res_cache_max_age_ > 0) {
+      std::string max_age =
+          std::string("max-age=") + std::to_string(static_res_cache_max_age_);
+      res.add_header("Cache-Control", max_age.data());
+    }
+#ifdef CINATRA_ENABLE_GZIP
+    res.set_status_and_content(status_type::ok, file_buffer.str(),
+                               req_content_type::none, content_encoding::gzip);
+#else
+    res.set_status_and_content(status_type::ok, file_buffer.str());
+#endif
+  }
+
   void write_chunked_header(request &req, std::shared_ptr<std::ifstream> in,
                             std::string_view mime) {
     auto range_header = req.get_header_value("range");
@@ -495,12 +535,38 @@ class http_server_ : private noncopyable {
         std::string_view(res_content_header), req.is_range());
   }
 
+  void write_chunked_header(request &req, std::string_view mime) {
+    auto range_header = req.get_header_value("range");
+    req.set_range_flag(!range_header.empty());
+    req.set_range_start_pos(range_header);
+
+    std::string res_content_header =
+        std::string(mime.data(), mime.size()) + "; charset=utf8";
+    res_content_header +=
+        std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
+    res_content_header +=
+        std::string("\r\n") + std::string("Accept-Ranges: bytes");
+    if (static_res_cache_max_age_ > 0) {
+      std::string max_age =
+          std::string("max-age=") + std::to_string(static_res_cache_max_age_);
+      res_content_header +=
+          std::string("\r\n") + std::string("Cache-Control: ") + max_age;
+    }
+
+    req.get_conn<ScoketType>()->write_chunked_header(
+        std::string_view(res_content_header), req.is_range());
+  }
+
   void write_chunked_body(request &req) {
     const size_t len = 3 * 1024 * 1024;
     auto str = get_send_data(req, len);
     auto read_len = str.size();
     bool eof = (read_len == 0 || read_len != len);
     req.get_conn<ScoketType>()->write_chunked_data(std::move(str), eof);
+  }
+
+  void write_chunked_body(request &req, std::string_view file_cache) {
+    req.get_conn<ScoketType>()->write_chunked_data_v2(file_cache, true);
   }
 
   void write_ranges_header(request &req, std::string_view mime,
@@ -602,7 +668,7 @@ class http_server_ : private noncopyable {
 
   int get_static_dir_filenames(const std::string &dir,
                                std::vector<std::string> &filenames,
-                               size_t dir_name_length) {
+                               size_t dir_name_length, bool skip = false) {
     fs::path path(dir);
     if (!fs::exists(path))
       return -1;
@@ -616,7 +682,10 @@ class http_server_ : private noncopyable {
         auto u8_path_name = iter->path().u8string();
         std::string relative_path(u8_path_name.begin(), u8_path_name.end());
         size_t length = relative_path.length();
-        relative_path = relative_path.substr(dir_name_length + 1, length);
+        if (!skip)
+          relative_path = relative_path.substr(dir_name_length + 1, length);
+        else
+          relative_path = relative_path.substr(dir_name_length, length);
         filenames.push_back(relative_path);
       }
     }
@@ -645,6 +714,21 @@ class http_server_ : private noncopyable {
     }
     else {
       return false;
+    }
+  }
+
+  void build_file_to_content_mapping(std::size_t file_size = 3145728) {
+    std::vector<std::string> files;
+    size_t static_dir_length = static_dir_.length();
+    get_static_dir_filenames(static_dir_, files, static_dir_length, true);
+    for (const auto &file : files) {
+      std::string full_path = static_dir_ + file;
+      std::ifstream ifs(full_path);
+      std::string content((std::istreambuf_iterator<char>(ifs)),
+                          (std::istreambuf_iterator<char>()));
+      if (content.size() < file_size) {
+        file_content_map_[file.substr(1)] = content;
+      }
     }
   }
 
@@ -682,6 +766,8 @@ class http_server_ : private noncopyable {
   uint64_t conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<connection<ScoketType>>> conns_;
   std::mutex conns_mtx_;
+
+  std::unordered_map<std::string, std::string> file_content_map_;
 
   std::string download_dir_response_head_ =
       "<html>"
