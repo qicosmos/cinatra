@@ -18,11 +18,14 @@
 namespace cinatra {
 class coro_http_server {
  public:
+  coro_http_server(asio::io_context &ctx, unsigned short port)
+      : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {}
+
   coro_http_server(size_t thread_num, unsigned short port)
-      : pool_(thread_num),
+      : pool_(std::make_unique<coro_io::io_context_pool>(thread_num)),
         port_(port),
-        acceptor_(pool_.get_executor()->get_asio_executor()),
-        check_timer_(pool_.get_executor()->get_asio_executor()) {}
+        acceptor_(pool_->get_executor()->get_asio_executor()),
+        check_timer_(pool_->get_executor()->get_asio_executor()) {}
 
   ~coro_http_server() {
     CINATRA_LOG_INFO << "coro_http_server will quit";
@@ -56,9 +59,11 @@ class coro_http_server {
     auto future = promise.getFuture();
 
     if (ec == std::errc{}) {
-      thd_ = std::thread([this] {
-        pool_.run();
-      });
+      if (out_ctx_ == nullptr) {
+        thd_ = std::thread([this] {
+          pool_->run();
+        });
+      }
 
       accept().start([p = std::move(promise)](auto &&res) mutable {
         if (res.hasError()) {
@@ -78,7 +83,7 @@ class coro_http_server {
 
   // only call once, not thread safe.
   void stop() {
-    if (!thd_.joinable()) {
+    if (out_ctx_ == nullptr && !thd_.joinable()) {
       return;
     }
 
@@ -97,11 +102,17 @@ class coro_http_server {
       connections_.clear();
     }
 
-    CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
-    pool_.stop();
-    CINATRA_LOG_INFO << "server's thread-pool finished.";
-    thd_.join();
-    CINATRA_LOG_INFO << "stop coro_http_server ok";
+    if (out_ctx_ == nullptr) {
+      CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
+      pool_->stop();
+
+      CINATRA_LOG_INFO << "server's thread-pool finished.";
+      thd_.join();
+      CINATRA_LOG_INFO << "stop coro_http_server ok";
+    }
+    else {
+      out_ctx_ = nullptr;
+    }
   }
 
   // call it after server async_start or sync_start.
@@ -191,7 +202,16 @@ class coro_http_server {
 
   async_simple::coro::Lazy<std::errc> accept() {
     for (;;) {
-      auto executor = pool_.get_executor();
+      coro_io::ExecutorWrapper<> *executor;
+      if (out_ctx_ == nullptr) {
+        executor = pool_->get_executor();
+      }
+      else {
+        out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
+            out_ctx_->get_executor());
+        executor = out_executor_.get();
+      }
+
       asio::ip::tcp::socket socket(executor->get_asio_executor());
       auto error = co_await coro_io::async_accept(acceptor_, socket);
       if (error) {
@@ -286,7 +306,9 @@ class coro_http_server {
   }
 
  private:
-  coro_io::io_context_pool pool_;
+  std::unique_ptr<coro_io::io_context_pool> pool_;
+  asio::io_context *out_ctx_ = nullptr;
+  std::unique_ptr<coro_io::ExecutorWrapper<>> out_executor_ = nullptr;
   uint16_t port_;
   asio::ip::tcp::acceptor acceptor_;
   std::thread thd_;
