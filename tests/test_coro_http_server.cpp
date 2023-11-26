@@ -283,6 +283,35 @@ TEST_CASE("get post") {
   server.stop();
 }
 
+TEST_CASE("use out context") {
+  asio::io_context out_ctx;
+  auto work = std::make_unique<asio::io_context::work>(out_ctx);
+  std::thread thd([&] {
+    out_ctx.run();
+  });
+
+  cinatra::coro_http_server server(out_ctx, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/out_ctx", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "use out ctx");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  {
+    coro_http_client client1{};
+    auto result = client1.get("http://127.0.0.1:9001/out_ctx");
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "use out ctx");
+  }
+
+  server.stop();
+
+  work.reset();
+  thd.join();
+}
+
 TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
   cinatra::coro_http_server server(1, 9001);
 
