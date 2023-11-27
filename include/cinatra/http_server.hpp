@@ -487,18 +487,16 @@ class http_server_ : private noncopyable {
     res.add_header("Access-Control-Allow-origin", "*");
     res.add_header("Content-type",
                    std::string(mime.data(), mime.size()) + "; charset=utf8");
-    std::stringstream file_buffer;
-    file_buffer << std::string(in.data(), in.size());
     if (static_res_cache_max_age_ > 0) {
       std::string max_age =
           std::string("max-age=") + std::to_string(static_res_cache_max_age_);
       res.add_header("Cache-Control", max_age.data());
     }
 #ifdef CINATRA_ENABLE_GZIP
-    res.set_status_and_content(status_type::ok, file_buffer.str(),
-                               req_content_type::none, content_encoding::gzip);
+    res.set_status_and_content(status_type::ok, in, req_content_type::none,
+                               content_encoding::gzip);
 #else
-    res.set_status_and_content(status_type::ok, file_buffer.str());
+    res.set_status_and_content_view(status_type::ok, in);
 #endif
   }
 
