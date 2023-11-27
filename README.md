@@ -247,13 +247,18 @@ cinatra目前支持了multipart和octet-stream格式的上传。
 	//chunked download
 	//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 
-	同时可以使用set_http_file_server(std::string path);函数来将cinatra转换为一个http文件下载服务器，path为该文件服务器的路径。示例如下:
+	http下载还提供了两个函数来优化其功能:
+	1. 通过set_http_file_server(std::string path)函数来将cinatra转换为一个http文件下载服务器。当访问  http://ip:port/path 的时候会展示能够下载的文件
+	2. 通过set_file_mapping(std::size_t file_max_size)函数可以建立请求路径与文件缓存的映射，开启此选项server初始化时会读取设置的静态文件路径下小于file_max_size的所有文件，当客户端访问时服务器不会读文件而是直接返回文件缓存。此选项可以通过内存来优化服务器性能。
+	
+	示例如下:
 
 	#include "cinatra.hpp"
 	using namespace cinatra;
 
 	int main() {
 		http_server server(std::thread::hardware_concurrency());
+		server.set_file_mapping();
 		server.set_http_file_server("http_file_server");
 		server.listen("0.0.0.0", "8080");
 		// 略

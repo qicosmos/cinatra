@@ -249,7 +249,8 @@ http://127.0.0.1:8080/purecpp/static/show.jpg
 //cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
 ```
 
-At the same time, you can use the `set_http_file_server(std::string path);` function to build an http file download server. The parameter path is the path of all downloadable files. Examples are as follows:
+1. Use the `set_http_file_server(std::string path)` function to convert cinatra into an http file download server. When accessing http://ip:port/path, files that can be downloaded will be displayed.
+2. The `set_file_mapping(std::size_t file_max_size)` function can be used to establish the mapping between the request path and the file cache. After turning on this option, the server will read all files smaller than file_max_size in the set static file path. When the client accesses the server, the server will directly return the file cache. This option optimizes server performance through memory.
 
 ```cpp
 #include "cinatra.hpp"
@@ -257,6 +258,7 @@ using namespace cinatra;
 
 int main() {
 	http_server server(std::thread::hardware_concurrency());
+	server.set_file_mapping();
 	server.set_http_file_server("http_file_server");
 	server.listen("0.0.0.0", "8080");
 	// ......
