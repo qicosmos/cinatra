@@ -74,7 +74,7 @@ class response {
     }
   }
 
-  void build_response_str() {
+  void build_response_str(auto &content) {
     rep_str_.append(to_rep_string(status_));
 
     //			if (keep_alive) {
@@ -95,7 +95,7 @@ class response {
     }
 
     char temp[20] = {};
-    itoa_fwd((int)content_.size(), temp);
+    itoa_fwd((int)content.size(), temp);
     rep_str_.append("Content-Length: ").append(temp).append("\r\n");
     if (res_type_ != req_content_type::none) {
       rep_str_.append(get_content_type(res_type_));
@@ -112,7 +112,7 @@ class response {
     else
       rep_str_.append("\r\n");
 
-    rep_str_.append(std::move(content_));
+    rep_str_.append(content);
   }
 
   std::vector<asio::const_buffer> to_buffers() {
@@ -164,7 +164,7 @@ class response {
   void set_status_and_content(status_type status) {
     status_ = status;
     set_content(std::string(to_string(status)));
-    build_response_str();
+    build_response_str(content_);
   }
 
   void set_status_and_content(
@@ -194,7 +194,36 @@ class response {
       (void)encoding;
       set_content(std::move(content));
     }
-    build_response_str();
+    build_response_str(content_);
+  }
+
+  void set_status_and_content_view(
+      status_type status, std::string_view content,
+      req_content_type res_type = req_content_type::none,
+      content_encoding encoding = content_encoding::none) {
+    status_ = status;
+    res_type_ = res_type;
+
+#ifdef CINATRA_ENABLE_GZIP
+    if (encoding == content_encoding::gzip) {
+      std::string encode_str;
+      bool r = gzip_codec::compress(content, encode_str, true);
+      if (!r) {
+        set_status_and_content(status_type::internal_server_error,
+                               "gzip compress error");
+      }
+      else {
+        add_header("Content-Encoding", "gzip");
+        set_content(std::move(encode_str));
+      }
+    }
+    else
+#endif
+    {
+      (void)encoding;
+      set_content_view(content);
+    }
+    build_response_str(content_view_);
   }
 
   std::string_view get_content_type(req_content_type type) {
@@ -237,6 +266,11 @@ class response {
   void set_content(std::string &&content) {
     body_type_ = content_type::string;
     content_ = std::move(content);
+  }
+
+  void set_content_view(std::string_view content) {
+    body_type_ = content_type::string;
+    content_view_ = content;
   }
 
   void set_chunked() {
@@ -324,6 +358,7 @@ class response {
   std::vector<std::pair<std::string, std::string>> headers_;
   std::vector<std::string> cache_data;
   std::string content_;
+  std::string content_view_;
   content_type body_type_ = content_type::unknown;
   status_type status_ = status_type::init;
   bool proc_continue_ = true;
