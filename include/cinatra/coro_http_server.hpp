@@ -2,6 +2,7 @@
 
 #include <asio/dispatch.hpp>
 #include <cstdint>
+#include <fstream>
 #include <mutex>
 #include <type_traits>
 
@@ -10,6 +11,8 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
+#include "cinatra/mime_types.hpp"
+#include "cinatra/utils.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
@@ -33,6 +36,8 @@ class coro_http_server {
   }
 
   void set_no_delay(bool r) { no_delay_ = r; }
+
+  void set_transfer_type(transfer_type type) { transfer_type_ = type; }
 
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
@@ -147,6 +152,90 @@ class coro_http_server {
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f));
+    }
+  }
+
+  int get_static_dir_filenames(const std::string &dir,
+                               std::vector<std::string> &filenames,
+                               size_t dir_name_length, bool skip = false) {
+    fs::path path(dir);
+    if (!fs::exists(path))
+      return -1;
+    fs::directory_iterator end_iter;
+    for (fs::directory_iterator iter(path); iter != end_iter; ++iter) {
+      if (fs::is_directory(iter->status())) {
+        get_static_dir_filenames(iter->path().string(), filenames,
+                                 dir_name_length);
+      }
+      else {
+        auto u8_path_name = iter->path().u8string();
+        std::string relative_path(u8_path_name.begin(), u8_path_name.end());
+        size_t length = relative_path.length();
+        if (!skip)
+          relative_path = relative_path.substr(dir_name_length + 1, length);
+        else
+          relative_path = relative_path.substr(dir_name_length, length);
+        filenames.push_back(relative_path);
+      }
+    }
+    return filenames.size();
+  }
+
+  void set_static_res_handler(std::string_view uri_suffix = "",
+                              std::string file_path = "www") {
+    static_dir_router_path_.clear();
+    static_dir_router_path_ = std::string(uri_suffix);
+    if (!file_path.empty())
+      static_dir_ = fs::absolute(file_path).string();  // default
+    else
+      static_dir_ =
+          fs::absolute(fs::current_path().string()).string();  // default
+
+    size_t static_dir_length = static_dir_.length();
+    files_.clear();
+    get_static_dir_filenames(static_dir_, files_, static_dir_length);
+
+    int i = files_.size();
+    for (auto &file : files_) {
+      std::string uri = static_dir_router_path_ + "/" + file;
+      std::size_t pos = uri.find('\\');
+
+      if (uri[0] != '/') {
+        uri.insert(uri.begin(), '/');
+      }
+
+      if (pos != std::string::npos && pos != 0) {
+        replace_all(uri, "\\", "/");
+      }
+
+      set_http_handler<cinatra::GET>(
+          uri,
+          [=](coro_http_request &req,
+              coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+            std::string file_name = file;
+            std::string_view extension = get_extension(file_name);
+            std::string_view mime = get_mime_type(extension);
+#ifdef _WIN32
+            char dir_separator = '\\';
+#else
+            char dir_separator = '/';
+#endif
+            std::string full_path = static_dir_ + dir_separator + file;
+
+            std::ifstream ifs(full_path, std::ios::binary);
+            std::string content((std::istreambuf_iterator<char>(ifs)),
+                                (std::istreambuf_iterator<char>()));
+
+            if (transfer_type_ == transfer_type::CHUNKED) {
+              co_await write_chunked_header(req, mime);
+              co_await write_chunked_body(req, content, true);
+            }
+            else {
+              co_await write_ranges_header(req, mime, file_name,
+                                           std::to_string(content.size()));
+              co_await write_ranges_body(req, content);
+            }
+          });
     }
   }
 
@@ -305,6 +394,47 @@ class coro_http_server {
     }
   }
 
+  async_simple::coro::Lazy<void> write_chunked_header(coro_http_request &req,
+                                                      std::string_view mime) {
+    std::string res_content_header =
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: ";
+    res_content_header +=
+        std::string(mime.data(), mime.size()) + "; charset=utf8";
+    res_content_header +=
+        std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
+    res_content_header +=
+        std::string("\r\n") + std::string("Accept-Ranges: bytes\r\n\r\n");
+
+    co_await req.get_conn()->write_data(res_content_header);
+  }
+
+  async_simple::coro::Lazy<void> write_chunked_body(coro_http_request &req,
+                                                    std::string_view buf,
+                                                    bool eof) {
+    co_await req.get_conn()->write_chunked_data(buf, eof);
+  }
+
+  async_simple::coro::Lazy<void> write_ranges_header(coro_http_request &req,
+                                                     std::string_view mime,
+                                                     std::string filename,
+                                                     std::string file_size) {
+    std::string header_str =
+        "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
+        "*\r\nAccept-Ranges: bytes\r\n";
+    header_str.append("Content-Disposition: attachment;filename=");
+    header_str.append(std::move(filename)).append("\r\n");
+    header_str.append("Connection: keep-alive\r\n");
+    header_str.append("Content-Type: ").append(mime).append("\r\n");
+    header_str.append("Content-Length: ");
+    header_str.append(file_size).append("\r\n\r\n");
+    co_await req.get_conn()->write_data(header_str);
+  }
+
+  async_simple::coro::Lazy<void> write_ranges_body(coro_http_request &req,
+                                                   std::string_view body) {
+    co_await req.get_conn()->write_data(body);
+  }
+
  private:
   std::unique_ptr<coro_io::io_context_pool> pool_;
   asio::io_context *out_ctx_ = nullptr;
@@ -325,6 +455,11 @@ class coro_http_server {
   asio::steady_timer check_timer_;
   bool need_check_ = false;
   std::atomic<bool> stop_timer_ = false;
+
+  std::string static_dir_router_path_ = "";
+  std::string static_dir_ = "";
+  transfer_type transfer_type_ = transfer_type::CHUNKED;
+  std::vector<std::string> files_;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
