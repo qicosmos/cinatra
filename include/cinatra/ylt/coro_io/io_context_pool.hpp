@@ -246,7 +246,7 @@ template <typename T = io_context_pool>
 inline T &g_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
-  static bool run_helper = [](auto pool) {
+  [[maybe_unused]] static bool run_helper = [](auto pool) {
     std::thread thrd{[pool] {
       pool->run();
     }};
@@ -260,7 +260,7 @@ template <typename T = io_context_pool>
 inline T &g_block_io_context_pool(
     unsigned pool_size = std::thread::hardware_concurrency()) {
   static auto _g_io_context_pool = std::make_shared<T>(pool_size);
-  static bool run_helper = [](auto pool) {
+  [[maybe_unused]] static bool run_helper = [](auto pool) {
     std::thread thrd{[pool] {
       pool->run();
     }};

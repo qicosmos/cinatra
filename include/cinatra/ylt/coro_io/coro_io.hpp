@@ -1,23 +1,23 @@
 #pragma once
+#include <async_simple/Executor.h>
 #include <async_simple/coro/Lazy.h>
+#include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
-#include <chrono>
-#include <deque>
-
-#include "asio/dispatch.hpp"
-#include "async_simple/Executor.h"
-#include "async_simple/coro/Sleep.h"
-
-#if defined(ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
+#if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
 
 #include <asio/connect.hpp>
+#include <asio/dispatch.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
+#include <asio/read_at.hpp>
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
+#include <asio/write_at.hpp>
+#include <chrono>
+#include <deque>
 
 #include "../util/type_traits.h"
 #include "io_context_pool.hpp"
@@ -123,6 +123,18 @@ async_read_some(Socket &socket, AsioBuffer &&buffer) noexcept {
 }
 
 template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_read_at(uint64_t offset, Socket &socket, AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_read_at(socket, offset, buffer,
+                        [&, handler](const auto &ec, auto size) {
+                          handler.set_value_then_resume(ec, size);
+                        });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
     Socket &socket, AsioBuffer &&buffer) noexcept {
   callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
@@ -177,6 +189,18 @@ async_write_some(Socket &socket, AsioBuffer &&buffer) noexcept {
     socket.async_write_some(buffer, [&, handler](const auto &ec, auto size) {
       handler.set_value_then_resume(ec, size);
     });
+  });
+}
+
+template <typename Socket, typename AsioBuffer>
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_write_at(uint64_t offset, Socket &socket, AsioBuffer &&buffer) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_write_at(socket, offset, buffer,
+                         [&, handler](const auto &ec, auto size) {
+                           handler.set_value_then_resume(ec, size);
+                         });
   });
 }
 
