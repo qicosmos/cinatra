@@ -155,73 +155,57 @@ class coro_http_server {
     }
   }
 
-  int get_static_dir_filenames(const std::string &dir,
-                               std::vector<std::string> &filenames,
-                               size_t dir_name_length, bool skip = false) {
-    fs::path path(dir);
-    if (!fs::exists(path))
-      return -1;
-    fs::directory_iterator end_iter;
-    for (fs::directory_iterator iter(path); iter != end_iter; ++iter) {
-      if (fs::is_directory(iter->status())) {
-        get_static_dir_filenames(iter->path().string(), filenames,
-                                 dir_name_length);
-      }
-      else {
-        auto u8_path_name = iter->path().u8string();
-        std::string relative_path(u8_path_name.begin(), u8_path_name.end());
-        size_t length = relative_path.length();
-        if (!skip)
-          relative_path = relative_path.substr(dir_name_length + 1, length);
-        else
-          relative_path = relative_path.substr(dir_name_length, length);
-        filenames.push_back(relative_path);
-      }
-    }
-    return filenames.size();
-  }
-
   void set_static_res_handler(std::string_view uri_suffix = "",
                               std::string file_path = "www") {
-    static_dir_router_path_.clear();
-    static_dir_router_path_ = std::string(uri_suffix);
-    if (!file_path.empty())
-      static_dir_ = fs::absolute(file_path).string();  // default
-    else
-      static_dir_ =
-          fs::absolute(fs::current_path().string()).string();  // default
+    if (std::filesystem::path(file_path).has_root_path() ||
+        std::filesystem::path(uri_suffix).has_root_path()) {
+      CINATRA_LOG_ERROR << "invalid file path: " << file_path;
+      std::exit(1);
+    }
 
-    size_t static_dir_length = static_dir_.length();
+    if (!uri_suffix.empty()) {
+      static_dir_router_path_ =
+          std::filesystem::path(uri_suffix).make_preferred().string();
+    }
+
+    if (!file_path.empty()) {
+      static_dir_ = std::filesystem::path(file_path).make_preferred().string();
+    }
+    else {
+      static_dir_ = fs::absolute(fs::current_path().string()).string();
+    }
+
     files_.clear();
-    get_static_dir_filenames(static_dir_, files_, static_dir_length);
+    for (const auto &file :
+         std::filesystem::recursive_directory_iterator(static_dir_)) {
+      if (!file.is_directory()) {
+        files_.push_back(file.path().string());
+      }
+    }
 
+    std::filesystem::path router_path =
+        std::filesystem::path(static_dir_router_path_);
+
+    std::string uri;
     for (auto &file : files_) {
-      std::string uri = static_dir_router_path_ + "/" + file;
-      std::size_t pos = uri.find('\\');
-
-      if (uri[0] != '/') {
-        uri.insert(uri.begin(), '/');
+      auto relative_path =
+          std::filesystem::path(file.substr(static_dir_.length())).string();
+      if (size_t pos = relative_path.find('\\') != std::string::npos) {
+        replace_all(relative_path, "\\", "/");
       }
-
-      if (pos != std::string::npos && pos != 0) {
-        replace_all(uri, "\\", "/");
-      }
+      uri = std::string("/")
+                .append(static_dir_router_path_)
+                .append(relative_path);
 
       set_http_handler<cinatra::GET>(
           uri,
-          [=](coro_http_request &req,
+          [this, file_name = file](
+              coro_http_request &req,
               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-            std::string file_name = file;
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
-#ifdef _WIN32
-            char dir_separator = '\\';
-#else
-            char dir_separator = '/';
-#endif
-            std::string full_path = static_dir_ + dir_separator + file;
 
-            std::ifstream ifs(full_path, std::ios::binary);
+            std::ifstream ifs(file_name, std::ios::binary);
             std::string content((std::istreambuf_iterator<char>(ifs)),
                                 (std::istreambuf_iterator<char>()));
 
@@ -230,7 +214,7 @@ class coro_http_server {
               co_await write_chunked_body(req, content, true);
             }
             else {
-              co_await write_ranges_header(req, mime, file_name,
+              co_await write_ranges_header(req, mime, std::move(file_name),
                                            std::to_string(content.size()));
               co_await write_ranges_body(req, content);
             }
