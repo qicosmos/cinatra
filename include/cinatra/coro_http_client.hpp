@@ -144,11 +144,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   };
 
   coro_http_client(asio::io_context::executor_type executor)
-      : socket_(std::make_shared<socket_t>(executor)),
+      : executor_wrapper_(executor),
+        timer_(&executor_wrapper_),
+        socket_(std::make_shared<socket_t>(executor)),
         read_buf_(socket_->read_buf_),
-        chunked_buf_(socket_->chunked_buf_),
-        executor_wrapper_(executor),
-        timer_(&executor_wrapper_) {}
+        chunked_buf_(socket_->chunked_buf_) {}
 
   coro_http_client(
       coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor())
@@ -644,7 +644,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     std::error_code err_code;
     timer_.cancel(err_code);
-    auto ret = co_await std::move(future);
+    co_await std::move(future);
     if (is_timeout_) {
       co_return std::make_error_code(std::errc::timed_out);
     }

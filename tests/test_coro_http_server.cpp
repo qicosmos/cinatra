@@ -766,7 +766,6 @@ TEST_CASE("test websocket with different message sizes") {
         return;
       }
 
-      size_t size = data.resp_body.size();
       std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
       REQUIRE(data.resp_body == medium_message);
     });
@@ -861,7 +860,6 @@ TEST_CASE("test websocket with message max_size limit") {
         return;
       }
 
-      size_t size = data.resp_body.size();
       std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
       REQUIRE(data.resp_body == medium_message);
     });

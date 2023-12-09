@@ -83,7 +83,7 @@ class coro_http_server {
       promise.setValue(ec);
     }
 
-    return std::move(future);
+    return future;
   }
 
   // only call once, not thread safe.
@@ -195,7 +195,6 @@ class coro_http_server {
     files_.clear();
     get_static_dir_filenames(static_dir_, files_, static_dir_length);
 
-    int i = files_.size();
     for (auto &file : files_) {
       std::string uri = static_dir_router_path_ + "/" + file;
       std::size_t pos = uri.find('\\');

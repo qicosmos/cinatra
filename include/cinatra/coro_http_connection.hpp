@@ -88,7 +88,9 @@ class coro_http_connection
 #endif
 
   async_simple::coro::Lazy<void> start() {
+#ifdef CINATRA_ENABLE_SSL
     bool has_shake = false;
+#endif
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
