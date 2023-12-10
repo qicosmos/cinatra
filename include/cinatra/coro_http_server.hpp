@@ -155,6 +155,8 @@ class coro_http_server {
     }
   }
 
+  void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
+
   void set_static_res_handler(std::string_view uri_suffix = "",
                               std::string file_path = "www") {
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -205,18 +207,73 @@ class coro_http_server {
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
 
-            std::ifstream ifs(file_name, std::ios::binary);
-            std::string content((std::istreambuf_iterator<char>(ifs)),
-                                (std::istreambuf_iterator<char>()));
+            std::string content;
+            detail::resize(content, chunked_size_);
 
-            if (transfer_type_ == transfer_type::CHUNKED) {
-              co_await write_chunked_header(req, mime);
-              co_await write_chunked_body(req, content, true);
+            coro_io::coro_file in_file{};
+            co_await in_file.async_open(file_name, coro_io::flags::read_only);
+            if (!in_file.is_open()) {
+              resp.set_status_and_content(status_type::not_found,
+                                          file_name + "not found");
+              co_return;
+            }
+
+            if (req.is_chunked()) {
+              resp.set_format_type(format_type::chunked);
+              bool ok;
+              if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+                co_return;
+              }
+
+              while (true) {
+                auto [ec, size] =
+                    co_await in_file.async_read(content.data(), content.size());
+                if (ec) {
+                  resp.set_status(status_type::no_content);
+                  co_await resp.get_conn()->reply();
+                  co_return;
+                }
+
+                bool r = co_await resp.get_conn()->write_chunked(
+                    std::string_view(content.data(), size));
+                if (!r) {
+                  co_return;
+                }
+
+                if (in_file.eof()) {
+                  co_await resp.get_conn()->end_chunked();
+                  break;
+                }
+              }
             }
             else {
-              co_await write_ranges_header(req, mime, std::move(file_name),
-                                           std::to_string(content.size()));
-              co_await write_ranges_body(req, content);
+              auto range_header = build_range_header(
+                  mime, file_name, coro_io::coro_file::file_size(file_name));
+              resp.set_delay(true);
+              bool r = co_await req.get_conn()->write_data(range_header);
+              if (!r) {
+                co_return;
+              }
+
+              while (true) {
+                auto [ec, size] =
+                    co_await in_file.async_read(content.data(), content.size());
+                if (ec) {
+                  resp.set_status(status_type::no_content);
+                  co_await resp.get_conn()->reply();
+                  co_return;
+                }
+
+                r = co_await req.get_conn()->write_data(
+                    std::string_view(content.data(), size));
+                if (!r) {
+                  co_return;
+                }
+
+                if (in_file.eof()) {
+                  break;
+                }
+              }
             }
           });
     }
@@ -377,45 +434,18 @@ class coro_http_server {
     }
   }
 
-  async_simple::coro::Lazy<void> write_chunked_header(coro_http_request &req,
-                                                      std::string_view mime) {
-    std::string res_content_header =
-        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: ";
-    res_content_header +=
-        std::string(mime.data(), mime.size()) + "; charset=utf8";
-    res_content_header +=
-        std::string("\r\n") + std::string("Access-Control-Allow-origin: *");
-    res_content_header +=
-        std::string("\r\n") + std::string("Accept-Ranges: bytes\r\n\r\n");
-
-    co_await req.get_conn()->write_data(res_content_header);
-  }
-
-  async_simple::coro::Lazy<void> write_chunked_body(coro_http_request &req,
-                                                    std::string_view buf,
-                                                    bool eof) {
-    co_await req.get_conn()->write_chunked_data(buf, eof);
-  }
-
-  async_simple::coro::Lazy<void> write_ranges_header(coro_http_request &req,
-                                                     std::string_view mime,
-                                                     std::string filename,
-                                                     std::string file_size) {
+  std::string build_range_header(std::string_view mime,
+                                 std::string_view filename, size_t file_size) {
     std::string header_str =
         "HTTP/1.1 200 OK\r\nAccess-Control-Allow-origin: "
         "*\r\nAccept-Ranges: bytes\r\n";
     header_str.append("Content-Disposition: attachment;filename=");
-    header_str.append(std::move(filename)).append("\r\n");
+    header_str.append(filename).append("\r\n");
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
-    header_str.append(file_size).append("\r\n\r\n");
-    co_await req.get_conn()->write_data(header_str);
-  }
-
-  async_simple::coro::Lazy<void> write_ranges_body(coro_http_request &req,
-                                                   std::string_view body) {
-    co_await req.get_conn()->write_data(body);
+    header_str.append(std::to_string(file_size)).append("\r\n\r\n");
+    return header_str;
   }
 
  private:
@@ -443,6 +473,7 @@ class coro_http_server {
   std::string static_dir_ = "";
   transfer_type transfer_type_ = transfer_type::CHUNKED;
   std::vector<std::string> files_;
+  size_t chunked_size_ = 1024 * 10;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;

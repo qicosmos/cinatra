@@ -924,48 +924,42 @@ TEST_CASE("test http download server") {
   cinatra::coro_http_server server(1, 9001);
   std::string filename = "test_download.txt";
   create_file(filename, 1010);
-  server.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/chunked",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        assert(req.get_content_type() == content_type::chunked);
-        chunked_result result{};
-        std::string content;
 
-        while (true) {
-          result = co_await req.get_conn()->read_chunked();
-          if (result.ec) {
-            co_return;
-          }
-          if (result.eof) {
-            break;
-          }
-
-          content.append(result.data);
-        }
-
-        std::cout << "content size: " << content.size() << "\n";
-        std::cout << content << "\n";
-        resp.set_format_type(format_type::chunked);
-        resp.set_status_and_content(status_type::ok, "chunked ok");
-      });
   // curl http://127.0.0.1:9001/download/test_download.txt will download
   // test_download.txt file
+  server.set_transfer_chunked_size(100);
   server.set_static_res_handler("download", "");
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
-  coro_http_client client{};
-  auto result = async_simple::coro::syncAwait(client.async_download(
-      "http://127.0.0.1:9001/download/test_download.txt", "download.txt"));
+  {
+    coro_http_client client{};
+    auto result = async_simple::coro::syncAwait(client.async_download(
+        "http://127.0.0.1:9001/download/test_download.txt", "download.txt"));
 
-  CHECK(result.status == 200);
-  std::string download_file = fs::absolute("download.txt").string();
-  std::ifstream ifs(download_file, std::ios::binary);
-  std::string content((std::istreambuf_iterator<char>(ifs)),
-                      (std::istreambuf_iterator<char>()));
-  CHECK(content.size() == 1010);
-  CHECK(content[0] == 'A');
+    CHECK(result.status == 200);
+    std::string download_file = fs::absolute("download.txt").string();
+    std::ifstream ifs(download_file, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        (std::istreambuf_iterator<char>()));
+    CHECK(content.size() == 1010);
+    CHECK(content[0] == 'A');
+  }
+
+  {
+    coro_http_client client{};
+    auto result = async_simple::coro::syncAwait(client.async_download(
+        "http://127.0.0.1:9001/download/test_download.txt", "download.txt",
+        "0-"));
+
+    CHECK(result.status == 200);
+    std::string download_file = fs::absolute("download.txt").string();
+    std::ifstream ifs(download_file, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        (std::istreambuf_iterator<char>()));
+    CHECK(content.size() == 1010);
+    CHECK(content[0] == 'A');
+  }
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

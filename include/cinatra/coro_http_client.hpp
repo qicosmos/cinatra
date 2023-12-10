@@ -752,6 +752,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     req_context<> ctx{};
     if (range.empty()) {
+      add_header("Transfer-Encoding", "chunked");
       ctx = {req_content_type::none, "", "", std::move(file)};
     }
     else {
