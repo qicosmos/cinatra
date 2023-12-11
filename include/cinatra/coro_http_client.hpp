@@ -679,17 +679,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::error_code ec{};
     size_t size = 0;
 
-    auto future = start_timer(req_timeout_duration_, "connect timer");
+    if (socket_->has_closed_) {
+      auto future = start_timer(req_timeout_duration_, "connect timer");
 
-    data = co_await connect(u);
-    if (ec = co_await wait_timer(std::move(future)); ec) {
-      co_return resp_data{ec, 404};
-    }
-    if (data.net_err) {
-      co_return data;
+      data = co_await connect(u);
+      if (ec = co_await wait_timer(std::move(future)); ec) {
+        co_return resp_data{ec, 404};
+      }
+      if (data.net_err) {
+        co_return data;
+      }
     }
 
-    future = start_timer(req_timeout_duration_, "upload timer");
+    auto future = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (inject_write_failed == ClientInjectAction::write_failed) {
@@ -865,17 +867,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::error_code ec{};
     size_t size = 0;
 
-    auto future = start_timer(req_timeout_duration_, "connect timer");
+    if (socket_->has_closed_) {
+      auto future = start_timer(req_timeout_duration_, "connect timer");
 
-    data = co_await connect(u);
-    if (ec = co_await wait_timer(std::move(future)); ec) {
-      co_return resp_data{ec, 404};
-    }
-    if (data.net_err) {
-      co_return data;
+      data = co_await connect(u);
+      if (ec = co_await wait_timer(std::move(future)); ec) {
+        co_return resp_data{ec, 404};
+      }
+      if (data.net_err) {
+        co_return data;
+      }
     }
 
-    future = start_timer(req_timeout_duration_, "upload timer");
+    auto future = start_timer(req_timeout_duration_, "upload timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
       co_return resp_data{ec, 404};
