@@ -280,14 +280,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
     if (!ok) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
 
     auto future = start_timer(req_timeout_duration_, "connect timer");
 
     data = co_await connect(u);
     if (auto ec = co_await wait_timer(std::move(future)); ec) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{ec, 404};
     }
     if (!data.net_err) {
       data.status = 200;
@@ -659,14 +659,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     });
     if (form_data_.empty()) {
       CINATRA_LOG_WARNING << "no multipart";
-      co_return resp_data{{}, 404};
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
     }
 
     req_context<> ctx{req_content_type::multipart, "", ""};
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
 
     size_t content_len = multipart_content_len();
@@ -682,7 +683,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     data = co_await connect(u);
     if (ec = co_await wait_timer(std::move(future)); ec) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{ec, 404};
     }
     if (data.net_err) {
       co_return data;
@@ -733,7 +734,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string uri, std::string name, std::string filename) {
     if (!add_file_part(std::move(name), std::move(filename))) {
       CINATRA_LOG_WARNING << "open file failed or duplicate test names";
-      co_return resp_data{{}, 404};
+      co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                          404};
     }
     co_return co_await async_upload_multipart(std::move(uri));
   }
@@ -832,7 +834,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     resp_data data{};
     auto [ok, u] = handle_uri(data, uri);
     if (!ok) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
 
     constexpr bool is_stream_file = is_stream_ptr_v<Source>;
@@ -867,7 +869,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     data = co_await connect(u);
     if (ec = co_await wait_timer(std::move(future)); ec) {
-      co_return resp_data{{}, 404};
+      co_return resp_data{ec, 404};
     }
     if (data.net_err) {
       co_return data;
