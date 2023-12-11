@@ -127,7 +127,7 @@ class http_parser {
   }
 
   bool is_ranges() const {
-    auto transfer_encoding = this->get_header_value("Accept-Ranges"sv);
+    auto transfer_encoding = this->get_header_value("Range"sv);
     return !transfer_encoding.empty();
   }
 

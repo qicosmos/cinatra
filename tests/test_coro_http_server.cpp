@@ -766,7 +766,6 @@ TEST_CASE("test websocket with different message sizes") {
         return;
       }
 
-      size_t size = data.resp_body.size();
       std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
       REQUIRE(data.resp_body == medium_message);
     });
@@ -861,7 +860,6 @@ TEST_CASE("test websocket with message max_size limit") {
         return;
       }
 
-      size_t size = data.resp_body.size();
       std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
       REQUIRE(data.resp_body == medium_message);
     });
@@ -921,6 +919,48 @@ TEST_CASE("test ssl server") {
   std::cout << "ssl ok\n";
 }
 #endif
+
+TEST_CASE("test http download server") {
+  cinatra::coro_http_server server(1, 9001);
+  std::string filename = "test_download.txt";
+  create_file(filename, 1010);
+
+  // curl http://127.0.0.1:9001/download/test_download.txt will download
+  // test_download.txt file
+  server.set_transfer_chunked_size(100);
+  server.set_static_res_handler("download", "");
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  {
+    coro_http_client client{};
+    auto result = async_simple::coro::syncAwait(client.async_download(
+        "http://127.0.0.1:9001/download/test_download.txt", "download.txt"));
+
+    CHECK(result.status == 200);
+    std::string download_file = fs::absolute("download.txt").string();
+    std::ifstream ifs(download_file, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        (std::istreambuf_iterator<char>()));
+    CHECK(content.size() == 1010);
+    CHECK(content[0] == 'A');
+  }
+
+  {
+    coro_http_client client{};
+    auto result = async_simple::coro::syncAwait(client.async_download(
+        "http://127.0.0.1:9001/download/test_download.txt", "download.txt",
+        "0-"));
+
+    CHECK(result.status == 200);
+    std::string download_file = fs::absolute("download.txt").string();
+    std::ifstream ifs(download_file, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        (std::istreambuf_iterator<char>()));
+    CHECK(content.size() == 1010);
+    CHECK(content[0] == 'A');
+  }
+}
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
