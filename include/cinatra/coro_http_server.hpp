@@ -37,8 +37,6 @@ class coro_http_server {
 
   void set_no_delay(bool r) { no_delay_ = r; }
 
-  void set_transfer_type(transfer_type type) { transfer_type_ = type; }
-
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
                 const std::string &passwd) {
@@ -159,8 +157,10 @@ class coro_http_server {
 
   void set_static_res_handler(std::string_view uri_suffix = "",
                               std::string file_path = "www") {
+    bool has_double_dot = (file_path.find("..") != std::string::npos) ||
+                          (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
-        std::filesystem::path(uri_suffix).has_root_path()) {
+        std::filesystem::path(uri_suffix).has_root_path() || has_double_dot) {
       CINATRA_LOG_ERROR << "invalid file path: " << file_path;
       std::exit(1);
     }
@@ -204,6 +204,13 @@ class coro_http_server {
           [this, file_name = file](
               coro_http_request &req,
               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+            bool is_chunked = req.is_chunked();
+            bool is_ranges = req.is_ranges();
+            if (!is_chunked && !is_ranges) {
+              resp.set_status(status_type::not_implemented);
+              co_return;
+            }
+
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
 
@@ -218,7 +225,7 @@ class coro_http_server {
               co_return;
             }
 
-            if (req.is_chunked()) {
+            if (is_chunked) {
               resp.set_format_type(format_type::chunked);
               bool ok;
               if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -246,7 +253,7 @@ class coro_http_server {
                 }
               }
             }
-            else {
+            else if (is_ranges) {
               auto range_header = build_range_header(
                   mime, file_name, coro_io::coro_file::file_size(file_name));
               resp.set_delay(true);
@@ -471,7 +478,6 @@ class coro_http_server {
 
   std::string static_dir_router_path_ = "";
   std::string static_dir_ = "";
-  transfer_type transfer_type_ = transfer_type::CHUNKED;
   std::vector<std::string> files_;
   size_t chunked_size_ = 1024 * 10;
 #ifdef CINATRA_ENABLE_SSL
