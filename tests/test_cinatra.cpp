@@ -594,21 +594,36 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
     server.async_start();
 
-    std::string filename = "test_1024.txt";
-    create_file(filename);
+    {
+      std::string filename = "test_1024.txt";
+      create_file(filename);
 
-    coro_http_client client{};
-    client.add_header("filename", filename);
-    std::string uri = "http://127.0.0.1:8090/chunked_upload";
-    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-    auto result = async_simple::coro::syncAwait(lazy);
-    CHECK(result.status == 200);
+      coro_http_client client{};
+      client.add_header("filename", filename);
+      std::string uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status == 200);
+    }
+
+    {
+      std::string filename = "test_100.txt";
+      create_file(filename, 100);
+
+      coro_http_client client{};
+      client.add_header("filename", filename);
+      std::string uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status == 200);
+    }
   }
 
   {
-    // chunked download
+    // chunked download, not in cache
     coro_http_server server(1, 8090);
     server.set_static_res_handler("download");
+    server.set_max_size_of_cache_files(100);
     server.set_transfer_chunked_size(100);
     server.async_start();
 
@@ -619,6 +634,12 @@ TEST_CASE("test coro_http_client chunked upload and download") {
     auto r = client.download(download_url, download_name);
     CHECK(r.status == 200);
     CHECK(std::filesystem::file_size(download_name) == 1024);
+
+    download_url = "http://127.0.0.1:8090/download/test_100.txt";
+    download_name = "test2.txt";
+    r = client.download(download_url, download_name);
+    CHECK(r.status == 200);
+    CHECK(std::filesystem::file_size(download_name) == 100);
   }
 }
 

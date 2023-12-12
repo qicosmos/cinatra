@@ -153,6 +153,27 @@ class coro_http_server {
     }
   }
 
+  void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
+    for (const auto &file :
+         std::filesystem::recursive_directory_iterator(static_dir_)) {
+      if (!file.is_directory()) {
+        std::error_code ec;
+        size_t filesize = fs::file_size(file, ec);
+        if (ec || filesize > max_size) {
+          continue;
+        }
+
+        std::ifstream ifs(file.path(), std::ios::binary);
+        if (ifs.is_open()) {
+          std::string content;
+          detail::resize(content, filesize);
+          ifs.read(content.data(), content.size());
+          static_file_cache_.emplace(file.path().string(), std::move(content));
+        }
+      }
+    }
+  }
+
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
   void set_static_res_handler(std::string_view uri_suffix = "",
@@ -208,6 +229,18 @@ class coro_http_server {
 
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
+
+            if (auto it = static_file_cache_.find(file_name);
+                it != static_file_cache_.end()) {
+              auto range_header =
+                  build_range_header(mime, file_name, fs::file_size(file_name));
+              resp.set_delay(true);
+              std::string &body = it->second;
+              std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
+                                                    asio::buffer(body)};
+              co_await req.get_conn()->async_write(arr);
+              co_return;
+            }
 
             std::string content;
             detail::resize(content, chunked_size_);
@@ -475,6 +508,8 @@ class coro_http_server {
   std::string static_dir_ = "";
   std::vector<std::string> files_;
   size_t chunked_size_ = 1024 * 10;
+
+  std::unordered_map<std::string, std::string> static_file_cache_;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
