@@ -1328,7 +1328,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
-      bool is_ranges = parser_.is_ranges();
+      bool is_ranges = parser_.is_resp_ranges();
       if (is_ranges) {
         is_keep_alive = true;
       }

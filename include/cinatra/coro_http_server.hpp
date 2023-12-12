@@ -204,12 +204,7 @@ class coro_http_server {
           [this, file_name = file](
               coro_http_request &req,
               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-            bool is_chunked = req.is_chunked();
-            bool is_ranges = req.is_ranges();
-            if (!is_chunked && !is_ranges) {
-              resp.set_status(status_type::not_implemented);
-              co_return;
-            }
+            bool is_ranges = req.is_req_ranges();
 
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
@@ -225,7 +220,7 @@ class coro_http_server {
               co_return;
             }
 
-            if (is_chunked) {
+            if (!is_ranges) {
               resp.set_format_type(format_type::chunked);
               bool ok;
               if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -253,7 +248,7 @@ class coro_http_server {
                 }
               }
             }
-            else if (is_ranges) {
+            else {
               auto range_header = build_range_header(
                   mime, file_name, coro_io::coro_file::file_size(file_name));
               resp.set_delay(true);

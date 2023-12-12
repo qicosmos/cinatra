@@ -949,11 +949,11 @@ TEST_CASE("test http download server") {
   {
     coro_http_client client{};
     auto result = async_simple::coro::syncAwait(client.async_download(
-        "http://127.0.0.1:9001/download/test_download.txt", "download.txt",
+        "http://127.0.0.1:9001/download/test_download.txt", "download1.txt",
         "0-"));
 
     CHECK(result.status == 200);
-    std::string download_file = fs::absolute("download.txt").string();
+    std::string download_file = fs::absolute("download1.txt").string();
     std::ifstream ifs(download_file, std::ios::binary);
     std::string content((std::istreambuf_iterator<char>(ifs)),
                         (std::istreambuf_iterator<char>()));
