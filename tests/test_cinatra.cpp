@@ -2,13 +2,19 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <future>
+#include <ios>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
 
+#include "async_simple/coro/SyncAwait.h"
 #include "cinatra.hpp"
 #include "cinatra/coro_http_client.hpp"
+#include "cinatra/coro_http_server.hpp"
+#include "cinatra/define.h"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
@@ -542,19 +548,79 @@ TEST_CASE("test coro_http_client quit") {
   CHECK(promise.get_future().get());
 }
 
-// TEST_CASE("test coro_http_client chunked download") {
-//   coro_http_client client{};
-//   client.set_req_timeout(10s);
-//   std::string uri =
-//       "http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx";
-//   std::string filename = "test.jpg";
-//
-//   std::error_code ec{};
-//   std::filesystem::remove(filename, ec);
-//   auto r = client.download(uri, filename);
-//   if (!r.net_err)
-//     CHECK(r.status >= 200);
-// }
+bool create_file(std::string_view filename, size_t file_size = 1024) {
+  std::ofstream out(filename.data(), std::ios::binary);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  out.write(str.data(), str.size());
+  return true;
+}
+
+TEST_CASE("test coro_http_client chunked upload and download") {
+  {
+    coro_http_server server(1, 8090);
+    server.set_http_handler<cinatra::PUT, cinatra::POST>(
+        "/chunked_upload",
+        [](coro_http_request &req,
+           coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          assert(req.get_content_type() == content_type::chunked);
+          chunked_result result{};
+          std::string_view filename = req.get_header_value("filename");
+
+          CHECK(!filename.empty());
+          std::string fullpath = fs::path("www").append(filename).string();
+          std::ofstream file(fullpath.data(), std::ios::binary);
+          CHECK(file.is_open());
+
+          while (true) {
+            result = co_await req.get_conn()->read_chunked();
+            if (result.ec) {
+              co_return;
+            }
+            if (result.eof) {
+              break;
+            }
+
+            file.write(result.data.data(), result.data.size());
+          }
+
+          file.close();
+          std::cout << "upload finished, filename: " << filename << "\n";
+          resp.set_status_and_content(status_type::ok, std::string(filename));
+        });
+
+    server.async_start();
+
+    std::string filename = "test_1024.txt";
+    create_file(filename);
+
+    coro_http_client client{};
+    client.add_header("filename", filename);
+    std::string uri = "http://127.0.0.1:8090/chunked_upload";
+    auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+    auto result = async_simple::coro::syncAwait(lazy);
+    CHECK(result.status == 200);
+  }
+
+  {
+    // chunked download
+    coro_http_server server(1, 8090);
+    server.set_static_res_handler("download");
+    server.set_transfer_chunked_size(100);
+    server.async_start();
+
+    coro_http_client client{};
+
+    std::string download_url = "http://127.0.0.1:8090/download/test_1024.txt";
+    std::string download_name = "test1.txt";
+    auto r = client.download(download_url, download_name);
+    CHECK(r.status == 200);
+    CHECK(std::filesystem::file_size(download_name) == 1024);
+  }
+}
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
