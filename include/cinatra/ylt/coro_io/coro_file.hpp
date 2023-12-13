@@ -325,20 +325,20 @@ class coro_file {
   std::string str_mode(int open_mode) {
     switch (open_mode) {
       case flags::read_only:
-        return "r";
+        return "rb";
       case flags::create_write:
       case flags::write_only:
         return "w";
       case flags::read_write:
-        return "r+";
+        return "rb+";
       case flags::append:
         return "a";
       case flags::create_read_write_append:
-        return "a+";
+        return "ab+";
       case flags::truncate:
         return "w+";
       default:
-        return "r+";
+        return "rb+";
     }
   }
 
