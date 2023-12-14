@@ -60,6 +60,8 @@ TEST_CASE("coro_io post") {
 TEST_CASE("coro_server example, will block") {
   return;  // remove this line when you run the coro server.
   cinatra::coro_http_server server(std::thread::hardware_concurrency(), 9001);
+  // url path is /data/example.flv
+  server.set_http_flv_server();
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/", [](coro_http_request &req, coro_http_response &resp) {
         // response in io thread.

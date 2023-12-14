@@ -324,6 +324,85 @@ class coro_http_server {
     }
   }
 
+  void set_http_flv_server(std::string_view virtual_path = "data",
+                           std::string video_path = "",
+                           std::string video_name = "example.flv") {
+    bool has_double_dot = (video_path.find("..") != std::string::npos) ||
+                          (virtual_path.find("..") != std::string::npos);
+    if (std::filesystem::path(video_path).has_root_path() ||
+        std::filesystem::path(virtual_path).has_root_path() || has_double_dot) {
+      CINATRA_LOG_ERROR << "invalid file path: " << virtual_path;
+      std::exit(1);
+    }
+    std::string static_dir_router_path = "";
+    if (!virtual_path.empty()) {
+      static_dir_router_path =
+          std::filesystem::path(virtual_path).make_preferred().string();
+    }
+
+    std::string static_dir = "";
+    if (!video_path.empty()) {
+      static_dir = std::filesystem::path(video_path).make_preferred().string();
+    }
+    else {
+      static_dir = fs::absolute(fs::current_path().string()).string();
+    }
+#ifdef WIN32
+    std::string video_real_path = static_dir + "\\" + video_name;
+#else
+    std::string video_real_path = static_dir + "/" + video_name;
+#endif
+    std::filesystem::path router_path =
+        std::filesystem::path(static_dir_router_path);
+
+    auto relative_path =
+        std::filesystem::path(video_real_path.substr(static_dir.length()))
+            .string();
+
+    if (size_t pos = relative_path.find('\\') != std::string::npos) {
+      replace_all(relative_path, "\\", "/");
+    }
+    std::string uri =
+        std::string("/").append(static_dir_router_path).append(relative_path);
+
+    set_http_handler<cinatra::GET>(
+        uri,
+        [this, source = video_real_path](
+            coro_http_request &req,
+            coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          auto flv_header = build_flv_header();
+
+          bool r = co_await req.get_conn()->write_data(flv_header);
+          if (!r) {
+            co_return;
+          }
+
+          std::string content;
+          detail::resize(content, 2000);
+          coro_io::coro_file in_file{};
+          co_await in_file.async_open(source, coro_io::flags::read_only);
+          while (true) {
+            auto [ec, size] =
+                co_await in_file.async_read(content.data(), content.size());
+            if (ec) {
+              resp.set_status(status_type::no_content);
+              co_await resp.get_conn()->reply();
+              co_return;
+            }
+
+            r = co_await req.get_conn()->write_data(
+                std::string_view(content.data(), size));
+            if (!r) {
+              co_return;
+            }
+
+            if (in_file.eof()) {
+              break;
+            }
+          }
+        });
+  }
+
   void set_check_duration(auto duration) { check_duration_ = duration; }
 
   void set_timeout_duration(
@@ -490,6 +569,14 @@ class coro_http_server {
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
     header_str.append(std::to_string(file_size)).append("\r\n\r\n");
+    return header_str;
+  }
+
+  std::string build_flv_header() {
+    std::string header_str =
+        "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: * \r\n"
+        "Content-Type: video/x-flv\r\nContent-Length: -1\r\n"
+        "Connection: Keep-Alive\r\nExpires: -1\r\nPragma: no-cache\r\n\r\n";
     return header_str;
   }
 
