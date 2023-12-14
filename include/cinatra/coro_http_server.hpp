@@ -19,6 +19,10 @@
 #include "ylt/coro_io/io_context_pool.hpp"
 
 namespace cinatra {
+enum class file_resp_format_type {
+  chunked,
+  range,
+};
 class coro_http_server {
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port)
@@ -154,10 +158,14 @@ class coro_http_server {
   }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
+    std::error_code ec;
     for (const auto &file :
-         std::filesystem::recursive_directory_iterator(static_dir_)) {
+         std::filesystem::recursive_directory_iterator(static_dir_, ec)) {
+      if (ec) {
+        continue;
+      }
+
       if (!file.is_directory()) {
-        std::error_code ec;
         size_t filesize = fs::file_size(file, ec);
         if (ec || filesize > max_size) {
           continue;
@@ -172,6 +180,10 @@ class coro_http_server {
         }
       }
     }
+  }
+
+  void set_file_resp_format_type(file_resp_format_type type) {
+    format_type_ = type;
   }
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
@@ -225,8 +237,6 @@ class coro_http_server {
           [this, file_name = file](
               coro_http_request &req,
               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-            bool is_ranges = req.is_req_ranges();
-
             std::string_view extension = get_extension(file_name);
             std::string_view mime = get_mime_type(extension);
 
@@ -253,7 +263,7 @@ class coro_http_server {
               co_return;
             }
 
-            if (!is_ranges) {
+            if (format_type_ == file_resp_format_type::chunked) {
               resp.set_format_type(format_type::chunked);
               bool ok;
               if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -510,6 +520,7 @@ class coro_http_server {
   size_t chunked_size_ = 1024 * 10;
 
   std::unordered_map<std::string, std::string> static_file_cache_;
+  file_resp_format_type format_type_ = file_resp_format_type::chunked;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
