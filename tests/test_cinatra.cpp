@@ -622,7 +622,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
   {
     // chunked download, not in cache
     coro_http_server server(1, 8090);
-    server.set_static_res_handler("download");
+    server.set_static_res_dir("download");
     server.set_max_size_of_cache_files(100);
     server.set_transfer_chunked_size(100);
     server.async_start();

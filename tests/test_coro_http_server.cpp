@@ -928,7 +928,7 @@ TEST_CASE("test http download server") {
   // curl http://127.0.0.1:9001/download/test_download.txt will download
   // test_download.txt file
   server.set_transfer_chunked_size(100);
-  server.set_static_res_handler("download", "");
+  server.set_static_res_dir("download", "");
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
