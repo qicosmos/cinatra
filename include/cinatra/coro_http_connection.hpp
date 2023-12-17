@@ -18,6 +18,7 @@
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
+#include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
@@ -108,7 +109,7 @@ class coro_http_connection
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
       if (ec) {
         if (ec != asio::error::eof) {
-          CINATRA_LOG_ERROR << "read http header error: " << ec.message();
+          CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
         close();
         break;
