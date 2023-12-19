@@ -794,6 +794,22 @@ TEST_CASE("test basic http request") {
   server_thread.join();
 }
 
+TEST_CASE("test coro_http_client request timeout") {
+  coro_http_client client{};
+  cinatra::coro_http_client::config conf{.conn_timeout_duration = 10s,
+                                         .req_timeout_duration = 1ms};
+  client.init_config(conf);
+  auto r =
+      async_simple::coro::syncAwait(client.connect("http://www.baidu.com"));
+  std::cout << r.net_err.message() << "\n";
+  if (!r.net_err) {
+    r = async_simple::coro::syncAwait(client.async_get("/"));
+    if (r.net_err) {
+      CHECK(r.net_err == std::errc::timed_out);
+    }
+  }
+}
+
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
 TEST_CASE("test inject failed") {
   // {
