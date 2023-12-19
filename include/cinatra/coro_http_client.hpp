@@ -680,7 +680,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     size_t size = 0;
 
     if (socket_->has_closed_) {
-      auto future = start_timer(req_timeout_duration_, "connect timer");
+      auto future = start_timer(conn_timeout_duration_, "connect timer");
 
       data = co_await connect(u);
       if (ec = co_await wait_future(std::move(future)); ec) {
@@ -871,7 +871,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     size_t size = 0;
 
     if (socket_->has_closed_) {
-      auto future = start_timer(req_timeout_duration_, "connect timer");
+      auto future = start_timer(conn_timeout_duration_, "connect timer");
 
       data = co_await connect(u);
       if (ec = co_await wait_future(std::move(future)); ec) {
