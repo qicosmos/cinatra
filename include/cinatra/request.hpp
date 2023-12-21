@@ -832,7 +832,7 @@ class request {
   }
 
   void set_aspect_data(const std::string &&key, const std::any &data) {
-    aspect_data_.insert({key, data});
+    aspect_data_[key] = data;
   }
 
   template <typename T>
