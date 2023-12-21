@@ -5,6 +5,14 @@
 #include "ws_define.h"
 
 namespace cinatra {
+
+typedef std::pair<std::string, std::string> paramters_t;
+
+struct params_t {
+  std::vector<paramters_t> parameters;
+  int size;
+};
+
 class coro_http_connection;
 class coro_http_request {
  public:
@@ -117,6 +125,8 @@ class coro_http_request {
     is_websocket_ = true;
     return true;
   }
+
+  params_t params_;
 
  private:
   http_parser& parser_;

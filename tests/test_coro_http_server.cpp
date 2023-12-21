@@ -962,6 +962,28 @@ TEST_CASE("test http download server") {
   }
 }
 
+TEST_CASE("test restful api") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test/:id/test2/:name",
+      [](coro_http_request &req, coro_http_response &response) {
+        for (auto i = 0; i < req.params_.size; ++i) {
+          std::cout << req.params_.parameters[i].first << ": "
+                    << req.params_.parameters[i].second << std::endl;
+        }
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  client.get("http://127.0.0.1:9001/test/11/test2/cpp");
+  client.get("http://127.0.0.1:9001/test/14/test2/linux");
+  client.get("http://127.0.0.1:9001/test/test/test2/test2");
+}
+
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

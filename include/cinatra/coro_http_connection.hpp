@@ -188,8 +188,23 @@ class coro_http_connection
           co_await router.route_coro(coro_handler, request_, response_);
         }
         else {
-          // not found
-          response_.set_status(status_type::not_found);
+          bool is_exist = false;
+          handle_func handler;
+          params_t params = {};
+          std::string method_str;
+          method_str.assign(parser_.method().data(), parser_.method().length());
+          std::string url_path;
+          url_path.assign(parser_.url().data(), parser_.url().length());
+
+          std::tie(is_exist, handler, request_.params_) =
+              router.get_router_tree()->get(url_path, method_str);
+          if (is_exist) {
+            (*handler)(request_, response_);
+          }
+          else {
+            // not found
+            response_.set_status(status_type::not_found);
+          }
         }
       }
 

@@ -10,6 +10,7 @@
 
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/coro_http_request.hpp"
+#include "cinatra/coro_radix_tree.hpp"
 #include "cinatra/response_cv.hpp"
 #include "coro_http_response.hpp"
 #include "ylt/util/type_traits.h"
@@ -52,12 +53,23 @@ class coro_http_router {
       coro_handles_.emplace(*it, std::move(handler));
     }
     else {
-      auto [it, ok] = keys_.emplace(std::move(whole_str));
-      if (!ok) {
-        CINATRA_LOG_WARNING << key << " has already registered.";
-        return;
+      if (whole_str.find(':') != std::string::npos) {
+        std::vector<std::string> method_names = {};
+        std::string method_str;
+        method_str.append(method_name);
+        method_names.push_back(method_str);
+        //cinatra::handle_func http_callback =
+        //    handler.target<cinatra::handle_func>();
+        router_tree_->insert(key, std::move(handler), method_names);
       }
-      map_handles_.emplace(*it, std::move(handler));
+      else {
+        auto [it, ok] = keys_.emplace(std::move(whole_str));
+        if (!ok) {
+          CINATRA_LOG_WARNING << key << " has already registered.";
+          return;
+        }
+        map_handles_.emplace(*it, std::move(handler));
+      }
     }
   }
 
@@ -77,6 +89,8 @@ class coro_http_router {
     }
     return nullptr;
   }
+
+  radix_tree* get_router_tree() { return router_tree_; }
 
   void route(auto handler, auto& req, auto& resp) {
     try {
@@ -122,5 +136,7 @@ class coro_http_router {
                      std::function<async_simple::coro::Lazy<void>(
                          coro_http_request& req, coro_http_response& resp)>>
       coro_handles_;
+
+  radix_tree* router_tree_ = new radix_tree();
 };
 }  // namespace cinatra
