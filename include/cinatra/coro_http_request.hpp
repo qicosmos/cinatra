@@ -93,6 +93,14 @@ class coro_http_request {
     return content_type::unknown;
   }
 
+  std::string_view get_boundary() {
+    auto content_type = get_header_value("content-type");
+    if (content_type.empty()) {
+      return {};
+    }
+    return content_type.substr(content_type.rfind("=") + 1);
+  }
+
   coro_http_connection* get_conn() { return conn_; }
 
   bool is_upgrade() {

@@ -559,6 +559,88 @@ bool create_file(std::string_view filename, size_t file_size = 1024) {
   return true;
 }
 
+TEST_CASE("test coro_http_client multipart upload") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/multipart_upload",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::multipart);
+        auto boundary = req.get_boundary();
+        std::unordered_map<std::string, std::shared_ptr<coro_io::coro_file>>
+            file_map;
+
+        while (true) {
+          auto part_head = co_await req.get_conn()->read_part_head();
+          if (part_head.ec) {
+            co_return;
+          }
+
+          if (part_head.eof) {
+            break;
+          }
+
+          std::cout << part_head.name << "\n";
+          std::cout << part_head.filename << "\n";
+
+          std::shared_ptr<coro_io::coro_file> file;
+          std::string filename;
+          if (!part_head.filename.empty()) {
+            file = std::make_shared<coro_io::coro_file>();
+            auto extent =
+                part_head.filename.substr(part_head.filename.rfind('.'));
+            filename = std::to_string(
+                std::chrono::system_clock::now().time_since_epoch().count());
+            filename += extent;
+            co_await file->async_open(filename, coro_io::flags::create_write);
+            if (!file->is_open()) {
+              resp.set_status_and_content(status_type::internal_server_error,
+                                          "file open failed");
+              co_return;
+            }
+          }
+
+          auto part_body = co_await req.get_conn()->read_part_body(boundary);
+          if (part_body.ec) {
+            co_return;
+          }
+
+          if (!filename.empty()) {
+            auto ec = co_await file->async_write(part_body.data.data(),
+                                                 part_body.data.size());
+            if (ec) {
+              co_return;
+            }
+
+            file_map.emplace(filename, std::move(file));
+          }
+          else {
+            std::cout << part_body.data << "\n";
+          }
+        }
+
+        std::cout << "upload finished, filename: " << file_map.size() << "\n";
+        for (auto &[name, file] : file_map) {
+          std::cout << name << "\n";
+        }
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.async_start();
+
+  std::string filename = "test_1024.txt";
+  create_file(filename);
+
+  coro_http_client client{};
+  std::string uri = "http://127.0.0.1:8090/multipart_upload";
+  // client.add_str_part("test", "test value");
+  client.add_file_part("test file", filename);
+  auto result =
+      async_simple::coro::syncAwait(client.async_upload_multipart(uri));
+  CHECK(result.status == 200);
+}
+
 TEST_CASE("test coro_http_client chunked upload and download") {
   {
     coro_http_server server(1, 8090);
