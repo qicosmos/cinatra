@@ -189,7 +189,9 @@ class coro_http_connection
         }
         else {
           bool is_exist = false;
-          handle_func handler;
+          std::function<void(coro_http_request & req,
+                             coro_http_response & resp)>
+              handler;
           params_t params = {};
           std::string method_str;
           method_str.assign(parser_.method().data(), parser_.method().length());
@@ -199,7 +201,7 @@ class coro_http_connection
           std::tie(is_exist, handler, request_.params_) =
               router.get_router_tree()->get(url_path, method_str);
           if (is_exist) {
-            (*handler)(request_, response_);
+            (handler)(request_, response_);
           }
           else {
             // not found

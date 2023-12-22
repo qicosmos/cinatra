@@ -1,5 +1,4 @@
-#ifndef RADIX_TREE_HPP
-#define RADIX_TREE_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -19,19 +18,14 @@ constexpr char type_asterisk = '*';
 constexpr char type_colon = ':';
 constexpr char type_slash = '/';
 
-int find(const std::string &str, char target, int start)
-{
-  auto i = str.find(target, start);
-  return i == -1 ? str.size() : i;
-}
-
-typedef void (*handle_func)(coro_http_request& req, coro_http_response& resp);
-
-typedef std::tuple<bool, handle_func, params_t> parse_result;
+typedef std::tuple<
+    bool, std::function<void(coro_http_request &req, coro_http_response &resp)>,
+    params_t>
+    parse_result;
 
 struct handler_t {
   std::string method;
-  handle_func handler;
+  std::function<void(coro_http_request &req, coro_http_response &resp)> handler;
 };
 
 struct radix_tree_node {
@@ -50,7 +44,8 @@ struct radix_tree_node {
       delete c;
   }
 
-  handle_func get_handler(const std::string &method) {
+  std::function<void(coro_http_request &req, coro_http_response &resp)>
+  get_handler(const std::string &method) {
     for (auto &h : this->handlers) {
       if (h.method == method) {
         return h.handler;
@@ -59,13 +54,12 @@ struct radix_tree_node {
     return nullptr;
   }
 
-  int add_handler(handle_func handler, const std::vector<std::string> &methods) {
+  int add_handler(
+      std::function<void(coro_http_request &req, coro_http_response &resp)>
+          handler,
+      const std::vector<std::string> &methods) {
     for (auto &m : methods) {
       auto old_handler = this->get_handler(m);
-
-      if (old_handler && old_handler != handler)
-        return -1;
-
       this->handlers.push_back(handler_t{m, handler});
     }
     return 0;
@@ -104,11 +98,14 @@ public:
   }
 
   ~radix_tree() {
-    std::cout << "why come here\n";
     delete this->root;
   }
 
-  int insert(const std::string &path, handle_func handler, const std::vector<std::string> &methods) {
+  int insert(
+      const std::string &path,
+      std::function<void(coro_http_request &req, coro_http_response &resp)>
+          handler,
+      const std::vector<std::string> &methods) {
     auto root = this->root;
     int i = 0, n = path.size(), param_count = 0, code = 0;
     while (i < n) {
@@ -118,17 +115,17 @@ public:
         (path[i] != type_colon && root->indices[0] == type_colon) ||
         (path[i] == type_colon && root->indices[0] != type_colon) ||
         (path[i] == type_colon && root->indices[0] == type_colon && path.substr(
-        i + 1, find(path, type_slash, i) - i - 1) != root->children[0]->path))) {
+        i + 1, find_pos(path, type_slash, i) - i - 1) != root->children[0]->path))) {
         code = -1;
         break;
       }
 
       auto child = root->get_child(path[i]);
       if (!child) {
-        auto p = find(path, type_colon, i);
+        auto p = find_pos(path, type_colon, i);
 
         if (p == n) {
-          p = find(path, type_asterisk, i);
+          p = find_pos(path, type_asterisk, i);
 
           root = root->insert_child(path[i], new radix_tree_node(path.substr(i, p - i)));
 
@@ -143,7 +140,7 @@ public:
 
         root = root->insert_child(path[i], new radix_tree_node(path.substr(i , p - i)));
 
-        i = find(path, type_slash, p);
+        i = find_pos(path, type_slash, p);
 
         root = root->insert_child(type_colon, new radix_tree_node(path.substr(p + 1, i - p - 1)));
         ++param_count;
@@ -211,7 +208,7 @@ public:
       if (root->indices[0] == type_colon) {
         root = root->children[0];
 
-        p = find(path, type_slash, i);
+        p = find_pos(path, type_slash, i);
         params.parameters.push_back(paramters_t{
           root->path, path.substr(i, p - i)
         });
@@ -235,7 +232,12 @@ public:
     return parse_result{true, root->get_handler(method), params};
   }
 private:
+
+  int find_pos(const std::string &str, char target, int start) {
+    auto i = str.find(target, start);
+    return i == -1 ? str.size() : i;
+  }
+
   radix_tree_node *root;
 };
 }
-#endif
