@@ -58,8 +58,6 @@ class coro_http_router {
         std::string method_str;
         method_str.append(method_name);
         method_names.push_back(method_str);
-        //cinatra::handle_func http_callback =
-        //    handler.target<cinatra::handle_func>();
         router_tree_->insert(key, std::move(handler), method_names);
       }
       else {

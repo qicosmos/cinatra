@@ -983,7 +983,6 @@ TEST_CASE("test restful api") {
   client.get("http://127.0.0.1:9001/test/test/test2/test2");
 }
 
-
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

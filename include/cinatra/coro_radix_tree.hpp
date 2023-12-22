@@ -1,14 +1,13 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <tuple>
-
 #include <async_simple/coro/Lazy.h>
 
 #include <functional>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <vector>
+
 #include "cinatra/coro_http_request.hpp"
 #include "coro_http_response.hpp"
 #include "ylt/util/type_traits.h"
@@ -29,19 +28,16 @@ struct handler_t {
 };
 
 struct radix_tree_node {
-  std::string path; // 节点路径
-  std::vector<handler_t> handlers; // 处理函数
-  std::string indices;  // 
-  std::vector<radix_tree_node*> children; // 儿子节点
-  int max_params; // 最大参数个数
+  std::string path;
+  std::vector<handler_t> handlers;
+  std::string indices;
+  std::vector<radix_tree_node *> children;
+  int max_params;
 
   radix_tree_node() = default;
-  radix_tree_node(const std::string &path) {
-    this->path = path;
-  }
+  radix_tree_node(const std::string &path) { this->path = path; }
   ~radix_tree_node() {
-    for (auto &c : this->children)
-      delete c;
+    for (auto &c : this->children) delete c;
   }
 
   std::function<void(coro_http_request &req, coro_http_response &resp)>
@@ -65,7 +61,7 @@ struct radix_tree_node {
     return 0;
   }
 
-  radix_tree_node* insert_child(char index, radix_tree_node *child) {
+  radix_tree_node *insert_child(char index, radix_tree_node *child) {
     auto i = this->get_index_position(index);
     this->indices.insert(this->indices.begin() + i, index);
     this->children.insert(this->children.begin() + i, child);
@@ -92,14 +88,10 @@ struct radix_tree_node {
 };
 
 class radix_tree {
-public:
-  radix_tree() {
-    this->root = new radix_tree_node();
-  }
+ public:
+  radix_tree() { this->root = new radix_tree_node(); }
 
-  ~radix_tree() {
-    delete this->root;
-  }
+  ~radix_tree() { delete this->root; }
 
   int insert(
       const std::string &path,
@@ -109,13 +101,13 @@ public:
     auto root = this->root;
     int i = 0, n = path.size(), param_count = 0, code = 0;
     while (i < n) {
-      if (!root->indices.empty() && (
-        root->indices[0] == type_asterisk ||
-        path[i] == type_asterisk ||
-        (path[i] != type_colon && root->indices[0] == type_colon) ||
-        (path[i] == type_colon && root->indices[0] != type_colon) ||
-        (path[i] == type_colon && root->indices[0] == type_colon && path.substr(
-        i + 1, find_pos(path, type_slash, i) - i - 1) != root->children[0]->path))) {
+      if (!root->indices.empty() &&
+          (root->indices[0] == type_asterisk || path[i] == type_asterisk ||
+           (path[i] != type_colon && root->indices[0] == type_colon) ||
+           (path[i] == type_colon && root->indices[0] != type_colon) ||
+           (path[i] == type_colon && root->indices[0] == type_colon &&
+            path.substr(i + 1, find_pos(path, type_slash, i) - i - 1) !=
+                root->children[0]->path))) {
         code = -1;
         break;
       }
@@ -127,10 +119,12 @@ public:
         if (p == n) {
           p = find_pos(path, type_asterisk, i);
 
-          root = root->insert_child(path[i], new radix_tree_node(path.substr(i, p - i)));
+          root = root->insert_child(path[i],
+                                    new radix_tree_node(path.substr(i, p - i)));
 
           if (p < n) {
-            root = root->insert_child(type_asterisk, new radix_tree_node(path.substr(p + 1)));
+            root = root->insert_child(type_asterisk,
+                                      new radix_tree_node(path.substr(p + 1)));
             ++param_count;
           }
 
@@ -138,11 +132,13 @@ public:
           break;
         }
 
-        root = root->insert_child(path[i], new radix_tree_node(path.substr(i , p - i)));
+        root = root->insert_child(path[i],
+                                  new radix_tree_node(path.substr(i, p - i)));
 
         i = find_pos(path, type_slash, p);
 
-        root = root->insert_child(type_colon, new radix_tree_node(path.substr(p + 1, i - p - 1)));
+        root = root->insert_child(
+            type_colon, new radix_tree_node(path.substr(p + 1, i - p - 1)));
         ++param_count;
 
         if (i == n) {
@@ -151,7 +147,6 @@ public:
         }
       }
       else {
-
         root = child;
 
         if (path[i] == type_colon) {
@@ -167,7 +162,8 @@ public:
           auto j = 0UL;
           auto m = root->path.size();
 
-          for (; i < n && j < m && path[i] == root->path[j]; ++i, ++j) {}
+          for (; i < n && j < m && path[i] == root->path[j]; ++i, ++j) {
+          }
 
           if (j < m) {
             auto child = new radix_tree_node(root->path.substr(j));
@@ -209,9 +205,8 @@ public:
         root = root->children[0];
 
         p = find_pos(path, type_slash, i);
-        params.parameters.push_back(paramters_t{
-          root->path, path.substr(i, p - i)
-        });
+        params.parameters.push_back(
+            paramters_t{root->path, path.substr(i, p - i)});
         params.size++;
         i = p;
       }
@@ -231,8 +226,8 @@ public:
 
     return parse_result{true, root->get_handler(method), params};
   }
-private:
 
+ private:
   int find_pos(const std::string &str, char target, int start) {
     auto i = str.find(target, start);
     return i == -1 ? str.size() : i;
@@ -240,4 +235,4 @@ private:
 
   radix_tree_node *root;
 };
-}
+}  // namespace cinatra
