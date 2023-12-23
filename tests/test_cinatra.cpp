@@ -567,8 +567,6 @@ TEST_CASE("test coro_http_client multipart upload") {
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         assert(req.get_content_type() == content_type::multipart);
         auto boundary = req.get_boundary();
-        std::unordered_map<std::string, std::shared_ptr<coro_io::coro_file>>
-            file_map;
 
         while (true) {
           auto part_head = co_await req.get_conn()->read_part_head();
@@ -612,17 +610,14 @@ TEST_CASE("test coro_http_client multipart upload") {
               co_return;
             }
 
-            file_map.emplace(filename, std::move(file));
+            file->close();
+            CHECK(fs::file_size(filename) == 1024);
           }
           else {
             std::cout << part_body.data << "\n";
           }
         }
 
-        std::cout << "upload finished, filename: " << file_map.size() << "\n";
-        for (auto &[name, file] : file_map) {
-          std::cout << name << "\n";
-        }
         resp.set_status_and_content(status_type::ok, "ok");
         co_return;
       });
@@ -634,7 +629,7 @@ TEST_CASE("test coro_http_client multipart upload") {
 
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090/multipart_upload";
-  // client.add_str_part("test", "test value");
+  client.add_str_part("test", "test value");
   client.add_file_part("test file", filename);
   auto result =
       async_simple::coro::syncAwait(client.async_upload_multipart(uri));
