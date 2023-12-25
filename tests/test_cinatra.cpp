@@ -75,7 +75,8 @@ TEST_CASE("test for gzip") {
 TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
-    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    bool ok =
+        client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -84,7 +85,8 @@ TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
     client.enable_auto_redirect(true);
-    bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+    bool ok =
+        client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -93,7 +95,7 @@ TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
     client.enable_auto_redirect(true);
-    client.init_ssl("../../include/cinatra", "notexistsserver.crt");
+    client.init_ssl("bing.com", "../../include/cinatra", "notexistsserver.crt");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status != 200);
   }
@@ -102,7 +104,7 @@ TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
     client.enable_auto_redirect(true);
-    client.init_ssl("../../include/cinatra", "fake_server.crt");
+    client.init_ssl("bing.com", "../../include/cinatra", "fake_server.crt");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status != 200);
   }
@@ -122,7 +124,7 @@ TEST_CASE("test ssl client") {
 
   {
     coro_http_client client{};
-    bool ok = client.init_ssl("../../include/cinatra/server.crt");
+    bool ok = client.init_ssl("bing.com", "../../include/cinatra/server.crt");
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -131,9 +133,9 @@ TEST_CASE("test ssl client") {
 
 TEST_CASE("test ssl client") {
   coro_http_client client{};
-  bool ok = client.init_ssl("../../include/cinatra", "server.crt");
+  bool ok = client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-  client.set_sni_hostname("https://www.bing.com");
+  // client.set_sni_hostname("https://www.bing.com");
   auto result = client.get("https://www.bing.com");
   CHECK(result.status >= 200);
 }
