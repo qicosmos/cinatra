@@ -39,9 +39,11 @@ class coro_http_connection
     : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
-  coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket)
+  coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
+                       coro_http_router &router)
       : executor_(executor),
         socket_(std::move(socket)),
+        router_(router),
         request_(parser_, this),
         response_(this) {
     buffers_.reserve(3);
@@ -179,13 +181,12 @@ class coro_http_connection
         request_.set_body(body_);
       }
 
-      auto &router = coro_http_router::instance();
-      if (auto handler = router.get_handler(key); handler) {
-        router.route(handler, request_, response_);
+      if (auto handler = router_.get_handler(key); handler) {
+        router_.route(handler, request_, response_);
       }
       else {
-        if (auto coro_handler = router.get_coro_handler(key); coro_handler) {
-          co_await router.route_coro(coro_handler, request_, response_);
+        if (auto coro_handler = router_.get_coro_handler(key); coro_handler) {
+          co_await router_.route_coro(coro_handler, request_, response_);
         }
         else {
           // not found
@@ -585,6 +586,7 @@ class coro_http_connection
  private:
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
+  coro_http_router &router_;
   asio::streambuf head_buf_;
   std::string body_;
   asio::streambuf chunked_buf_;

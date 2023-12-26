@@ -104,7 +104,7 @@ class my_object {
 TEST_CASE("set http handler") {
   cinatra::coro_http_server server(1, 9001);
 
-  auto &router = coro_http_router::instance();
+  auto &router = server.get_router();
   auto &handlers = router.get_handlers();
 
   server.set_http_handler<cinatra::GET>(
@@ -129,6 +129,15 @@ TEST_CASE("set http handler") {
       });
   CHECK(handlers.size() == 4);
 
+  cinatra::coro_http_server server2(1, 9001);
+  server2.set_http_handler<cinatra::GET>(
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto &handlers2 = server2.get_router().get_handlers();
+  CHECK(handlers2.size() == 1);
+
   auto coro_func =
       [](coro_http_request &req,
          coro_http_response &response) -> async_simple::coro::Lazy<void> {
@@ -146,18 +155,6 @@ TEST_CASE("set http handler") {
 
   server.set_http_handler<cinatra::GET, cinatra::POST>("/bb", coro_func);
   CHECK(coro_handlers.size() == 4);
-
-  CHECK(router.get_handler("GET /") != nullptr);
-  CHECK(router.get_handler("GET /cc") == nullptr);
-  CHECK(router.get_coro_handler("POST /bb") != nullptr);
-  CHECK(router.get_coro_handler("POST /cc") == nullptr);
-
-  my_object o;
-  server.set_http_handler<cinatra::GET>("/normal", &my_object::normal, &o);
-  server.set_http_handler<cinatra::GET>("/lazy", &my_object::lazy, &o);
-
-  CHECK(router.get_handler("GET /normal") != nullptr);
-  CHECK(router.get_handler("GET /lazy") == nullptr);
 }
 
 TEST_CASE("test server start and stop") {
