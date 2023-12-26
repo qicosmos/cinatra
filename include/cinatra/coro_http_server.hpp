@@ -130,13 +130,11 @@ class coro_http_server {
   void set_http_handler(std::string key, Func handler) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
     if constexpr (sizeof...(method) == 1) {
-      (coro_http_router::instance().set_http_handler<method>(
-           std::move(key), std::move(handler)),
+      (router_.set_http_handler<method>(std::move(key), std::move(handler)),
        ...);
     }
     else {
-      (coro_http_router::instance().set_http_handler<method>(key, handler),
-       ...);
+      (router_.set_http_handler<method>(key, handler), ...);
     }
   }
 
@@ -182,6 +180,8 @@ class coro_http_server {
       }
     }
   }
+
+  const coro_http_router &get_router() const { return router_; }
 
   void set_file_resp_format_type(file_resp_format_type type) {
     format_type_ = type;
@@ -408,8 +408,8 @@ class coro_http_server {
 
       uint64_t conn_id = ++conn_id_;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
-      auto conn =
-          std::make_shared<coro_http_connection>(executor, std::move(socket));
+      auto conn = std::make_shared<coro_http_connection>(
+          executor, std::move(socket), router_);
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -535,5 +535,6 @@ class coro_http_server {
   std::string passwd_;
   bool use_ssl_ = false;
 #endif
+  coro_http_router router_;
 };
 }  // namespace cinatra
