@@ -369,7 +369,6 @@ class coro_http_connection
     constexpr std::string_view name = "name=\"";
     constexpr std::string_view filename = "filename=\"";
 
-    int index = 0;
     while (true) {
       if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
           ec) {
@@ -394,11 +393,7 @@ class coro_http_connection
       }
       std::string_view data{data_ptr, size};
       if (size == 2) {  // got the head end: \r\n\r\n
-        index++;
-        if (index == 2) {
-          break;
-        }
-        continue;
+        break;
       }
 
       if (size_t pos = data.find("name"); pos != std::string_view::npos) {
@@ -431,6 +426,16 @@ class coro_http_connection
     chunked_buf_.consume(size);
     result.eof = true;
     result.data = std::string_view{data_ptr, size - boundary.size() - 4};
+
+    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
+        ec) {
+      result = {};
+      result.ec = ec;
+      close();
+      co_return result;
+    }
+
+    chunked_buf_.consume(size);
 
     co_return result;
   }

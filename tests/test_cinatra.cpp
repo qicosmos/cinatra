@@ -590,6 +590,7 @@ TEST_CASE("test coro_http_client multipart upload") {
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
             filename += extent;
+            std::cout << filename << "\n";
             co_await file->async_open(filename, coro_io::flags::create_write);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
