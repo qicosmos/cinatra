@@ -581,11 +581,15 @@ TEST_CASE("test coro_http_client multipart upload") {
           std::string filename;
           if (!part_head.filename.empty()) {
             file = std::make_shared<coro_io::coro_file>();
-            auto extent =
-                part_head.filename.substr(part_head.filename.rfind('.'));
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
-            filename += extent;
+
+            size_t pos = part_head.filename.rfind('.');
+            if (pos != std::string::npos) {
+              auto extent = part_head.filename.substr(pos);
+              filename += extent;
+            }
+
             std::cout << filename << "\n";
             co_await file->async_open(filename, coro_io::flags::create_write);
             if (!file->is_open()) {
