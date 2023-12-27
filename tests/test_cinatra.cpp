@@ -574,10 +574,6 @@ TEST_CASE("test coro_http_client multipart upload") {
             co_return;
           }
 
-          if (part_head.eof) {
-            break;
-          }
-
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
@@ -616,6 +612,10 @@ TEST_CASE("test coro_http_client multipart upload") {
           }
           else {
             std::cout << part_body.data << "\n";
+          }
+
+          if (part_body.eof) {
+            break;
           }
         }
 

@@ -3,6 +3,7 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
+#include <string_view>
 #include <system_error>
 #include <thread>
 
@@ -32,7 +33,6 @@ struct part_head_t {
   std::error_code ec;
   std::string name;
   std::string filename;
-  bool eof;
 };
 
 struct websocket_result {
@@ -381,14 +381,6 @@ class coro_http_connection
           asio::buffer_cast<const char *>(chunked_buf_.data());
       chunked_buf_.consume(size);
       if (*data_ptr == '-') {
-        if (size >= 4) {
-          std::string_view tail{data_ptr + size - 4, 2};
-          if (tail == "--") {  // all part complete: --\r\n in head
-            result.eof = true;
-            co_return result;
-          }
-        }
-
         continue;
       }
       std::string_view data{data_ptr, size};
@@ -424,8 +416,8 @@ class coro_http_connection
 
     const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
     chunked_buf_.consume(size);
-    result.eof = true;
-    result.data = std::string_view{data_ptr, size - boundary.size() - 4};
+    result.data = std::string_view{
+        data_ptr, size - boundary.size() - 4};  //-- boundary \r\n
 
     if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
         ec) {
@@ -435,8 +427,16 @@ class coro_http_connection
       co_return result;
     }
 
-    chunked_buf_.consume(size);
+    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    std::string data{data_ptr, size};
+    if (size > 2) {
+      constexpr std::string_view complete_flag = "--\r\n";
+      if (data == complete_flag) {
+        result.eof = true;
+      }
+    }
 
+    chunked_buf_.consume(size);
     co_return result;
   }
 
