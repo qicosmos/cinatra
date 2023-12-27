@@ -3,7 +3,6 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
-#include <string_view>
 #include <system_error>
 #include <thread>
 
