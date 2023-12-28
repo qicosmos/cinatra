@@ -75,9 +75,26 @@ TEST_CASE("test for gzip") {
 TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
-    bool ok =
-        client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
-    REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
+    auto result = client.get("https://www.bing.com");
+    CHECK(result.status >= 200);
+  }
+
+  {
+    coro_http_client client{};
+    auto result = client.get("http://www.bing.com");
+    CHECK(result.status >= 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.set_ssl_schema(true);
+    auto result = client.get("www.bing.com");
+    CHECK(result.status >= 200);
+  }
+
+  {
+    coro_http_client client{};
+    client.set_ssl_schema(false);
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
   }
@@ -85,36 +102,17 @@ TEST_CASE("test ssl client") {
   {
     coro_http_client client{};
     client.enable_auto_redirect(true);
-    bool ok =
-        client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
+    bool ok = client.init_ssl();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
   }
-
-  {
-    coro_http_client client{};
-    client.enable_auto_redirect(true);
-    client.init_ssl("bing.com", "../../include/cinatra", "notexistsserver.crt");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status != 200);
-  }
-
-#if !defined(__clang__)
-  {
-    coro_http_client client{};
-    client.enable_auto_redirect(true);
-    client.init_ssl("bing.com", "../../include/cinatra", "fake_server.crt");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status != 200);
-  }
-#endif
 
   {
     coro_http_client client{};
     client.set_req_timeout(8s);
     client.enable_auto_redirect(true);
-    std::string uri = "https://www.bing.com";
+    std::string uri = "http://www.bing.com";
     // Make sure the host and port are matching with your proxy server
     client.set_proxy("106.14.255.124", "80");
     resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
@@ -124,7 +122,7 @@ TEST_CASE("test ssl client") {
 
   {
     coro_http_client client{};
-    bool ok = client.init_ssl("bing.com", "../../include/cinatra/server.crt");
+    bool ok = client.init_ssl();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
@@ -133,7 +131,7 @@ TEST_CASE("test ssl client") {
 
 TEST_CASE("test ssl client") {
   coro_http_client client{};
-  bool ok = client.init_ssl("bing.com", "../../include/cinatra", "server.crt");
+  bool ok = client.init_ssl();
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
   // client.set_sni_hostname("https://www.bing.com");
   auto result = client.get("https://www.bing.com");
@@ -466,21 +464,21 @@ TEST_CASE("test bad uri") {
   CHECK(result.status == 404);
 }
 
-TEST_CASE("test ssl without init ssl") {
-  {
-    coro_http_client client{};
-    client.add_str_part("hello", "world");
-    auto result = async_simple::coro::syncAwait(
-        client.async_upload_multipart("https://www.bing.com"));
-    CHECK(result.status == 404);
-  }
+TEST_CASE("test ssl without init ssl"){{coro_http_client client{};
+client.add_str_part("hello", "world");
+auto result = async_simple::coro::syncAwait(
+    client.async_upload_multipart("https://www.bing.com"));
+CHECK(result.status == 404);
+}
 
-  {
-    coro_http_client client{};
-    auto result =
-        async_simple::coro::syncAwait(client.async_get("https://www.bing.com"));
-    CHECK(result.status == 404);
-  }
+#ifndef CINATRA_ENABLE_SSL
+{
+  coro_http_client client{};
+  auto result =
+      async_simple::coro::syncAwait(client.async_get("https://www.bing.com"));
+  CHECK(result.status == 404);
+}
+#endif
 }
 
 TEST_CASE("test multiple ranges download") {
