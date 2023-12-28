@@ -9,7 +9,6 @@
 #include <thread>
 #include <vector>
 
-#include "asio/ssl/verify_mode.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/coro_http_connection.hpp"
