@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include "asio/ssl/verify_mode.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/coro_http_connection.hpp"
@@ -908,7 +909,8 @@ TEST_CASE("test ssl server") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
-  [[maybe_unused]] auto r = client.init_ssl();
+  [[maybe_unused]] auto r = client.init_ssl(asio::ssl::verify_peer,
+                                            "../../include/cinatra/server.crt");
 
   auto result = client.get("https://127.0.0.1:9001/ssl");
   CHECK(result.status == 200);
