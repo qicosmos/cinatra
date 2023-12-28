@@ -35,8 +35,8 @@ TEST_CASE("test wss client") {
   f.wait();
 
   auto client = std::make_shared<coro_http_client>();
-  bool ok =
-      client->init_ssl("localhost", "../../include/cinatra", "server.crt");
+  bool ok = client->init_ssl(asio::ssl::verify_peer,
+                             "../../include/cinatra/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
   std::promise<void> promise;
