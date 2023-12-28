@@ -991,10 +991,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         bool no_schema = !has_schema(uri);
 
         if (no_schema) {
+#ifdef CINATRA_ENABLE_SSL
           if (is_ssl_schema_) {
             append_uri.append("https://").append(uri);
           }
-          else {
+          else
+#endif
+          {
             append_uri.append("http://").append(uri);
           }
         }
@@ -1025,6 +1028,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
 
         if (u.is_ssl) {
+#ifdef CINATRA_ENABLE_SSL
           if (!has_init_ssl_) {
             size_t pos = u.host.find("www.");
             std::string host;
@@ -1040,6 +1044,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
               co_return data;
             }
           }
+#endif
           if (ec = co_await handle_shake(); ec) {
             break;
           }
