@@ -1,4 +1,6 @@
 #pragma once
+#include <regex>
+
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
@@ -127,6 +129,7 @@ class coro_http_request {
   }
 
   params_t params_;
+  std::smatch matches_;
 
  private:
   http_parser& parser_;
