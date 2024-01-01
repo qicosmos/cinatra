@@ -960,6 +960,48 @@ TEST_CASE("test http download server") {
   }
 }
 
+TEST_CASE("test restful api") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test/:id/test2/:name",
+      [](coro_http_request &req, coro_http_response &response) {
+        CHECK(req.params_.parameters[0].first == "id");
+        CHECK(req.params_.parameters[0].second == "11");
+        CHECK(req.params_.parameters[1].first == "name");
+        CHECK(req.params_.parameters[1].second == "cpp");
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test2/{}/test3/{}",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          // coroutine in other thread.
+          CHECK(req.matches_.str(1) == "name");
+          CHECK(req.matches_.str(2) == "test");
+          resp.set_status_and_content(cinatra::status_type::ok, "hello world");
+        });
+        co_return;
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      R"(/numbers/(\d+)/test/(\d+))",
+      [](coro_http_request &req, coro_http_response &response) {
+        CHECK(req.matches_.str(1) == "100");
+        CHECK(req.matches_.str(2) == "200");
+        response.set_status_and_content(status_type::ok, "number regex ok");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  client.get("http://127.0.0.1:9001/test/11/test2/cpp");
+  client.get("http://127.0.0.1:9001/test2/name/test3/test");
+  client.get("http://127.0.0.1:9001/numbers/100/test/200");
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
