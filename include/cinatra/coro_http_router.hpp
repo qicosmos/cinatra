@@ -30,6 +30,7 @@ constexpr inline bool is_lazy_v =
 
 class coro_http_router {
  public:
+  ~coro_http_router() { delete router_tree_; }
   // eg: "GET hello/" as a key
   template <http_method method, typename Func>
   void set_http_handler(std::string key, Func handler) {
