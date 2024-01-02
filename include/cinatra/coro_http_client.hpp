@@ -1721,11 +1721,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<void> async_read_ws() {
     resp_data data{};
 
-    auto self = this->shared_from_this();
     read_buf_.consume(read_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
     auto on_ws_msg = std::move(on_ws_msg_);
+    auto on_ws_close = std::move(on_ws_close_);
     websocket ws{};
     while (true) {
       if (auto [ec, _] = co_await async_read(read_buf_, header_size); ec) {
@@ -1781,8 +1781,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       header_size = 2;
 
       if (is_close_frame) {
-        if (on_ws_close_)
-          on_ws_close_(data.resp_body);
+        if (on_ws_close)
+          on_ws_close(data.resp_body);
         co_await async_send_ws("close", false, opcode::close);
         async_close();
 

@@ -34,13 +34,13 @@ TEST_CASE("test wss client") {
   });
   f.wait();
 
-  auto client = std::make_shared<coro_http_client>();
-  bool ok = client->init_ssl(asio::ssl::verify_peer,
-                             "../../include/cinatra/server.crt");
+  coro_http_client client{};
+  bool ok = client.init_ssl(asio::ssl::verify_peer,
+                            "../../include/cinatra/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
   std::promise<void> promise;
-  client->on_ws_msg([&promise](resp_data data) {
+  client.on_ws_msg([&promise](resp_data data) {
     if (data.net_err) {
       std::cout << data.net_err.message() << "\n";
       promise.set_value();
@@ -52,14 +52,14 @@ TEST_CASE("test wss client") {
   });
 
   REQUIRE(async_simple::coro::syncAwait(
-      client->async_ws_connect("wss://localhost:9001")));
+      client.async_ws_connect("wss://localhost:9001")));
 
-  auto result = async_simple::coro::syncAwait(client->async_send_ws("hello"));
+  auto result = async_simple::coro::syncAwait(client.async_send_ws("hello"));
   std::cout << result.net_err << "\n";
 
   promise.get_future().wait();
 
-  client->async_close();
+  client.async_close();
 
   server.stop();
   server_thread.join();
@@ -123,10 +123,10 @@ TEST_CASE("test websocket") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-  auto client = std::make_shared<coro_http_client>();
-  client->set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
+  coro_http_client client{};
+  client.set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
 
-  async_simple::coro::syncAwait(test_websocket(*client));
+  async_simple::coro::syncAwait(test_websocket(client));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
@@ -156,13 +156,13 @@ void test_websocket_content(size_t len) {
   });
   f.wait();
 
-  auto client = std::make_shared<coro_http_client>();
+  coro_http_client client{};
   REQUIRE(async_simple::coro::syncAwait(
-      client->async_ws_connect("ws://localhost:8090")));
+      client.async_ws_connect("ws://localhost:8090")));
 
   std::string send_str(len, 'a');
 
-  client->on_ws_msg([&, send_str](resp_data data) {
+  client.on_ws_msg([&, send_str](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
       return;
@@ -173,14 +173,14 @@ void test_websocket_content(size_t len) {
     CHECK(data.resp_body == send_str);
   });
 
-  async_simple::coro::syncAwait(client->async_send_ws(send_str));
+  async_simple::coro::syncAwait(client.async_send_ws(send_str));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   server.stop();
   server_thread.join();
 
-  client->async_close();
+  client.async_close();
 }
 
 TEST_CASE("test websocket content lt 126") {
@@ -211,11 +211,11 @@ TEST_CASE("test send after server stop") {
   });
   f.wait();
 
-  auto client = std::make_shared<coro_http_client>();
+  coro_http_client client{};
   REQUIRE(async_simple::coro::syncAwait(
-      client->async_ws_connect("ws://localhost:8090")));
+      client.async_ws_connect("ws://localhost:8090")));
 
-  client->on_ws_msg([](resp_data data) {
+  client.on_ws_msg([](resp_data data) {
     std::cout << data.net_err.message() << "\n";
   });
 
@@ -223,8 +223,71 @@ TEST_CASE("test send after server stop") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
-  auto result = async_simple::coro::syncAwait(client->async_send_ws(""));
+  auto result = async_simple::coro::syncAwait(client.async_send_ws(""));
   CHECK(result.net_err);
 
   server_thread.join();
+}
+
+async_simple::coro::Lazy<void> test_websocket() {
+  coro_http_client client{};
+  client.on_ws_close([](std::string_view reason) {
+    std::cout << "web socket close " << reason << std::endl;
+  });
+  client.on_ws_msg([](resp_data data) {
+    if (data.net_err) {
+      std::cout << data.net_err.message() << "\n";
+      return;
+    }
+    std::cout << data.resp_body << std::endl;
+  });
+
+  bool r = co_await client.async_ws_connect("ws://127.0.0.1:8089/ws_echo");
+  if (!r) {
+    co_return;
+  }
+
+  auto data = co_await client.async_send_ws("test2fdsaf", true, opcode::binary);
+  // auto data = co_await client.async_send_ws_chuncked(tmp, 3145728, false,
+  // opcode::binary);
+  if (data.eof) {
+    std::cout << "data complete" << std::endl;
+  }
+
+  auto result = co_await client.async_send_ws_close("ws close");
+  std::cout << "close socket!\n";
+}
+
+TEST_CASE("test client quit after send msg") {
+  coro_http_server server(1, 8089);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_echo",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        websocket_result result{};
+
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_TEXT_FRAME) {
+          }
+          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
+            auto part_data = result.data;
+            std::ofstream out("output.iso",
+                              std::ios_base::app | std::ios_base::binary);
+            out << part_data;
+            out.close();
+          }
+        }
+      });
+  server.async_start();
+
+  async_simple::coro::syncAwait(test_websocket());
 }
