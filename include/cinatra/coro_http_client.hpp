@@ -1727,9 +1727,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     auto on_ws_msg = std::move(on_ws_msg_);
     auto on_ws_close = std::move(on_ws_close_);
     asio::streambuf &read_buf = sock->read_buf_;
+    bool has_init_ssl = false;
+#ifdef CINATRA_ENABLE_SSL
+    has_init_ssl = has_init_ssl_;
+#endif
     websocket ws{};
     while (true) {
-      if (auto [ec, _] = co_await async_read_ws(sock, read_buf, header_size);
+      if (auto [ec, _] =
+              co_await async_read_ws(sock, read_buf, header_size, has_init_ssl);
           ec) {
         data.net_err = ec;
         data.status = 404;
@@ -1759,8 +1764,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       size_t payload_len = ws.payload_length();
       if (payload_len > read_buf.size()) {
         size_t size_to_read = payload_len - read_buf.size();
-        if (auto [ec, size] =
-                co_await async_read_ws(sock, read_buf, size_to_read);
+        if (auto [ec, size] = co_await async_read_ws(
+                sock, read_buf, size_to_read, has_init_ssl);
             ec) {
           data.net_err = ec;
           data.status = 404;
@@ -1795,7 +1800,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         std::vector<asio::const_buffer> buffers{asio::buffer(encode_header),
                                                 asio::buffer(reason)};
 
-        co_await async_write_ws(sock, buffers);
+        co_await async_write_ws(sock, buffers, has_init_ssl);
 
         close_socket(*sock);
 
@@ -1812,9 +1817,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_ws(
-      auto sock, AsioBuffer &&buffer, size_t size_to_read) noexcept {
+      auto sock, AsioBuffer &&buffer, size_t size_to_read,
+      bool has_init_ssl = false) noexcept {
 #ifdef CINATRA_ENABLE_SSL
-    if (has_init_ssl_) {
+    if (has_init_ssl) {
       return coro_io::async_read(*sock->ssl_stream_, buffer, size_to_read);
     }
     else {
@@ -1827,9 +1833,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write_ws(
-      auto sock, AsioBuffer &&buffer) {
+      auto sock, AsioBuffer &&buffer, bool has_init_ssl = false) {
 #ifdef CINATRA_ENABLE_SSL
-    if (has_init_ssl_) {
+    if (has_init_ssl) {
       return coro_io::async_write(*sock->ssl_stream_, buffer);
     }
     else {
