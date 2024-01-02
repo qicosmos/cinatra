@@ -795,7 +795,7 @@ TEST_CASE("test websocket with different message sizes") {
     async_simple::coro::syncAwait(
         client.async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
     async_simple::coro::syncAwait(client.async_send_ws(large_message));
-    async_simple::coro::syncAwait(client.async_send_ws_close());
+    async_simple::coro::syncAwait(client.async_send_ws_close("test close"));
   }
 
   server.stop();
