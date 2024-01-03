@@ -176,8 +176,8 @@ struct oneof_reader {
       throw cmdline_error("");
     return ret;
   }
-  template <typename ... Args>
-  oneof_reader(Args&&... args) {
+  template <typename... Args>
+  oneof_reader(Args &&... args) {
       add(std::forward<Args>(args)...);
   }
   void add(const T &v) { alt.push_back(v); }
