@@ -25,8 +25,8 @@ TEST_CASE("simple test cmd line options") {
 // ./test_gt10 -a A -b B -c C -d D -e E -f F -gh H -i I -j J -k KK
 TEST_CASE("test cmd line options more than 10") {
   const char* argv[] = {
-    "test_gt10", "-a", "AA", "-b", "B", "-c", "C", -d "D", -e "E",
-    "-f", "F", "-g", "G" "-h", "H", "-i", "I", "-j", "J", "-k8"
+    "test_gt10", "-a", "AA", "-b", "B", "-c", "C", "-d", "D", "-e", "E",
+    "-f", "F", "-g", "G", "-h", "H", "-i", "I", "-j", "J", "-k8"
   };
   int argc = sizeof(argv) / sizeof(argv[0]);
   cmdline::parser p;
@@ -41,7 +41,7 @@ TEST_CASE("test cmd line options more than 10") {
   p.add<std::string>("arg_h", 'h', "argument vector h");
   p.add<std::string>("arg_i", 'i', "argument vector i");
   p.add<std::string>("arg_j", 'j', "argument vector j");
-  p.add<std::int>("arg_k", 'k', "argument vector k", false, 1);
+  p.add<int>("arg_k", 'k', "argument vector k", false, 1);
 
   p.parse_check(argc, const_cast<char**>(argv));
 
@@ -55,7 +55,7 @@ TEST_CASE("test cmd line options more than 10") {
   CHECK(p.get<std::string>("arg_h") == "H");
   CHECK(p.get<std::string>("arg_i") == "I");
   CHECK(p.get<std::string>("arg_j") == "J");
-  CHECK(p.get<std::int>("arg_k") == 8);
+  CHECK(p.get<int>("arg_k") == 8);
 }
 
 // ./cinatra_press_tool -c100 -t4 -d10s --headers=HTTPheaders -r7
