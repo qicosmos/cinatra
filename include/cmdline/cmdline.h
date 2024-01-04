@@ -177,8 +177,8 @@ struct oneof_reader {
     return ret;
   }
   template <typename... Args>
-  oneof_reader(Args &&... args) {
-      add(std::forward<Args>(args)...);
+  oneof_reader(Args &&...args) {
+    add(std::forward<Args>(args)...);
   }
   void add(const T &v) { alt.push_back(v); }
 
@@ -186,8 +186,8 @@ struct oneof_reader {
   std::vector<T> alt;
 };
 
-template <class T, typename ... Args>
-oneof_reader<T> oneof(Args&&...args) {    
+template <class T, typename... Args>
+oneof_reader<T> oneof(Args &&...args) {
   return oneof_reader<T>(std::forward<Args>(args)...);
 }
 

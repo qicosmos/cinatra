@@ -22,11 +22,11 @@ TEST_CASE("simple test cmd line options") {
   CHECK(p.get<int>("threads") == 4);
 }
 
-// ./test_gt10 -a A -b B -c C -d D -e E -f F -gh H -i I -j J -k KK
+// ./test_gt10 -a A -b B -c C -d D -e E -f F -gh H -i I -j J -k 8
 TEST_CASE("test cmd line options more than 10") {
-  const char* argv[] = { "test_gt10", "-a", "AA", "-b", "B", "-c", "C", "-d",
-                         "D", "-e", "E", "-f", "F", "-g", "G", "-h",
-                         "H", "-i", "I", "-j", "J", "-k8"};
+  const char* argv[] = {"test_gt10", "-a", "AA", "-b", "B", "-c", "C", "-d",
+                        "D",         "-e", "E",  "-f", "F", "-g", "G", "-h",
+                        "H",         "-i", "I",  "-j", "J", "-k8"};
   int argc = sizeof(argv) / sizeof(argv[0]);
   cmdline::parser p;
 
