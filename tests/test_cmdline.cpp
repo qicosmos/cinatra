@@ -22,6 +22,41 @@ TEST_CASE("simple test cmd line options") {
   CHECK(p.get<int>("threads") == 4);
 }
 
+// ./test_gt10 -a A -b B -c C -d D -e E -f F -gh H -i I -j J -k 8
+TEST_CASE("test cmd line options more than 10") {
+  const char* argv[] = {"test_gt10", "-a", "AA", "-b", "B", "-c", "C", "-d",
+                        "D",         "-e", "E",  "-f", "F", "-g", "G", "-h",
+                        "H",         "-i", "I",  "-j", "J", "-k8"};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+  cmdline::parser p;
+
+  p.add<std::string>("arg_a", 'a', "argument vector a");
+  p.add<std::string>("arg_b", 'b', "argument vector b");
+  p.add<std::string>("arg_c", 'c', "argument vector c");
+  p.add<std::string>("arg_d", 'd', "argument vector d");
+  p.add<std::string>("arg_e", 'e', "argument vector e");
+  p.add<std::string>("arg_f", 'f', "argument vector f");
+  p.add<std::string>("arg_g", 'g', "argument vector g");
+  p.add<std::string>("arg_h", 'h', "argument vector h");
+  p.add<std::string>("arg_i", 'i', "argument vector i");
+  p.add<std::string>("arg_j", 'j', "argument vector j");
+  p.add<int>("arg_k", 'k', "argument vector k", false, 1);
+
+  p.parse_check(argc, const_cast<char**>(argv));
+
+  CHECK(p.get<std::string>("arg_a") == "AA");
+  CHECK(p.get<std::string>("arg_b") == "B");
+  CHECK(p.get<std::string>("arg_c") == "C");
+  CHECK(p.get<std::string>("arg_d") == "D");
+  CHECK(p.get<std::string>("arg_e") == "E");
+  CHECK(p.get<std::string>("arg_f") == "F");
+  CHECK(p.get<std::string>("arg_g") == "G");
+  CHECK(p.get<std::string>("arg_h") == "H");
+  CHECK(p.get<std::string>("arg_i") == "I");
+  CHECK(p.get<std::string>("arg_j") == "J");
+  CHECK(p.get<int>("arg_k") == 8);
+}
+
 // ./cinatra_press_tool -c100 -t4 -d10s --headers=HTTPheaders -r7
 TEST_CASE("test cinatra_press_tool cmd line options without spaces") {
   const char* argv[] = {"cinatra_press_tool",    "-c100", "-vt4", "-d10s",
