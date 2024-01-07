@@ -309,8 +309,7 @@ class coro_http_server {
                 auto ranges =
                     parse_ranges(range_str, fs::file_size(file_name), is_valid);
                 if (!is_valid) {
-                  resp.set_status_and_content(
-                      status_type::range_not_satisfiable, "range invalid");
+                  resp.set_status(status_type::range_not_satisfiable);
                   co_return;
                 }
 

@@ -96,7 +96,7 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
     }
 
     if (end > 0 && end >= file_size) {
-      end = file_size;
+      end = file_size - 1;
     }
 
     if (start == -1) {

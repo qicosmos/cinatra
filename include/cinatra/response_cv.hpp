@@ -110,6 +110,12 @@ inline std::string_view conflict =
     "<body><h1>409 Conflict</h1></body>"
     "</html>";
 
+inline std::string_view range_not_satisfiable =
+    "<html>"
+    "<head><title>Requested Range Not Satisfiable</title></head>"
+    "<body><h1>416 Requested Range Not Satisfiable</h1></body>"
+    "</html>";
+
 inline std::string_view internal_server_error =
     "<html>"
     "<head><title>Internal Server Error</title></head>"
@@ -160,6 +166,8 @@ inline constexpr std::string_view rep_unauthorized =
 inline constexpr std::string_view rep_forbidden = "HTTP/1.1 403 Forbidden\r\n";
 inline constexpr std::string_view rep_not_found = "HTTP/1.1 404 Not Found\r\n";
 inline constexpr std::string_view rep_conflict = "HTTP/1.1 409 Conflict\r\n";
+inline constexpr std::string_view rep_range_not_satisfiable =
+    "HTTP/1.1 416 Requested Range Not Satisfiable\r\n";
 inline constexpr std::string_view rep_internal_server_error =
     "HTTP/1.1 500 Internal Server Error\r\n";
 inline constexpr std::string_view rep_not_implemented =
@@ -290,6 +298,9 @@ inline decltype(auto) to_buffer(status_type status) {
       return T(rep_not_found.data(), rep_not_found.length());
     case status_type::conflict:
       return T(rep_conflict.data(), rep_conflict.length());
+    case status_type::range_not_satisfiable:
+      return T(rep_range_not_satisfiable.data(),
+               rep_range_not_satisfiable.length());
     case status_type::internal_server_error:
       return T(rep_internal_server_error.data(),
                rep_internal_server_error.length());
@@ -310,67 +321,48 @@ inline constexpr std::string_view to_rep_string(status_type status) {
   switch (status) {
     case cinatra::status_type::switching_protocols:
       return switching_protocols;
-      break;
     case cinatra::status_type::ok:
       return rep_ok;
-      break;
     case cinatra::status_type::created:
       return rep_created;
-      break;
     case cinatra::status_type::accepted:
       return rep_accepted;
-      break;
     case cinatra::status_type::no_content:
       return rep_no_content;
-      break;
     case cinatra::status_type::partial_content:
       return rep_partial_content;
-      break;
     case cinatra::status_type::multiple_choices:
       return rep_multiple_choices;
-      break;
     case cinatra::status_type::moved_permanently:
       return rep_moved_permanently;
-      break;
     case cinatra::status_type::moved_temporarily:
       return rep_moved_temporarily;
-      break;
     case cinatra::status_type::not_modified:
       return rep_not_modified;
-      break;
     case cinatra::status_type::temporary_redirect:
       return rep_temporary_redirect;
-      break;
     case cinatra::status_type::bad_request:
       return rep_bad_request;
-      break;
     case cinatra::status_type::unauthorized:
       return rep_unauthorized;
-      break;
     case cinatra::status_type::forbidden:
       return rep_forbidden;
-      break;
     case cinatra::status_type::not_found:
       return rep_not_found;
-      break;
     case cinatra::status_type::conflict:
       return rep_conflict;
-      break;
+    case cinatra::status_type::range_not_satisfiable:
+      return rep_range_not_satisfiable;
     case cinatra::status_type::internal_server_error:
       return rep_internal_server_error;
-      break;
     case cinatra::status_type::not_implemented:
       return rep_not_implemented;
-      break;
     case cinatra::status_type::bad_gateway:
       return rep_bad_gateway;
-      break;
     case cinatra::status_type::service_unavailable:
       return rep_service_unavailable;
-      break;
     default:
       return rep_not_implemented;
-      break;
   }
 }
 
@@ -404,6 +396,8 @@ inline std::string_view to_string(status_type status) {
       return not_found;
     case status_type::conflict:
       return conflict;
+    case status_type::range_not_satisfiable:
+      return range_not_satisfiable;
     case status_type::internal_server_error:
       return internal_server_error;
     case status_type::not_implemented:
