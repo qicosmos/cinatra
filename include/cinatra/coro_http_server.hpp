@@ -249,8 +249,8 @@ class coro_http_server {
 
             if (auto it = static_file_cache_.find(file_name);
                 it != static_file_cache_.end()) {
-              auto range_header =
-                  build_range_header(mime, file_name, fs::file_size(file_name));
+              auto range_header = build_range_header(
+                  mime, file_name, std::to_string(fs::file_size(file_name)));
               resp.set_delay(true);
               std::string &body = it->second;
               std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
@@ -330,7 +330,8 @@ class coro_http_server {
                       .append(std::to_string(file_size))
                       .append(CRCF);
                   auto range_header = build_range_header(
-                      mime, file_name, part_size, status, content_range);
+                      mime, file_name, std::to_string(part_size), status,
+                      content_range);
                   resp.set_delay(true);
                   bool r = co_await req.get_conn()->write_data(range_header);
                   if (!r) {
@@ -344,28 +345,10 @@ class coro_http_server {
                   // multipart ranges
                   resp.set_delay(true);
                   std::string file_size_str = std::to_string(file_size);
-                  size_t total = 0;
-                  std::vector<std::string> multi_heads;
-                  for (auto [start, end] : ranges) {
-                    std::string part_header = "--";
-                    part_header.append(BOUNDARY).append(CRCF);
-                    part_header.append("Content-Type: ")
-                        .append(mime)
-                        .append(CRCF);
-                    part_header.append("Content-Range: ").append("bytes ");
-                    part_header.append(std::to_string(start))
-                        .append("-")
-                        .append(std::to_string(end))
-                        .append("/")
-                        .append(file_size_str)
-                        .append(TWO_CRCF);
-                    total += part_header.size();
-                    multi_heads.push_back(std::move(part_header));
-                    size_t part_size = end + 1 - start + CRCF.size();
-                    total += part_size;
-                  }
-                  total += (BOUNDARY.size() + 4);
-                  auto range_header = build_multiple_range_header(total);
+                  size_t content_len = 0;
+                  std::vector<std::string> multi_heads = build_part_heads(
+                      ranges, mime, file_size_str, content_len);
+                  auto range_header = build_multiple_range_header(content_len);
                   bool r = co_await req.get_conn()->write_data(range_header);
                   if (!r) {
                     co_return;
@@ -381,27 +364,23 @@ class coro_http_server {
                     auto [start, end] = ranges[i];
                     in_file.seek(start, SEEK_SET);
                     size_t part_size = end + 1 - start;
-                    r = co_await send_single_part(in_file, content, req, resp,
-                                                  part_size);
-                    if (!r) {
-                      co_return;
-                    }
 
-                    auto r = co_await req.get_conn()->write_data(CRCF);
+                    std::string_view more = CRCF;
+                    if (i == ranges.size() - 1) {
+                      more = MULTIPART_END;
+                    }
+                    r = co_await send_single_part(in_file, content, req, resp,
+                                                  part_size, more);
                     if (!r) {
                       co_return;
                     }
                   }
-
-                  std::string tail = "--";
-                  tail.append(BOUNDARY).append("--");
-                  co_await req.get_conn()->write_data(tail);
                 }
                 co_return;
               }
 
-              auto range_header = build_range_header(
-                  mime, file_name, coro_io::coro_file::file_size(file_name));
+              auto range_header = build_range_header(mime, file_name,
+                                                     std::to_string(file_size));
               resp.set_delay(true);
               bool r = co_await req.get_conn()->write_data(range_header);
               if (!r) {
@@ -596,8 +575,33 @@ class coro_http_server {
     return header_str;
   }
 
+  std::vector<std::string> build_part_heads(auto &ranges, std::string_view mime,
+                                            std::string_view file_size_str,
+                                            size_t &content_len) {
+    std::vector<std::string> multi_heads;
+    for (auto [start, end] : ranges) {
+      std::string part_header = "--";
+      part_header.append(BOUNDARY).append(CRCF);
+      part_header.append("Content-Type: ").append(mime).append(CRCF);
+      part_header.append("Content-Range: ").append("bytes ");
+      part_header.append(std::to_string(start))
+          .append("-")
+          .append(std::to_string(end))
+          .append("/")
+          .append(file_size_str)
+          .append(TWO_CRCF);
+      content_len += part_header.size();
+      multi_heads.push_back(std::move(part_header));
+      size_t part_size = end + 1 - start + CRCF.size();
+      content_len += part_size;
+    }
+    content_len += (BOUNDARY.size() + 4);
+    return multi_heads;
+  }
+
   std::string build_range_header(std::string_view mime,
-                                 std::string_view filename, size_t file_size,
+                                 std::string_view filename,
+                                 std::string_view file_size_str,
                                  int status = 200,
                                  std::string_view content_range = "") {
     std::string header_str = "HTTP/1.1 ";
@@ -613,13 +617,14 @@ class coro_http_server {
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
-    header_str.append(std::to_string(file_size)).append("\r\n\r\n");
+    header_str.append(file_size_str).append("\r\n\r\n");
     return header_str;
   }
 
   async_simple::coro::Lazy<bool> send_single_part(auto &in_file, auto &content,
                                                   auto &req, auto &resp,
-                                                  size_t part_size) {
+                                                  size_t part_size,
+                                                  std::string_view more = "") {
     while (true) {
       size_t read_size = (std::min)(part_size, chunked_size_);
       if (read_size == 0) {
@@ -634,8 +639,20 @@ class coro_http_server {
 
       part_size -= read_size;
 
-      auto r = co_await req.get_conn()->write_data(
-          std::string_view(content.data(), size));
+      bool r = true;
+      if (more.empty()) {
+        r = co_await req.get_conn()->write_data(
+            std::string_view(content.data(), size));
+      }
+      else {
+        std::array<asio::const_buffer, 2> arr{
+            asio::buffer(content.data(), size), asio::buffer(more)};
+        auto [ec, _] = co_await req.get_conn()->async_write(arr);
+        if (ec) {
+          r = false;
+        }
+      }
+
       if (!r) {
         co_return false;
       }

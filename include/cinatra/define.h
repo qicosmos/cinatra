@@ -103,8 +103,7 @@ inline const std::string CSESSIONID = "CSESSIONID";
 const static inline std::string CRCF = "\r\n";
 const static inline std::string TWO_CRCF = "\r\n\r\n";
 const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
-const static inline std::string MULTIPART_END =
-    CRCF + "--" + BOUNDARY + "--" + TWO_CRCF;
+const static inline std::string MULTIPART_END = CRCF + "--" + BOUNDARY + "--";
 
 inline std::unordered_map<std::string, std::string> g_content_type_map = {
     {".css", "text/css"},
