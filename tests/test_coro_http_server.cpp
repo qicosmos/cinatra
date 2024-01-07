@@ -29,6 +29,47 @@ using namespace cinatra;
 
 using namespace std::chrono_literals;
 
+TEST_CASE("test parse ranges") {
+  bool is_valid = true;
+  auto vec = parse_ranges("200-999", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}});
+
+  vec = parse_ranges("-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+
+  vec = parse_ranges("-a", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  vec = parse_ranges("abc", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  is_valid = true;
+  vec = parse_ranges("-900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{9100, 9999}});
+
+  vec = parse_ranges("900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{900, 9999}});
+
+  vec = parse_ranges("200-999, 2000-2499", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}, {2000, 2499}});
+
+  vec = parse_ranges("200-999, 2000-2499, 9500-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{
+                   {200, 999}, {2000, 2499}, {9500, 9999}});
+
+  vec = parse_ranges("", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+}
+
 TEST_CASE("coro_io post") {
   auto t1 = async_simple::coro::syncAwait(coro_io::post([] {
   }));
@@ -88,6 +129,14 @@ TEST_CASE("coro_server example, will block") {
   server.sync_start();
   CHECK(server.port() > 0);
 }
+
+// TEST_CASE("test range download") {
+//   std::cout<<fs::current_path()<<"\n";
+//   coro_http_server server(1, 9001);
+//   server.set_static_res_dir("", "");
+//   server.set_file_resp_format_type(file_resp_format_type::range);
+//   server.sync_start();
+// }
 
 class my_object {
  public:

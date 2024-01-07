@@ -22,6 +22,7 @@ enum class status_type {
   forbidden = 403,
   not_found = 404,
   conflict = 409,
+  range_not_satisfiable = 416,
   internal_server_error = 500,
   not_implemented = 501,
   bad_gateway = 502,
