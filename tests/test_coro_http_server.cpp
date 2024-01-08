@@ -29,6 +29,47 @@ using namespace cinatra;
 
 using namespace std::chrono_literals;
 
+TEST_CASE("test parse ranges") {
+  bool is_valid = true;
+  auto vec = parse_ranges("200-999", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}});
+
+  vec = parse_ranges("-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+
+  vec = parse_ranges("-a", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  vec = parse_ranges("abc", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  is_valid = true;
+  vec = parse_ranges("-900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{9100, 9999}});
+
+  vec = parse_ranges("900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{900, 9999}});
+
+  vec = parse_ranges("200-999, 2000-2499", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}, {2000, 2499}});
+
+  vec = parse_ranges("200-999, 2000-2499, 9500-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{
+                   {200, 999}, {2000, 2499}, {9500, 9999}});
+
+  vec = parse_ranges("", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+}
+
 TEST_CASE("coro_io post") {
   auto t1 = async_simple::coro::syncAwait(coro_io::post([] {
   }));
@@ -87,6 +128,64 @@ TEST_CASE("coro_server example, will block") {
       });
   server.sync_start();
   CHECK(server.port() > 0);
+}
+
+bool create_file(std::string_view filename, size_t file_size = 1024) {
+  std::ofstream out(filename.data(), std::ios::binary);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  out.write(str.data(), str.size());
+  return true;
+}
+
+TEST_CASE("test range download") {
+  create_file("range_test.txt", 64);
+  std::cout << fs::current_path() << "\n";
+  coro_http_server server(1, 9001);
+  server.set_static_res_dir("", "");
+  server.set_file_resp_format_type(file_resp_format_type::range);
+  server.async_start();
+
+  coro_http_client client{};
+  std::string filename = "test1.txt";
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+
+  std::string uri = "http://127.0.0.1:9001/range_test.txt";
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "1-16"));
+  CHECK(result.status == 206);
+  CHECK(fs::file_size(filename) == 16);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "0-63"));
+  CHECK(result.status == 200);
+  CHECK(fs::file_size(filename) == 64);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "-10"));
+  CHECK(result.status == 206);
+  CHECK(fs::file_size(filename) == 10);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "0-200"));
+  CHECK(result.status == 200);
+  CHECK(fs::file_size(filename) == 64);
+
+  filename = "test3.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "100-200"));
+  CHECK(result.status == 416);
+
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "aaa-200"));
+  CHECK(result.status == 416);
 }
 
 class my_object {
@@ -357,17 +456,6 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
 
   server.stop();
   std::cout << "ok\n";
-}
-
-bool create_file(std::string_view filename, size_t file_size = 1024) {
-  std::ofstream out(filename.data(), std::ios::binary);
-  if (!out.is_open()) {
-    return false;
-  }
-
-  std::string str(file_size, 'A');
-  out.write(str.data(), str.size());
-  return true;
 }
 
 async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {

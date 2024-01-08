@@ -1,10 +1,113 @@
 #pragma once
+#include <charconv>
+
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
 #include "ws_define.h"
 
 namespace cinatra {
+inline std::vector<std::string_view> split_sv(std::string_view s,
+                                              std::string_view delimiter) {
+  size_t start = 0;
+  size_t end = s.find_first_of(delimiter);
+
+  std::vector<std::string_view> output;
+
+  while (end <= std::string_view::npos) {
+    output.emplace_back(s.substr(start, end - start));
+
+    if (end == std::string_view::npos)
+      break;
+
+    start = end + 1;
+    end = s.find_first_of(delimiter, start);
+  }
+
+  return output;
+}
+
+inline std::string_view trim_sv(std::string_view v) {
+  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+  return v;
+}
+
+inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
+                                                     size_t file_size,
+                                                     bool& is_valid) {
+  range_str = trim_sv(range_str);
+  if (range_str.empty()) {
+    return {{0, file_size - 1}};
+  }
+
+  if (range_str.find("--") != std::string_view::npos) {
+    is_valid = false;
+    return {};
+  }
+
+  if (range_str == "-") {
+    return {{0, file_size - 1}};
+  }
+
+  std::vector<std::pair<int, int>> vec;
+  auto ranges = split_sv(range_str, ",");
+  for (auto range : ranges) {
+    auto sub_range = split_sv(range, "-");
+    auto fist_range = trim_sv(sub_range[0]);
+
+    int start = 0;
+    if (fist_range.empty()) {
+      start = -1;
+    }
+    else {
+      auto [ptr, ec] = std::from_chars(
+          fist_range.data(), fist_range.data() + fist_range.size(), start);
+      if (ec != std::errc{}) {
+        is_valid = false;
+        return {};
+      }
+    }
+
+    int end = 0;
+    if (sub_range.size() == 1) {
+      end = file_size - 1;
+    }
+    else {
+      auto second_range = trim_sv(sub_range[1]);
+      if (second_range.empty()) {
+        end = file_size - 1;
+      }
+      else {
+        auto [ptr, ec] =
+            std::from_chars(second_range.data(),
+                            second_range.data() + second_range.size(), end);
+        if (ec != std::errc{}) {
+          is_valid = false;
+          return {};
+        }
+      }
+    }
+
+    if (start > 0 && (start >= file_size || start == end)) {
+      // out of range
+      is_valid = false;
+      return {};
+    }
+
+    if (end > 0 && end >= file_size) {
+      end = file_size - 1;
+    }
+
+    if (start == -1) {
+      start = file_size - end;
+      end = file_size - 1;
+    }
+
+    vec.push_back({start, end});
+  }
+  return vec;
+}
 class coro_http_connection;
 class coro_http_request {
  public:

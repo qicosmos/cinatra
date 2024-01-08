@@ -489,8 +489,8 @@ TEST_CASE("test multiple ranges download") {
   std::error_code ec{};
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
-      client.async_download(uri, filename, "1-10,11-16"));
-  if (result.status == 200 && !result.resp_body.empty()) {
+      client.async_download(uri, filename, "1-16"));
+  if (result.status == 206) {
     CHECK(std::filesystem::file_size(filename) == 16);
   }
 }
@@ -505,7 +505,7 @@ TEST_CASE("test ranges download") {
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10"));
-  if (result.status == 200 && !result.resp_body.empty()) {
+  if (result.status == 206) {
     CHECK(std::filesystem::file_size(filename) == 10);
   }
 
