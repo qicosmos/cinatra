@@ -188,11 +188,11 @@ class coro_http_connection
       }
 
       if (auto handler = router_.get_handler(key); handler) {
-        router_.route(handler, request_, response_);
+        router_.route(handler, request_, response_, key);
       }
       else {
         if (auto coro_handler = router_.get_coro_handler(key); coro_handler) {
-          co_await router_.route_coro(coro_handler, request_, response_);
+          co_await router_.route_coro(coro_handler, request_, response_, key);
         }
         else {
           // not found

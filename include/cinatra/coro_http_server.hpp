@@ -125,32 +125,41 @@ class coro_http_server {
   uint16_t port() const { return port_; }
 
   template <http_method... method, typename Func>
-  void set_http_handler(std::string key, Func handler) {
+  void set_http_handler(
+      std::string key, Func handler,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
     if constexpr (sizeof...(method) == 1) {
-      (router_.set_http_handler<method>(std::move(key), std::move(handler)),
+      (router_.set_http_handler<method>(std::move(key), std::move(handler),
+                                        std::move(aspects)),
        ...);
     }
     else {
-      (router_.set_http_handler<method>(key, handler), ...);
+      (router_.set_http_handler<method>(key, handler, aspects), ...);
     }
   }
 
-  template <http_method... method, typename Func>
-  void set_http_handler(std::string key, Func handler, auto owner) {
+  template <http_method... method, typename Func, typename Owner>
+  void set_http_handler(
+      std::string key, Func handler, Owner &&owner,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+    static_assert(std::is_member_function_pointer_v<Func>,
+                  "must be member function");
     using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
                                                    coro_http_response & resp)>
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
-      set_http_handler<method...>(std::move(key), std::move(f));
+      set_http_handler<method...>(std::move(key), std::move(f),
+                                  std::move(aspects));
     }
     else {
       std::function<void(coro_http_request & req, coro_http_response & resp)>
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
-      set_http_handler<method...>(std::move(key), std::move(f));
+      set_http_handler<method...>(std::move(key), std::move(f),
+                                  std::move(aspects));
     }
   }
 
