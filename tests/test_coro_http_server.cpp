@@ -386,6 +386,67 @@ TEST_CASE("get post") {
   server.stop();
 }
 
+struct log_t : public base_aspect {
+  bool before(coro_http_request &, coro_http_response &) {
+    std::cout << "before log" << std::endl;
+    return true;
+  }
+
+  bool after(coro_http_request &, coro_http_response &res) {
+    std::cout << "after log" << std::endl;
+    res.add_header("aaaa", "bbcc");
+    return true;
+  }
+};
+
+struct check_t : public base_aspect {
+  bool before(coro_http_request &, coro_http_response &) {
+    std::cout << "check before" << std::endl;
+    return true;
+  }
+};
+
+TEST_CASE("test aspects") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET, POST>(
+      "/",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+
+  server.set_http_handler<GET, POST>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      },
+      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+
+  auto check = [](auto &result) {
+    bool has_str = false;
+    for (auto [k, v] : result.resp_headers) {
+      if (k == "aaaa") {
+        if (v == "bbcc") {
+          has_str = true;
+        }
+        break;
+      }
+    }
+    CHECK(has_str);
+  };
+
+  check(result);
+
+  result = client.get("http://127.0.0.1:9001/coro");
+  check(result);
+}
+
 TEST_CASE("use out context") {
   asio::io_context out_ctx;
   auto work = std::make_unique<asio::io_context::work>(out_ctx);
