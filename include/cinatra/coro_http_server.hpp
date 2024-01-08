@@ -136,8 +136,10 @@ class coro_http_server {
     }
   }
 
-  template <http_method... method, typename Func>
-  void set_http_handler(std::string key, Func handler, auto owner) {
+  template <http_method... method, typename Func, typename Owner>
+  void set_http_handler(std::string key, Func handler, Owner &&owner) {
+    static_assert(std::is_member_function_pointer_v<Func>,
+                  "must be member function");
     using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,

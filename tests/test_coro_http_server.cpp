@@ -196,7 +196,7 @@ class my_object {
 
   async_simple::coro::Lazy<void> lazy(coro_http_request &req,
                                       coro_http_response &response) {
-    response.set_status_and_content(status_type::ok, "ok");
+    response.set_status_and_content(status_type::ok, "ok lazy");
     co_return;
   }
 };
@@ -237,6 +237,12 @@ TEST_CASE("set http handler") {
 
   auto &handlers2 = server2.get_router().get_handlers();
   CHECK(handlers2.size() == 1);
+
+  my_object o{};
+  // member function
+  server2.set_http_handler<GET>("/test", &my_object::normal, o);
+  server2.set_http_handler<GET>("/test_lazy", &my_object::lazy, &o);
+  CHECK(handlers2.size() == 2);
 
   auto coro_func =
       [](coro_http_request &req,
