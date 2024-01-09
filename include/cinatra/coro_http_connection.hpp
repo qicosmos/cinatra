@@ -289,6 +289,52 @@ class coro_http_connection
     co_return co_await write_chunked("", true);
   }
 
+  async_simple::coro::Lazy<bool> begin_multipart(
+      std::string_view boundary = "", std::string_view content_type = "") {
+    response_.set_delay(true);
+    response_.set_status(status_type::ok);
+    if (boundary.empty()) {
+      boundary = BOUNDARY;
+    }
+    if (content_type.empty()) {
+      content_type = "multipart/form-data";
+    }
+
+    std::string str{content_type};
+    str.append("; ").append("boundary=").append(boundary);
+    response_.add_header("Content-Type", str);
+    response_.set_boundary(boundary);
+    co_return co_await reply();
+  }
+
+  async_simple::coro::Lazy<bool> write_multipart(
+      std::string_view part_data, std::string_view content_type) {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string part_head = "--";
+    part_head.append(response_.get_boundary()).append(CRCF);
+    part_head.append("Content-Type: ").append(content_type).append(CRCF);
+    part_head.append("Content-Length: ")
+        .append(std::to_string(part_data.size()))
+        .append(TWO_CRCF);
+
+    buffers_.push_back(asio::buffer(part_head));
+    buffers_.push_back(asio::buffer(part_data));
+    buffers_.push_back(asio::buffer(CRCF));
+
+    auto [ec, _] = co_await async_write(buffers_);
+    co_return ec == std::error_code{};
+  }
+
+  async_simple::coro::Lazy<bool> end_multipart() {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string multipart_end = "--";
+    multipart_end.append(response_.get_boundary()).append("--");
+    auto [ec, _] = co_await async_write(asio::buffer(multipart_end));
+    co_return ec == std::error_code{};
+  }
+
   async_simple::coro::Lazy<chunked_result> read_chunked() {
     if (head_buf_.size() > 0) {
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
