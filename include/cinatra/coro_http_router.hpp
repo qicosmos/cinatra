@@ -80,13 +80,11 @@ class coro_http_router {
             return;
           }
           coro_handles_.emplace(*it, std::move(handler));
+          if (!aspects.empty()) {
+            has_aspects_ = true;
+            aspects_.emplace(*it, std::move(aspects));
+          }
         }
-      }
-
-      coro_handles_.emplace(*it, std::move(handler));
-      if (!aspects.empty()) {
-        has_aspects_ = true;
-        aspects_.emplace(*it, std::move(aspects));
       }
     }
     else {
@@ -114,12 +112,10 @@ class coro_http_router {
           return;
         }
         map_handles_.emplace(*it, std::move(handler));
-      }
-
-      map_handles_.emplace(*it, std::move(handler));
-      if (!aspects.empty()) {
-        has_aspects_ = true;
-        aspects_.emplace(*it, std::move(aspects));
+        if (!aspects.empty()) {
+          has_aspects_ = true;
+          aspects_.emplace(*it, std::move(aspects));
+        }
       }
     }
   }
