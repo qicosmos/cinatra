@@ -206,7 +206,7 @@ class coro_http_connection
           std::tie(is_exist, handler, request_.params_) =
               router_.get_router_tree()->get(url_path, method_str);
           if (is_exist) {
-            router_.route(&handler, request_, response_);
+            (handler)(request_, response_);
           }
           else {
             bool is_coro_exist = false;
@@ -218,8 +218,7 @@ class coro_http_connection
                 router_.get_coro_router_tree()->get_coro(url_path, method_str);
 
             if (is_coro_exist) {
-              std::cout << "come exit here!\n";
-              co_await router_.route_coro(&coro_handler, request_, response_);
+              co_await (coro_handler)(request_, response_);
             }
             else {
               bool is_matched_regex_router = false;
