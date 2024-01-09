@@ -164,6 +164,7 @@ class coro_http_response {
     delay_ = false;
     status_ = status_type::init;
     fmt_type_ = format_type::normal;
+    boundary_.clear();
   }
 
   void append_head(auto& headers) {
