@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <future>
 #include <memory>
@@ -27,6 +28,47 @@
 using namespace cinatra;
 
 using namespace std::chrono_literals;
+
+TEST_CASE("test parse ranges") {
+  bool is_valid = true;
+  auto vec = parse_ranges("200-999", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}});
+
+  vec = parse_ranges("-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+
+  vec = parse_ranges("-a", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  vec = parse_ranges("abc", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  is_valid = true;
+  vec = parse_ranges("-900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{9100, 9999}});
+
+  vec = parse_ranges("900", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{900, 9999}});
+
+  vec = parse_ranges("200-999, 2000-2499", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{200, 999}, {2000, 2499}});
+
+  vec = parse_ranges("200-999, 2000-2499, 9500-", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{
+                   {200, 999}, {2000, 2499}, {9500, 9999}});
+
+  vec = parse_ranges("", 10000, is_valid);
+  CHECK(is_valid);
+  CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
+}
 
 TEST_CASE("coro_io post") {
   auto t1 = async_simple::coro::syncAwait(coro_io::post([] {
@@ -88,6 +130,64 @@ TEST_CASE("coro_server example, will block") {
   CHECK(server.port() > 0);
 }
 
+bool create_file(std::string_view filename, size_t file_size = 1024) {
+  std::ofstream out(filename.data(), std::ios::binary);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  out.write(str.data(), str.size());
+  return true;
+}
+
+TEST_CASE("test range download") {
+  create_file("range_test.txt", 64);
+  std::cout << fs::current_path() << "\n";
+  coro_http_server server(1, 9001);
+  server.set_static_res_dir("", "");
+  server.set_file_resp_format_type(file_resp_format_type::range);
+  server.async_start();
+
+  coro_http_client client{};
+  std::string filename = "test1.txt";
+  std::error_code ec{};
+  std::filesystem::remove(filename, ec);
+
+  std::string uri = "http://127.0.0.1:9001/range_test.txt";
+  resp_data result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "1-16"));
+  CHECK(result.status == 206);
+  CHECK(fs::file_size(filename) == 16);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "0-63"));
+  CHECK(result.status == 200);
+  CHECK(fs::file_size(filename) == 64);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "-10"));
+  CHECK(result.status == 206);
+  CHECK(fs::file_size(filename) == 10);
+
+  filename = "test2.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "0-200"));
+  CHECK(result.status == 200);
+  CHECK(fs::file_size(filename) == 64);
+
+  filename = "test3.txt";
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "100-200"));
+  CHECK(result.status == 416);
+
+  result = async_simple::coro::syncAwait(
+      client.async_download(uri, filename, "aaa-200"));
+  CHECK(result.status == 416);
+}
+
 class my_object {
  public:
   void normal(coro_http_request &req, coro_http_response &response) {
@@ -96,7 +196,7 @@ class my_object {
 
   async_simple::coro::Lazy<void> lazy(coro_http_request &req,
                                       coro_http_response &response) {
-    response.set_status_and_content(status_type::ok, "ok");
+    response.set_status_and_content(status_type::ok, "ok lazy");
     co_return;
   }
 };
@@ -137,6 +237,12 @@ TEST_CASE("set http handler") {
 
   auto &handlers2 = server2.get_router().get_handlers();
   CHECK(handlers2.size() == 1);
+
+  my_object o{};
+  // member function
+  server2.set_http_handler<GET>("/test", &my_object::normal, o);
+  server2.set_http_handler<GET>("/test_lazy", &my_object::lazy, &o);
+  CHECK(handlers2.size() == 2);
 
   auto coro_func =
       [](coro_http_request &req,
@@ -280,6 +386,74 @@ TEST_CASE("get post") {
   server.stop();
 }
 
+struct log_t : public base_aspect {
+  bool before(coro_http_request &, coro_http_response &) {
+    std::cout << "before log" << std::endl;
+    return true;
+  }
+
+  bool after(coro_http_request &, coro_http_response &res) {
+    std::cout << "after log" << std::endl;
+    res.add_header("aaaa", "bbcc");
+    return true;
+  }
+};
+
+struct check_t : public base_aspect {
+  bool before(coro_http_request &, coro_http_response &) {
+    std::cout << "check before" << std::endl;
+    return true;
+  }
+};
+
+TEST_CASE("test aspects") {
+  coro_http_server server(1, 9001);
+  create_file("test_aspect.txt", 64);
+  std::vector<std::shared_ptr<base_aspect>> aspects = {
+      std::make_shared<log_t>(), std::make_shared<check_t>()};
+  server.set_static_res_dir("", "", aspects);
+  server.set_http_handler<GET, POST>(
+      "/",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      },
+      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+
+  server.set_http_handler<GET, POST>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      },
+      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+
+  auto check = [](auto &result) {
+    bool has_str = false;
+    for (auto [k, v] : result.resp_headers) {
+      if (k == "aaaa") {
+        if (v == "bbcc") {
+          has_str = true;
+        }
+        break;
+      }
+    }
+    CHECK(has_str);
+  };
+
+  check(result);
+
+  result = client.get("http://127.0.0.1:9001/coro");
+  check(result);
+
+  result = client.get("http://127.0.0.1:9001/test_aspect.txt");
+  CHECK(result.status == 200);
+}
+
 TEST_CASE("use out context") {
   asio::io_context out_ctx;
   auto work = std::make_unique<asio::io_context::work>(out_ctx);
@@ -356,17 +530,6 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
 
   server.stop();
   std::cout << "ok\n";
-}
-
-bool create_file(std::string_view filename, size_t file_size = 1024) {
-  std::ofstream out(filename.data(), std::ios::binary);
-  if (!out.is_open()) {
-    return false;
-  }
-
-  std::string str(file_size, 'A');
-  out.write(str.data(), str.size());
-  return true;
 }
 
 async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
@@ -739,7 +902,7 @@ TEST_CASE("test websocket with different message sizes") {
           }
 
           if (result.type == cinatra::ws_frame_type::WS_CLOSE_FRAME) {
-            REQUIRE(result.data.empty());
+            REQUIRE(result.data == "test close");
             break;
           }
 
@@ -751,13 +914,16 @@ TEST_CASE("test websocket with different message sizes") {
       });
   server.async_start();
 
-  auto client = std::make_shared<cinatra::coro_http_client>();
-
   SUBCASE("medium message - 16 bit length") {
+    cinatra::coro_http_client client{};
     std::string medium_message(
         65535, 'x');  // 65,535 'x' characters for the medium message test.
 
-    client->on_ws_msg([medium_message](cinatra::resp_data data) {
+    client.on_ws_close([](std::string_view reason) {
+      std::cout << "web socket close " << reason << std::endl;
+    });
+
+    client.on_ws_msg([medium_message](cinatra::resp_data data) {
       if (data.net_err) {
         std::cout << "ws_msg net error " << data.net_err.message() << "\n";
         return;
@@ -768,16 +934,17 @@ TEST_CASE("test websocket with different message sizes") {
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
-    async_simple::coro::syncAwait(client->async_send_ws(medium_message));
-    async_simple::coro::syncAwait(client->async_send_ws_close());
+        client.async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
+    async_simple::coro::syncAwait(client.async_send_ws(medium_message));
+    async_simple::coro::syncAwait(client.async_send_ws_close("test close"));
   }
 
   SUBCASE("large message - 64 bit length") {
+    cinatra::coro_http_client client{};
     std::string large_message(
         70000, 'x');  // 70,000 'x' characters for the large message test.
 
-    client->on_ws_msg([large_message](cinatra::resp_data data) {
+    client.on_ws_msg([large_message](cinatra::resp_data data) {
       if (data.net_err) {
         std::cout << "ws_msg net error " << data.net_err.message() << "\n";
         return;
@@ -788,9 +955,9 @@ TEST_CASE("test websocket with different message sizes") {
     });
 
     async_simple::coro::syncAwait(
-        client->async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
-    async_simple::coro::syncAwait(client->async_send_ws(large_message));
-    async_simple::coro::syncAwait(client->async_send_ws_close());
+        client.async_ws_connect("ws://127.0.0.1:9001/ws_echo1"));
+    async_simple::coro::syncAwait(client.async_send_ws(large_message));
+    async_simple::coro::syncAwait(client.async_send_ws_close("test close"));
   }
 
   server.stop();
@@ -867,6 +1034,7 @@ TEST_CASE("test websocket with message max_size limit") {
     async_simple::coro::syncAwait(client->async_send_ws_close());
   }
 
+  client = std::make_shared<cinatra::coro_http_client>();
   SUBCASE("large message - 64 bit length") {
     std::string large_message(
         70000, 'x');  // 70,000 'x' characters for the large message test.
