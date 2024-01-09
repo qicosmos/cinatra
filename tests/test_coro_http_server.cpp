@@ -169,6 +169,7 @@ TEST_CASE("test multiple download") {
   coro_http_client client{};
   auto result = client.get("http://127.0.0.1:9001/");
   CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world ok");
 }
 
 TEST_CASE("test range download") {

@@ -330,7 +330,7 @@ class coro_http_connection
     response_.set_delay(true);
     buffers_.clear();
     std::string multipart_end = "--";
-    multipart_end.append(response_.get_boundary()).append("--");
+    multipart_end.append(response_.get_boundary()).append("--").append(CRCF);
     auto [ec, _] = co_await async_write(asio::buffer(multipart_end));
     co_return ec == std::error_code{};
   }
