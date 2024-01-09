@@ -22,18 +22,6 @@
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
-struct chunked_result {
-  std::error_code ec;
-  bool eof = false;
-  std::string_view data;
-};
-
-struct part_head_t {
-  std::error_code ec;
-  std::string name;
-  std::string filename;
-};
-
 struct websocket_result {
   std::error_code ec;
   ws_frame_type type;
