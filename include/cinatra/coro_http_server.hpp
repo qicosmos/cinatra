@@ -196,8 +196,9 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
-  void set_static_res_dir(std::string_view uri_suffix = "",
-                          std::string file_path = "www") {
+  void set_static_res_dir(
+      std::string_view uri_suffix = "", std::string file_path = "www",
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     bool has_double_dot = (file_path.find("..") != std::string::npos) ||
                           (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -415,7 +416,8 @@ class coro_http_server {
                 }
               }
             }
-          });
+          },
+          aspects);
     }
   }
 

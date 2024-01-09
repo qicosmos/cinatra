@@ -408,6 +408,10 @@ struct check_t : public base_aspect {
 
 TEST_CASE("test aspects") {
   coro_http_server server(1, 9001);
+  create_file("test_aspect.txt", 64);
+  std::vector<std::shared_ptr<base_aspect>> aspects = {
+      std::make_shared<log_t>(), std::make_shared<check_t>()};
+  server.set_static_res_dir("", "", aspects);
   server.set_http_handler<GET, POST>(
       "/",
       [](coro_http_request &req, coro_http_response &resp) {
@@ -445,6 +449,9 @@ TEST_CASE("test aspects") {
 
   result = client.get("http://127.0.0.1:9001/coro");
   check(result);
+
+  result = client.get("http://127.0.0.1:9001/test_aspect.txt");
+  CHECK(result.status == 200);
 }
 
 TEST_CASE("use out context") {
