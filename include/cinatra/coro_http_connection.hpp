@@ -199,53 +199,65 @@ class coro_http_connection
           std::function<void(coro_http_request & req,
                              coro_http_response & resp)>
               handler;
-          params_t params = {};
           std::string method_str;
           method_str.assign(parser_.method().data(), parser_.method().length());
           std::string url_path;
           url_path.assign(parser_.url().data(), parser_.url().length());
-
           std::tie(is_exist, handler, request_.params_) =
               router_.get_router_tree()->get(url_path, method_str);
           if (is_exist) {
-            (handler)(request_, response_);
+            router_.route(&handler, request_, response_);
           }
           else {
-            bool is_matched_regex_router = false;
-            // coro regex router
-            auto coro_regex_handlers = router_.get_coro_regex_handlers();
-            if (coro_regex_handlers.size() != 0) {
-              for (auto &pair : coro_regex_handlers) {
-                std::string coro_regex_key;
-                coro_regex_key.assign(key.data(), key.size());
+            bool is_coro_exist = false;
+            std::function<async_simple::coro::Lazy<void>(
+                coro_http_request & req, coro_http_response & resp)>
+                coro_handler;
 
-                if (std::regex_match(coro_regex_key, request_.matches_,
-                                     std::get<0>(pair))) {
-                  auto coro_handler = std::get<1>(pair);
-                  co_await (coro_handler)(request_, response_);
-                  is_matched_regex_router = true;
-                }
-              }
+            std::tie(is_coro_exist, coro_handler, request_.params_) =
+                router_.get_coro_router_tree()->get_coro(url_path, method_str);
+
+            if (is_coro_exist) {
+              std::cout << "come exit here!\n";
+              co_await router_.route_coro(&coro_handler, request_, response_);
             }
-            // regex router
-            if (!is_matched_regex_router) {
-              auto regex_handlers = router_.get_regex_handlers();
-              if (regex_handlers.size() != 0) {
-                for (auto &pair : regex_handlers) {
-                  std::string regex_key;
-                  regex_key.assign(key.data(), key.size());
-                  if (std::regex_match(regex_key, request_.matches_,
+            else {
+              bool is_matched_regex_router = false;
+              // coro regex router
+              auto coro_regex_handlers = router_.get_coro_regex_handlers();
+              if (coro_regex_handlers.size() != 0) {
+                for (auto &pair : coro_regex_handlers) {
+                  std::string coro_regex_key;
+                  coro_regex_key.assign(key.data(), key.size());
+
+                  if (std::regex_match(coro_regex_key, request_.matches_,
                                        std::get<0>(pair))) {
-                    auto handler = std::get<1>(pair);
-                    (handler)(request_, response_);
+                    auto coro_handler = std::get<1>(pair);
+                    co_await (coro_handler)(request_, response_);
                     is_matched_regex_router = true;
                   }
                 }
               }
+              // regex router
+              if (!is_matched_regex_router) {
+                auto regex_handlers = router_.get_regex_handlers();
+                if (regex_handlers.size() != 0) {
+                  for (auto &pair : regex_handlers) {
+                    std::string regex_key;
+                    regex_key.assign(key.data(), key.size());
+                    if (std::regex_match(regex_key, request_.matches_,
+                                         std::get<0>(pair))) {
+                      auto handler = std::get<1>(pair);
+                      (handler)(request_, response_);
+                      is_matched_regex_router = true;
+                    }
+                  }
+                }
+              }
+              // not found
+              if (!is_matched_regex_router)
+                response_.set_status(status_type::not_found);
             }
-            // not found
-            if (!is_matched_regex_router)
-              response_.set_status(status_type::not_found);
           }
         }
       }

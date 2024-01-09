@@ -8,13 +8,6 @@
 
 namespace cinatra {
 
-typedef std::pair<std::string, std::string> paramters_t;
-
-struct params_t {
-  std::vector<paramters_t> parameters;
-  int size;
-};
-
 class coro_http_connection;
 class coro_http_request {
  public:
@@ -128,7 +121,7 @@ class coro_http_request {
     return true;
   }
 
-  params_t params_;
+  std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;
 
  private:

@@ -30,7 +30,6 @@ constexpr inline bool is_lazy_v =
 
 class coro_http_router {
  public:
-  ~coro_http_router() { delete router_tree_; }
   // eg: "GET hello/" as a key
   template <http_method method, typename Func>
   void set_http_handler(std::string key, Func handler) {
@@ -42,26 +41,34 @@ class coro_http_router {
     // std::string_view, avoid memcpy when route
     using return_type = typename util::function_traits<Func>::return_type;
     if constexpr (is_lazy_v<return_type>) {
-      if (whole_str.find("{") != std::string::npos ||
-          whole_str.find(")") != std::string::npos) {
-        std::string pattern = whole_str;
-        std::unordered_map<std::string, int> params;
-        params.clear();
-
-        if (pattern.find("{}") != std::string::npos) {
-          replace_all(pattern, "{}", "([^/]+)");
-        }
-
-        coro_regex_handles_.emplace_back(std::regex(pattern),
-                                         std::move(handler));
+      if (whole_str.find(":") != std::string::npos) {
+        std::vector<std::string> coro_method_names = {};
+        std::string coro_method_str;
+        coro_method_str.append(method_name);
+        coro_method_names.push_back(coro_method_str);
+        coro_router_tree_->coro_insert(key, std::move(handler),
+                                       coro_method_names);
       }
       else {
-        auto [it, ok] = coro_keys_.emplace(std::move(whole_str));
-        if (!ok) {
-          CINATRA_LOG_WARNING << key << " has already registered.";
-          return;
+        if (whole_str.find("{") != std::string::npos ||
+            whole_str.find(")") != std::string::npos) {
+          std::string pattern = whole_str;
+
+          if (pattern.find("{}") != std::string::npos) {
+            replace_all(pattern, "{}", "([^/]+)");
+          }
+
+          coro_regex_handles_.emplace_back(std::regex(pattern),
+                                           std::move(handler));
         }
-        coro_handles_.emplace(*it, std::move(handler));
+        else {
+          auto [it, ok] = coro_keys_.emplace(std::move(whole_str));
+          if (!ok) {
+            CINATRA_LOG_WARNING << key << " has already registered.";
+            return;
+          }
+          coro_handles_.emplace(*it, std::move(handler));
+        }
       }
     }
     else {
@@ -75,8 +82,6 @@ class coro_http_router {
       else if (whole_str.find("{") != std::string::npos ||
                whole_str.find(")") != std::string::npos) {
         std::string pattern = whole_str;
-        std::unordered_map<std::string, int> params;
-        params.clear();
 
         if (pattern.find("{}") != std::string::npos) {
           replace_all(pattern, "{}", "([^/]+)");
@@ -143,7 +148,11 @@ class coro_http_router {
 
   const auto& get_coro_handlers() const { return coro_handles_; }
 
-  radix_tree* get_router_tree() { return router_tree_; }
+  std::shared_ptr<radix_tree> get_router_tree() { return router_tree_; }
+
+  std::shared_ptr<radix_tree> get_coro_router_tree() {
+    return coro_router_tree_;
+  }
 
   const auto& get_coro_regex_handlers() { return coro_regex_handles_; }
 
@@ -162,7 +171,11 @@ class coro_http_router {
                          coro_http_request& req, coro_http_response& resp)>>
       coro_handles_;
 
-  radix_tree* router_tree_ = new radix_tree();
+  std::shared_ptr<radix_tree> router_tree_ =
+      std::make_shared<radix_tree>(radix_tree());
+
+  std::shared_ptr<radix_tree> coro_router_tree_ =
+      std::make_shared<radix_tree>(radix_tree());
 
   std::vector<std::tuple<
       std::regex,
