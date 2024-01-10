@@ -716,9 +716,11 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           assert(req.get_content_type() == content_type::chunked);
           chunked_result result{};
           std::string_view filename = req.get_header_value("filename");
-          std::cout << "filename: " << filename << "\n";
+
           CHECK(!filename.empty());
           std::string fullpath = fs::current_path().append(filename).string();
+          std::cout << "filename: " << fullpath << "\n";
+          std::cout << "exists: " << fs::exists(fullpath) << "\n";
           std::ofstream file;
           file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
