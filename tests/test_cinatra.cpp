@@ -718,7 +718,17 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           std::string_view filename = req.get_header_value("filename");
           std::cout << "filename: " << filename << "\n";
           CHECK(!filename.empty());
-          std::ofstream file(filename.data(), std::ios::binary);
+          std::ofstream file;
+          file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
+          try {
+            file.open(filename.data(), std::ios::binary);
+          } catch (std::ios_base::failure &e) {
+            std::cerr << e.what() << '\n';
+          } catch (std::system_error &e) {
+            std::cerr << e.code().message() << std::endl;
+          }
+
           CHECK(file.is_open());
 
           while (true) {
