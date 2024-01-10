@@ -11,28 +11,29 @@ using namespace cinatra;
 
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test wss client") {
-  http_ssl_server server(std::thread::hardware_concurrency());
-  server.set_ssl_conf(
-      {"../../include/cinatra/server.crt", "../../include/cinatra/server.key"});
-  REQUIRE(server.listen("0.0.0.0", "9001"));
+  cinatra::coro_http_server server(1, 9001);
+  server.init_ssl("../../include/cinatra/server.crt",
+                  "../../include/cinatra/server.key");
+  server.set_http_handler<cinatra::GET>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
 
-  server.set_http_handler<GET>("/", [](request &req, response &res) {
-    assert(req.get_content_type() == content_type::websocket);
-
-    req.on(ws_message, [](request &req) {
-      auto part_data = req.get_part_data();
-      req.get_conn<cinatra::SSL>()->send_ws_string(
-          std::string(part_data.data(), part_data.length()));
-    });
-  });
-
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
   bool ok = client.init_ssl(asio::ssl::verify_peer,
@@ -62,7 +63,6 @@ TEST_CASE("test wss client") {
   client.close();
 
   server.stop();
-  server_thread.join();
 }
 #endif
 
