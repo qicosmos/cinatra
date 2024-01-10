@@ -4,9 +4,9 @@
 namespace cinatra {
 
 template <typename T>
-class multipart_reader {
+class multipart_reader_t {
  public:
-  multipart_reader(T *conn)
+  multipart_reader_t(T *conn)
       : conn_(conn),
         head_buf_(conn_->head_buf_),
         chunked_buf_(conn_->chunked_buf_) {}
@@ -114,5 +114,5 @@ class multipart_reader {
 };
 
 template <typename T>
-multipart_reader(T *con) -> multipart_reader<T>;
+multipart_reader_t(T *con) -> multipart_reader_t<T>;
 }  // namespace cinatra

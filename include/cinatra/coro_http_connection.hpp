@@ -625,7 +625,7 @@ class coro_http_connection
   }
 
  private:
-  friend class multipart_reader<coro_http_connection>;
+  friend class multipart_reader_t<coro_http_connection>;
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;

@@ -1540,7 +1540,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       resp_data &data, req_context<String> ctx) {
     std::error_code ec{};
     std::string boundary = std::string{parser_.get_boundary()};
-    multipart_reader multipart(this);
+    multipart_reader_t multipart(this);
     while (true) {
       auto part_head = co_await multipart.read_part_head();
       if (part_head.ec) {
@@ -1973,7 +1973,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return has_http_scheme;
   }
 
-  friend class multipart_reader<coro_http_client>;
+  friend class multipart_reader_t<coro_http_client>;
   http_parser parser_;
   coro_io::ExecutorWrapper<> executor_wrapper_;
   coro_io::period_timer timer_;
