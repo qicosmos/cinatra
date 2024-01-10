@@ -786,6 +786,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
   {
     // chunked download, not in cache
+    create_file("test_102.txt", 102);
     create_file("test_static.txt", 1024);
     coro_http_server server(1, 8090);
     server.set_static_res_dir("download", "");
@@ -801,11 +802,11 @@ TEST_CASE("test coro_http_client chunked upload and download") {
     CHECK(r.status == 200);
     CHECK(std::filesystem::file_size(download_name) == 1024);
 
-    download_url = "http://127.0.0.1:8090/download/test_100.txt";
+    download_url = "http://127.0.0.1:8090/download/test_102.txt";
     download_name = "test2.txt";
     r = client.download(download_url, download_name);
     CHECK(r.status == 200);
-    CHECK(std::filesystem::file_size(download_name) == 100);
+    CHECK(std::filesystem::file_size(download_name) == 102);
   }
 }
 
