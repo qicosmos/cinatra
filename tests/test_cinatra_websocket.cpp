@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <future>
 #include <memory>
@@ -6,6 +7,8 @@
 #include "cinatra.hpp"
 #include "cinatra/websocket.hpp"
 #include "doctest/doctest.h"
+
+using namespace std::chrono_literals;
 
 using namespace cinatra;
 
