@@ -59,7 +59,7 @@ TEST_CASE("test wss client") {
 
   promise.get_future().wait();
 
-  client.async_close();
+  client.close();
 
   server.stop();
   server_thread.join();
@@ -180,7 +180,7 @@ void test_websocket_content(size_t len) {
   server.stop();
   server_thread.join();
 
-  client.async_close();
+  client.close();
 }
 
 TEST_CASE("test websocket content lt 126") {

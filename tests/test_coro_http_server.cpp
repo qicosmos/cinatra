@@ -147,6 +147,7 @@ TEST_CASE("test multiple download") {
       "/",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        multipart_reader multipart(resp.get_conn());
         bool ok;
         if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
           co_return;

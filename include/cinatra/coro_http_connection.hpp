@@ -15,6 +15,7 @@
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
+#include "multipart.hpp"
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
@@ -717,6 +718,7 @@ class coro_http_connection
   }
 
  private:
+  friend class multipart_reader<coro_http_connection>;
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;

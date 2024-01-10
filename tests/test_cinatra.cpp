@@ -447,7 +447,7 @@ TEST_CASE("test upload file") {
       "http//badurl.com", "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
-  client.async_close();
+  client.close();
 
   server.stop();
   server_thread.join();
