@@ -192,7 +192,6 @@ class coro_http_router {
 
   const auto& get_coro_handlers() const { return coro_handles_; }
 
-
   std::shared_ptr<radix_tree> get_router_tree() { return router_tree_; }
 
   std::shared_ptr<radix_tree> get_coro_router_tree() {
@@ -235,7 +234,6 @@ class coro_http_router {
 
   void handle_after() {}
 
-
  private:
   std::set<std::string> keys_;
   std::unordered_map<
@@ -248,7 +246,6 @@ class coro_http_router {
                      std::function<async_simple::coro::Lazy<void>(
                          coro_http_request& req, coro_http_response& resp)>>
       coro_handles_;
-
 
   std::shared_ptr<radix_tree> router_tree_ =
       std::make_shared<radix_tree>(radix_tree());
@@ -270,6 +267,5 @@ class coro_http_router {
                      std::vector<std::shared_ptr<base_aspect>>>
       aspects_;
   bool has_aspects_ = false;
-
 };
 }  // namespace cinatra
