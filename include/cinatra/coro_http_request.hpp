@@ -1,5 +1,7 @@
 #pragma once
+
 #include <charconv>
+#include <regex>
 
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
@@ -7,6 +9,7 @@
 #include "ws_define.h"
 
 namespace cinatra {
+
 inline std::vector<std::string_view> split_sv(std::string_view s,
                                               std::string_view delimiter) {
   size_t start = 0;
@@ -108,6 +111,7 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
   }
   return vec;
 }
+
 class coro_http_connection;
 class coro_http_request {
  public:
@@ -220,6 +224,9 @@ class coro_http_request {
     is_websocket_ = true;
     return true;
   }
+
+  std::unordered_map<std::string, std::string> params_;
+  std::smatch matches_;
 
  private:
   http_parser& parser_;
