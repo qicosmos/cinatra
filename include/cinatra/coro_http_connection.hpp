@@ -15,6 +15,7 @@
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
+#include "multipart.hpp"
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
@@ -22,18 +23,6 @@
 #include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
-struct chunked_result {
-  std::error_code ec;
-  bool eof = false;
-  std::string_view data;
-};
-
-struct part_head_t {
-  std::error_code ec;
-  std::string name;
-  std::string filename;
-};
-
 struct websocket_result {
   std::error_code ec;
   ws_frame_type type;
@@ -289,6 +278,52 @@ class coro_http_connection
     co_return co_await write_chunked("", true);
   }
 
+  async_simple::coro::Lazy<bool> begin_multipart(
+      std::string_view boundary = "", std::string_view content_type = "") {
+    response_.set_delay(true);
+    response_.set_status(status_type::ok);
+    if (boundary.empty()) {
+      boundary = BOUNDARY;
+    }
+    if (content_type.empty()) {
+      content_type = "multipart/form-data";
+    }
+
+    std::string str{content_type};
+    str.append("; ").append("boundary=").append(boundary);
+    response_.add_header("Content-Type", str);
+    response_.set_boundary(boundary);
+    co_return co_await reply();
+  }
+
+  async_simple::coro::Lazy<bool> write_multipart(
+      std::string_view part_data, std::string_view content_type) {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string part_head = "--";
+    part_head.append(response_.get_boundary()).append(CRCF);
+    part_head.append("Content-Type: ").append(content_type).append(CRCF);
+    part_head.append("Content-Length: ")
+        .append(std::to_string(part_data.size()))
+        .append(TWO_CRCF);
+
+    buffers_.push_back(asio::buffer(part_head));
+    buffers_.push_back(asio::buffer(part_data));
+    buffers_.push_back(asio::buffer(CRCF));
+
+    auto [ec, _] = co_await async_write(buffers_);
+    co_return !ec;
+  }
+
+  async_simple::coro::Lazy<bool> end_multipart() {
+    response_.set_delay(true);
+    buffers_.clear();
+    std::string multipart_end = "--";
+    multipart_end.append(response_.get_boundary()).append("--").append(CRCF);
+    auto [ec, _] = co_await async_write(asio::buffer(multipart_end));
+    co_return !ec;
+  }
+
   async_simple::coro::Lazy<chunked_result> read_chunked() {
     if (head_buf_.size() > 0) {
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
@@ -344,99 +379,6 @@ class coro_http_connection
     result.data = std::string_view{data_ptr, (size_t)chunk_size};
     chunked_buf_.consume(chunk_size + CRCF.size());
 
-    co_return result;
-  }
-
-  async_simple::coro::Lazy<part_head_t> read_part_head() {
-    if (head_buf_.size() > 0) {
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-      chunked_buf_.sputn(data_ptr, head_buf_.size());
-      head_buf_.consume(head_buf_.size());
-    }
-
-    part_head_t result{};
-    std::error_code ec{};
-    size_t last_size = chunked_buf_.size();
-    size_t size;
-
-    auto get_part_name = [](std::string_view data, std::string_view name,
-                            size_t start) {
-      start += name.length();
-      size_t end = data.find("\"", start);
-      return data.substr(start, end - start);
-    };
-
-    constexpr std::string_view name = "name=\"";
-    constexpr std::string_view filename = "filename=\"";
-
-    while (true) {
-      if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
-          ec) {
-        result.ec = ec;
-        close();
-        co_return result;
-      }
-
-      const char *data_ptr =
-          asio::buffer_cast<const char *>(chunked_buf_.data());
-      chunked_buf_.consume(size);
-      if (*data_ptr == '-') {
-        continue;
-      }
-      std::string_view data{data_ptr, size};
-      if (size == 2) {  // got the head end: \r\n\r\n
-        break;
-      }
-
-      if (size_t pos = data.find("name"); pos != std::string_view::npos) {
-        result.name = get_part_name(data, name, pos);
-
-        if (size_t pos = data.find("filename"); pos != std::string_view::npos) {
-          result.filename = get_part_name(data, filename, pos);
-        }
-        continue;
-      }
-    }
-
-    co_return result;
-  }
-
-  async_simple::coro::Lazy<chunked_result> read_part_body(
-      std::string_view boundary) {
-    chunked_result result{};
-    std::error_code ec{};
-    size_t size = 0;
-
-    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, boundary);
-        ec) {
-      result.ec = ec;
-      close();
-      co_return result;
-    }
-
-    const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-    chunked_buf_.consume(size);
-    result.data = std::string_view{
-        data_ptr, size - boundary.size() - 4};  //-- boundary \r\n
-
-    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
-        ec) {
-      result = {};
-      result.ec = ec;
-      close();
-      co_return result;
-    }
-
-    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-    std::string data{data_ptr, size};
-    if (size > 2) {
-      constexpr std::string_view complete_flag = "--\r\n";
-      if (data == complete_flag) {
-        result.eof = true;
-      }
-    }
-
-    chunked_buf_.consume(size);
     co_return result;
   }
 
@@ -683,6 +625,7 @@ class coro_http_connection
   }
 
  private:
+  friend class multipart_reader_t<coro_http_connection>;
   async_simple::Executor *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;

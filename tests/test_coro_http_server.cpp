@@ -141,6 +141,38 @@ bool create_file(std::string_view filename, size_t file_size = 1024) {
   return true;
 }
 
+TEST_CASE("test multiple download") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        multipart_reader_t multipart(resp.get_conn());
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " ok"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
+              !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_multipart();
+      });
+
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world ok");
+}
+
 TEST_CASE("test range download") {
   create_file("range_test.txt", 64);
   std::cout << fs::current_path() << "\n";

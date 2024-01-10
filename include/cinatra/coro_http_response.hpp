@@ -57,6 +57,10 @@ class coro_http_response {
 
   void set_keepalive(bool r) { keepalive_ = r; }
 
+  void set_boundary(std::string_view boundary) { boundary_ = boundary; }
+
+  std::string_view get_boundary() { return boundary_; }
+
   void to_buffers(std::vector<asio::const_buffer>& buffers) {
     build_resp_head();
 
@@ -99,10 +103,18 @@ class coro_http_response {
   }
 
   void build_resp_head() {
-    if (std::find_if(resp_headers_.begin(), resp_headers_.end(),
-                     [](resp_header& header) {
-                       return header.key == "Host";
-                     }) == resp_headers_.end()) {
+    bool has_len = false;
+    bool has_host = false;
+    for (auto& [k, v] : resp_headers_) {
+      if (k == "Host") {
+        has_host = true;
+      }
+      if (k == "Content-Length") {
+        has_len = true;
+      }
+    }
+
+    if (!has_host) {
       resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
     }
 
@@ -122,7 +134,8 @@ class coro_http_response {
                            std::string_view(buf_, std::distance(buf_, ptr))});
       }
       else {
-        resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
+        if (!has_len && boundary_.empty())
+          resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
       }
     }
 
@@ -151,6 +164,7 @@ class coro_http_response {
     delay_ = false;
     status_ = status_type::init;
     fmt_type_ = format_type::normal;
+    boundary_.clear();
   }
 
   void append_head(auto& headers) {
@@ -173,5 +187,6 @@ class coro_http_response {
   std::vector<resp_header> resp_headers_;
   std::vector<resp_header_sv> resp_headers_sv_;
   coro_http_connection* conn_;
+  std::string boundary_;
 };
 }  // namespace cinatra

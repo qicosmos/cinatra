@@ -15,6 +15,7 @@
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
+#include "cinatra/multipart.hpp"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
@@ -447,7 +448,7 @@ TEST_CASE("test upload file") {
       "http//badurl.com", "test_not_exist_file", not_exist_file));
   CHECK(result.status == 404);
 
-  client.async_close();
+  client.close();
 
   server.stop();
   server_thread.join();
@@ -567,9 +568,9 @@ TEST_CASE("test coro_http_client multipart upload") {
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         assert(req.get_content_type() == content_type::multipart);
         auto boundary = req.get_boundary();
-
+        multipart_reader_t multipart(req.get_conn());
         while (true) {
-          auto part_head = co_await req.get_conn()->read_part_head();
+          auto part_head = co_await multipart.read_part_head();
           if (part_head.ec) {
             co_return;
           }
@@ -599,7 +600,7 @@ TEST_CASE("test coro_http_client multipart upload") {
             }
           }
 
-          auto part_body = co_await req.get_conn()->read_part_body(boundary);
+          auto part_body = co_await multipart.read_part_body(boundary);
           if (part_body.ec) {
             co_return;
           }
