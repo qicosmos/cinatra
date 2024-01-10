@@ -742,7 +742,13 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
     {
       std::string filename = "test_1024.txt";
-      create_file(filename);
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename);
+      CHECK(r);
 
       coro_http_client client{};
       client.add_header("filename", filename);
