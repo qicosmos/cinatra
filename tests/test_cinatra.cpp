@@ -716,7 +716,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           assert(req.get_content_type() == content_type::chunked);
           chunked_result result{};
           std::string_view filename = req.get_header_value("filename");
-
+          std::cout << "filename: " << filename << "\n";
           CHECK(!filename.empty());
           std::ofstream file(filename.data(), std::ios::binary);
           CHECK(file.is_open());
