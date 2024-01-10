@@ -103,7 +103,8 @@ inline const std::string CSESSIONID = "CSESSIONID";
 const static inline std::string CRCF = "\r\n";
 const static inline std::string TWO_CRCF = "\r\n\r\n";
 const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
-const static inline std::string MULTIPART_END = CRCF + "--" + BOUNDARY + "--";
+const static inline std::string MULTIPART_END =
+    CRCF + "--" + BOUNDARY + "--" + CRCF;
 
 struct chunked_result {
   std::error_code ec;
