@@ -1,6 +1,7 @@
 #pragma once
-#include <string_view>
 #include <zlib.h>
+
+#include <string_view>
 namespace cinatra::gzip_codec {
 // from https://github.com/chafey/GZipCodec
 
@@ -70,11 +71,11 @@ inline bool uncompress(std::string_view compressed_data, std::string &data) {
     strm.next_out = out;
     ret = inflate(&strm, Z_NO_FLUSH);
     switch (ret) {
-    case Z_NEED_DICT:
-    case Z_DATA_ERROR:
-    case Z_MEM_ERROR:
-      inflateEnd(&strm);
-      return false;
+      case Z_NEED_DICT:
+      case Z_DATA_ERROR:
+      case Z_MEM_ERROR:
+        inflateEnd(&strm);
+        return false;
     }
     have = CHUNK - strm.avail_out;
     data.append((char *)out, have);
@@ -139,4 +140,4 @@ inline int uncompress_file(const char *src_file, const char *out_file_name) {
 
   return 0;
 }
-} // namespace cinatra::gzip_codec
+}  // namespace cinatra::gzip_codec
