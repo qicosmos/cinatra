@@ -13,7 +13,7 @@ using namespace cinatra;
 TEST_CASE("test wss client") {
   cinatra::coro_http_server server(1, 9001);
   server.init_ssl("../../include/cinatra/server.crt",
-                  "../../include/cinatra/server.key");
+                  "../../include/cinatra/server.key", "test");
   server.set_http_handler<cinatra::GET>(
       "/",
       [](coro_http_request &req,
