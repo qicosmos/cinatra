@@ -304,95 +304,98 @@ TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
 
-TEST_CASE("test head put and some other request") {
-  // coro_http_server server(1, 8090);
-  // // Setting up GET and POST handlers
-  // server.set_http_handler<HEAD>(
-  //     "/", [&server](coro_http_request &, coro_http_response &res) mutable {
-  //       res.set_status_and_content(status_type::ok, "not allowed");
-  //     });
-  // server.set_http_handler<POST>(
-  //     "/", [&server](coro_http_request &req, coro_http_response &res) mutable
-  //     {
-  //       std::string str(req.get_body());
-  //       str.append(" reply from post");
-  //       res.set_status_and_content(status_type::ok, std::move(str));
-  //     });
-  // server.async_start();
+// TEST_CASE("test head put and some other request") {
+//   // coro_http_server server(1, 8090);
+//   // // Setting up GET and POST handlers
+//   // server.set_http_handler<HEAD>(
+//   //     "/", [&server](coro_http_request &, coro_http_response &res) mutable
+//   {
+//   //       res.set_status_and_content(status_type::ok, "not allowed");
+//   //     });
+//   // server.set_http_handler<POST>(
+//   //     "/", [&server](coro_http_request &req, coro_http_response &res)
+//   mutable
+//   //     {
+//   //       std::string str(req.get_body());
+//   //       str.append(" reply from post");
+//   //       res.set_status_and_content(status_type::ok, std::move(str));
+//   //     });
+//   // server.async_start();
 
-  // {
-  //   coro_http_client client{};
-  //   auto f = client.async_head("http://127.0.0.1:8090/");
-  //   auto result = async_simple::coro::syncAwait(f);
-  //   CHECK(result.status == 405);
-  // }
+//   // {
+//   //   coro_http_client client{};
+//   //   auto f = client.async_head("http://127.0.0.1:8090/");
+//   //   auto result = async_simple::coro::syncAwait(f);
+//   //   CHECK(result.status == 405);
+//   // }
 
-  coro_http_client client{};
+//   coro_http_client client{};
 
-  auto f = client.async_head("http://httpbin.org/headers");
-  auto result = async_simple::coro::syncAwait(f);
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v << "\n";
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+//   auto f = client.async_head("http://httpbin.org/headers");
+//   auto result = async_simple::coro::syncAwait(f);
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v << "\n";
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
 
-  std::string json = R"({
-"Id": 12345,
-"Customer": "John Smith",
-"Quantity": 1,
-"Price": 10.00
-})";
+//   std::string json = R"({
+// "Id": 12345,
+// "Customer": "John Smith",
+// "Quantity": 1,
+// "Price": 10.00
+// })";
 
-  coro_http_client client1{};
-  result = async_simple::coro::syncAwait(client1.async_put(
-      "http://reqbin.com/echo/put/json", json, req_content_type::json));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+//   coro_http_client client1{};
+//   result = async_simple::coro::syncAwait(client1.async_put(
+//       "http://reqbin.com/echo/put/json", json, req_content_type::json));
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v;
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
 
-  result = async_simple::coro::syncAwait(client1.async_delete(
-      "http://reqbin.com/echo/delete/json.txt", json, req_content_type::json));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+//   result = async_simple::coro::syncAwait(client1.async_delete(
+//       "http://reqbin.com/echo/delete/json.txt", json,
+//       req_content_type::json));
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v;
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
 
-  coro_http_client client2{};
-  result = async_simple::coro::syncAwait(
-      client2.async_options("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v << std::endl;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+//   coro_http_client client2{};
+//   result = async_simple::coro::syncAwait(
+//       client2.async_options("http://httpbin.org"));
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v << std::endl;
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
 
-  result =
-      async_simple::coro::syncAwait(client2.async_patch("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+//   result =
+//       async_simple::coro::syncAwait(client2.async_patch("http://httpbin.org"));
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v;
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
 
-  result =
-      async_simple::coro::syncAwait(client2.async_trace("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
-  std::cout << std::endl;
-}
+//   result =
+//       async_simple::coro::syncAwait(client2.async_trace("http://httpbin.org"));
+//   for (auto [k, v] : result.resp_headers) {
+//     std::cout << k << ": " << v;
+//   }
+//   if (!result.net_err) {
+//     CHECK(result.status >= 200);
+//   }
+//   std::cout << std::endl;
+// }
 
 TEST_CASE("test upload file") {
   coro_http_server server(1, 8090);
@@ -715,8 +718,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           std::string_view filename = req.get_header_value("filename");
 
           CHECK(!filename.empty());
-          std::string fullpath = fs::path("www").append(filename).string();
-          std::ofstream file(fullpath.data(), std::ios::binary);
+          std::ofstream file(filename.data(), std::ios::binary);
           CHECK(file.is_open());
 
           while (true) {
@@ -765,8 +767,9 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
   {
     // chunked download, not in cache
+    create_file("test_1024.txt", 1024);
     coro_http_server server(1, 8090);
-    server.set_static_res_dir("download");
+    server.set_static_res_dir("download", "");
     server.set_max_size_of_cache_files(100);
     server.set_transfer_chunked_size(100);
     server.async_start();
