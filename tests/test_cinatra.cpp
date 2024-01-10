@@ -718,11 +718,12 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           std::string_view filename = req.get_header_value("filename");
           std::cout << "filename: " << filename << "\n";
           CHECK(!filename.empty());
+          std::string fullpath = fs::current_path().append(filename).string();
           std::ofstream file;
           file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
           try {
-            file.open(filename.data(), std::ios::binary);
+            file.open(fullpath, std::ios::binary);
           } catch (std::ios_base::failure &e) {
             std::cerr << e.what() << '\n';
           } catch (std::system_error &e) {
