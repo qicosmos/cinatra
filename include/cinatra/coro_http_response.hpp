@@ -64,7 +64,7 @@ class coro_http_response {
   void to_buffers(std::vector<asio::const_buffer>& buffers) {
     build_resp_head();
 
-    buffers.push_back(asio::buffer(to_rep_string(status_)));
+    buffers.push_back(asio::buffer(to_http_status_string(status_)));
     buffers.push_back(asio::buffer(head_));
     if (!content_.empty()) {
       if (fmt_type_ == format_type::chunked) {
@@ -118,8 +118,8 @@ class coro_http_response {
       resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
     }
 
-    if (status_ >= status_type::not_found) {
-      content_.append(to_string(status_));
+    if (content_.empty()) {
+      content_.append(default_status_content(status_));
     }
 
     if (fmt_type_ == format_type::chunked) {

@@ -71,117 +71,8 @@ enum class status_type {
 
 enum class content_encoding { gzip, none };
 
-inline std::string_view ok_sv = "OK";
-inline std::string_view http_continue = "100 Http Continue";
-inline std::string_view switching_protocols_sv = "101 Switching Protocols";
-inline std::string_view processing = "102 Processing";
-inline std::string_view created =
-    "<html>"
-    "<head><title>Created</title></head>"
-    "<body><h1>201 Created</h1></body>"
-    "</html>";
-inline std::string_view accepted =
-    "<html>"
-    "<head><title>Accepted</title></head>"
-    "<body><h1>202 Accepted</h1></body>"
-    "</html>";
-inline std::string_view nonauthoritative = "203 Nonauthoritative";
-inline std::string_view no_content =
-    "<html>"
-    "<head><title>No Content</title></head>"
-    "<body><h1>204 Content</h1></body>"
-    "</html>";
-inline std::string_view reset_content = "205 Reset Content";
-inline std::string_view multiple_choices =
-    "<html>"
-    "<head><title>Multiple Choices</title></head>"
-    "<body><h1>300 Multiple Choices</h1></body>"
-    "</html>";
-
-inline std::string_view moved_permanently =
-    "<html>"
-    "<head><title>Moved Permanently</title></head>"
-    "<body><h1>301 Moved Permanently</h1></body>"
-    "</html>";
-
-inline std::string_view temporary_redirect =
-    "<html>"
-    "<head><title>Temporary Redirect</title></head>"
-    "<body><h1>307 Temporary Redirect</h1></body>"
-    "</html>";
-
-inline std::string_view moved_temporarily =
-    "<html>"
-    "<head><title>Moved Temporarily</title></head>"
-    "<body><h1>302 Moved Temporarily</h1></body>"
-    "</html>";
-
-inline std::string_view not_modified =
-    "<html>"
-    "<head><title>Not Modified</title></head>"
-    "<body><h1>304 Not Modified</h1></body>"
-    "</html>";
-
-inline std::string_view bad_request =
-    "<html>"
-    "<head><title>Bad Request</title></head>"
-    "<body><h1>400 Bad Request</h1></body>"
-    "</html>";
-
-inline std::string_view unauthorized =
-    "<html>"
-    "<head><title>Unauthorized</title></head>"
-    "<body><h1>401 Unauthorized</h1></body>"
-    "</html>";
-
-inline std::string_view forbidden =
-    "<html>"
-    "<head><title>Forbidden</title></head>"
-    "<body><h1>403 Forbidden</h1></body>"
-    "</html>";
-
-inline std::string_view not_found =
-    "<html>"
-    "<head><title>Not Found</title></head>"
-    "<body><h1>404 Not Found</h1></body>"
-    "</html>";
-inline std::string_view method_not_allowed = "102 Method Not Allowed";
-inline std::string_view conflict =
-    "<html>"
-    "<head><title>Conflict</title></head>"
-    "<body><h1>409 Conflict</h1></body>"
-    "</html>";
-
-inline std::string_view range_not_satisfiable =
-    "<html>"
-    "<head><title>Requested Range Not Satisfiable</title></head>"
-    "<body><h1>416 Requested Range Not Satisfiable</h1></body>"
-    "</html>";
-
-inline std::string_view internal_server_error =
-    "<html>"
-    "<head><title>Internal Server Error</title></head>"
-    "<body><h1>500 Internal Server Error</h1></body>"
-    "</html>";
-
-inline std::string_view not_implemented =
-    "<html>"
-    "<head><title>Not Implemented</title></head>"
-    "<body><h1>501 Not Implemented</h1></body>"
-    "</html>";
-
-inline std::string_view bad_gateway =
-    "<html>"
-    "<head><title>Bad Gateway</title></head>"
-    "<body><h1>502 Bad Gateway</h1></body>"
-    "</html>";
-
-inline std::string_view service_unavailable =
-    "<html>"
-    "<head><title>Service Unavailable</title></head>"
-    "<body><h1>503 Service Unavailable</h1></body>"
-    "</html>";
-
+// http response status string
+namespace http_status_string {
 inline constexpr std::string_view switching_protocols =
     "HTTP/1.1 101 Switching Protocals\r\n";
 inline constexpr std::string_view rep_ok = "HTTP/1.1 200 OK\r\n";
@@ -207,6 +98,8 @@ inline constexpr std::string_view rep_unauthorized =
     "HTTP/1.1 401 Unauthorized\r\n";
 inline constexpr std::string_view rep_forbidden = "HTTP/1.1 403 Forbidden\r\n";
 inline constexpr std::string_view rep_not_found = "HTTP/1.1 404 Not Found\r\n";
+inline constexpr std::string_view rep_method_not_allowed =
+    "HTTP/1.1 405 Method Not Allowed\r\n";
 inline constexpr std::string_view rep_conflict = "HTTP/1.1 409 Conflict\r\n";
 inline constexpr std::string_view rep_range_not_satisfiable =
     "HTTP/1.1 416 Requested Range Not Satisfiable\r\n";
@@ -218,6 +111,7 @@ inline constexpr std::string_view rep_bad_gateway =
     "HTTP/1.1 502 Bad Gateway\r\n";
 inline constexpr std::string_view rep_service_unavailable =
     "HTTP/1.1 503 Service Unavailable\r\n";
+}  // namespace http_status_string
 
 inline constexpr std::string_view rep_html =
     "Content-Type: text/html; charset=UTF-8\r\n";
@@ -291,10 +185,6 @@ struct to_chars {
       '\n'};
 };
 
-//        template<unsigned... digits>
-//        const char to_chars<digits...>::value[] = { ('0' + digits)... , '\r',
-//        '\n', 0 };
-
 template <unsigned rem, unsigned... digits>
 struct explode : explode<rem / 10, rem % 10, digits...> {};
 
@@ -305,61 +195,8 @@ struct explode<0, digits...> : to_chars<digits...> {};
 template <unsigned num>
 struct num_to_string : detail::explode<num / 10, num % 10> {};
 
-template <typename T>
-inline decltype(auto) to_buffer(status_type status) {
-  switch (status) {
-    case status_type::switching_protocols:
-      return T(switching_protocols.data(), switching_protocols.length());
-    case status_type::ok:
-      return T(rep_ok.data(), rep_ok.length());
-    case status_type::created:
-      return T(rep_created.data(), rep_created.length());
-    case status_type::accepted:
-      return T(rep_accepted.data(), rep_created.length());
-    case status_type::no_content:
-      return T(rep_no_content.data(), rep_no_content.length());
-    case status_type::partial_content:
-      return T(rep_partial_content.data(), rep_partial_content.length());
-    case status_type::multiple_choices:
-      return T(rep_multiple_choices.data(), rep_multiple_choices.length());
-    case status_type::moved_permanently:
-      return T(rep_moved_permanently.data(), rep_moved_permanently.length());
-    case status_type::temporary_redirect:
-      return T(rep_temporary_redirect.data(), rep_temporary_redirect.length());
-    case status_type::moved_temporarily:
-      return T(rep_moved_temporarily.data(), rep_moved_temporarily.length());
-    case status_type::not_modified:
-      return T(rep_not_modified.data(), rep_not_modified.length());
-    case status_type::bad_request:
-      return T(rep_bad_request.data(), rep_bad_request.length());
-    case status_type::unauthorized:
-      return T(rep_unauthorized.data(), rep_unauthorized.length());
-    case status_type::forbidden:
-      return T(rep_forbidden.data(), rep_forbidden.length());
-    case status_type::not_found:
-      return T(rep_not_found.data(), rep_not_found.length());
-    case status_type::conflict:
-      return T(rep_conflict.data(), rep_conflict.length());
-    case status_type::range_not_satisfiable:
-      return T(rep_range_not_satisfiable.data(),
-               rep_range_not_satisfiable.length());
-    case status_type::internal_server_error:
-      return T(rep_internal_server_error.data(),
-               rep_internal_server_error.length());
-    case status_type::not_implemented:
-      return T(rep_not_implemented.data(), rep_not_implemented.length());
-    case status_type::bad_gateway:
-      return T(rep_bad_gateway.data(), rep_bad_gateway.length());
-    case status_type::service_unavailable:
-      return T(rep_service_unavailable.data(),
-               rep_service_unavailable.length());
-    default:
-      return T(rep_internal_server_error.data(),
-               rep_internal_server_error.length());
-  }
-}
-
-inline constexpr std::string_view to_rep_string(status_type status) {
+inline constexpr std::string_view to_http_status_string(status_type status) {
+  using namespace http_status_string;
   switch (status) {
     case cinatra::status_type::switching_protocols:
       return switching_protocols;
@@ -392,7 +229,7 @@ inline constexpr std::string_view to_rep_string(status_type status) {
     case cinatra::status_type::not_found:
       return rep_not_found;
     case cinatra::status_type::method_not_allowed:
-      return method_not_allowed;
+      return rep_method_not_allowed;
     case cinatra::status_type::conflict:
       return rep_conflict;
     case cinatra::status_type::range_not_satisfiable:
@@ -410,50 +247,9 @@ inline constexpr std::string_view to_rep_string(status_type status) {
   }
 }
 
-inline std::string_view to_string(status_type status) {
-  switch (status) {
-    case status_type::ok:
-      return ok_sv;
-    case status_type::created:
-      return created;
-    case status_type::accepted:
-      return accepted;
-    case status_type::no_content:
-      return no_content;
-    case status_type::multiple_choices:
-      return multiple_choices;
-    case status_type::moved_permanently:
-      return moved_permanently;
-    case status_type::moved_temporarily:
-      return moved_temporarily;
-    case status_type::temporary_redirect:
-      return temporary_redirect;
-    case status_type::not_modified:
-      return not_modified;
-    case status_type::bad_request:
-      return bad_request;
-    case status_type::unauthorized:
-      return unauthorized;
-    case status_type::forbidden:
-      return forbidden;
-    case status_type::not_found:
-      return not_found;
-    case cinatra::status_type::method_not_allowed:
-      return method_not_allowed;
-    case status_type::conflict:
-      return conflict;
-    case status_type::range_not_satisfiable:
-      return range_not_satisfiable;
-    case status_type::internal_server_error:
-      return internal_server_error;
-    case status_type::not_implemented:
-      return not_implemented;
-    case status_type::bad_gateway:
-      return bad_gateway;
-    case status_type::service_unavailable:
-      return service_unavailable;
-    default:
-      return internal_server_error;
-  }
+inline constexpr std::string_view default_status_content(status_type status) {
+  std::string_view str = to_http_status_string(status);
+  return str.substr(9, str.size() - 11);
 }
+
 }  // namespace cinatra

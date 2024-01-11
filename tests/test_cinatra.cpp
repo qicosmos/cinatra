@@ -719,19 +719,7 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
           CHECK(!filename.empty());
           std::string fullpath = fs::current_path().append(filename).string();
-          std::cout << "filename: " << fullpath << "\n";
-          std::cout << "exists: " << fs::exists(fullpath) << "\n";
-          std::ofstream file;
-          file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-
-          try {
-            file.open(fullpath, std::ios::binary);
-          } catch (std::ios_base::failure &e) {
-            std::cerr << e.what() << '\n';
-          } catch (std::system_error &e) {
-            std::cerr << e.code().message() << std::endl;
-          }
-
+          std::ofstream file(fullpath, std::ios::binary);
           CHECK(file.is_open());
 
           while (true) {
