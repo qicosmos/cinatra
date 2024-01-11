@@ -24,9 +24,9 @@ using namespace std::chrono_literals;
 using namespace cinatra;
 
 #ifdef CINATRA_ENABLE_GZIP
-std::string_view
-get_header_value(std::vector<std::pair<std::string, std::string>> &resp_headers,
-                 std::string_view key) {
+std::string_view get_header_value(
+    std::vector<std::pair<std::string, std::string>> &resp_headers,
+    std::string_view key) {
   for (const auto &p : resp_headers) {
     if (p.first == key)
       return std::string_view(p.second.data(), p.second.size());
@@ -181,7 +181,9 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
 
 async_simple::coro::Lazy<void> test_collect_all() {
   asio::io_context ioc;
-  std::thread thd([&] { ioc.run(); });
+  std::thread thd([&] {
+    ioc.run();
+  });
   std::vector<std::shared_ptr<coro_http_client>> v;
   std::vector<async_simple::coro::Lazy<resp_data>> futures;
   for (int i = 0; i < 2; ++i) {
@@ -425,7 +427,8 @@ TEST_CASE("test upload file") {
 
             file->close();
             CHECK(fs::file_size(filename) == 2 * 1024 * 1024);
-          } else {
+          }
+          else {
             std::cout << part_body.data << "\n";
           }
 
@@ -651,7 +654,8 @@ TEST_CASE("test coro_http_client multipart upload") {
 
             file->close();
             CHECK(fs::file_size(filename) == 1024);
-          } else {
+          }
+          else {
             std::cout << part_body.data << "\n";
           }
 
@@ -1003,7 +1007,7 @@ TEST_CASE("test coro http proxy request with port") {
   client.set_proxy("106.14.255.124", "80");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   if (!result.net_err)
-    CHECK(result.status >= 200); // maybe return 500 from that host.
+    CHECK(result.status >= 200);  // maybe return 500 from that host.
 }
 
 // TEST_CASE("test coro http basic auth request") {
@@ -1157,7 +1161,8 @@ TEST_CASE("test conversion between unix time and gmt time, http format") {
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      } else {
+      }
+      else {
         CHECK(timestamp == "invalid");
       }
     }
@@ -1194,7 +1199,8 @@ TEST_CASE("test conversion between unix time and gmt time, utc format") {
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      } else {
+      }
+      else {
         CHECK(timestamp == "invalid");
       }
     }
@@ -1210,8 +1216,9 @@ TEST_CASE(
     "test conversion between unix time and gmt time, utc without punctuation "
     "format") {
   std::chrono::microseconds time_cost{0};
-  std::ifstream file("../../tests/files_for_test_time_parse/"
-                     "utc_without_punctuation_times.txt");
+  std::ifstream file(
+      "../../tests/files_for_test_time_parse/"
+      "utc_without_punctuation_times.txt");
   if (!file) {
     std::cout << "open file failed" << std::endl;
   }
@@ -1235,7 +1242,8 @@ TEST_CASE(
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      } else {
+      }
+      else {
         CHECK(timestamp == "invalid");
       }
     }
