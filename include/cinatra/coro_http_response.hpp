@@ -42,10 +42,14 @@ class coro_http_response {
   }
 
   void set_status(cinatra::status_type status) { status_ = status; }
-  void set_content(std::string content) { content_ = std::move(content); }
+  void set_content(std::string content) {
+    content_ = std::move(content);
+    has_set_content_ = true;
+  }
   void set_status_and_content(status_type status, std::string content) {
     status_ = status;
     content_ = std::move(content);
+    has_set_content_ = true;
   }
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
@@ -118,7 +122,8 @@ class coro_http_response {
       resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
     }
 
-    if (content_.empty()) {
+    if (content_.empty() && !has_set_content_ &&
+        fmt_type_ != format_type::chunked) {
       content_.append(default_status_content(status_));
     }
 
@@ -188,5 +193,6 @@ class coro_http_response {
   std::vector<resp_header_sv> resp_headers_sv_;
   coro_http_connection* conn_;
   std::string boundary_;
+  bool has_set_content_ = false;
 };
 }  // namespace cinatra
