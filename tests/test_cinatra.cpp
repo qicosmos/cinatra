@@ -24,9 +24,9 @@ using namespace std::chrono_literals;
 using namespace cinatra;
 
 #ifdef CINATRA_ENABLE_GZIP
-std::string_view get_header_value(
-    std::vector<std::pair<std::string, std::string>> &resp_headers,
-    std::string_view key) {
+std::string_view
+get_header_value(std::vector<std::pair<std::string, std::string>> &resp_headers,
+                 std::string_view key) {
   for (const auto &p : resp_headers) {
     if (p.first == key)
       return std::string_view(p.second.data(), p.second.size());
@@ -181,9 +181,7 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
 
 async_simple::coro::Lazy<void> test_collect_all() {
   asio::io_context ioc;
-  std::thread thd([&] {
-    ioc.run();
-  });
+  std::thread thd([&] { ioc.run(); });
   std::vector<std::shared_ptr<coro_http_client>> v;
   std::vector<async_simple::coro::Lazy<resp_data>> futures;
   for (int i = 0; i < 2; ++i) {
@@ -304,98 +302,74 @@ TEST_CASE("test collect all") {
   async_simple::coro::syncAwait(test_collect_all());
 }
 
-// TEST_CASE("test head put and some other request") {
-//   // coro_http_server server(1, 8090);
-//   // // Setting up GET and POST handlers
-//   // server.set_http_handler<HEAD>(
-//   //     "/", [&server](coro_http_request &, coro_http_response &res) mutable
-//   {
-//   //       res.set_status_and_content(status_type::ok, "not allowed");
-//   //     });
-//   // server.set_http_handler<POST>(
-//   //     "/", [&server](coro_http_request &req, coro_http_response &res)
-//   mutable
-//   //     {
-//   //       std::string str(req.get_body());
-//   //       str.append(" reply from post");
-//   //       res.set_status_and_content(status_type::ok, std::move(str));
-//   //     });
-//   // server.async_start();
+TEST_CASE("test head put and some other request") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<HEAD>(
+      "/headers", [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("Content-Type", "application/json");
+        resp.add_header("Content-Length", "117");
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::http_method::PATCH,
+                          cinatra::http_method::TRACE>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status(status_type::method_not_allowed);
+      });
+  server.set_http_handler<cinatra::http_method::OPTIONS>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("Allow", "HEAD, OPTIONS, GET, POST, PUT");
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
 
-//   // {
-//   //   coro_http_client client{};
-//   //   auto f = client.async_head("http://127.0.0.1:8090/");
-//   //   auto result = async_simple::coro::syncAwait(f);
-//   //   CHECK(result.status == 405);
-//   // }
+  coro_http_client client{};
 
-//   coro_http_client client{};
+  auto f = client.async_head("http://127.0.0.1:9001/headers");
+  auto result = async_simple::coro::syncAwait(f);
+  CHECK(result.status == 200);
 
-//   auto f = client.async_head("http://httpbin.org/headers");
-//   auto result = async_simple::coro::syncAwait(f);
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v << "\n";
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
+  result = async_simple::coro::syncAwait(
+      client.async_patch("http://127.0.0.1:9001/"));
+  CHECK(result.status == 405);
 
-//   std::string json = R"({
-// "Id": 12345,
-// "Customer": "John Smith",
-// "Quantity": 1,
-// "Price": 10.00
-// })";
+  result = async_simple::coro::syncAwait(
+      client.async_trace("http://127.0.0.1:9001/"));
+  CHECK(result.status == 405);
 
-//   coro_http_client client1{};
-//   result = async_simple::coro::syncAwait(client1.async_put(
-//       "http://reqbin.com/echo/put/json", json, req_content_type::json));
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v;
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
+  result = async_simple::coro::syncAwait(
+      client.async_options("http://127.0.0.1:9001/"));
+  CHECK(result.status == 200);
 
-//   result = async_simple::coro::syncAwait(client1.async_delete(
-//       "http://reqbin.com/echo/delete/json.txt", json,
-//       req_content_type::json));
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v;
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
+  //   std::string json = R"({
+  // "Id": 12345,
+  // "Customer": "John Smith",
+  // "Quantity": 1,
+  // "Price": 10.00
+  // })";
 
-//   coro_http_client client2{};
-//   result = async_simple::coro::syncAwait(
-//       client2.async_options("http://httpbin.org"));
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v << std::endl;
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
+  //   coro_http_client client1{};
+  //   result = async_simple::coro::syncAwait(client1.async_put(
+  //       "http://reqbin.com/echo/put/json", json, req_content_type::json));
+  //   for (auto [k, v] : result.resp_headers) {
+  //     std::cout << k << ": " << v;
+  //   }
+  //   if (!result.net_err) {
+  //     CHECK(result.status >= 200);
+  //   }
 
-//   result =
-//       async_simple::coro::syncAwait(client2.async_patch("http://httpbin.org"));
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v;
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
+  //   result = async_simple::coro::syncAwait(client1.async_delete(
+  //       "http://reqbin.com/echo/delete/json.txt", json,
+  //       req_content_type::json));
+  //   for (auto [k, v] : result.resp_headers) {
+  //     std::cout << k << ": " << v;
+  //   }
+  //   if (!result.net_err) {
+  //     CHECK(result.status >= 200);
+  //   }
 
-//   result =
-//       async_simple::coro::syncAwait(client2.async_trace("http://httpbin.org"));
-//   for (auto [k, v] : result.resp_headers) {
-//     std::cout << k << ": " << v;
-//   }
-//   if (!result.net_err) {
-//     CHECK(result.status >= 200);
-//   }
-//   std::cout << std::endl;
-// }
+  //   std::cout << std::endl;
+}
 
 TEST_CASE("test upload file") {
   coro_http_server server(1, 8090);
@@ -451,8 +425,7 @@ TEST_CASE("test upload file") {
 
             file->close();
             CHECK(fs::file_size(filename) == 2 * 1024 * 1024);
-          }
-          else {
+          } else {
             std::cout << part_body.data << "\n";
           }
 
@@ -678,8 +651,7 @@ TEST_CASE("test coro_http_client multipart upload") {
 
             file->close();
             CHECK(fs::file_size(filename) == 1024);
-          }
-          else {
+          } else {
             std::cout << part_body.data << "\n";
           }
 
@@ -1031,7 +1003,7 @@ TEST_CASE("test coro http proxy request with port") {
   client.set_proxy("106.14.255.124", "80");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   if (!result.net_err)
-    CHECK(result.status >= 200);  // maybe return 500 from that host.
+    CHECK(result.status >= 200); // maybe return 500 from that host.
 }
 
 // TEST_CASE("test coro http basic auth request") {
@@ -1185,8 +1157,7 @@ TEST_CASE("test conversion between unix time and gmt time, http format") {
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      }
-      else {
+      } else {
         CHECK(timestamp == "invalid");
       }
     }
@@ -1223,8 +1194,7 @@ TEST_CASE("test conversion between unix time and gmt time, utc format") {
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      }
-      else {
+      } else {
         CHECK(timestamp == "invalid");
       }
     }
@@ -1240,9 +1210,8 @@ TEST_CASE(
     "test conversion between unix time and gmt time, utc without punctuation "
     "format") {
   std::chrono::microseconds time_cost{0};
-  std::ifstream file(
-      "../../tests/files_for_test_time_parse/"
-      "utc_without_punctuation_times.txt");
+  std::ifstream file("../../tests/files_for_test_time_parse/"
+                     "utc_without_punctuation_times.txt");
   if (!file) {
     std::cout << "open file failed" << std::endl;
   }
@@ -1266,8 +1235,7 @@ TEST_CASE(
         if (timestamp != "invalid") {
           CHECK(result.second == std::stoll(timestamp));
         }
-      }
-      else {
+      } else {
         CHECK(timestamp == "invalid");
       }
     }
