@@ -305,7 +305,7 @@ TEST_CASE("test collect all") {
 }
 
 TEST_CASE("test head put and some other request") {
-  coro_http_server server(1, 9001);
+  coro_http_server server(1, 8090);
   server.set_http_handler<HEAD>(
       "/headers", [](coro_http_request &req, coro_http_response &resp) {
         resp.add_header("Content-Type", "application/json");
@@ -323,24 +323,24 @@ TEST_CASE("test head put and some other request") {
         resp.set_status_and_content(status_type::ok, "");
       });
   server.async_start();
-  std::this_thread::sleep_for(200ms);
+  std::this_thread::sleep_for(300ms);
 
   coro_http_client client{};
 
-  auto f = client.async_head("http://127.0.0.1:9001/headers");
-  auto result = async_simple::coro::syncAwait(f);
+  auto result = async_simple::coro::syncAwait(
+      client.async_head("http://127.0.0.1:8090/headers"));
   CHECK(result.status == 200);
 
   result = async_simple::coro::syncAwait(
-      client.async_patch("http://127.0.0.1:9001/"));
+      client.async_patch("http://127.0.0.1:8090/"));
   CHECK(result.status == 405);
 
   result = async_simple::coro::syncAwait(
-      client.async_trace("http://127.0.0.1:9001/"));
+      client.async_trace("http://127.0.0.1:8090/"));
   CHECK(result.status == 405);
 
   result = async_simple::coro::syncAwait(
-      client.async_options("http://127.0.0.1:9001/"));
+      client.async_options("http://127.0.0.1:8090/"));
   CHECK(result.status == 200);
 
   //   std::string json = R"({
