@@ -212,7 +212,7 @@ class coro_http_connection
 
             if (is_coro_exist) {
               if (coro_handler) {
-                co_await(coro_handler)(request_, response_);
+                co_await (coro_handler)(request_, response_);
               }
               else {
                 response_.set_status(status_type::not_found);
@@ -230,7 +230,7 @@ class coro_http_connection
                                        std::get<0>(pair))) {
                     auto coro_handler = std::get<1>(pair);
                     if (coro_handler) {
-                      co_await(coro_handler)(request_, response_);
+                      co_await (coro_handler)(request_, response_);
                       is_matched_regex_router = true;
                     }
                   }
