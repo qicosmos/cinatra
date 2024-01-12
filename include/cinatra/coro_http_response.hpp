@@ -13,6 +13,7 @@
 #include "define.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
+#include "utils.hpp"
 
 namespace cinatra {
 struct resp_header {
@@ -77,32 +78,6 @@ class coro_http_response {
       else {
         buffers.push_back(asio::buffer(content_));
       }
-    }
-  }
-
-  std::string_view to_hex_string(size_t val) {
-    static char buf[20];
-    auto [ptr, ec] = std::to_chars(std::begin(buf), std::end(buf), val, 16);
-    return std::string_view{buf, size_t(std::distance(buf, ptr))};
-  }
-
-  void to_chunked_buffers(std::vector<asio::const_buffer> &buffers,
-                          std::string_view chunk_data, bool eof) {
-    if (!chunk_data.empty()) {
-      // convert bytes transferred count to a hex string.
-      auto chunk_size = to_hex_string(chunk_data.size());
-
-      // Construct chunk based on rfc2616 section 3.6.1
-      buffers.push_back(asio::buffer(chunk_size));
-      buffers.push_back(asio::buffer(crlf));
-      buffers.push_back(asio::buffer(chunk_data));
-      buffers.push_back(asio::buffer(crlf));
-    }
-
-    // append last-chunk
-    if (eof) {
-      buffers.push_back(asio::buffer(last_chunk));
-      buffers.push_back(asio::buffer(crlf));
     }
   }
 

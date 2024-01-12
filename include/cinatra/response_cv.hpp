@@ -4,6 +4,8 @@
 #include "define.h"
 
 namespace cinatra {
+enum class content_encoding { gzip, none };
+
 enum class status_type {
   init,
   http_continue = 100,
@@ -68,8 +70,6 @@ enum class status_type {
   not_extended = 510,
   network_authentication_required = 511
 };
-
-enum class content_encoding { gzip, none };
 
 // http response status string
 namespace http_status_string {
@@ -183,88 +183,6 @@ inline constexpr std::string_view rep_not_extended =
 inline constexpr std::string_view rep_network_authentication_required =
     "HTTP/1.1 511 Network Authentication Required\r\n";
 }  // namespace http_status_string
-
-inline constexpr std::string_view rep_html =
-    "Content-Type: text/html; charset=UTF-8\r\n";
-inline constexpr std::string_view rep_json =
-    "Content-Type: application/json; charset=UTF-8\r\n";
-inline constexpr std::string_view rep_string =
-    "Content-Type: text/plain; charset=UTF-8\r\n";
-inline constexpr std::string_view rep_multipart =
-    "Content-Type: multipart/form-data; boundary=";
-
-inline constexpr std::string_view rep_keep = "Connection: keep-alive\r\n";
-inline constexpr std::string_view rep_close = "Connection: close     \r\n";
-inline constexpr std::string_view rep_len = "Content-Length: ";
-inline constexpr std::string_view rep_crcf = "\r\n";
-inline constexpr std::string_view rep_server = "Server: cinatra\r\n";
-
-inline const char name_value_separator[] = {':', ' '};
-// inline std::string_view crlf = "\r\n";
-
-constexpr std::string_view crlf = "\r\n";
-constexpr std::string_view last_chunk = "0\r\n";
-inline const std::string http_chunk_header =
-    "HTTP/1.1 200 OK\r\n"
-    "Transfer-Encoding: chunked\r\n";
-/*"Content-Type: video/mp4\r\n"
-"\r\n";*/
-
-inline const std::string http_range_chunk_header =
-    "HTTP/1.1 206 Partial Content\r\n"
-    "Transfer-Encoding: chunked\r\n";
-/*"Content-Type: video/mp4\r\n"
-"\r\n";*/
-
-inline constexpr std::string_view to_content_type_str(req_content_type type) {
-  switch (type) {
-    case req_content_type::html:
-      return rep_html;
-    case req_content_type::json:
-      return rep_json;
-    case req_content_type::string:
-      return rep_string;
-    case req_content_type::multipart:
-      return rep_multipart;
-    default:
-      return "";
-  }
-}
-
-namespace detail {
-template <unsigned... digits>
-struct to_chars {
-  static constexpr std::array<char, sizeof...(digits) + 18> value = {
-      'C',
-      'o',
-      'n',
-      't',
-      'e',
-      'n',
-      't',
-      '-',
-      'L',
-      'e',
-      'n',
-      'g',
-      't',
-      'h',
-      ':',
-      ' ',
-      ('0' + digits)...,
-      '\r',
-      '\n'};
-};
-
-template <unsigned rem, unsigned... digits>
-struct explode : explode<rem / 10, rem % 10, digits...> {};
-
-template <unsigned... digits>
-struct explode<0, digits...> : to_chars<digits...> {};
-}  // namespace detail
-
-template <unsigned num>
-struct num_to_string : detail::explode<num / 10, num % 10> {};
 
 inline constexpr std::string_view to_http_status_string(status_type status) {
   using namespace http_status_string;

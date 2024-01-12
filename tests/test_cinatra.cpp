@@ -36,12 +36,12 @@ std::string_view get_header_value(
 
 TEST_CASE("test for gzip") {
   coro_http_server server(1, 8090);
-  server.set_http_handler<GET, POST>("/gzip", [](coro_http_request &req,
-                                                 coro_http_response &res) {
-    CHECK(req.get_header_value("Content-Encoding") == "gzip");
-    res.set_status_and_content(status_type::ok, "hello world",
-                               req_content_type::none, content_encoding::gzip);
-  });
+  server.set_http_handler<GET, POST>(
+      "/gzip", [](coro_http_request &req, coro_http_response &res) {
+        CHECK(req.get_header_value("Content-Encoding") == "gzip");
+        res.set_status_and_content(status_type::ok, "hello world",
+                                   req_content_type::none);  // TODO
+      });
   server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));

@@ -5,6 +5,16 @@
 
 using namespace cinatra;
 
+template <typename... Args>
+inline void print(Args... args) {
+  ((std::cout << args << ' '), ...);
+  std::cout << "\n";
+}
+
+inline void print(const std::error_code &ec) {
+  print(ec.value(), ec.message());
+}
+
 struct log_t {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "before log" << std::endl;

@@ -311,10 +311,8 @@ class coro_http_connection
 
   async_simple::coro::Lazy<bool> write_chunked_data(std::string_view buf,
                                                     bool eof) {
-    std::string chunk_size_str = "";
-    std::vector<asio::const_buffer> buffers =
-        to_chunked_buffers<asio::const_buffer>(buf.data(), buf.length(),
-                                               chunk_size_str, eof);
+    std::vector<asio::const_buffer> buffers;
+    to_chunked_buffers(buffers, buf, eof);
     auto [ec, _] = co_await async_write(std::move(buffers));
     if (ec) {
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
@@ -342,7 +340,7 @@ class coro_http_connection
                                                bool eof = false) {
     response_.set_delay(true);
     buffers_.clear();
-    response_.to_chunked_buffers(buffers_, chunked_data, eof);
+    to_chunked_buffers(buffers_, chunked_data, eof);
     co_return co_await reply(false);
   }
 
