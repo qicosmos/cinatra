@@ -4,6 +4,8 @@
 #include "define.h"
 
 namespace cinatra {
+enum class content_encoding { gzip, none };
+
 enum class status_type {
   init,
   http_continue = 100,
@@ -68,8 +70,6 @@ enum class status_type {
   not_extended = 510,
   network_authentication_required = 511
 };
-
-enum class content_encoding { gzip, none };
 
 // http response status string
 namespace http_status_string {

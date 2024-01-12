@@ -6,35 +6,10 @@
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
 #include "http_parser.hpp"
+#include "utils.hpp"
 #include "ws_define.h"
 
 namespace cinatra {
-
-inline std::vector<std::string_view> split_sv(std::string_view s,
-                                              std::string_view delimiter) {
-  size_t start = 0;
-  size_t end = s.find_first_of(delimiter);
-
-  std::vector<std::string_view> output;
-
-  while (end <= std::string_view::npos) {
-    output.emplace_back(s.substr(start, end - start));
-
-    if (end == std::string_view::npos)
-      break;
-
-    start = end + 1;
-    end = s.find_first_of(delimiter, start);
-  }
-
-  return output;
-}
-
-inline std::string_view trim_sv(std::string_view v) {
-  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
-  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
-  return v;
-}
 
 inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
                                                      size_t file_size,

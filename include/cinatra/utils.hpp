@@ -113,6 +113,32 @@ inline int64_t hex_to_int(std::string_view s) {
   return n;
 }
 
+inline std::vector<std::string_view> split_sv(std::string_view s,
+                                              std::string_view delimiter) {
+  size_t start = 0;
+  size_t end = s.find_first_of(delimiter);
+
+  std::vector<std::string_view> output;
+
+  while (end <= std::string_view::npos) {
+    output.emplace_back(s.substr(start, end - start));
+
+    if (end == std::string_view::npos)
+      break;
+
+    start = end + 1;
+    end = s.find_first_of(delimiter, start);
+  }
+
+  return output;
+}
+
+inline std::string_view trim_sv(std::string_view v) {
+  v.remove_prefix((std::min)(v.find_first_not_of(" "), v.size()));
+  v.remove_suffix((std::min)(v.size() - v.find_last_not_of(" ") - 1, v.size()));
+  return v;
+}
+
 inline std::string_view to_hex_string(size_t val) {
   static char buf[20];
   auto [ptr, ec] = std::to_chars(std::begin(buf), std::end(buf), val, 16);
@@ -190,52 +216,6 @@ inline std::string base64_encode(const std::string &str) {
     for (j = 0; (j < i + 1); j++) ret += base64_chars[char_array_4[j]];
 
     while ((i++ < 3)) ret += '=';
-  }
-
-  return ret;
-}
-
-inline std::string base64_decode(std::string const &encoded_string) {
-  int in_len = static_cast<int>(encoded_string.size());
-  int i = 0;
-  int j = 0;
-  int in_ = 0;
-  unsigned char char_array_4[4], char_array_3[3];
-  std::string ret;
-
-  while (in_len-- && (encoded_string[in_] != '=') &&
-         is_base64(encoded_string[in_])) {
-    char_array_4[i++] = encoded_string[in_];
-    in_++;
-    if (i == 4) {
-      for (i = 0; i < 4; i++)
-        char_array_4[i] =
-            static_cast<unsigned char>(base64_chars.find(char_array_4[i]));
-
-      char_array_3[0] =
-          (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-      char_array_3[1] =
-          ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-      for (i = 0; (i < 3); i++) ret += char_array_3[i];
-      i = 0;
-    }
-  }
-
-  if (i) {
-    for (j = i; j < 4; j++) char_array_4[j] = 0;
-
-    for (j = 0; j < 4; j++)
-      char_array_4[j] =
-          static_cast<unsigned char>(base64_chars.find(char_array_4[j]));
-
-    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-    char_array_3[1] =
-        ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-    for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
   }
 
   return ret;
