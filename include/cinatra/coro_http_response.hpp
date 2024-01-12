@@ -94,15 +94,15 @@ class coro_http_response {
 
       // Construct chunk based on rfc2616 section 3.6.1
       buffers.push_back(asio::buffer(chunk_size));
-      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio::buffer(CRCF));
       buffers.push_back(asio::buffer(chunk_data));
-      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio::buffer(CRCF));
     }
 
     // append last-chunk
     if (eof) {
-      buffers.push_back(asio::buffer(last_chunk));
-      buffers.push_back(asio::buffer(crlf));
+      buffers.push_back(asio::buffer(LAST_CHUNK));
+      buffers.push_back(asio::buffer(CRCF));
     }
   }
 

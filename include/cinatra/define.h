@@ -105,6 +105,7 @@ const static inline std::string TWO_CRCF = "\r\n\r\n";
 const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
 const static inline std::string MULTIPART_END =
     CRCF + "--" + BOUNDARY + "--" + CRCF;
+constexpr std::string_view LAST_CHUNK = "0\r\n";
 
 struct chunked_result {
   std::error_code ec;
