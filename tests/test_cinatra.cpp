@@ -322,6 +322,30 @@ TEST_CASE("test head put and some other request") {
         resp.add_header("Allow", "HEAD, OPTIONS, GET, POST, PUT");
         resp.set_status_and_content(status_type::ok, "");
       });
+  server.set_http_handler<cinatra::http_method::PUT>(
+      "/put/json", [](coro_http_request &req, coro_http_response &resp) {
+        auto json_str = req.get_body();
+        std::ofstream file("json.txt", std::ios::binary);
+        file.write(json_str.data(), json_str.size());
+        file.close();
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::http_method::PUT>(
+      "/delete/:name", [](coro_http_request &req, coro_http_response &resp) {
+        auto &filename = req.params_["name"];
+        std::error_code ec;
+        fs::remove(filename, ec);
+        std::string result = ec ? "delete failed" : "ok";
+        resp.set_status_and_content(status_type::ok, result);
+      });
+  server.set_http_handler<cinatra::http_method::DEL>(
+      "/delete/:name", [](coro_http_request &req, coro_http_response &resp) {
+        auto &filename = req.params_["name"];
+        std::error_code ec;
+        fs::remove(filename, ec);
+        std::string result = ec ? "delete failed" : "delete ok";
+        resp.set_status_and_content(status_type::ok, result);
+      });
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
@@ -343,34 +367,27 @@ TEST_CASE("test head put and some other request") {
       client.async_options("http://127.0.0.1:8090/"));
   CHECK(result.status == 200);
 
-  //   std::string json = R"({
-  // "Id": 12345,
-  // "Customer": "John Smith",
-  // "Quantity": 1,
-  // "Price": 10.00
-  // })";
+  std::string json = R"({
+  "Id": 12345,
+  "Customer": "John Smith",
+  "Quantity": 1,
+  "Price": 10.00
+  })";
 
-  //   coro_http_client client1{};
-  //   result = async_simple::coro::syncAwait(client1.async_put(
-  //       "http://reqbin.com/echo/put/json", json, req_content_type::json));
-  //   for (auto [k, v] : result.resp_headers) {
-  //     std::cout << k << ": " << v;
-  //   }
-  //   if (!result.net_err) {
-  //     CHECK(result.status >= 200);
-  //   }
+  coro_http_client client1{};
+  result = async_simple::coro::syncAwait(client1.async_put(
+      "http://127.0.0.1:8090/put/json", json, req_content_type::json));
+  CHECK(result.status == 200);
 
-  //   result = async_simple::coro::syncAwait(client1.async_delete(
-  //       "http://reqbin.com/echo/delete/json.txt", json,
-  //       req_content_type::json));
-  //   for (auto [k, v] : result.resp_headers) {
-  //     std::cout << k << ": " << v;
-  //   }
-  //   if (!result.net_err) {
-  //     CHECK(result.status >= 200);
-  //   }
+  result = async_simple::coro::syncAwait(client1.async_post(
+      "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
 
-  //   std::cout << std::endl;
+  CHECK(result.status == 404);
+
+  result = async_simple::coro::syncAwait(client1.async_delete(
+      "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
+
+  CHECK(result.status == 200);
 }
 
 TEST_CASE("test upload file") {

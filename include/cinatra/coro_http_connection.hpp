@@ -188,14 +188,18 @@ class coro_http_connection
           std::function<void(coro_http_request & req,
                              coro_http_response & resp)>
               handler;
-          std::string method_str;
-          method_str.assign(parser_.method().data(), parser_.method().length());
-          std::string url_path;
-          url_path.assign(parser_.url().data(), parser_.url().length());
+          std::string method_str{parser_.method()};
+          std::string url_path = method_str;
+          url_path.append(" ").append(parser_.url());
           std::tie(is_exist, handler, request_.params_) =
               router_.get_router_tree()->get(url_path, method_str);
           if (is_exist) {
-            (handler)(request_, response_);
+            if (handler) {
+              (handler)(request_, response_);
+            }
+            else {
+              response_.set_status(status_type::not_found);
+            }
           }
           else {
             bool is_coro_exist = false;
@@ -207,7 +211,12 @@ class coro_http_connection
                 router_.get_coro_router_tree()->get_coro(url_path, method_str);
 
             if (is_coro_exist) {
-              co_await (coro_handler)(request_, response_);
+              if (coro_handler) {
+                co_await(coro_handler)(request_, response_);
+              }
+              else {
+                response_.set_status(status_type::not_found);
+              }
             }
             else {
               bool is_matched_regex_router = false;
@@ -215,14 +224,15 @@ class coro_http_connection
               auto coro_regex_handlers = router_.get_coro_regex_handlers();
               if (coro_regex_handlers.size() != 0) {
                 for (auto &pair : coro_regex_handlers) {
-                  std::string coro_regex_key;
-                  coro_regex_key.assign(key.data(), key.size());
+                  std::string coro_regex_key{key};
 
                   if (std::regex_match(coro_regex_key, request_.matches_,
                                        std::get<0>(pair))) {
                     auto coro_handler = std::get<1>(pair);
-                    co_await (coro_handler)(request_, response_);
-                    is_matched_regex_router = true;
+                    if (coro_handler) {
+                      co_await(coro_handler)(request_, response_);
+                      is_matched_regex_router = true;
+                    }
                   }
                 }
               }
@@ -231,13 +241,14 @@ class coro_http_connection
                 auto regex_handlers = router_.get_regex_handlers();
                 if (regex_handlers.size() != 0) {
                   for (auto &pair : regex_handlers) {
-                    std::string regex_key;
-                    regex_key.assign(key.data(), key.size());
+                    std::string regex_key{key};
                     if (std::regex_match(regex_key, request_.matches_,
                                          std::get<0>(pair))) {
                       auto handler = std::get<1>(pair);
-                      (handler)(request_, response_);
-                      is_matched_regex_router = true;
+                      if (handler) {
+                        (handler)(request_, response_);
+                        is_matched_regex_router = true;
+                      }
                     }
                   }
                 }
