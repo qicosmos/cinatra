@@ -1,6 +1,8 @@
 #pragma once
-#include "utils.hpp"
+#include <asio.hpp>
 #include <string>
+
+#include "utils.hpp"
 
 namespace cinatra::smtp {
 struct email_server {
@@ -17,8 +19,9 @@ struct email_data {
   std::string filepath;
 };
 
-template <typename T> class client {
-public:
+template <typename T>
+class client {
+ public:
   static constexpr bool IS_SSL = std::is_same_v<T, cinatra::SSL>;
   client(asio::io_service &io_service)
       : io_context_(io_service), socket_(io_service), resolver_(io_service) {}
@@ -36,8 +39,7 @@ public:
     }
 
     asio::ip::tcp::resolver::query qry(
-        host, server_.port,
-        asio::ip::resolver_query_base::numeric_service);
+        host, server_.port, asio::ip::resolver_query_base::numeric_service);
     std::error_code ec;
     auto endpoint_iterator = resolver_.resolve(qry, ec);
     asio::connect(socket_, endpoint_iterator, ec);
@@ -57,8 +59,7 @@ public:
     }
 
     while (true) {
-      asio::read(socket(), response_, asio::transfer_at_least(1),
-                        ec);
+      asio::read(socket(), response_, asio::transfer_at_least(1), ec);
       if (ec) {
         return;
       }
@@ -73,13 +74,14 @@ public:
     }
   }
 
-private:
+ private:
   auto &socket() {
 #ifdef CINATRA_ENABLE_SSL
     if constexpr (IS_SSL) {
       assert(ssl_socket_);
       return *ssl_socket_;
-    } else
+    }
+    else
 #endif
     {
       return socket_;
@@ -91,8 +93,8 @@ private:
     ctx.set_default_verify_paths();
     ctx.set_verify_mode(ctx.verify_fail_if_no_peer_cert);
 
-    ssl_socket_ = std::make_unique<
-        asio::ssl::stream<asio::ip::tcp::socket &>>(socket_, ctx);
+    ssl_socket_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+        socket_, ctx);
     ssl_socket_->set_verify_mode(asio::ssl::verify_none);
     ssl_socket_->set_verify_callback([](auto preverified, auto &ctx) {
       char subject_name[256];
@@ -162,12 +164,10 @@ private:
     out << base64_encode(server_.user) << "\r\n";
     out << base64_encode(server_.password) << "\r\n";
     out << "MAIL FROM:<" << data_.from_email << ">\r\n";
-    for (auto to : data_.to_email)
-      out << "RCPT TO:<" << to << ">\r\n";
+    for (auto to : data_.to_email) out << "RCPT TO:<" << to << ">\r\n";
     out << "DATA\r\n";
     out << "FROM: " << data_.from_email << "\r\n";
-    for (auto to : data_.to_email)
-      out << "TO: " << to << "\r\n";
+    for (auto to : data_.to_email) out << "TO: " << to << "\r\n";
     out << "SUBJECT: " << data_.subject << "\r\n";
 
     build_smtp_content(out);
@@ -189,12 +189,11 @@ private:
     socket_.close(ignore_ec);
   }
 
-private:
+ private:
   asio::io_context &io_context_;
   asio::ip::tcp::socket socket_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      ssl_socket_;
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_socket_;
 #endif
   asio::ip::tcp::resolver resolver_;
 
@@ -210,4 +209,4 @@ static inline auto get_smtp_client(asio::io_service &io_service) {
   return smtp::client<T>(io_service);
 }
 
-} // namespace cinatra::smtp
+}  // namespace cinatra::smtp

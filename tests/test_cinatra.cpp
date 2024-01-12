@@ -35,25 +35,14 @@ std::string_view get_header_value(
 }
 
 TEST_CASE("test for gzip") {
-  http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
-
-  server.set_http_handler<GET, POST>("/gzip", [](request &req, response &res) {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET, POST>("/gzip", [](coro_http_request &req,
+                                                 coro_http_response &res) {
     CHECK(req.get_header_value("Content-Encoding") == "gzip");
     res.set_status_and_content(status_type::ok, "hello world",
                                req_content_type::none, content_encoding::gzip);
   });
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+  server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -68,7 +57,6 @@ TEST_CASE("test for gzip") {
   CHECK(ret == true);
   CHECK(decompress_data == "hello world");
   server.stop();
-  server_thread.join();
 }
 #endif
 
@@ -139,6 +127,17 @@ TEST_CASE("test ssl client") {
   CHECK(result.status >= 200);
 }
 #endif
+
+bool create_file(std::string_view filename, size_t file_size = 1024) {
+  std::ofstream out(filename.data(), std::ios::binary);
+  if (!out.is_open()) {
+    return false;
+  }
+
+  std::string str(file_size, 'A');
+  out.write(str.data(), str.size());
+  return true;
+}
 
 TEST_CASE("test cinatra::string with SSO") {
   std::string s = "HelloHi";
@@ -219,7 +218,7 @@ TEST_CASE("test request with out buffer") {
   }
 
   {
-    str.resize(10240);
+    detail::resize(str, 102400);
     coro_http_client client;
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
@@ -306,100 +305,160 @@ TEST_CASE("test collect all") {
 }
 
 TEST_CASE("test head put and some other request") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<HEAD>(
+      "/headers", [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("Content-Type", "application/json");
+        resp.add_header("Content-Length", "117");
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::http_method::PATCH,
+                          cinatra::http_method::TRACE>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status(status_type::method_not_allowed);
+      });
+  server.set_http_handler<cinatra::http_method::OPTIONS>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("Allow", "HEAD, OPTIONS, GET, POST, PUT");
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::http_method::PUT>(
+      "/put/json", [](coro_http_request &req, coro_http_response &resp) {
+        auto json_str = req.get_body();
+        std::ofstream file("json.txt", std::ios::binary);
+        file.write(json_str.data(), json_str.size());
+        file.close();
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::http_method::PUT>(
+      "/delete/:name", [](coro_http_request &req, coro_http_response &resp) {
+        auto &filename = req.params_["name"];
+        std::error_code ec;
+        fs::remove(filename, ec);
+        std::string result = ec ? "delete failed" : "ok";
+        resp.set_status_and_content(status_type::ok, result);
+      });
+  server.set_http_handler<cinatra::http_method::DEL>(
+      "/delete/:name", [](coro_http_request &req, coro_http_response &resp) {
+        auto &filename = req.params_["name"];
+        std::error_code ec;
+        fs::remove(filename, ec);
+        std::string result = ec ? "delete failed" : "delete ok";
+        resp.set_status_and_content(status_type::ok, result);
+      });
+  server.async_start();
+  std::this_thread::sleep_for(300ms);
+
   coro_http_client client{};
 
-  auto f = client.async_head("http://httpbin.org/headers");
-  auto result = async_simple::coro::syncAwait(f);
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v << "\n";
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+  auto result = async_simple::coro::syncAwait(
+      client.async_head("http://127.0.0.1:8090/headers"));
+  CHECK(result.status == 200);
+
+  result = async_simple::coro::syncAwait(
+      client.async_patch("http://127.0.0.1:8090/"));
+  CHECK(result.status == 405);
+
+  result = async_simple::coro::syncAwait(
+      client.async_trace("http://127.0.0.1:8090/"));
+  CHECK(result.status == 405);
+
+  result = async_simple::coro::syncAwait(
+      client.async_options("http://127.0.0.1:8090/"));
+  CHECK(result.status == 200);
 
   std::string json = R"({
-"Id": 12345,
-"Customer": "John Smith",
-"Quantity": 1,
-"Price": 10.00
-})";
+  "Id": 12345,
+  "Customer": "John Smith",
+  "Quantity": 1,
+  "Price": 10.00
+  })";
 
   coro_http_client client1{};
   result = async_simple::coro::syncAwait(client1.async_put(
-      "http://reqbin.com/echo/put/json", json, req_content_type::json));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+      "http://127.0.0.1:8090/put/json", json, req_content_type::json));
+  CHECK(result.status == 200);
+
+  result = async_simple::coro::syncAwait(client1.async_post(
+      "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
+
+  CHECK(result.status == 404);
 
   result = async_simple::coro::syncAwait(client1.async_delete(
-      "http://reqbin.com/echo/delete/json.txt", json, req_content_type::json));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
+      "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
 
-  coro_http_client client2{};
-  result = async_simple::coro::syncAwait(
-      client2.async_options("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v << std::endl;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
-
-  result =
-      async_simple::coro::syncAwait(client2.async_patch("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
-
-  result =
-      async_simple::coro::syncAwait(client2.async_trace("http://httpbin.org"));
-  for (auto [k, v] : result.resp_headers) {
-    std::cout << k << ": " << v;
-  }
-  if (!result.net_err) {
-    CHECK(result.status >= 200);
-  }
-  std::cout << std::endl;
+  CHECK(result.status == 200);
 }
 
 TEST_CASE("test upload file") {
-  http_server server(std::thread::hardware_concurrency());
-  //  server.enable_timeout(false);
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT, cinatra::POST>(
+      "/multipart",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::multipart);
+        auto boundary = req.get_boundary();
+        multipart_reader_t multipart(req.get_conn());
+        while (true) {
+          auto part_head = co_await multipart.read_part_head();
+          if (part_head.ec) {
+            co_return;
+          }
 
-  server.set_http_handler<POST>("/multipart", [](request &req, response &res) {
-    assert(req.get_content_type() == content_type::multipart);
-    auto &files = req.get_upload_files();
-    for (auto &file : files) {
-      std::cout << file.get_file_path() << " " << file.get_file_size()
-                << std::endl;
-    }
-    std::cout << "multipart finished\n";
-    res.render_string("multipart finished");
-  });
+          std::cout << part_head.name << "\n";
+          std::cout << part_head.filename << "\n";
 
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+          std::shared_ptr<coro_io::coro_file> file;
+          std::string filename;
+          if (!part_head.filename.empty()) {
+            file = std::make_shared<coro_io::coro_file>();
+            filename = std::to_string(
+                std::chrono::system_clock::now().time_since_epoch().count());
+
+            size_t pos = part_head.filename.rfind('.');
+            if (pos != std::string::npos) {
+              auto extent = part_head.filename.substr(pos);
+              filename += extent;
+            }
+
+            std::cout << filename << "\n";
+            co_await file->async_open(filename, coro_io::flags::create_write);
+            if (!file->is_open()) {
+              resp.set_status_and_content(status_type::internal_server_error,
+                                          "file open failed");
+              co_return;
+            }
+          }
+
+          auto part_body = co_await multipart.read_part_body(boundary);
+          if (part_body.ec) {
+            co_return;
+          }
+
+          if (!filename.empty()) {
+            auto ec = co_await file->async_write(part_body.data.data(),
+                                                 part_body.data.size());
+            if (ec) {
+              co_return;
+            }
+
+            file->close();
+            CHECK(fs::file_size(filename) == 2 * 1024 * 1024);
+          }
+          else {
+            std::cout << part_body.data << "\n";
+          }
+
+          if (part_body.eof) {
+            break;
+          }
+        }
+
+        resp.set_status_and_content(status_type::ok, "multipart finished");
+        co_return;
+      });
+
+  server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -414,9 +473,7 @@ TEST_CASE("test upload file") {
   CHECK(!client.add_file_part("key", "value"));
   result = async_simple::coro::syncAwait(client.async_upload_multipart(uri));
   CHECK(!client.is_redirect(result));
-  if (result.status == 200) {
-    CHECK(result.resp_body == "multipart finished");
-  }
+  CHECK(result.resp_body == "multipart finished");
 
   client.add_str_part("hello", "world");
   result = async_simple::coro::syncAwait(
@@ -434,9 +491,8 @@ TEST_CASE("test upload file") {
   result = async_simple::coro::syncAwait(
       client.async_upload_multipart(uri, "test", test_file_name));
 
-  if (result.status == 200) {
-    CHECK(result.resp_body == "multipart finished");
-  }
+  CHECK(result.resp_body == "multipart finished");
+
   std::filesystem::remove(std::filesystem::path(test_file_name));
 
   std::string not_exist_file = "notexist.txt";
@@ -451,7 +507,6 @@ TEST_CASE("test upload file") {
   client.close();
 
   server.stop();
-  server_thread.join();
 }
 
 TEST_CASE("test bad uri") {
@@ -497,37 +552,39 @@ TEST_CASE("test multiple ranges download") {
 }
 
 TEST_CASE("test ranges download") {
+  create_file("test_range.txt", 64);
+  coro_http_server server(1, 8090);
+  server.set_static_res_dir("", "");
+  server.async_start();
+
   coro_http_client client{};
   client.set_req_timeout(std::chrono::seconds(8));
-  std::string uri = "http://httpbin.org/range/32";
+  std::string uri = "http://127.0.0.1:8090/test_range.txt";
 
   std::string filename = "test1.txt";
   std::error_code ec{};
   std::filesystem::remove(filename, ec);
   resp_data result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "1-10"));
-  if (result.status == 206) {
-    CHECK(std::filesystem::file_size(filename) == 10);
-  }
+  CHECK(result.status == 206);
+  CHECK(std::filesystem::file_size(filename) == 10);
 
   filename = "test2.txt";
   std::filesystem::remove(filename, ec);
   result = async_simple::coro::syncAwait(
       client.async_download(uri, filename, "10-15"));
-  if (result.status == 200 && !result.resp_body.empty()) {
-    CHECK(std::filesystem::file_size(filename) == 6);
-  }
-  // multiple range test
-  //  auto result =
-  //      async_simple::coro::syncAwait(client.async_download(uri, "test2.txt",
-  //      "1-10, 20-30"));
-  //  if (result.resp_body.size() == 31)
-  //    CHECK(result.resp_body == "bcdefghijklmnopqrstuvwxyzabcdef");
+  CHECK(result.status == 206);
+  CHECK(std::filesystem::file_size(filename) == 6);
 }
 
-TEST_CASE("test ranges download with a bad filename") {
+TEST_CASE("test ranges download with a bad filename and multiple ranges") {
+  create_file("test_multiple_range.txt", 64);
+  coro_http_server server(1, 8090);
+  server.set_static_res_dir("", "");
+  server.async_start();
+
   coro_http_client client{};
-  std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
+  std::string uri = "http://127.0.0.1:8090/test_multiple_range.txt";
 
   std::string filename = "";
   std::error_code ec{};
@@ -537,6 +594,17 @@ TEST_CASE("test ranges download with a bad filename") {
   CHECK(result.status == 404);
   CHECK(result.net_err ==
         std::make_error_code(std::errc::no_such_file_or_directory));
+
+  client.add_header("Range", "bytes=1-10,20-30");
+  result = client.get(uri);
+  CHECK(result.status == 206);
+  CHECK(result.resp_body.size() == 21);
+
+  filename = "test_ranges.txt";
+  client.add_header("Range", "bytes=0-10,21-30");
+  result = client.download(uri, filename);
+  CHECK(result.status == 206);
+  CHECK(fs::file_size(filename) == 21);
 }
 
 TEST_CASE("test coro_http_client quit") {
@@ -547,17 +615,6 @@ TEST_CASE("test coro_http_client quit") {
   }();
 
   CHECK(promise.get_future().get());
-}
-
-bool create_file(std::string_view filename, size_t file_size = 1024) {
-  std::ofstream out(filename.data(), std::ios::binary);
-  if (!out.is_open()) {
-    return false;
-  }
-
-  std::string str(file_size, 'A');
-  out.write(str.data(), str.size());
-  return true;
 }
 
 TEST_CASE("test coro_http_client multipart upload") {
@@ -654,8 +711,8 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           std::string_view filename = req.get_header_value("filename");
 
           CHECK(!filename.empty());
-          std::string fullpath = fs::path("www").append(filename).string();
-          std::ofstream file(fullpath.data(), std::ios::binary);
+          std::string fullpath = fs::current_path().append(filename).string();
+          std::ofstream file(fullpath, std::ios::binary);
           CHECK(file.is_open());
 
           while (true) {
@@ -679,7 +736,13 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
     {
       std::string filename = "test_1024.txt";
-      create_file(filename);
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename);
+      CHECK(r);
 
       coro_http_client client{};
       client.add_header("filename", filename);
@@ -704,25 +767,27 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
   {
     // chunked download, not in cache
+    create_file("test_102.txt", 102);
+    create_file("test_static.txt", 1024);
     coro_http_server server(1, 8090);
-    server.set_static_res_dir("download");
+    server.set_static_res_dir("download", "");
     server.set_max_size_of_cache_files(100);
     server.set_transfer_chunked_size(100);
     server.async_start();
 
     coro_http_client client{};
 
-    std::string download_url = "http://127.0.0.1:8090/download/test_1024.txt";
+    std::string download_url = "http://127.0.0.1:8090/download/test_static.txt";
     std::string download_name = "test1.txt";
     auto r = client.download(download_url, download_name);
     CHECK(r.status == 200);
     CHECK(std::filesystem::file_size(download_name) == 1024);
 
-    download_url = "http://127.0.0.1:8090/download/test_100.txt";
+    download_url = "http://127.0.0.1:8090/download/test_102.txt";
     download_name = "test2.txt";
     r = client.download(download_url, download_name);
     CHECK(r.status == 200);
-    CHECK(std::filesystem::file_size(download_name) == 100);
+    CHECK(std::filesystem::file_size(download_name) == 102);
   }
 }
 
@@ -781,46 +846,34 @@ TEST_CASE("test coro_http_client async_get") {
 }
 
 TEST_CASE("test basic http request") {
-  http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
-
+  coro_http_server server(1, 8090);
   // Setting up GET and POST handlers
   server.set_http_handler<GET>(
-      "/", [&server](request &, response &res) mutable {
+      "/", [&server](coro_http_request &, coro_http_response &res) mutable {
         res.set_status_and_content(status_type::ok, "hello world");
       });
   server.set_http_handler<POST>(
-      "/", [&server](request &req, response &res) mutable {
-        std::string str(req.body());
+      "/", [&server](coro_http_request &req, coro_http_response &res) mutable {
+        std::string str(req.get_body());
         str.append(" reply from post");
         res.set_status_and_content(status_type::ok, std::move(str));
       });
 
   // Setting up PUT handler
   server.set_http_handler<PUT>(
-      "/", [&server](request &req, response &res) mutable {
-        std::string str(req.body());
+      "/", [&server](coro_http_request &req, coro_http_response &res) mutable {
+        std::string str(req.get_body());
         str.append(" put successfully");
         res.set_status_and_content(status_type::ok, std::move(str));
       });
 
   // Setting up DELETE handler
   server.set_http_handler<DEL>(
-      "/", [&server](request &, response &res) mutable {
+      "/", [&server](coro_http_request &, coro_http_response &res) mutable {
         res.set_status_and_content(status_type::ok, "data deleted");
       });
 
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+  server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -874,7 +927,6 @@ TEST_CASE("test basic http request") {
   CHECK(result.status == 200);
 
   server.stop();
-  server_thread.join();
 }
 
 TEST_CASE("test coro_http_client request timeout") {
@@ -1017,25 +1069,14 @@ TEST_CASE("test coro http redirect request") {
 }
 
 TEST_CASE("test coro http request timeout") {
-  http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
+  coro_http_server server(1, 8090);
   server.set_http_handler<GET, POST>(
-      "/", [&server](request &, response &res) mutable {
+      "/", [&server](coro_http_request &, coro_http_response &res) mutable {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         res.set_status_and_content(status_type::ok, "hello world");
       });
 
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+  server.async_start();
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   coro_http_client client{};
   std::string uri = "http://127.0.0.1:8090";
@@ -1055,7 +1096,6 @@ TEST_CASE("test coro http request timeout") {
   CHECK(!result.net_err);
 
   server.stop();
-  server_thread.join();
 }
 
 TEST_CASE("test coro_http_client using external io_context") {
@@ -1091,25 +1131,14 @@ TEST_CASE("test coro_http_client dealing with self join") {
 }
 
 TEST_CASE("test coro_http_client no scheme still send request check") {
-  http_server server(std::thread::hardware_concurrency());
-  bool r = server.listen("0.0.0.0", "8090");
-  if (!r) {
-    std::cout << "listen failed."
-              << "\n";
-  }
+  coro_http_server server(1, 8090);
   server.set_http_handler<GET, POST>(
-      "/", [&server](request &, response &res) mutable {
+      "/", [&server](coro_http_request &, coro_http_response &res) mutable {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         res.set_status_and_content(status_type::ok, "hello world");
       });
 
-  std::promise<void> pr;
-  std::future<void> f = pr.get_future();
-  std::thread server_thread([&server, &pr]() {
-    pr.set_value();
-    server.run();
-  });
-  f.wait();
+  server.async_start();
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   std::string uri = "http://127.0.0.1:8090";
 
@@ -1122,7 +1151,6 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
   CHECK(resp.status == 404);
 
   server.stop();
-  server_thread.join();
 }
 
 TEST_CASE("test conversion between unix time and gmt time, http format") {

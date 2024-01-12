@@ -39,7 +39,7 @@ class response {
   constexpr auto set_status_and_content(
       const char (&content)[N],
       content_encoding encoding = content_encoding::none) {
-    constexpr auto status_str = to_rep_string(status);
+    constexpr auto status_str = to_http_status_string(status);
     constexpr auto type_str = to_content_type_str(content_type);
     constexpr auto len_str = num_to_string<N - 1>::value;
 
@@ -75,7 +75,7 @@ class response {
   }
 
   void build_response_str(auto &content) {
-    rep_str_.append(to_rep_string(status_));
+    rep_str_.append(to_http_status_string(status_));
 
     //			if (keep_alive) {
     //				rep_str_.append("Connection: keep-alive\r\n");

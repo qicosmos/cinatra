@@ -33,7 +33,7 @@ enum class format_type {
 class coro_http_connection;
 class coro_http_response {
  public:
-  coro_http_response(coro_http_connection* conn)
+  coro_http_response(coro_http_connection *conn)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
         delay_(false),
@@ -42,10 +42,14 @@ class coro_http_response {
   }
 
   void set_status(cinatra::status_type status) { status_ = status; }
-  void set_content(std::string content) { content_ = std::move(content); }
-  void set_status_and_content(status_type status, std::string content) {
+  void set_content(std::string content) {
+    content_ = std::move(content);
+    has_set_content_ = true;
+  }
+  void set_status_and_content(status_type status, std::string content = "") {
     status_ = status;
     content_ = std::move(content);
+    has_set_content_ = true;
   }
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
@@ -61,10 +65,10 @@ class coro_http_response {
 
   std::string_view get_boundary() { return boundary_; }
 
-  void to_buffers(std::vector<asio::const_buffer>& buffers) {
+  void to_buffers(std::vector<asio::const_buffer> &buffers) {
     build_resp_head();
 
-    buffers.push_back(asio::buffer(to_rep_string(status_)));
+    buffers.push_back(asio::buffer(to_http_status_string(status_)));
     buffers.push_back(asio::buffer(head_));
     if (!content_.empty()) {
       if (fmt_type_ == format_type::chunked) {
@@ -82,7 +86,7 @@ class coro_http_response {
     return std::string_view{buf, size_t(std::distance(buf, ptr))};
   }
 
-  void to_chunked_buffers(std::vector<asio::const_buffer>& buffers,
+  void to_chunked_buffers(std::vector<asio::const_buffer> &buffers,
                           std::string_view chunk_data, bool eof) {
     if (!chunk_data.empty()) {
       // convert bytes transferred count to a hex string.
@@ -105,7 +109,7 @@ class coro_http_response {
   void build_resp_head() {
     bool has_len = false;
     bool has_host = false;
-    for (auto& [k, v] : resp_headers_) {
+    for (auto &[k, v] : resp_headers_) {
       if (k == "Host") {
         has_host = true;
       }
@@ -118,8 +122,9 @@ class coro_http_response {
       resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
     }
 
-    if (status_ >= status_type::not_found) {
-      content_.append(to_string(status_));
+    if (content_.empty() && !has_set_content_ &&
+        fmt_type_ != format_type::chunked) {
+      content_.append(default_status_content(status_));
     }
 
     if (fmt_type_ == format_type::chunked) {
@@ -152,7 +157,7 @@ class coro_http_response {
     head_.append(CRCF);
   }
 
-  coro_http_connection* get_conn() { return conn_; }
+  coro_http_connection *get_conn() { return conn_; }
 
   void clear() {
     head_.clear();
@@ -165,10 +170,11 @@ class coro_http_response {
     status_ = status_type::init;
     fmt_type_ = format_type::normal;
     boundary_.clear();
+    has_set_content_ = false;
   }
 
-  void append_head(auto& headers) {
-    for (auto& [k, v] : headers) {
+  void append_head(auto &headers) {
+    for (auto &[k, v] : headers) {
       head_.append(k);
       head_.append(":");
       head_.append(v);
@@ -186,7 +192,8 @@ class coro_http_response {
   char buf_[32];
   std::vector<resp_header> resp_headers_;
   std::vector<resp_header_sv> resp_headers_sv_;
-  coro_http_connection* conn_;
+  coro_http_connection *conn_;
   std::string boundary_;
+  bool has_set_content_ = false;
 };
 }  // namespace cinatra

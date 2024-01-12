@@ -93,7 +93,7 @@ class coro_http_router {
         std::string method_str;
         method_str.append(method_name);
         method_names.push_back(method_str);
-        router_tree_->insert(key, std::move(handler), method_names);
+        router_tree_->insert(whole_str, std::move(handler), method_names);
       }
       else if (whole_str.find("{") != std::string::npos ||
                whole_str.find(")") != std::string::npos) {
