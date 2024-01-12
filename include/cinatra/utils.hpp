@@ -8,6 +8,7 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <asio/buffer.hpp>
 #include <cctype>
 #include <cstddef>  //std::byte
 #include <cstdlib>
@@ -145,29 +146,25 @@ inline std::string_view to_hex_string(size_t val) {
   return std::string_view{buf, size_t(std::distance(buf, ptr))};
 }
 
-template <typename T>
-inline std::vector<T> to_chunked_buffers(const char *chunk_data, size_t length,
-                                         std::string &chunk_size, bool eof) {
-  std::vector<T> buffers;
-
+inline void to_chunked_buffers(std::vector<asio::const_buffer> &buffers,
+                               std::string_view chunk_data, bool eof) {
+  size_t length = chunk_data.size();
   if (length > 0) {
     // convert bytes transferred count to a hex string.
-    chunk_size = to_hex_string(length);
+    auto chunk_size = to_hex_string(length);
 
     // Construct chunk based on rfc2616 section 3.6.1
-    buffers.push_back(T(chunk_size.data(), chunk_size.size()));
-    buffers.push_back(T(CRCF.data(), CRCF.size()));
-    buffers.push_back(T(chunk_data, length));
-    buffers.push_back(T(CRCF.data(), CRCF.size()));
+    buffers.push_back(asio::buffer(chunk_size));
+    buffers.push_back(asio::buffer(CRCF));
+    buffers.push_back(asio::buffer(chunk_data, length));
+    buffers.push_back(asio::buffer(CRCF));
   }
 
   // append last-chunk
   if (eof) {
-    buffers.push_back(T(LAST_CHUNK.data(), LAST_CHUNK.size()));
-    buffers.push_back(T(CRCF.data(), CRCF.size()));
+    buffers.push_back(asio::buffer(LAST_CHUNK));
+    buffers.push_back(asio::buffer(CRCF));
   }
-
-  return buffers;
 }
 
 static const std::string base64_chars =
