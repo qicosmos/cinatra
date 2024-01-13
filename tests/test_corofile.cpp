@@ -89,7 +89,7 @@ TEST_CASE("validate corofile") {
     auto write_ec = async_simple::coro::syncAwait(file.async_write(buf, 10));
     CHECK(write_ec == std::make_error_code(std::errc::bad_file_descriptor));
   }
-#if defined(YLT_ENABLE_FILE_IO_URING)
+#if defined(ENABLE_FILE_IO_URING)
   {
     coro_io::coro_file file{};
     async_simple::coro::syncAwait(
@@ -176,7 +176,7 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(pair.second == 0);
   }
 
-#if defined(YLT_ENABLE_FILE_IO_URING)
+#if defined(ENABLE_FILE_IO_URING)
   {
     coro_io::coro_file file{};
     async_simple::coro::syncAwait(
