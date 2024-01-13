@@ -268,6 +268,9 @@ class coro_http_connection
       response_.clear();
       buffers_.clear();
       body_.clear();
+      if (need_shrink_every_time_) {
+        body_.shrink_to_fit();
+      }
     }
   }
 
@@ -579,6 +582,8 @@ class coro_http_connection
 
   void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
 
+  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
@@ -720,5 +725,6 @@ class coro_http_connection
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool use_ssl_ = false;
 #endif
+  bool need_shrink_every_time_ = false;
 };
 }  // namespace cinatra

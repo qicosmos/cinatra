@@ -432,6 +432,8 @@ class coro_http_server {
     }
   }
 
+  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+
   size_t connection_count() {
     std::scoped_lock lock(conn_mtx_);
     return connections_.size();
@@ -501,6 +503,9 @@ class coro_http_server {
           executor, std::move(socket), router_);
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
+      }
+      if (need_shrink_every_time_) {
+        conn->set_shrink_to_fit(true);
       }
       if (need_check_) {
         conn->set_check_timeout(true);
@@ -706,5 +711,6 @@ class coro_http_server {
   bool use_ssl_ = false;
 #endif
   coro_http_router router_;
+  bool need_shrink_every_time_ = false;
 };
 }  // namespace cinatra

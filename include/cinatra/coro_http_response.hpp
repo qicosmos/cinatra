@@ -137,6 +137,9 @@ class coro_http_response {
   void clear() {
     head_.clear();
     content_.clear();
+    if (need_shrink_every_time_) {
+      content_.shrink_to_fit();
+    }
 
     resp_headers_.clear();
     resp_headers_sv_.clear();
@@ -147,6 +150,8 @@ class coro_http_response {
     boundary_.clear();
     has_set_content_ = false;
   }
+
+  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
   void append_head(auto &headers) {
     for (auto &[k, v] : headers) {
@@ -170,5 +175,6 @@ class coro_http_response {
   coro_http_connection *conn_;
   std::string boundary_;
   bool has_set_content_ = false;
+  bool need_shrink_every_time_ = false;
 };
 }  // namespace cinatra
