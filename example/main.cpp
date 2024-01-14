@@ -1,4 +1,3 @@
-#include <boost/asio.hpp>
 #include <cassert>
 #include <fstream>
 #include <iostream>
