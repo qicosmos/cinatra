@@ -1,6 +1,8 @@
 #pragma once
 
+#include <any>
 #include <charconv>
+#include <optional>
 #include <regex>
 
 #include "async_simple/coro/Lazy.h"
@@ -8,14 +10,12 @@
 #include "http_parser.hpp"
 #include "utils.hpp"
 #include "ws_define.h"
-#include <any>
-#include <optional>
-
 
 namespace cinatra {
 
-inline std::vector<std::pair<int, int>>
-parse_ranges(std::string_view range_str, size_t file_size, bool &is_valid) {
+inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
+                                                     size_t file_size,
+                                                     bool &is_valid) {
   range_str = trim_sv(range_str);
   if (range_str.empty()) {
     return {{0, file_size - 1}};
@@ -39,7 +39,8 @@ parse_ranges(std::string_view range_str, size_t file_size, bool &is_valid) {
     int start = 0;
     if (fist_range.empty()) {
       start = -1;
-    } else {
+    }
+    else {
       auto [ptr, ec] = std::from_chars(
           fist_range.data(), fist_range.data() + fist_range.size(), start);
       if (ec != std::errc{}) {
@@ -51,11 +52,13 @@ parse_ranges(std::string_view range_str, size_t file_size, bool &is_valid) {
     int end = 0;
     if (sub_range.size() == 1) {
       end = file_size - 1;
-    } else {
+    }
+    else {
       auto second_range = trim_sv(sub_range[1]);
       if (second_range.empty()) {
         end = file_size - 1;
-      } else {
+      }
+      else {
         auto [ptr, ec] =
             std::from_chars(second_range.data(),
                             second_range.data() + second_range.size(), end);
@@ -88,7 +91,7 @@ parse_ranges(std::string_view range_str, size_t file_size, bool &is_valid) {
 
 class coro_http_connection;
 class coro_http_request {
-public:
+ public:
   coro_http_request(http_parser &parser, coro_http_connection *conn)
       : parser_(parser), conn_(conn) {}
 
@@ -145,13 +148,16 @@ public:
       if (content_type.find("application/x-www-form-urlencoded") !=
           std::string_view::npos) {
         return content_type::urlencoded;
-      } else if (content_type.find("multipart/form-data") !=
-                 std::string_view::npos) {
+      }
+      else if (content_type.find("multipart/form-data") !=
+               std::string_view::npos) {
         return content_type::multipart;
-      } else if (content_type.find("application/octet-stream") !=
-                 std::string_view::npos) {
+      }
+      else if (content_type.find("application/octet-stream") !=
+               std::string_view::npos) {
         return content_type::octet_stream;
-      } else {
+      }
+      else {
         return content_type::string;
       }
     }
@@ -208,7 +214,7 @@ public:
     }
 
     try {
-      return std::any_cast<T>(it->second); // throws
+      return std::any_cast<T>(it->second);  // throws
     } catch (const std::bad_any_cast &e) {
       return std::optional<T>{};
     }
@@ -217,11 +223,11 @@ public:
   std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;
 
-private:
+ private:
   http_parser &parser_;
   std::string_view body_;
   coro_http_connection *conn_;
   bool is_websocket_;
   std::unordered_map<std::string, std::any> aspect_data_;
 };
-} // namespace cinatra
+}  // namespace cinatra
