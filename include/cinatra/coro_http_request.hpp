@@ -8,12 +8,14 @@
 #include "http_parser.hpp"
 #include "utils.hpp"
 #include "ws_define.h"
+#include <any>
+#include <optional>
+
 
 namespace cinatra {
 
-inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
-                                                     size_t file_size,
-                                                     bool& is_valid) {
+inline std::vector<std::pair<int, int>>
+parse_ranges(std::string_view range_str, size_t file_size, bool &is_valid) {
   range_str = trim_sv(range_str);
   if (range_str.empty()) {
     return {{0, file_size - 1}};
@@ -37,8 +39,7 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
     int start = 0;
     if (fist_range.empty()) {
       start = -1;
-    }
-    else {
+    } else {
       auto [ptr, ec] = std::from_chars(
           fist_range.data(), fist_range.data() + fist_range.size(), start);
       if (ec != std::errc{}) {
@@ -50,13 +51,11 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
     int end = 0;
     if (sub_range.size() == 1) {
       end = file_size - 1;
-    }
-    else {
+    } else {
       auto second_range = trim_sv(sub_range[1]);
       if (second_range.empty()) {
         end = file_size - 1;
-      }
-      else {
+      } else {
         auto [ptr, ec] =
             std::from_chars(second_range.data(),
                             second_range.data() + second_range.size(), end);
@@ -89,13 +88,13 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
 
 class coro_http_connection;
 class coro_http_request {
- public:
-  coro_http_request(http_parser& parser, coro_http_connection* conn)
+public:
+  coro_http_request(http_parser &parser, coro_http_connection *conn)
       : parser_(parser), conn_(conn) {}
 
   std::string_view get_header_value(std::string_view key) {
     auto headers = parser_.get_headers();
-    for (auto& header : headers) {
+    for (auto &header : headers) {
       if (iequal0(header.name, key)) {
         return header.value;
       }
@@ -119,9 +118,9 @@ class coro_http_request {
 
   std::span<http_header> get_headers() const { return parser_.get_headers(); }
 
-  const auto& get_queries() const { return parser_.queries(); }
+  const auto &get_queries() const { return parser_.queries(); }
 
-  void set_body(std::string& body) {
+  void set_body(std::string &body) {
     body_ = body;
     auto type = get_content_type();
     if (type == content_type::urlencoded) {
@@ -146,16 +145,13 @@ class coro_http_request {
       if (content_type.find("application/x-www-form-urlencoded") !=
           std::string_view::npos) {
         return content_type::urlencoded;
-      }
-      else if (content_type.find("multipart/form-data") !=
-               std::string_view::npos) {
+      } else if (content_type.find("multipart/form-data") !=
+                 std::string_view::npos) {
         return content_type::multipart;
-      }
-      else if (content_type.find("application/octet-stream") !=
-               std::string_view::npos) {
+      } else if (content_type.find("application/octet-stream") !=
+                 std::string_view::npos) {
         return content_type::octet_stream;
-      }
-      else {
+      } else {
         return content_type::string;
       }
     }
@@ -175,7 +171,7 @@ class coro_http_request {
     return content_type.substr(content_type.rfind("=") + 1);
   }
 
-  coro_http_connection* get_conn() { return conn_; }
+  coro_http_connection *get_conn() { return conn_; }
 
   bool is_upgrade() {
     auto h = get_header_value("Connection");
@@ -200,13 +196,32 @@ class coro_http_request {
     return true;
   }
 
+  void set_aspect_data(const std::string &&key, const std::any &data) {
+    aspect_data_[key] = data;
+  }
+
+  template <typename T>
+  std::optional<T> get_aspect_data(const std::string &&key) {
+    auto it = aspect_data_.find(key);
+    if (it == aspect_data_.end()) {
+      return std::optional<T>{};
+    }
+
+    try {
+      return std::any_cast<T>(it->second); // throws
+    } catch (const std::bad_any_cast &e) {
+      return std::optional<T>{};
+    }
+  }
+
   std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;
 
- private:
-  http_parser& parser_;
+private:
+  http_parser &parser_;
   std::string_view body_;
-  coro_http_connection* conn_;
+  coro_http_connection *conn_;
   bool is_websocket_;
+  std::unordered_map<std::string, std::any> aspect_data_;
 };
-}  // namespace cinatra
+} // namespace cinatra

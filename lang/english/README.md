@@ -60,282 +60,211 @@ cmake -DENABLE_SIMD=AARCH64 .. # enable neon instruction set in aarch64
 
 ### Example 1: A simple "Hello World"
 
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
+```c++
+	#include "include/cinatra.hpp"
+	using namespace cinatra;
+	
+	int main() {
+		int max_thread_num = std::thread::hardware_concurrency();
+		coro_http_server server(max_thread_num, 8080);
+		server.set_http_handler<GET, POST>("/", [](coro_http_request& req, coro_http_response& res) {
+			res.set_status_and_content(status_type::ok, "hello world");
+		});
 
-int main() {
-	int max_thread_num = std::thread::hardware_concurrency();
-	http_server server(max_thread_num);
-	server.listen("0.0.0.0", "8080");
-	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
-	});
-
-	server.run();
-	return 0;
-}
+		server.sync_start();
+		return 0;
+	}
 ```
 
 ### Example 2: Access to request header, query parameter, and response
 
-```cpp
+```c++
 #include "cinatra.hpp"
-using namespace cinatra;
+
+struct person_t {
+  void foo(coro_http_request &, coro_http_response &res) {
+    res.set_status_and_content(status_type::ok, "ok");
+  }
+};
+
+async_simple::coro::Lazy<void> basic_usage() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.set_http_handler<GET>(
+      "/in_thread_pool",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        // will respose in another thread.
+        co_await coro_io::post([&] {
+          // do your heavy work here when finished work, response.
+          resp.set_status_and_content(status_type::ok, "ok");
+        });
+      });
+
+  server.set_http_handler<POST, PUT>(
+      "/post", [](coro_http_request &req, coro_http_response &resp) {
+        auto req_body = req.get_body();
+        resp.set_status_and_content(status_type::ok, std::string{req_body});
+      });
+
+  server.set_http_handler<GET>(
+      "/headers", [](coro_http_request &req, coro_http_response &resp) {
+        auto name = req.get_header_value("name");
+        auto age = req.get_header_value("age");
+        assert(name == "tom");
+        assert(age == "20");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<GET>(
+      "/query", [](coro_http_request &req, coro_http_response &resp) {
+        auto name = req.get_query_value("name");
+        auto age = req.get_query_value("age");
+        assert(name == "tom");
+        assert(age == "20");
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/users/:userid/subscriptions/:subid",
+      [](coro_http_request &req, coro_http_response &response) {
+        assert(req.params_["userid"] == "ultramarines");
+        assert(req.params_["subid"] == "guilliman");
+        response.set_status_and_content(status_type::ok, "ok");
+      });
+
+  person_t person{};
+  server.set_http_handler<GET>("/person", &person_t::foo, person);
+
+  server.async_start();
+  std::this_thread::sleep_for(300ms);  // wait for server start
+
+  coro_http_client client{};
+  auto result = co_await client.async_get("http://127.0.0.1:9001/get");
+  assert(result.status == 200);
+  assert(result.resp_body == "ok");
+  for (auto [key, val] : result.resp_headers) {
+    std::cout << key << ": " << val << "\n";
+  }
+
+  result = co_await client.async_get("/coro");
+  assert(result.status == 200);
+
+  result = co_await client.async_get("/in_thread_pool");
+  assert(result.status == 200);
+
+  result = co_await client.async_post("/post", "post string",
+                                      req_content_type::string);
+  assert(result.status == 200);
+  assert(result.resp_body == "post string");
+
+  client.add_header("name", "tom");
+  client.add_header("age", "20");
+  result = co_await client.async_get("/headers");
+  assert(result.status == 200);
+
+  result = co_await client.async_get("/query?name=tom&age=20");
+  assert(result.status == 200);
+
+  result = co_await client.async_get(
+      "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
+  assert(result.status == 200);
+
+  // make sure you have installed openssl and enable CINATRA_ENABLE_SSL
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_client client2{};
+  result = co_await client2.async_get("https://baidu.com");
+  assert(result.status == 200);
+#endif
+}
 
 int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.listen("0.0.0.0", "8080");
-	server.set_http_handler<GET, POST>("/test", [](request& req, response& res) {
-		auto name = req.get_header_value("name");
-		if (name.empty()) {
-			res.set_status_and_content(status_type::bad_request, "no name");
-			return;
-		}
-
-		auto id = req.get_query_value("id");
-		if (id.empty()) {
-			res.set_status_and_content(status_type::bad_request);
-			return;
-		}
-
-		res.set_status_and_content(status_type::ok, "hello world");
-	});
-
-	server.run();
-	return 0;
+  async_simple::coro::syncAwait(basic_usage());
 }
 ```
 
 ### Example 3: Aspect-oriented HTTP server
 
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
+```c++
+	#include "cinatra.hpp"
+	using namespace cinatra;
 
-// Logging aspect
-struct log_t
-{
-	bool before(request& req, response& res) {
-		std::cout << "before log" << std::endl;
-		return true;
-	}
-
-	bool after(request& req, response& res) {
-		std::cout << "after log" << std::endl;
-		return true;
-	}
-};
-
-// Checking aspect
-struct check {
-	bool before(request& req, response& res) {
-		std::cout << "before check" << std::endl;
-		if (req.get_header_value("name").empty()) {
-			res.set_status_and_content(status_type::bad_request);
-			return false;
+	//日志切面
+	struct log_t : public base_aspect
+	{
+		bool before(coro_http_request& req, coro_http_response& res) {
+			std::cout << "before log" << std::endl;
+			return true;
 		}
-		return true;
+	
+		bool after(coro_http_request& req, coro_http_response& res) {
+			std::cout << "after log" << std::endl;
+			return true;
+		}
+	};
+	
+	//校验的切面
+	struct check  : public base_aspect {
+		bool before(coro_http_request& req, coro_http_response& res) {
+			std::cout << "before check" << std::endl;
+			if (req.get_header_value("name").empty()) {
+				res.set_status_and_content(status_type::bad_request);
+				return false;
+			}
+			return true;
+		}
+	
+		bool after(coro_http_request& req, coro_http_response& res) {
+			std::cout << "after check" << std::endl;
+			return true;
+		}
+	};
+
+	//将信息从中间件传输到处理程序
+	struct get_data  : public base_aspect {
+		bool before(coro_http_request& req, coro_http_response& res) {
+			req.set_aspect_data("hello", std::string("hello world"));
+			return true;
+		}
 	}
 
-	bool after(request& req, response& res) {
-		std::cout << "after check" << std::endl;
-		return true;
+	int main() {
+		coro_http_server server(std::thread::hardware_concurrency(), 8080);
+		server.set_http_handler<GET, POST>("/aspect", [](coro_http_request& req, coro_http_response& res) {
+			res.set_status_and_content(status_type::ok, "hello world");
+		}, std::vector{std::make_shared<check>(), std::make_shared<log_t>()});
+
+		server.set_http_handler<GET,POST>("/aspect/data", [](coro_http_request& req, coro_http_response& res) {
+			std::string hello = req.get_aspect_data<std::string>("hello");
+			res.set_status_and_content(status_type::ok, std::move(hello));
+		}, std::vector{std::make_shared<get_data>()});
+
+		server.sync_start();
+		return 0;
 	}
-};
-
-// transfer data from aspect to http handler
-struct get_data {
-	bool before(request& req, response& res) {
-		req.set_aspect_data("hello", std::string("hello world"));
-		return true;
-	}
-}
-
-int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.listen("0.0.0.0", "8080");
-	server.set_http_handler<GET, POST>("/aspect", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
-	}, check{}, log_t{});
-
-	server.set_http_handler<GET,POST>("/aspect/data", [](request& req, response& res) {
-		std::string hello = req.get_aspect_data<std::string>("hello");
-		res.set_status_and_content(status_type::ok, std::move(hello));
-	}, get_data{});
-
-	server.run();
-	return 0;
-}
 ```
 
 In this example, there are two aspects: one is to check the validity of the http request, and the other is the logging aspect. You can add pass as many aspects as needed to the `set_http_handler` method.
 
 The order of execution of the aspects depends on the order that they are passed to the `set_http_handler` method. In this example, the aspect to check the validity of the http request is called first. If the request is not valid, it will return a Bad Request error. If it is valid, the next aspect (that is, the log aspect) will be called. The log aspect, through the `before` method, will print a log indicating the processing before entering the business logic. After the business logic is completed, the log aspect's `after` method will  print to indicate the processing after the end of the business logic.
 
-### Example 4: File upload
+### Example 4: File upload, download, websocket
 
-Cinatra currently supports uploading of multipart and octet-stream formats.
+see[example](../../example/main.cpp)
 
-#### Multi-part file upload
-
-```cpp
-#include <atomic>
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.listen("0.0.0.0", "8080");
-
-	//http upload(multipart)
-	server.set_http_handler<GET, POST>("/upload_multipart", [](request& req, response& res) {
-		assert(req.get_content_type() == content_type::multipart);
-		
-		auto& files = req.get_upload_files();
-		for (auto& file : files) {
-			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
-		}
-
-		res.set_status_and_content(status_type::ok, "multipart finished");
-	});
-
-	server.run();
-	return 0;
-}
-```
-
-As you can see, a few lines of code can be used to implement a http file upload server, including exception handling and error handling.
-
-#### Octet-stream file upload
-
-```cpp
-#include <atomic>
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.listen("0.0.0.0", "8080");
-
-	//http upload(octet-stream)
-	server.set_http_handler<GET, POST>("/upload_octet_stream", [](request& req, response& res) {
-		assert(req.get_content_type() == content_type::octet_stream);
-		auto& files = req.get_upload_files();
-		for (auto& file : files) {
-			std::cout << file.get_file_path() << " " << file.get_file_size() << std::endl;
-		}
-
-		res.set_status_and_content(status_type::ok, "octet-stream finished");
-	});
-
-	server.run();
-	return 0;
-}
-```
-
-### Example 5: File download
-
-cinatra support chunked download files.
-
-Make sure the files are in your resource dictionary(which you could set in the server, such as "./public/static"), and then you could download the files directly.
-
-Here is the example:
-
-Assume the file "show.jpg" is in the "./purecpp/static/" of the server, you just need to typing the address of the image, and you could download the image immediately.
-```
-//chunked download
-http://127.0.0.1:8080/purecpp/static/show.jpg
-//cinatra will send you the file, if the file is big file(more than 5M) the file will be downloaded by chunked. support continues download
-```
-
-1. Use the `set_http_file_server(std::string path)` function to convert cinatra into an http file download server. When accessing http://ip:port/path, files that can be downloaded will be displayed.
-2. The `set_file_mapping(std::size_t file_max_size)` function can be used to establish the mapping between the request path and the file cache. After turning on this option, the server will read all files smaller than file_max_size in the set static file path. When the client accesses the server, the server will directly return the file cache. This option optimizes server performance through memory.
-
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.set_file_mapping();
-	server.set_http_file_server("http_file_server");
-	server.listen("0.0.0.0", "8080");
-	// ......
-}
-```
-
-In this time, when accessing the `http_file_server` path of the current server, all downloadable files will be displayed in the browser, and you can download them by clicking on them.
-
-### Example 6: WebSocket
-
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-	http_server server(std::thread::hardware_concurrency());
-	server.listen("0.0.0.0", "8080");
-
-	//web socket
-	server.set_http_handler<GET, POST>("/ws", [](request& req, response& res) {
-		assert(req.get_content_type() == content_type::websocket);
-
-		req.on(ws_open, [](request& req){
-			std::cout << "websocket start" << std::endl;
-		});
-
-		req.on(ws_message, [](request& req) {
-			auto part_data = req.get_part_data();
-			//echo
-			std::string str = std::string(part_data.data(), part_data.length());
-			req.get_conn<cinatra::NonSSL>()->send_ws_string(std::move(str));
-			std::cout << part_data.data() << std::endl;
-		});
-
-		req.on(ws_error, [](request& req) {
-			std::cout << "websocket pack error or network error" << std::endl;
-		});
-	});
-
-	server.run();
-	return 0;
-}
-```
-
-### Example 7: io_service_inplace
-
-This code demonstrates how to use io_service_inplace and then control the running thread and loop of the http server itself. Use http://[::1]:8080/close (IPv6) or http://127.0.0.1:8080/close (IPv4) to shut down the http server.
-
-```cpp
-#include "cinatra.hpp"
-using namespace cinatra;
-
-int main() {
-
-	bool is_running = true;
-	http_server_<io_service_inplace> server;
-	server.listen("8080");
-
-	server.set_http_handler<GET, POST>("/", [](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "hello world");
-	});
-
-	server.set_http_handler<GET, POST>("/close", [&](request& req, response& res) {
-		res.set_status_and_content(status_type::ok, "will close");
-
-		is_running = false;
-		server.stop();
-	});
-
-	while(is_running)
-		server.poll_one();
-
-	return 0;
-}
-```
-
-### Example 8: set RESTful API path parameters
+### Example : set RESTful API path parameters
 
 This code demonstrates how to use RESTful path parameters. Two RESTful APIs are set up below. When accessing the first API, such as the url `http://127.0.0.1:8080/numbers/1234/test/5678`, the server can get the two parameters of 1234 and 5678, the first RESTful API The parameter is `(\d+)`, which is a regex expression, which means that the parameter can only be a number. The code to get the first parameter is `req.get_matches ()[1]`. Because each req is different, each matched parameter is placed in the `request` structure.
 
@@ -371,7 +300,7 @@ int main() {
 }
 ```
 
-### Example 9: cinatra client usage
+### Example : cinatra client usage
 
 #### sync_send get/post message
 

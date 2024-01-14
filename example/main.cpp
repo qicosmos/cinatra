@@ -1,3 +1,4 @@
+#include <boost/asio.hpp>
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -18,19 +19,6 @@ void create_file(std::string filename, size_t file_size = 64) {
     file.write(str.data(), str.size());
   }
 }
-
-struct log_t : public base_aspect {
-  bool before(coro_http_request &, coro_http_response &) {
-    std::cout << "before log" << std::endl;
-    return true;
-  }
-
-  bool after(coro_http_request &, coro_http_response &res) {
-    std::cout << "after log" << std::endl;
-    res.add_header("aaaa", "bbcc");
-    return true;
-  }
-};
 
 async_simple::coro::Lazy<void> byte_ranges_download() {
   create_file("test_multiple_range.txt", 64);
@@ -62,7 +50,7 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
     std::string uri = "http://127.0.0.1:8090/test_multiple_range.txt";
 
     client.add_header("Range", "bytes=1-10,20-30");
-    auto result = client.get(uri);
+    auto result = co_await client.async_get(uri);
     assert(result.status == 206);
     assert(result.resp_body.size() == 21);
 
@@ -244,15 +232,38 @@ async_simple::coro::Lazy<void> static_file_server() {
   assert(result.resp_body.size() == 64);
 }
 
+struct log_t : public base_aspect {
+  bool before(coro_http_request &, coro_http_response &) {
+    std::cout << "before log" << std::endl;
+    return true;
+  }
+
+  bool after(coro_http_request &, coro_http_response &res) {
+    std::cout << "after log" << std::endl;
+    res.add_header("aaaa", "bbcc");
+    return true;
+  }
+};
+
+struct get_data : public base_aspect {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data("hello", std::string("hello world"));
+    return true;
+  }
+};
+
 async_simple::coro::Lazy<void> use_aspects() {
   coro_http_server server(1, 9001);
-  std::vector<std::shared_ptr<base_aspect>> aspects{std::make_shared<log_t>()};
   server.set_http_handler<GET>(
       "/get",
       [](coro_http_request &req, coro_http_response &resp) {
+        std::optional<std::string> val =
+            req.get_aspect_data<std::string>("hello");
+        assert(*val == "hello world");
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      aspects);
+      std::vector<std::shared_ptr<base_aspect>>{std::make_shared<log_t>(),
+                                                std::make_shared<get_data>()});
 
   server.async_start();
   std::this_thread::sleep_for(300ms);  // wait for server start
