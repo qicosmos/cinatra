@@ -169,6 +169,10 @@ class coro_http_request {
     return content_type::unknown;
   }
 
+  std::string_view get_url() { return parser_.url(); }
+
+  std::string_view get_method() { return parser_.method(); }
+
   std::string_view get_boundary() {
     auto content_type = get_header_value("content-type");
     if (content_type.empty()) {

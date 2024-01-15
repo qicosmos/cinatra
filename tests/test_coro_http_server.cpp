@@ -389,6 +389,11 @@ TEST_CASE("get post") {
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/test1", [](coro_http_request &req, coro_http_response &resp) {
+        CHECK(req.get_method() == "POST");
+        CHECK(req.get_url() == "/test1");
+        CHECK(req.get_conn()->local_address() == "127.0.0.1:9001");
+        CHECK(req.get_conn()->remote_address().find("127.0.0.1:") !=
+              std::string::npos);
         resp.add_header("Host", "Cinatra");
         resp.set_status_and_content(cinatra::status_type::ok, "hello world");
       });
