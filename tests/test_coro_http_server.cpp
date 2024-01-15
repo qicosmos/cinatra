@@ -1,11 +1,13 @@
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <future>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -15,6 +17,7 @@
 #include "cinatra/coro_http_connection.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
+#include "cinatra/url_encode_decode.hpp"
 #include "cinatra/utils.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
@@ -130,8 +133,9 @@ TEST_CASE("coro_server example, will block") {
   CHECK(server.port() > 0);
 }
 
-bool create_file(std::string_view filename, size_t file_size = 1024) {
-  std::ofstream out(filename.data(), std::ios::binary);
+template <typename View>
+bool create_file(View filename, size_t file_size = 1024) {
+  std::ofstream out(fs::u8path(filename), std::ios::binary);
   if (!out.is_open()) {
     return false;
   }
@@ -175,11 +179,36 @@ TEST_CASE("test multiple download") {
 
 TEST_CASE("test range download") {
   create_file("range_test.txt", 64);
+  create_file("中文测试.txt", 64);
+  create_file(fs::u8path("utf8中文.txt").string(), 64);
   std::cout << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
   server.set_file_resp_format_type(file_resp_format_type::range);
   server.async_start();
+  std::this_thread::sleep_for(300ms);
+
+  {
+    // test Chinese file name
+    coro_http_client client{};
+    std::string local_filename = "temp.txt";
+
+    std::string base_uri = "http://127.0.0.1:9001/";
+    std::string path = code_utils::url_encode("中文测试.txt");
+    auto result = client.download(base_uri + path, local_filename);
+    CHECK(result.status == 200);
+    CHECK(fs::file_size(local_filename) == 64);
+  }
+
+  {
+    coro_http_client client{};
+    std::string local_filename = "temp1.txt";
+    std::string base_uri = "http://127.0.0.1:9001/";
+    std::string path = code_utils::url_encode(fs::u8path("utf8中文.txt"));
+    auto result = client.download(base_uri + path, local_filename);
+    CHECK(result.status == 200);
+    CHECK(fs::file_size(local_filename) == 64);
+  }
 
   coro_http_client client{};
   std::string filename = "test1.txt";

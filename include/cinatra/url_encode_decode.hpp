@@ -29,7 +29,7 @@ inline static std::string url_encode(const std::string &value) noexcept {
   return result;
 }
 
-inline static std::string url_decode(const std::string &value) noexcept {
+inline static std::string url_decode(std::string_view value) noexcept {
   std::string result;
   result.reserve(value.size() / 3 +
                  (value.size() % 3));  // Minimum size of result
@@ -39,7 +39,7 @@ inline static std::string url_decode(const std::string &value) noexcept {
     if (chr == '%' && i + 2 < value.size()) {
       auto hex = value.substr(i + 1, 2);
       auto decoded_chr =
-          static_cast<char>(std::strtol(hex.c_str(), nullptr, 16));
+          static_cast<char>(std::strtol(hex.data(), nullptr, 16));
       result += decoded_chr;
       i += 2;
     }

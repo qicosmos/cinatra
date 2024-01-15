@@ -1186,6 +1186,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
     uri_t u;
     if (!u.parse_from(uri.data())) {
+      CINATRA_LOG_WARNING
+          << uri
+          << ", the url is not right, maybe need to encode the url firstly";
       data.net_err = std::make_error_code(std::errc::protocol_error);
       data.status = 404;
       return {false, {}};
