@@ -132,11 +132,13 @@ TEST_CASE("coro_server example, will block") {
 
 template <typename View>
 bool create_file(View filename, size_t file_size = 1024) {
-  std::ofstream out(fs::u8path(filename), std::ios::binary);
+  std::cout << "begin to open file: " << filename << "\n";
+  std::ofstream out(filename, std::ios::binary);
   if (!out.is_open()) {
+    std::cout << "open file: " << filename << " failed\n";
     return false;
   }
-
+  std::cout << "open file: " << filename << " ok\n";
   std::string str(file_size, 'A');
   out.write(str.data(), str.size());
   return true;
@@ -176,7 +178,7 @@ TEST_CASE("test multiple download") {
 
 TEST_CASE("test range download") {
   create_file("range_test.txt", 64);
-  // create_file("中文测试.txt", 64);
+  create_file(fs::u8path("中文测试.txt").string(), 64);
   create_file(fs::u8path("utf8中文.txt").string(), 64);
   std::cout << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
@@ -185,17 +187,17 @@ TEST_CASE("test range download") {
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
-  // {
-  //   // test Chinese file name
-  //   coro_http_client client{};
-  //   std::string local_filename = "temp.txt";
+  {
+    // test Chinese file name
+    coro_http_client client{};
+    std::string local_filename = "temp.txt";
 
-  //   std::string base_uri = "http://127.0.0.1:9001/";
-  //   std::string path = code_utils::url_encode("中文测试.txt");
-  //   auto result = client.download(base_uri + path, local_filename);
-  //   CHECK(result.status == 200);
-  //   CHECK(fs::file_size(local_filename) == 64);
-  // }
+    std::string base_uri = "http://127.0.0.1:9001/";
+    std::string path = code_utils::url_encode("中文测试.txt");
+    auto result = client.download(base_uri + path, local_filename);
+    CHECK(result.status == 200);
+    CHECK(fs::file_size(local_filename) == 64);
+  }
 
   {
     coro_http_client client{};
