@@ -3,7 +3,6 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
-#include <string_view>
 #include <system_error>
 #include <thread>
 
@@ -12,7 +11,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/response_cv.hpp"
-#include "cinatra/url_encode_decode.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
@@ -220,7 +218,7 @@ class coro_http_connection
 
             if (is_coro_exist) {
               if (coro_handler) {
-                co_await(coro_handler)(request_, response_);
+                co_await (coro_handler)(request_, response_);
               }
               else {
                 response_.set_status(status_type::not_found);
@@ -238,7 +236,7 @@ class coro_http_connection
                                        std::get<0>(pair))) {
                     auto coro_handler = std::get<1>(pair);
                     if (coro_handler) {
-                      co_await(coro_handler)(request_, response_);
+                      co_await (coro_handler)(request_, response_);
                       is_matched_regex_router = true;
                     }
                   }
