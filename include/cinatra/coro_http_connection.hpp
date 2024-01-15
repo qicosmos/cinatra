@@ -172,6 +172,12 @@ class coro_http_connection
           parser_.method().data(),
           parser_.method().length() + 1 + parser_.url().length()};
 
+      std::string decode_key;
+      if (parser_.url().find('%') != std::string_view::npos) {
+        decode_key = code_utils::url_decode(key);
+        key = decode_key;
+      }
+
       if (!body_.empty()) {
         request_.set_body(body_);
       }
