@@ -1,13 +1,11 @@
 #include <chrono>
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <future>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -17,7 +15,6 @@
 #include "cinatra/coro_http_connection.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
-#include "cinatra/url_encode_decode.hpp"
 #include "cinatra/utils.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
@@ -204,7 +201,8 @@ TEST_CASE("test range download") {
     coro_http_client client{};
     std::string local_filename = "temp1.txt";
     std::string base_uri = "http://127.0.0.1:9001/";
-    std::string path = code_utils::url_encode(fs::u8path("utf8中文.txt"));
+    std::string path =
+        code_utils::url_encode(fs::u8path("utf8中文.txt").string());
     auto result = client.download(base_uri + path, local_filename);
     CHECK(result.status == 200);
     CHECK(fs::file_size(local_filename) == 64);
