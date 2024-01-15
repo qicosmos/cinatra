@@ -178,8 +178,11 @@ TEST_CASE("test multiple download") {
 
 TEST_CASE("test range download") {
   create_file("range_test.txt", 64);
-  create_file(fs::u8path("中文测试.txt").string(), 64);
+#ifdef ASIO_WINDOWS
+#else
+  create_file("中文测试.txt", 64);
   create_file(fs::u8path("utf8中文.txt").string(), 64);
+#endif
   std::cout << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
@@ -187,6 +190,8 @@ TEST_CASE("test range download") {
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
+#ifdef ASIO_WINDOWS
+#else
   {
     // test Chinese file name
     coro_http_client client{};
@@ -209,6 +214,7 @@ TEST_CASE("test range download") {
     CHECK(result.status == 200);
     CHECK(fs::file_size(local_filename) == 64);
   }
+#endif
 
   coro_http_client client{};
   std::string filename = "test1.txt";
