@@ -300,6 +300,36 @@ class coro_http_connection
     co_return true;
   }
 
+  std::string local_address() {
+    if (has_closed_) {
+      return "";
+    }
+
+    std::stringstream ss;
+    std::error_code ec;
+    ss << socket_.local_endpoint(ec);
+    if (ec) {
+      return "";
+    }
+    return ss.str();
+  }
+
+  std::string remote_address() {
+    static std::string remote_addr;
+    if (has_closed_) {
+      return remote_addr;
+    }
+
+    std::stringstream ss;
+    std::error_code ec;
+    ss << socket_.remote_endpoint(ec);
+    if (ec) {
+      return remote_addr;
+    }
+    remote_addr = ss.str();
+    return ss.str();
+  }
+
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
     buffers.push_back(asio::buffer(message));
