@@ -228,12 +228,12 @@ class coro_http_server {
     }
 
     std::filesystem::path router_path =
-        std::filesystem::u8path(static_dir_router_path_);
+        std::filesystem::path(static_dir_router_path_);
 
     std::string uri;
     for (auto &file : files_) {
       auto relative_path =
-          std::filesystem::u8path(file.substr(static_dir_.length())).string();
+          std::filesystem::path(file.substr(static_dir_.length())).string();
       if (size_t pos = relative_path.find('\\') != std::string::npos) {
         replace_all(relative_path, "\\", "/");
       }
