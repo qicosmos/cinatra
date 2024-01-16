@@ -182,21 +182,19 @@ const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 
   /// 
-  /// \param base_path ssl 证书所在路径
-  /// \param cert_file ssl 证书名称
-  /// \param verify_mode 证书校验模式，默认不校验
-  /// \param domain 校验的域名
+  /// \param verify_mode 证书校验模式，默认校验
+  /// \param full_path ssl 证书名称
+  /// \param sni_hostname sni host 名称，默认为url的host
   /// \return ssl 初始化是否成功
-  bool init_ssl(const std::string &base_path = "", const std::string &cert_file = "",
-                int verify_mode = asio::ssl::verify_none,
-                const std::string &domain = "localhost");
+  bool init_ssl(int verify_mode = asio::ssl::verify_peer,
+                              std::string full_path = "",
+                              const std::string &sni_hostname = "");
 ```
 
 ```c++
 #ifdef CINATRA_ENABLE_SSL
 void test_coro_http_client() {
   coro_http_client client{};
-  client.init_ssl("../../include/cinatra", "server.crt");
   auto data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
   data = client.get("https://www.bing.com");
@@ -213,7 +211,7 @@ void test_coro_http_client() {
 }
 #endif
 ```
-如果没有ssl 证书，则init_ssl(); 参数不填。
+根据需要，一般情况下init_ssl()可以不调用。
 
 # http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。
@@ -401,7 +399,7 @@ client 配置项：
     // 是否启用tcp_no_delay
     bool enable_tcp_no_delay;
 #ifdef CINATRA_ENABLE_SSL
-    // 是否使用ssl
+    // 当请求的url中没有schema时，use_ssl为true时添加https，为false时添加http
     bool use_ssl = false;
     // ssl 证书路径
     std::string base_path;

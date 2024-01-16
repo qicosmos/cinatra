@@ -342,7 +342,7 @@ void test_sync_client() {
 void test_coro_http_client() {
   using namespace cinatra;
   coro_http_client client{};
-  client.init_ssl("../../include/cinatra", "server.crt");
+  client.init_ssl("../../include/cinatra", "server.crt"); // optinal 一般情况下可以不调用这一行
   auto data = client.get("https://www.bing.com");
   std::cout << data.resp_body << "\n";
   data = client.get("https://www.bing.com");
