@@ -348,25 +348,6 @@ class coro_http_connection
     co_return true;
   }
 
-  async_simple::coro::Lazy<bool> write_chunked_data(std::string_view buf,
-                                                    bool eof) {
-    std::vector<asio::const_buffer> buffers;
-    to_chunked_buffers(buffers, buf, eof);
-    auto [ec, _] = co_await async_write(std::move(buffers));
-    if (ec) {
-      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
-      close();
-      co_return false;
-    }
-
-    if (!keep_alive_) {
-      // now in io thread, so can close socket immediately.
-      close();
-    }
-
-    co_return true;
-  }
-
   bool sync_reply() { return async_simple::coro::syncAwait(reply()); }
 
   async_simple::coro::Lazy<bool> begin_chunked() {
