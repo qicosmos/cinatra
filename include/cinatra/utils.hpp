@@ -10,6 +10,7 @@
 #include <array>
 #include <asio/buffer.hpp>
 #include <cctype>
+#include <charconv>
 #include <cstddef>  //std::byte
 #include <cstdlib>
 #include <iomanip>
