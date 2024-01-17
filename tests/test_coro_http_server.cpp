@@ -578,13 +578,13 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         CHECK(req.get_query_value("theCityName") == "58367");
         CHECK(req.get_decode_query_value("aa") == "\"bbb\"");
         CHECK(req.get_decode_query_value("no_such-key").empty());
-        CHECK(req.get_boundary().empty());
         CHECK(!req.is_upgrade());
         resp.set_status_and_content(status_type::ok, "form-urlencode");
       });
 
   server.set_http_handler<cinatra::GET>(
       "/throw", [](coro_http_request &req, coro_http_response &resp) {
+        CHECK(req.get_boundary().empty());
         throw std::invalid_argument("invalid arguments");
         resp.set_status_and_content(status_type::ok, "ok");
       });
