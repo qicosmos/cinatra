@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <fstream>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -12,17 +13,14 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_connection.hpp"
+#include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
 #include "cinatra/utils.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
-#define DOCTEST_CONFIG_IMPLEMENT
-#include <iostream>
-
-#include "cinatra/coro_http_client.hpp"
-#include "cinatra/coro_http_server.hpp"
 #include "doctest/doctest.h"
 
 using namespace cinatra;
@@ -40,6 +38,10 @@ TEST_CASE("test parse ranges") {
   CHECK(vec == std::vector<std::pair<int, int>>{{0, 9999}});
 
   vec = parse_ranges("-a", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
+  vec = parse_ranges("--100", 10000, is_valid);
   CHECK(!is_valid);
   CHECK(vec.empty());
 
@@ -181,7 +183,7 @@ TEST_CASE("test range download") {
 #ifdef ASIO_WINDOWS
 #else
   create_file("中文测试.txt", 64);
-  create_file(fs::u8path("utf8中文.txt").string(), 64);
+  create_file(fs::path(u8"utf8中文.txt").string(), 64);
 #endif
   std::cout << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
@@ -209,7 +211,7 @@ TEST_CASE("test range download") {
     std::string local_filename = "temp1.txt";
     std::string base_uri = "http://127.0.0.1:9001/";
     std::string path =
-        code_utils::url_encode(fs::u8path("utf8中文.txt").string());
+        code_utils::url_encode(fs::path(u8"utf8中文.txt").string());
     auto result = client.download(base_uri + path, local_filename);
     CHECK(result.status == 200);
     CHECK(fs::file_size(local_filename) == 64);
@@ -270,7 +272,6 @@ class my_object {
 
 TEST_CASE("set http handler") {
   cinatra::coro_http_server server(1, 9001);
-
   auto &router = server.get_router();
   auto &handlers = router.get_handlers();
 
@@ -360,6 +361,7 @@ TEST_CASE("test server sync_start and stop") {
 
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 9001);
+  server.set_shrink_to_fit(true);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/test", [](coro_http_request &req, coro_http_response &resp) {
         auto value = req.get_header_value("connection");
@@ -480,7 +482,11 @@ struct check_t : public base_aspect {
 
 TEST_CASE("test aspects") {
   coro_http_server server(1, 9001);
-  create_file("test_aspect.txt", 64);
+  server.set_static_res_dir("", "");
+  server.set_max_size_of_cache_files(100);
+  create_file("test_aspect.txt", 64);  // in cache
+  create_file("test_file.txt", 200);   // not in cache
+
   std::vector<std::shared_ptr<base_aspect>> aspects = {
       std::make_shared<log_t>(), std::make_shared<check_t>()};
   server.set_static_res_dir("", "", aspects);
@@ -523,6 +529,9 @@ TEST_CASE("test aspects") {
   check(result);
 
   result = client.get("http://127.0.0.1:9001/test_aspect.txt");
+  CHECK(result.status == 200);
+
+  result = client.get("http://127.0.0.1:9001/test_file.txt");
   CHECK(result.status == 200);
 }
 
@@ -573,11 +582,14 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         CHECK(req.get_body() == "theCityName=58367&aa=%22bbb%22");
         CHECK(req.get_query_value("theCityName") == "58367");
         CHECK(req.get_decode_query_value("aa") == "\"bbb\"");
+        CHECK(req.get_decode_query_value("no_such-key").empty());
+        CHECK(!req.is_upgrade());
         resp.set_status_and_content(status_type::ok, "form-urlencode");
       });
 
   server.set_http_handler<cinatra::GET>(
       "/throw", [](coro_http_request &req, coro_http_response &resp) {
+        CHECK(req.get_boundary().empty());
         throw std::invalid_argument("invalid arguments");
         resp.set_status_and_content(status_type::ok, "ok");
       });
@@ -795,18 +807,29 @@ TEST_CASE("test websocket") {
 
           if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
             std::cout << "close frame\n";
-            CHECK(result.data.empty());
             out_file.close();
             break;
           }
 
-          if (result.type == ws_frame_type::WS_TEXT_FRAME) {
+          if (result.type == ws_frame_type::WS_TEXT_FRAME ||
+              result.type == ws_frame_type::WS_BINARY_FRAME) {
             CHECK(!result.data.empty());
             std::cout << result.data << "\n";
-          }
-
-          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
             out_file << result.data;
+          }
+          else {
+            std::cout << result.data << "\n";
+            if (result.type == ws_frame_type::WS_PING_FRAME ||
+                result.type == ws_frame_type::WS_PONG_FRAME) {
+              std::cout << "ping or pong msg\n";
+              // ping pong frame just need to continue, no need echo anything,
+              // because framework has reply ping/pong to client automatically.
+              continue;
+            }
+            else {
+              // error frame
+              break;
+            }
           }
 
           auto ec = co_await req.get_conn()->write_websocket(result.data);
@@ -818,6 +841,9 @@ TEST_CASE("test websocket") {
   server.async_start();
 
   auto client = std::make_shared<coro_http_client>();
+  client->on_ws_close([](std::string_view reason) {
+    std::cout << "normal close, reason: " << reason << "\n";
+  });
   client->on_ws_msg([](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
@@ -826,6 +852,7 @@ TEST_CASE("test websocket") {
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     CHECK(!data.resp_body.empty());
+    std::cout << "recieve msg from server: " << data.resp_body << "\n";
   });
 
   async_simple::coro::syncAwait(
@@ -833,8 +860,13 @@ TEST_CASE("test websocket") {
   async_simple::coro::syncAwait(
       client->async_send_ws("test2fdsaf", true, opcode::binary));
   async_simple::coro::syncAwait(client->async_send_ws("test_ws"));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("PING", false, opcode::ping));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("PONG", false, opcode::pong));
 
-  async_simple::coro::syncAwait(client->async_send_ws_close());
+  async_simple::coro::syncAwait(client->async_send_ws_close("normal close"));
+  std::this_thread::sleep_for(300ms);  // wait for server handle all messages
 }
 
 TEST_CASE("check small ws file") {
@@ -852,7 +884,7 @@ TEST_CASE("check small ws file") {
   str.resize(file_size);
 
   file.read(str.data(), str.size());
-  CHECK(str == "test2fdsaf");
+  CHECK(str == "test2fdsaftest_ws");
   std::filesystem::remove(filename, ec);
 }
 
