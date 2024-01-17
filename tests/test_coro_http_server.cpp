@@ -807,18 +807,29 @@ TEST_CASE("test websocket") {
 
           if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
             std::cout << "close frame\n";
-            CHECK(result.data.empty());
             out_file.close();
             break;
           }
 
-          if (result.type == ws_frame_type::WS_TEXT_FRAME) {
+          if (result.type == ws_frame_type::WS_TEXT_FRAME ||
+              result.type == ws_frame_type::WS_BINARY_FRAME) {
             CHECK(!result.data.empty());
             std::cout << result.data << "\n";
-          }
-
-          if (result.type == ws_frame_type::WS_BINARY_FRAME) {
             out_file << result.data;
+          }
+          else {
+            std::cout << result.data << "\n";
+            if (result.type == ws_frame_type::WS_PING_FRAME ||
+                result.type == ws_frame_type::WS_PONG_FRAME) {
+              std::cout << "ping or pong msg\n";
+              // ping pong frame just need to continue, no need echo anything,
+              // because framework has reply ping/pong to client automatically.
+              continue;
+            }
+            else {
+              // error frame
+              break;
+            }
           }
 
           auto ec = co_await req.get_conn()->write_websocket(result.data);
@@ -830,6 +841,9 @@ TEST_CASE("test websocket") {
   server.async_start();
 
   auto client = std::make_shared<coro_http_client>();
+  client->on_ws_close([](std::string_view reason) {
+    std::cout << "normal close, reason: " << reason << "\n";
+  });
   client->on_ws_msg([](resp_data data) {
     if (data.net_err) {
       std::cout << "ws_msg net error " << data.net_err.message() << "\n";
@@ -838,6 +852,7 @@ TEST_CASE("test websocket") {
 
     std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
     CHECK(!data.resp_body.empty());
+    std::cout << "recieve msg from server: " << data.resp_body << "\n";
   });
 
   async_simple::coro::syncAwait(
@@ -850,7 +865,8 @@ TEST_CASE("test websocket") {
   async_simple::coro::syncAwait(
       client->async_send_ws("PONG", false, opcode::pong));
 
-  async_simple::coro::syncAwait(client->async_send_ws_close());
+  async_simple::coro::syncAwait(client->async_send_ws_close("normal close"));
+  std::this_thread::sleep_for(300ms);  // wait for server handle all messages
 }
 
 TEST_CASE("check small ws file") {
@@ -868,7 +884,7 @@ TEST_CASE("check small ws file") {
   str.resize(file_size);
 
   file.read(str.data(), str.size());
-  CHECK(str == "test2fdsaf");
+  CHECK(str == "test2fdsaftest_ws");
   std::filesystem::remove(filename, ec);
 }
 
