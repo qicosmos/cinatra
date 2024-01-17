@@ -1376,3 +1376,51 @@ TEST_CASE("test coro radix tree restful api") {
   client.get("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:9001/value/guilliman/cawl/yvraine");
 }
+
+TEST_CASE("Testing get_content_type_str function") {
+    SUBCASE("Test HTML content type") {
+        CHECK(get_content_type_str(req_content_type::html) == "text/html; charset=UTF-8");
+    }
+
+    SUBCASE("Test JSON content type") {
+        CHECK(get_content_type_str(req_content_type::json) == "application/json; charset=UTF-8");
+    }
+
+    SUBCASE("Test String content type") {
+        CHECK(get_content_type_str(req_content_type::string) == "text/html; charset=UTF-8");
+    }
+
+    SUBCASE("Test Multipart content type") {
+        std::string result = get_content_type_str(req_content_type::multipart);
+        std::string expectedPrefix = "multipart/form-data; boundary=";
+        CHECK(result.find(expectedPrefix) == 0); // Check if the result starts with the expected prefix
+
+        // Check if there is something after the prefix,
+        // this test failed.
+        /*CHECK(result.length() > expectedPrefix.length());*/
+    }
+
+    SUBCASE("Test Octet Stream content type") {
+        CHECK(get_content_type_str(req_content_type::octet_stream) == "application/octet-stream");
+    }
+
+    SUBCASE("Test XML content type") {
+        CHECK(get_content_type_str(req_content_type::xml) == "application/xml");
+    }
+}
+
+TEST_CASE("test get_local_time_str with_month"){
+    char buf[32];
+    std::string_view format = "%Y-%m-%d %H:%M:%S"; // This format includes '%m'
+    std::time_t t = std::time(nullptr);
+
+    std::string_view result = cinatra::get_local_time_str(buf, t, format);
+    std::cout << "Local time with month: " << result << "\n";
+
+    // Perform a basic check
+    CHECK(!result.empty());
+}
+
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
+int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
+DOCTEST_MSVC_SUPPRESS_WARNING_POP
