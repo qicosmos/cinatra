@@ -482,9 +482,11 @@ struct check_t : public base_aspect {
 
 TEST_CASE("test aspects") {
   coro_http_server server(1, 9001);
+  server.set_static_res_dir("", "");
+  server.set_max_size_of_cache_files(100);
   create_file("test_aspect.txt", 64);  // in cache
   create_file("test_file.txt", 200);   // not in cache
-  server.set_max_size_of_cache_files(100);
+
   std::vector<std::shared_ptr<base_aspect>> aspects = {
       std::make_shared<log_t>(), std::make_shared<check_t>()};
   server.set_static_res_dir("", "", aspects);
@@ -527,6 +529,9 @@ TEST_CASE("test aspects") {
   check(result);
 
   result = client.get("http://127.0.0.1:9001/test_aspect.txt");
+  CHECK(result.status == 200);
+
+  result = client.get("http://127.0.0.1:9001/test_file.txt");
   CHECK(result.status == 200);
 }
 
