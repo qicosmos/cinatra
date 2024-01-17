@@ -272,7 +272,7 @@ class my_object {
 
 TEST_CASE("set http handler") {
   cinatra::coro_http_server server(1, 9001);
-
+  server.set_shrink_to_fit(true);
   auto &router = server.get_router();
   auto &handlers = router.get_handlers();
 
@@ -482,7 +482,9 @@ struct check_t : public base_aspect {
 
 TEST_CASE("test aspects") {
   coro_http_server server(1, 9001);
-  create_file("test_aspect.txt", 64);
+  create_file("test_aspect.txt", 64);  // in cache
+  create_file("test_file.txt", 200);   // not in cache
+  server.set_max_size_of_cache_files(100);
   std::vector<std::shared_ptr<base_aspect>> aspects = {
       std::make_shared<log_t>(), std::make_shared<check_t>()};
   server.set_static_res_dir("", "", aspects);
@@ -575,6 +577,9 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
         CHECK(req.get_body() == "theCityName=58367&aa=%22bbb%22");
         CHECK(req.get_query_value("theCityName") == "58367");
         CHECK(req.get_decode_query_value("aa") == "\"bbb\"");
+        CHECK(req.get_decode_query_value("no_such-key").empty());
+        CHECK(req.get_boundary().empty());
+        CHECK(!req.is_upgrade());
         resp.set_status_and_content(status_type::ok, "form-urlencode");
       });
 

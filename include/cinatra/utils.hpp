@@ -210,10 +210,10 @@ inline std::string base64_encode(const std::string &str) {
 }
 
 // from h2o
-inline const char *MAP =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/";
+// inline const char *MAP =
+//    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+//    "abcdefghijklmnopqrstuvwxyz"
+//    "0123456789+/";
 
 inline bool is_valid_utf8(unsigned char *s, size_t length) {
   for (unsigned char *e = s + length; s != e;) {
