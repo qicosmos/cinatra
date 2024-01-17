@@ -183,7 +183,7 @@ TEST_CASE("test range download") {
 #ifdef ASIO_WINDOWS
 #else
   create_file("中文测试.txt", 64);
-  create_file(fs::u8path("utf8中文.txt").string(), 64);
+  create_file(fs::path(u8"utf8中文.txt").string(), 64);
 #endif
   std::cout << fs::current_path() << "\n";
   coro_http_server server(1, 9001);
@@ -211,7 +211,7 @@ TEST_CASE("test range download") {
     std::string local_filename = "temp1.txt";
     std::string base_uri = "http://127.0.0.1:9001/";
     std::string path =
-        code_utils::url_encode(fs::u8path("utf8中文.txt").string());
+        code_utils::url_encode(fs::path(u8"utf8中文.txt").string());
     auto result = client.download(base_uri + path, local_filename);
     CHECK(result.status == 200);
     CHECK(fs::file_size(local_filename) == 64);
