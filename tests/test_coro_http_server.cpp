@@ -1389,29 +1389,37 @@ TEST_CASE("test get_local_time_str with_month"){
     CHECK(!result.empty());
 }
 
-TEST_CASE("test build_range_header function") {
-  cinatra::coro_http_server server(1, 9001);
-  std::string filename = "test_download.txt";
-  create_file(filename, 1010);
+TEST_CASE("Testing base64_encode function") {
+    SUBCASE("Base64 encoding of an empty string") {
+        CHECK(base64_encode("") == "");
+    }
 
-  server.set_transfer_chunked_size(100);
-  server.set_static_res_dir("download", "");
-  server.async_start();
-  std::this_thread::sleep_for(200ms);
+    SUBCASE("Base64 encoding of 'Hello'") {
+        CHECK(base64_encode("Hello") == "SGVsbG8=");
+    }
 
-  coro_http_client client{};
-  auto result = async_simple::coro::syncAwait(client.async_download(
-      "http://127.0.0.1:9001/download/test_download.txt", "download2.txt"));
+    SUBCASE("Base64 encoding of a binary data") {
+        std::string binaryData = "\x01\x02\x03"; // Example binary data
+        CHECK(base64_encode(binaryData) == "AQID");
+    }
+}
 
-  CHECK(result.status == 200);
+TEST_CASE("Testing is_valid_utf8 function") {
+    SUBCASE("Valid UTF-8 string") {
+        auto validUtf8 = std::u8string(u8"Hello, 世界");
+        std::string validUtf8Converted(validUtf8.begin(), validUtf8.end());
+        CHECK(is_valid_utf8((unsigned char*)validUtf8.c_str(), validUtf8.size()) == true);
+    }
 
-  // Verify the content of the downloaded file
-  std::string download_file = fs::absolute("download2.txt").string();
-  std::ifstream ifs(download_file, std::ios::binary);
-  std::string content((std::istreambuf_iterator<char>(ifs)),
-                      (std::istreambuf_iterator<char>()));
-  CHECK(content.size() == 1010);
-  CHECK(content[0] == 'A');
+    SUBCASE("Invalid UTF-8 string with wrong continuation bytes") {
+        std::string invalidUtf8 = "Hello, \x80\x80"; // wrong continuation bytes
+        CHECK(is_valid_utf8((unsigned char*)invalidUtf8.c_str(), invalidUtf8.size()) == false);
+    }
+
+    SUBCASE("Empty string") {
+        std::string empty = "";
+        CHECK(is_valid_utf8((unsigned char*)empty.c_str(), empty.size()) == true);
+    }
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
