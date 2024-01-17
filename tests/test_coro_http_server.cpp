@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <fstream>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -12,17 +13,14 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_connection.hpp"
+#include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
 #include "cinatra/utils.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
-#define DOCTEST_CONFIG_IMPLEMENT
-#include <iostream>
-
-#include "cinatra/coro_http_client.hpp"
-#include "cinatra/coro_http_server.hpp"
 #include "doctest/doctest.h"
 
 using namespace cinatra;
@@ -1344,7 +1342,3 @@ TEST_CASE("test coro radix tree restful api") {
   client.get("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:9001/value/guilliman/cawl/yvraine");
 }
-
-DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
-int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
-DOCTEST_MSVC_SUPPRESS_WARNING_POP
