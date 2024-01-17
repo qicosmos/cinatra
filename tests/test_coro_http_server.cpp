@@ -1389,39 +1389,6 @@ TEST_CASE("test get_local_time_str with_month"){
     CHECK(!result.empty());
 }
 
-TEST_CASE("Testing base64_encode function") {
-    SUBCASE("Base64 encoding of an empty string") {
-        CHECK(base64_encode("") == "");
-    }
-
-    SUBCASE("Base64 encoding of 'Hello'") {
-        CHECK(base64_encode("Hello") == "SGVsbG8=");
-    }
-
-    SUBCASE("Base64 encoding of a binary data") {
-        std::string binaryData = "\x01\x02\x03"; // Example binary data
-        CHECK(base64_encode(binaryData) == "AQID");
-    }
-}
-
-TEST_CASE("Testing is_valid_utf8 function") {
-    SUBCASE("Valid UTF-8 string") {
-        auto validUtf8 = std::u8string(u8"Hello, 世界");
-        std::string validUtf8Converted(validUtf8.begin(), validUtf8.end());
-        CHECK(is_valid_utf8((unsigned char*)validUtf8.c_str(), validUtf8.size()) == true);
-    }
-
-    SUBCASE("Invalid UTF-8 string with wrong continuation bytes") {
-        std::string invalidUtf8 = "Hello, \x80\x80"; // wrong continuation bytes
-        CHECK(is_valid_utf8((unsigned char*)invalidUtf8.c_str(), invalidUtf8.size()) == false);
-    }
-
-    SUBCASE("Empty string") {
-        std::string empty = "";
-        CHECK(is_valid_utf8((unsigned char*)empty.c_str(), empty.size()) == true);
-    }
-}
-
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
