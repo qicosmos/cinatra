@@ -1,6 +1,7 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 set(project_name test_cinatra)
 add_executable(${project_name}
+		test_coro_http_server.cpp
         test_cinatra.cpp
         test_cinatra_websocket.cpp
         test_cmdline.cpp
@@ -58,9 +59,6 @@ add_executable(test_time_util
         )
 add_test(NAME test_time_util COMMAND test_time_util)
 
-add_executable(test_coro_http_server test_coro_http_server.cpp)
-add_test(NAME test_coro_http_server COMMAND test_coro_http_server)
-
 option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
 if (CINATRA_ENABLE_SSL)
     message(STATUS "Use SSL")
@@ -68,7 +66,6 @@ if (CINATRA_ENABLE_SSL)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
     target_link_libraries(test_corofile  PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    target_link_libraries(test_coro_http_server  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
 add_executable(test_http_parse
