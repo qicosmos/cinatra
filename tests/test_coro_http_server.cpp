@@ -840,6 +840,10 @@ TEST_CASE("test websocket") {
   async_simple::coro::syncAwait(
       client->async_send_ws("test2fdsaf", true, opcode::binary));
   async_simple::coro::syncAwait(client->async_send_ws("test_ws"));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("PING", false, opcode::ping));
+  async_simple::coro::syncAwait(
+      client->async_send_ws("PONG", false, opcode::pong));
 
   async_simple::coro::syncAwait(client->async_send_ws_close());
 }
