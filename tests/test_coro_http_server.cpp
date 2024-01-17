@@ -272,7 +272,6 @@ class my_object {
 
 TEST_CASE("set http handler") {
   cinatra::coro_http_server server(1, 9001);
-  server.set_shrink_to_fit(true);
   auto &router = server.get_router();
   auto &handlers = router.get_handlers();
 
@@ -362,6 +361,7 @@ TEST_CASE("test server sync_start and stop") {
 
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 9001);
+  server.set_shrink_to_fit(true);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/test", [](coro_http_request &req, coro_http_response &resp) {
         auto value = req.get_header_value("connection");

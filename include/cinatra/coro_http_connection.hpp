@@ -599,7 +599,10 @@ class coro_http_connection
 
   void set_ws_max_size(uint64_t max_size) { max_part_size_ = max_size; }
 
-  void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+  void set_shrink_to_fit(bool r) {
+    need_shrink_every_time_ = r;
+    response_.set_shrink_to_fit(r);
+  }
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
