@@ -41,6 +41,10 @@ TEST_CASE("test parse ranges") {
   CHECK(!is_valid);
   CHECK(vec.empty());
 
+  vec = parse_ranges("--100", 10000, is_valid);
+  CHECK(!is_valid);
+  CHECK(vec.empty());
+
   vec = parse_ranges("abc", 10000, is_valid);
   CHECK(!is_valid);
   CHECK(vec.empty());

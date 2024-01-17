@@ -66,7 +66,6 @@ if (CINATRA_ENABLE_SSL)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
     target_link_libraries(test_corofile  PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    target_link_libraries(test_coro_http_server  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
 add_executable(test_http_parse
