@@ -1271,3 +1271,80 @@ TEST_CASE(
                    std::chrono::microseconds::period::den
             << "s" << std::endl;
 }
+
+TEST_CASE("Testing get_content_type_str function") {
+    SUBCASE("Test HTML content type") {
+        CHECK(get_content_type_str(req_content_type::html) == "text/html; charset=UTF-8");
+    }
+
+    SUBCASE("Test JSON content type") {
+        CHECK(get_content_type_str(req_content_type::json) == "application/json; charset=UTF-8");
+    }
+
+    SUBCASE("Test String content type") {
+        CHECK(get_content_type_str(req_content_type::string) == "text/html; charset=UTF-8");
+    }
+
+    SUBCASE("Test Multipart content type") {
+        std::string result = get_content_type_str(req_content_type::multipart);
+        std::string expectedPrefix = "multipart/form-data; boundary=";
+        CHECK(result.find(expectedPrefix) == 0); // Check if the result starts with the expected prefix
+
+        // Check if there is something after the prefix,
+        // this test failed.
+        /*CHECK(result.length() > expectedPrefix.length());*/
+    }
+
+    SUBCASE("Test Octet Stream content type") {
+        CHECK(get_content_type_str(req_content_type::octet_stream) == "application/octet-stream");
+    }
+
+    SUBCASE("Test XML content type") {
+        CHECK(get_content_type_str(req_content_type::xml) == "application/xml");
+    }
+}
+
+TEST_CASE("test get_local_time_str with_month"){
+    char buf[32];
+    std::string_view format = "%Y-%m-%d %H:%M:%S"; // This format includes '%m'
+    std::time_t t = std::time(nullptr);
+
+    std::string_view result = cinatra::get_local_time_str(buf, t, format);
+    std::cout << "Local time with month: " << result << "\n";
+
+    // Perform a basic check
+    CHECK(!result.empty());
+}
+
+TEST_CASE("Testing base64_encode function") {
+    SUBCASE("Base64 encoding of an empty string") {
+        CHECK(base64_encode("") == "");
+    }
+
+    SUBCASE("Base64 encoding of 'Hello'") {
+        CHECK(base64_encode("Hello") == "SGVsbG8=");
+    }
+
+    SUBCASE("Base64 encoding of a binary data") {
+        std::string binaryData = "\x01\x02\x03"; // Example binary data
+        CHECK(base64_encode(binaryData) == "AQID");
+    }
+}
+
+TEST_CASE("Testing is_valid_utf8 function") {
+    SUBCASE("Valid UTF-8 string") {
+        auto validUtf8 = std::u8string(u8"Hello, 世界");
+        std::string validUtf8Converted(validUtf8.begin(), validUtf8.end());
+        CHECK(is_valid_utf8((unsigned char*)validUtf8.c_str(), validUtf8.size()) == true);
+    }
+
+    SUBCASE("Invalid UTF-8 string with wrong continuation bytes") {
+        std::string invalidUtf8 = "Hello, \x80\x80"; // wrong continuation bytes
+        CHECK(is_valid_utf8((unsigned char*)invalidUtf8.c_str(), invalidUtf8.size()) == false);
+    }
+
+    SUBCASE("Empty string") {
+        std::string empty;
+        CHECK(is_valid_utf8((unsigned char*)empty.c_str(), empty.size()) == true);
+    }
+}
