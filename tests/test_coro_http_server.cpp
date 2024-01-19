@@ -460,6 +460,19 @@ TEST_CASE("get post") {
   server.stop();
 }
 
+TEST_CASE("test alias") {
+  http_server server(1, 9001);
+  server.set_http_handler<GET>("/", [](request &req, response &resp) {
+    resp.set_status_and_content(status_type::ok, "ok");
+  });
+  server.async_start();
+  std::this_thread::sleep_for(300ms);
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+  CHECK(result.resp_body == "ok");
+}
+
 struct log_t : public base_aspect {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "before log" << std::endl;
