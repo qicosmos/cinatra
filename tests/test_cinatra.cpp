@@ -1355,3 +1355,298 @@ TEST_CASE("Testing is_valid_utf8 function") {
     CHECK(is_valid_utf8((unsigned char *)empty.c_str(), empty.size()) == true);
   }
 }
+
+TEST_CASE("test transfer cookie to string") {
+  cookie cookie("name", "value");
+  CHECK(cookie.get_name() == "name");
+  CHECK(cookie.get_value() == "value");
+  CHECK(cookie.to_string() == "name=value");
+  cookie.set_path("/");
+  CHECK(cookie.to_string() == "name=value; path=/");
+  cookie.set_comment("comment");
+  CHECK(cookie.to_string() == "name=value; path=/");
+  cookie.set_domain("baidu.com");
+  CHECK(cookie.to_string() == "name=value; domain=baidu.com; path=/");
+  cookie.set_secure(true);
+  CHECK(cookie.to_string() == "name=value; domain=baidu.com; path=/; secure");
+  cookie.set_http_only(true);
+  CHECK(cookie.to_string() ==
+        "name=value; domain=baidu.com; path=/; secure; HttpOnly");
+  cookie.set_priority("Low");
+  CHECK(cookie.to_string() ==
+        "name=value; domain=baidu.com; path=/; Priority=Low; secure; HttpOnly");
+  cookie.set_priority("Medium");
+  CHECK(cookie.to_string() ==
+        "name=value; domain=baidu.com; path=/; Priority=Medium; secure; "
+        "HttpOnly");
+  cookie.set_priority("High");
+  CHECK(
+      cookie.to_string() ==
+      "name=value; domain=baidu.com; path=/; Priority=High; secure; HttpOnly");
+  cookie.set_priority("");
+  cookie.set_http_only(false);
+
+  cookie.set_version(1);
+  CHECK(cookie.to_string() ==
+        "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; "
+        "Path=\"/\"; secure; Version=\"1\"");
+
+  cookie.set_secure(false);
+  cookie.set_max_age(100);
+  CHECK(cookie.to_string() ==
+        "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; "
+        "Path=\"/\"; Max-Age=\"100\"; Version=\"1\"");
+
+  cookie.set_http_only(true);
+  CHECK(cookie.to_string() ==
+        "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; "
+        "Path=\"/\"; Max-Age=\"100\"; HttpOnly; Version=\"1\"");
+
+  cookie.set_priority("Low");
+  CHECK(
+      cookie.to_string() ==
+      "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; Path=\"/\"; "
+      "Priority=\"Low\"; Max-Age=\"100\"; HttpOnly; Version=\"1\"");
+  cookie.set_priority("Medium");
+  CHECK(
+      cookie.to_string() ==
+      "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; Path=\"/\"; "
+      "Priority=\"Medium\"; Max-Age=\"100\"; HttpOnly; Version=\"1\"");
+  cookie.set_priority("High");
+  CHECK(
+      cookie.to_string() ==
+      "name=\"value\"; Comment=\"comment\"; Domain=\"baidu.com\"; Path=\"/\"; "
+      "Priority=\"High\"; Max-Age=\"100\"; HttpOnly; Version=\"1\"");
+}
+
+std::vector<std::string_view> get_header_values(
+    std::span<http_header> &resp_headers, std::string_view key) {
+  std::vector<std::string_view> values{};
+  for (const auto &p : resp_headers) {
+    if (p.name == key)
+      values.push_back(p.value);
+  }
+  return values;
+}
+
+std::string cookie_str1 = "";
+std::string cookie_str2 = "";
+
+TEST_CASE("test cookie") {
+  coro_http_server server(5, 8090);
+  server.set_http_handler<GET>(
+      "/construct_cookies",
+      [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session->get_session_cookie().set_path("/");
+        cookie_str1 = session->get_session_cookie().to_string();
+
+        cookie another_cookie("test", "cookie");
+        another_cookie.set_http_only(true);
+        another_cookie.set_domain("baidu.com");
+        res.add_cookie(another_cookie);
+        cookie_str2 = another_cookie.to_string();
+
+        res.set_status_and_content(status_type::ok, session->get_session_id());
+      });
+
+  server.set_http_handler<GET>(
+      "/check_session_cookie",
+      [](coro_http_request &req, coro_http_response &res) {
+        auto session_id = req.get_header_value("Cookie");
+        CHECK(session_id ==
+              CSESSIONID + "=" + req.get_session()->get_session_id());
+        res.set_status(status_type::ok);
+      });
+
+  server.async_start();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  auto r1 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/construct_cookies"));
+  auto cookie_strs = get_header_values(r1.resp_headers, "Set-Cookie");
+  CHECK(cookie_strs.size() == 2);
+  bool check1 =
+      (cookie_strs[0] == cookie_str1 && cookie_strs[1] == cookie_str2);
+  bool check2 =
+      (cookie_strs[1] == cookie_str1 && cookie_strs[0] == cookie_str2);
+  CHECK((check1 || check2));
+  CHECK(r1.status == 200);
+
+  std::string session_cookie =
+      CSESSIONID + "=" + std::string(r1.resp_body.data(), r1.resp_body.size());
+
+  client.add_header("Cookie", session_cookie);
+  auto r2 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/check_session_cookie"));
+  CHECK(r2.status == 200);
+
+  server.stop();
+}
+
+std::string session_id_login = "";
+std::string session_id_logout = "";
+std::string session_id_check_login = "";
+std::string session_id_check_logout = "";
+
+TEST_CASE("test session") {
+  coro_http_server server(5, 8090);
+  server.set_http_handler<GET>(
+      "/login", [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id_login = session->get_session_id();
+        session->set_data("login", true);
+        res.set_status(status_type::ok);
+      });
+  server.set_http_handler<GET>(
+      "/logout", [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id_logout = session->get_session_id();
+        session->remove_data("login");
+        res.set_status(status_type::ok);
+      });
+  server.set_http_handler<GET>(
+      "/check_login", [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id_check_login = session->get_session_id();
+        bool login = session->get_data<bool>("login");
+        CHECK(login == true);
+        res.set_status(status_type::ok);
+      });
+  server.set_http_handler<GET>(
+      "/check_logout", [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id_check_logout = session->get_session_id();
+        bool login = session->get_data<bool>("login");
+        CHECK(login == false);
+        res.set_status(status_type::ok);
+      });
+  server.async_start();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  auto r1 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/check_logout"));
+  CHECK(r1.status == 200);
+
+  auto r2 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/login"));
+  CHECK(r2.status == 200);
+  CHECK(session_id_login != session_id_check_logout);
+
+  std::string session_cookie = CSESSIONID + "=" + session_id_login;
+
+  client.add_header("Cookie", session_cookie);
+  auto r3 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/check_login"));
+  CHECK(r3.status == 200);
+  CHECK(session_id_login == session_id_check_login);
+
+  client.add_header("Cookie", session_cookie);
+  auto r4 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/logout"));
+  CHECK(r4.status == 200);
+  CHECK(session_id_login == session_id_logout);
+
+  client.add_header("Cookie", session_cookie);
+  auto r5 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/check_logout"));
+  CHECK(r5.status == 200);
+  CHECK(session_id_login == session_id_check_logout);
+
+  server.stop();
+}
+
+std::string session_id = "";
+TEST_CASE("test session timeout") {
+  coro_http_server server(5, 8090);
+
+  server.set_http_handler<GET>(
+      "/construct_session",
+      [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id = session->get_session_id();
+        session->set_session_timeout(2);
+        res.set_status(status_type::ok);
+      });
+
+  server.set_http_handler<GET>("/no_sleep", [](coro_http_request &req,
+                                               coro_http_response &res) {
+    CHECK(session_manager::get().check_session_existence(session_id) == true);
+    res.set_status(status_type::ok);
+  });
+
+  server.set_http_handler<GET>("/after_sleep_3s", [](coro_http_request &req,
+                                                     coro_http_response &res) {
+    CHECK(session_manager::get().check_session_existence(session_id) == false);
+    res.set_status(status_type::ok);
+  });
+
+  session_manager::get().set_check_session_duration(10ms);
+  server.async_start();
+
+  coro_http_client client{};
+  auto r1 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/construct_session"));
+  CHECK(r1.status == 200);
+
+  auto r2 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/no_sleep"));
+  CHECK(r2.status == 200);
+
+  std::this_thread::sleep_for(3s);
+  auto r3 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/after_sleep_3s"));
+  CHECK(r3.status == 200);
+
+  server.stop();
+}
+
+TEST_CASE("test session validate") {
+  coro_http_server server(5, 8090);
+
+  server.set_http_handler<GET>(
+      "/construct_session",
+      [](coro_http_request &req, coro_http_response &res) {
+        auto session = req.get_session();
+        session_id = session->get_session_id();
+        res.set_status(status_type::ok);
+      });
+
+  server.set_http_handler<GET>(
+      "/invalidate_session",
+      [](coro_http_request &req, coro_http_response &res) {
+        CHECK(session_manager::get().check_session_existence(session_id) ==
+              true);
+        session_manager::get().get_session(session_id)->invalidate();
+        res.set_status(status_type::ok);
+      });
+
+  server.set_http_handler<GET>("/after_sleep_3s", [](coro_http_request &req,
+                                                     coro_http_response &res) {
+    CHECK(session_manager::get().check_session_existence(session_id) == false);
+    res.set_status(status_type::ok);
+  });
+
+  session_manager::get().set_check_session_duration(10ms);
+  server.async_start();
+
+  coro_http_client client{};
+  auto r1 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/construct_session"));
+  CHECK(r1.status == 200);
+
+  auto r2 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/invalidate_session"));
+  CHECK(r2.status == 200);
+
+  std::this_thread::sleep_for(3s);
+  auto r3 = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/after_sleep_3s"));
+  CHECK(r3.status == 200);
+
+  server.stop();
+}
