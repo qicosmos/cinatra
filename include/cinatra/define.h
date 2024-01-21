@@ -87,7 +87,6 @@ constexpr inline auto TEXT = req_content_type::string;
 constexpr inline auto RANGES = req_content_type::ranges;
 constexpr inline auto NONE = req_content_type::none;
 
-inline const std::string_view STATIC_RESOURCE = "cinatra_static_resource";
 inline const std::string CSESSIONID = "CSESSIONID";
 
 const static inline std::string CRCF = "\r\n";
@@ -96,6 +95,15 @@ const static inline std::string BOUNDARY = "--CinatraBoundary2B8FAF4A80EDB307";
 const static inline std::string MULTIPART_END =
     CRCF + "--" + BOUNDARY + "--" + CRCF;
 constexpr std::string_view LAST_CHUNK = "0\r\n";
+constexpr std::string_view CINATRA_HOST_SV = "Host: cinatra\r\n";
+constexpr std::string_view TRANSFER_ENCODING_SV =
+    "Transfer-Encoding: chunked\r\n";
+constexpr std::string_view CONTENT_LENGTH_SV = "Content-Length: ";
+constexpr std::string_view ZERO_LENGTH_SV = "Content-Length: 0\r\n";
+constexpr std::string_view DATE_SV = "Date: ";
+constexpr std::string_view CONN_KEEP_SV = "Connection: keep-alive\r\n";
+constexpr std::string_view CONN_CLOSE_SV = "Connection: close\r\n";
+constexpr std::string_view COLON_SV = ": ";
 
 struct chunked_result {
   std::error_code ec;
