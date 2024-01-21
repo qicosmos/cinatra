@@ -38,9 +38,7 @@ class coro_http_response {
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
         delay_(false),
-        conn_(conn) {
-    head_.reserve(128);
-  }
+        conn_(conn) {}
 
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) {
@@ -67,10 +65,8 @@ class coro_http_response {
   std::string_view get_boundary() { return boundary_; }
 
   void to_buffers(std::vector<asio::const_buffer> &buffers) {
-    build_resp_head();
-
     buffers.push_back(asio::buffer(to_http_status_string(status_)));
-    buffers.push_back(asio::buffer(head_));
+    build_resp_head(buffers);
     if (!content_.empty()) {
       if (fmt_type_ == format_type::chunked) {
         to_chunked_buffers(buffers, content_, true);
@@ -81,7 +77,7 @@ class coro_http_response {
     }
   }
 
-  void build_resp_head() {
+  void build_resp_head(std::vector<asio::const_buffer> &buffers) {
     bool has_len = false;
     bool has_host = false;
     for (auto &[k, v] : resp_headers_) {
@@ -94,7 +90,7 @@ class coro_http_response {
     }
 
     if (!has_host) {
-      resp_headers_sv_.emplace_back(resp_header_sv{"Host", "cinatra"});
+      buffers.emplace_back(asio::buffer(CINATRA_HOST_SV));
     }
 
     if (content_.empty() && !has_set_content_ &&
@@ -103,46 +99,51 @@ class coro_http_response {
     }
 
     if (fmt_type_ == format_type::chunked) {
-      resp_headers_sv_.emplace_back(
-          resp_header_sv{"Transfer-Encoding", "chunked"});
+      buffers.emplace_back(asio::buffer(TRANSFER_ENCODING_SV));
     }
     else {
       if (!content_.empty()) {
         auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
-        resp_headers_sv_.emplace_back(
-            resp_header_sv{"Content-Length",
-                           std::string_view(buf_, std::distance(buf_, ptr))});
+        buffers.emplace_back(asio::buffer(CONTENT_LENGTH_SV));
+        buffers.emplace_back(
+            asio::buffer(std::string_view(buf_, std::distance(buf_, ptr))));
+        buffers.emplace_back(asio::buffer(CRCF));
       }
       else {
         if (!has_len && boundary_.empty())
-          resp_headers_sv_.emplace_back(resp_header_sv{"Content-Length", "0"});
+          buffers.emplace_back(asio::buffer(ZERO_LENGTH_SV));
       }
     }
 
-    resp_headers_sv_.emplace_back(resp_header_sv{"Date", get_gmt_time_str()});
+    buffers.emplace_back(asio::buffer(DATE_SV));
+    buffers.emplace_back(asio::buffer(get_gmt_time_str()));
+    buffers.emplace_back(asio::buffer(CRCF));
 
     if (keepalive_.has_value()) {
       bool keepalive = keepalive_.value();
-      resp_headers_sv_.emplace_back(
-          resp_header_sv{"Connection", keepalive ? "keep-alive" : "close"});
+      keepalive ? buffers.emplace_back(asio::buffer(CONN_KEEP_SV))
+                : buffers.emplace_back(asio::buffer(CONN_CLOSE_SV));
     }
 
-    append_head(resp_headers_);
-    append_head(resp_headers_sv_);
-    head_.append(CRCF);
+    for (auto &[k, v] : resp_headers_) {
+      buffers.emplace_back(asio::buffer(k));
+      buffers.emplace_back(asio::buffer(COLON_SV));
+      buffers.emplace_back(asio::buffer(v));
+      buffers.emplace_back(asio::buffer(CRCF));
+    }
+
+    buffers.emplace_back(asio::buffer(CRCF));
   }
 
   coro_http_connection *get_conn() { return conn_; }
 
   void clear() {
-    head_.clear();
     content_.clear();
     if (need_shrink_every_time_) {
       content_.shrink_to_fit();
     }
 
     resp_headers_.clear();
-    resp_headers_sv_.clear();
     keepalive_ = {};
     delay_ = false;
     status_ = status_type::init;
@@ -153,25 +154,14 @@ class coro_http_response {
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
-  void append_head(auto &headers) {
-    for (auto &[k, v] : headers) {
-      head_.append(k);
-      head_.append(":");
-      head_.append(v);
-      head_.append(CRCF);
-    }
-  }
-
  private:
   status_type status_;
   format_type fmt_type_;
-  std::string head_;
   std::string content_;
   std::optional<bool> keepalive_;
   bool delay_;
   char buf_[32];
   std::vector<resp_header> resp_headers_;
-  std::vector<resp_header_sv> resp_headers_sv_;
   coro_http_connection *conn_;
   std::string boundary_;
   bool has_set_content_ = false;

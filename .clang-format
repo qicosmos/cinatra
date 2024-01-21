@@ -15,5 +15,3 @@ DisableFormat: true
 Language: Json
 DisableFormat: true
 
-Language: Proto
-DisableFormat: true
