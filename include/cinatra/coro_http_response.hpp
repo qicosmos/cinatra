@@ -63,6 +63,9 @@ class coro_http_response {
 
   void set_keepalive(bool r) { keepalive_ = r; }
 
+  void need_date_head(bool r) { need_date_ = r; }
+  bool need_date() { return need_date_; }
+
   void set_boundary(std::string_view boundary) { boundary_ = boundary; }
 
   std::string_view get_boundary() { return boundary_; }
@@ -118,9 +121,11 @@ class coro_http_response {
       }
     }
 
-    resp_str.append(DATE_SV);
-    resp_str.append(get_gmt_time_str());
-    resp_str.append(CRCF);
+    if (need_date_) {
+      resp_str.append(DATE_SV);
+      resp_str.append(get_gmt_time_str());
+      resp_str.append(CRCF);
+    }
 
     if (keepalive_.has_value()) {
       bool keepalive = keepalive_.value();
@@ -177,9 +182,11 @@ class coro_http_response {
       }
     }
 
-    buffers.emplace_back(asio::buffer(DATE_SV));
-    buffers.emplace_back(asio::buffer(get_gmt_time_str()));
-    buffers.emplace_back(asio::buffer(CRCF));
+    if (need_date_) {
+      buffers.emplace_back(asio::buffer(DATE_SV));
+      buffers.emplace_back(asio::buffer(get_gmt_time_str()));
+      buffers.emplace_back(asio::buffer(CRCF));
+    }
 
     if (keepalive_.has_value()) {
       bool keepalive = keepalive_.value();
@@ -228,5 +235,6 @@ class coro_http_response {
   std::string boundary_;
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
+  bool need_date_ = true;
 };
 }  // namespace cinatra

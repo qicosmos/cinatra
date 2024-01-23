@@ -276,9 +276,8 @@ class coro_http_connection
             co_await reply();
           }
           else {
-            std::string resp_str;
-            resp_str.reserve(512);
-            response_.build_resp_str(resp_str);
+            resp_str_.reserve(512);
+            response_.build_resp_str(resp_str_);
 
             while (true) {
               size_t left_size = head_buf_.size();
@@ -304,6 +303,7 @@ class coro_http_connection
 
               coro_http_request req(parser, this);
               coro_http_response resp(this);
+              resp.need_date_head(response_.need_date());
               if (auto handler = router_.get_handler(key); handler) {
                 router_.route(handler, req, resp, key);
               }
@@ -314,10 +314,10 @@ class coro_http_connection
                 }
               }
 
-              resp.build_resp_str(resp_str);
+              resp.build_resp_str(resp_str_);
             }
 
-            auto [write_ec, _] = co_await async_write(asio::buffer(resp_str));
+            auto [write_ec, _] = co_await async_write(asio::buffer(resp_str_));
             if (write_ec) {
               CINATRA_LOG_ERROR << "async_write error: " << write_ec.message();
               close();
@@ -333,6 +333,7 @@ class coro_http_connection
       response_.clear();
       buffers_.clear();
       body_.clear();
+      resp_str_.clear();
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
       }
@@ -798,6 +799,7 @@ class coro_http_connection
   bool checkout_timeout_ = false;
   std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
   uint64_t max_part_size_ = 8 * 1024 * 1024;
+  std::string resp_str_;
 
   websocket ws_;
 #ifdef CINATRA_ENABLE_SSL
