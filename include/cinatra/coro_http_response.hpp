@@ -54,6 +54,10 @@ class coro_http_response {
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
   void set_format_type(format_type type) { fmt_type_ = type; }
+  template <size_t N>
+  void set_content_type() {
+    content_type_ = get_content_type<N>();
+  }
 
   status_type status() { return status_; }
   std::string_view content() { return content_; }
@@ -134,6 +138,10 @@ class coro_http_response {
                 : resp_str.append(CONN_CLOSE_SV);
     }
 
+    if (content_type_.empty()) {
+      resp_str.append(content_type_);
+    }
+
     for (auto &[k, v] : resp_headers_) {
       resp_str.append(k);
       resp_str.append(COLON_SV);
@@ -202,6 +210,10 @@ class coro_http_response {
                 : buffers.emplace_back(asio::buffer(CONN_CLOSE_SV));
     }
 
+    if (content_type_.empty()) {
+      buffers.emplace_back(asio::buffer(content_type_));
+    }
+
     for (auto &[k, v] : resp_headers_) {
       buffers.emplace_back(asio::buffer(k));
       buffers.emplace_back(asio::buffer(COLON_SV));
@@ -250,5 +262,6 @@ class coro_http_response {
   bool need_shrink_every_time_ = false;
   bool need_date_ = true;
   std::unordered_map<std::string, cookie> cookies_;
+  std::string_view content_type_;
 };
 }  // namespace cinatra
