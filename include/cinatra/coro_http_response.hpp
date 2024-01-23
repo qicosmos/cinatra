@@ -10,6 +10,7 @@
 
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
+#include "cookie.hpp"
 #include "define.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
@@ -102,6 +103,13 @@ class coro_http_response {
       buffers.emplace_back(asio::buffer(TRANSFER_ENCODING_SV));
     }
     else {
+      if (!cookies_.empty()) {
+        for (auto &[_, cookie] : cookies_) {
+          resp_headers_.emplace_back(
+              resp_header{"Set-Cookie", cookie.to_string()});
+        }
+      }
+
       if (!content_.empty()) {
         auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
         buffers.emplace_back(asio::buffer(CONTENT_LENGTH_SV));
@@ -150,9 +158,14 @@ class coro_http_response {
     fmt_type_ = format_type::normal;
     boundary_.clear();
     has_set_content_ = false;
+    cookies_.clear();
   }
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
+
+  void add_cookie(const cookie &cookie) {
+    cookies_[cookie.get_name()] = cookie;
+  }
 
  private:
   status_type status_;
@@ -166,5 +179,6 @@ class coro_http_response {
   std::string boundary_;
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
+  std::unordered_map<std::string, cookie> cookies_;
 };
 }  // namespace cinatra
