@@ -138,7 +138,7 @@ class coro_http_response {
                 : resp_str.append(CONN_CLOSE_SV);
     }
 
-    if (content_type_.empty()) {
+    if (!content_type_.empty()) {
       resp_str.append(content_type_);
     }
 
@@ -210,7 +210,7 @@ class coro_http_response {
                 : buffers.emplace_back(asio::buffer(CONN_CLOSE_SV));
     }
 
-    if (content_type_.empty()) {
+    if (!content_type_.empty()) {
       buffers.emplace_back(asio::buffer(content_type_));
     }
 
