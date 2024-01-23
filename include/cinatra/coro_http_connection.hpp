@@ -11,11 +11,13 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/response_cv.hpp"
+#include "cookie.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_parser.hpp"
 #include "multipart.hpp"
+#include "session_manager.hpp"
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
@@ -266,6 +268,8 @@ class coro_http_connection
           }
         }
       }
+
+      handle_session_for_response();
 
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
@@ -743,6 +747,17 @@ class coro_http_connection
   }
 
   void set_check_timeout(bool r) { checkout_timeout_ = r; }
+
+  void handle_session_for_response() {
+    if (request_.has_session()) {
+      auto session =
+          session_manager::get().get_session(request_.get_cached_session_id());
+      if (session != nullptr && session->get_need_set_to_client()) {
+        response_.add_cookie(session->get_session_cookie());
+        session->set_need_set_to_client(false);
+      }
+    }
+  }
 
  private:
   bool check_keep_alive() {
