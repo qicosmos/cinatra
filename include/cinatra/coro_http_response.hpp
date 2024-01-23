@@ -54,6 +54,9 @@ class coro_http_response {
   bool get_delay() const { return delay_; }
   void set_format_type(format_type type) { fmt_type_ = type; }
 
+  status_type status() { return status_; }
+  std::string_view content() { return content_; }
+
   void add_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
@@ -75,6 +78,65 @@ class coro_http_response {
         buffers.push_back(asio::buffer(content_));
       }
     }
+  }
+
+  void build_resp_str(std::string &resp_str) {
+    resp_str.append(to_http_status_string(status_));
+    bool has_len = false;
+    bool has_host = false;
+    for (auto &[k, v] : resp_headers_) {
+      if (k == "Host") {
+        has_host = true;
+      }
+      if (k == "Content-Length") {
+        has_len = true;
+      }
+    }
+
+    if (!has_host) {
+      resp_str.append(CINATRA_HOST_SV);
+    }
+
+    if (content_.empty() && !has_set_content_ &&
+        fmt_type_ != format_type::chunked) {
+      content_.append(default_status_content(status_));
+    }
+
+    if (fmt_type_ == format_type::chunked) {
+      resp_str.append(TRANSFER_ENCODING_SV);
+    }
+    else {
+      if (!content_.empty()) {
+        auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_.size());
+        resp_str.append(CONTENT_LENGTH_SV);
+        resp_str.append(std::string_view(buf_, std::distance(buf_, ptr)));
+        resp_str.append(CRCF);
+      }
+      else {
+        if (!has_len && boundary_.empty())
+          resp_str.append(ZERO_LENGTH_SV);
+      }
+    }
+
+    resp_str.append(DATE_SV);
+    resp_str.append(get_gmt_time_str());
+    resp_str.append(CRCF);
+
+    if (keepalive_.has_value()) {
+      bool keepalive = keepalive_.value();
+      keepalive ? resp_str.append(CONN_KEEP_SV)
+                : resp_str.append(CONN_CLOSE_SV);
+    }
+
+    for (auto &[k, v] : resp_headers_) {
+      resp_str.append(k);
+      resp_str.append(COLON_SV);
+      resp_str.append(v);
+      resp_str.append(CRCF);
+    }
+
+    resp_str.append(CRCF);
+    resp_str.append(content_);
   }
 
   void build_resp_head(std::vector<asio::const_buffer> &buffers) {

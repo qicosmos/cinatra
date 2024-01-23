@@ -268,7 +268,66 @@ class coro_http_connection
       }
 
       if (!response_.get_delay()) {
-        co_await reply();
+        if (head_buf_.size()) {
+          // handle pipeling, only support GET and HEAD method now.
+          if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
+            response_.set_status_and_content(status_type::method_not_allowed,
+                                             "method not allowed");
+            co_await reply();
+          }
+          else {
+            std::string resp_str;
+            resp_str.reserve(512);
+            response_.build_resp_str(resp_str);
+
+            while (true) {
+              size_t left_size = head_buf_.size();
+              auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+              std::string_view left_content{data_ptr, left_size};
+              size_t pos = left_content.find(TWO_CRCF);
+              if (pos == std::string_view::npos) {
+                break;
+              }
+              http_parser parser;
+              int head_len = parser.parse_request(data_ptr, size, 0);
+              if (head_len <= 0) {
+                CINATRA_LOG_ERROR << "parse http header error";
+                close();
+                break;
+              }
+
+              head_buf_.consume(pos + TWO_CRCF.length());
+
+              std::string_view key = {
+                  parser_.method().data(),
+                  parser_.method().length() + 1 + parser_.url().length()};
+
+              coro_http_request req(parser, this);
+              coro_http_response resp(this);
+              if (auto handler = router_.get_handler(key); handler) {
+                router_.route(handler, req, resp, key);
+              }
+              else {
+                if (auto coro_handler = router_.get_coro_handler(key);
+                    coro_handler) {
+                  co_await router_.route_coro(coro_handler, req, resp, key);
+                }
+              }
+
+              resp.build_resp_str(resp_str);
+            }
+
+            auto [write_ec, _] = co_await async_write(asio::buffer(resp_str));
+            if (write_ec) {
+              CINATRA_LOG_ERROR << "async_write error: " << write_ec.message();
+              close();
+              co_return;
+            }
+          }
+        }
+        else {
+          co_await reply();
+        }
       }
 
       response_.clear();
