@@ -19,7 +19,7 @@ class session_manager {
     auto tp = std::chrono::high_resolution_clock::now();
     auto nano = tp.time_since_epoch().count();
     id_++;
-    return std::to_string(nano) + std::to_string(id_);
+    return std::to_string(nano).append(std::to_string(id_));
   }
 
   std::shared_ptr<session> get_session(const std::string &session_id) {

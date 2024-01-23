@@ -1511,7 +1511,7 @@ TEST_CASE("test session") {
       "/check_login", [](coro_http_request &req, coro_http_response &res) {
         auto session = req.get_session();
         session_id_check_login = session->get_session_id();
-        bool login = session->get_data<bool>("login");
+        bool login = session->get_data<bool>("login").value_or(false);
         CHECK(login == true);
         res.set_status(status_type::ok);
       });
@@ -1519,7 +1519,7 @@ TEST_CASE("test session") {
       "/check_logout", [](coro_http_request &req, coro_http_response &res) {
         auto session = req.get_session();
         session_id_check_logout = session->get_session_id();
-        bool login = session->get_data<bool>("login");
+        bool login = session->get_data<bool>("login").value_or(false);
         CHECK(login == false);
         res.set_status(status_type::ok);
       });
@@ -1569,7 +1569,7 @@ TEST_CASE("test session timeout") {
       [](coro_http_request &req, coro_http_response &res) {
         auto session = req.get_session();
         session_id = session->get_session_id();
-        session->set_session_timeout(2);
+        session->set_session_timeout(1);
         res.set_status(status_type::ok);
       });
 
@@ -1579,7 +1579,7 @@ TEST_CASE("test session timeout") {
     res.set_status(status_type::ok);
   });
 
-  server.set_http_handler<GET>("/after_sleep_3s", [](coro_http_request &req,
+  server.set_http_handler<GET>("/after_sleep_2s", [](coro_http_request &req,
                                                      coro_http_response &res) {
     CHECK(session_manager::get().check_session_existence(session_id) == false);
     res.set_status(status_type::ok);
@@ -1597,9 +1597,9 @@ TEST_CASE("test session timeout") {
       client.async_get("http://127.0.0.1:8090/no_sleep"));
   CHECK(r2.status == 200);
 
-  std::this_thread::sleep_for(3s);
+  std::this_thread::sleep_for(2s);
   auto r3 = async_simple::coro::syncAwait(
-      client.async_get("http://127.0.0.1:8090/after_sleep_3s"));
+      client.async_get("http://127.0.0.1:8090/after_sleep_2s"));
   CHECK(r3.status == 200);
 
   server.stop();
@@ -1625,7 +1625,7 @@ TEST_CASE("test session validate") {
         res.set_status(status_type::ok);
       });
 
-  server.set_http_handler<GET>("/after_sleep_3s", [](coro_http_request &req,
+  server.set_http_handler<GET>("/after_sleep_2s", [](coro_http_request &req,
                                                      coro_http_response &res) {
     CHECK(session_manager::get().check_session_existence(session_id) == false);
     res.set_status(status_type::ok);
@@ -1643,9 +1643,9 @@ TEST_CASE("test session validate") {
       client.async_get("http://127.0.0.1:8090/invalidate_session"));
   CHECK(r2.status == 200);
 
-  std::this_thread::sleep_for(3s);
+  std::this_thread::sleep_for(2s);
   auto r3 = async_simple::coro::syncAwait(
-      client.async_get("http://127.0.0.1:8090/after_sleep_3s"));
+      client.async_get("http://127.0.0.1:8090/after_sleep_2s"));
   CHECK(r3.status == 200);
 
   server.stop();

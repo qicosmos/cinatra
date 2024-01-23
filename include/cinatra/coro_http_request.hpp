@@ -258,9 +258,7 @@ class coro_http_request {
     return temp_session_id;
   }
 
-  bool has_session() {
-    return session_manager::get().check_session_existence(cached_session_id_);
-  }
+  bool has_session() { return !cached_session_id_.empty(); }
 
   std::unordered_map<std::string, std::string> params_;
   std::smatch matches_;

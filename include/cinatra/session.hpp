@@ -47,7 +47,7 @@ class session {
   }
 
   template <typename T>
-  T get_data(const std::string &name) {
+  std::optional<T> get_data(const std::string &name) {
     std::unique_lock<std::mutex> lock(mtx_);
 
     auto iter = data_.find(name);
@@ -55,11 +55,11 @@ class session {
       try {
         return std::any_cast<T>(iter->second);
       } catch (const std::exception &e) {
-        return T{};
+        return std::nullopt;
       }
     }
 
-    return T{};
+    return std::nullopt;
   }
 
   const std::string &get_session_id() {
