@@ -269,8 +269,6 @@ class coro_http_connection
         }
       }
 
-      handle_session_for_response();
-
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
           // handle pipeling, only support GET and HEAD method now.
@@ -330,6 +328,7 @@ class coro_http_connection
           }
         }
         else {
+          handle_session_for_response();
           co_await reply();
         }
       }
