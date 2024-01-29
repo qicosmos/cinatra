@@ -12,7 +12,9 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "cookie.hpp"
 #include "define.h"
+#ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
+#endif
 #include "response_cv.hpp"
 #include "time_util.hpp"
 #include "utils.hpp"
