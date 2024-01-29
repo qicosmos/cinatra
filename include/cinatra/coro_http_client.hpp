@@ -16,6 +16,7 @@
 
 #include "asio/dispatch.hpp"
 #include "asio/error.hpp"
+#include "asio/ssl/verify_mode.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
@@ -246,7 +247,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return true;
   }
 
-  [[nodiscard]] bool init_ssl(int verify_mode = asio::ssl::verify_peer,
+  [[nodiscard]] bool init_ssl(int verify_mode = asio::ssl::verify_none,
                               std::string full_path = "",
                               const std::string &sni_hostname = "") {
     std::string base_path;
