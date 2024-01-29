@@ -24,12 +24,10 @@ using namespace std::chrono_literals;
 using namespace cinatra;
 
 #ifdef CINATRA_ENABLE_GZIP
-std::string_view get_header_value(
-    std::vector<std::pair<std::string, std::string>> &resp_headers,
-    std::string_view key) {
-  for (const auto &p : resp_headers) {
-    if (p.first == key)
-      return std::string_view(p.second.data(), p.second.size());
+std::string_view get_header_value(auto &resp_headers, std::string_view key) {
+  for (const auto &[k, v] : resp_headers) {
+    if (k == key)
+      return v;
   }
   return {};
 }
@@ -40,7 +38,7 @@ TEST_CASE("test for gzip") {
       "/gzip", [](coro_http_request &req, coro_http_response &res) {
         CHECK(req.get_header_value("Content-Encoding") == "gzip");
         res.set_status_and_content(status_type::ok, "hello world",
-                                   req_content_type::none);  // TODO
+                                   content_encoding::gzip);
       });
   server.async_start();
 
