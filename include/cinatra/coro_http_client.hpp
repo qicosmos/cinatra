@@ -16,7 +16,6 @@
 
 #include "asio/dispatch.hpp"
 #include "asio/error.hpp"
-#include "asio/ssl/verify_mode.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/Future.h"
 #include "async_simple/Unit.h"
