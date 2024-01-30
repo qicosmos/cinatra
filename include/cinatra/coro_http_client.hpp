@@ -1779,8 +1779,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     head_buf_.consume(head_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
-    auto on_ws_msg = std::move(on_ws_msg_);
-    auto on_ws_close = std::move(on_ws_close_);
+    auto on_ws_msg = on_ws_msg_;
+    auto on_ws_close = on_ws_close_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
 #ifdef CINATRA_ENABLE_SSL
