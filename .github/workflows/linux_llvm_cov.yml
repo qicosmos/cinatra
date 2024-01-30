@@ -31,12 +31,15 @@ jobs:
         run: |
           mkdir build && cd build
           CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
-          make -j test_cinatra test_corofile
+          make -j
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           cd tests
-          ./test_cinatra ./test_corofile
+          ./test_cinatra 
+          ./test_corofile
+          ./test_time_util
+          ./test_http_parse
           llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
-          llvm-cov show ./test_cinatra -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-instantiations=false
+          llvm-cov show test_cinatra test_corofile test_time_util test_http_parse -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-instantiations=false
           echo "Done!"
 
       - name: Upload Coverage Results
@@ -51,7 +54,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report ./test_cinatra -instr-profile=test_cinatra.profdata -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-region-summary=false >> tmp.log
+          llvm-cov report test_cinatra test_corofile test_time_util test_http_parse -instr-profile=test_cinatra.profdata -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
