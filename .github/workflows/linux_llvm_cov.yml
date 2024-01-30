@@ -36,8 +36,9 @@ jobs:
           cd tests
           ./test_cinatra 
           ./test_corofile
-          ./test_time_util
           ./test_http_parse
+          ./test_time_util
+          
           llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
           llvm-cov show test_cinatra test_corofile test_time_util test_http_parse -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-instantiations=false
           echo "Done!"
