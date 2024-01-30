@@ -815,6 +815,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     // clear
     head_buf_.consume(head_buf_.size());
     chunked_buf_.consume(chunked_buf_.size());
+    resp_chunk_str_.clear();
   }
 
   async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
