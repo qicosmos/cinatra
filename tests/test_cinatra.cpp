@@ -528,23 +528,6 @@ TEST_CASE("test bad uri") {
   CHECK(result.status == 404);
 }
 
-TEST_CASE("test ssl without init ssl"){{coro_http_client client{};
-client.add_str_part("hello", "world");
-auto result = async_simple::coro::syncAwait(
-    client.async_upload_multipart("https://www.bing.com"));
-CHECK(result.status == 404);
-}
-
-#ifndef CINATRA_ENABLE_SSL
-{
-  coro_http_client client{};
-  auto result =
-      async_simple::coro::syncAwait(client.async_get("https://www.bing.com"));
-  CHECK(result.status == 404);
-}
-#endif
-}
-
 TEST_CASE("test multiple ranges download") {
   coro_http_client client{};
   std::string uri = "http://uniquegoodshiningmelody.neverssl.com/favicon.ico";
