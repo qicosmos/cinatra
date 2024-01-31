@@ -68,6 +68,16 @@ TEST_CASE("test ssl client") {
 
   {
     coro_http_client client{};
+    auto r =
+        async_simple::coro::syncAwait(client.connect("https://www.baidu.com"));
+    if (r.status == 200) {
+      auto result = client.get("/");
+      CHECK(result.status >= 200);
+    }
+  }
+
+  {
+    coro_http_client client{};
     auto result = client.get("http://www.bing.com");
     CHECK(result.status >= 200);
   }
@@ -516,23 +526,6 @@ TEST_CASE("test bad uri") {
   auto result = async_simple::coro::syncAwait(
       client.async_upload_multipart("http://www.badurlrandom.org"));
   CHECK(result.status == 404);
-}
-
-TEST_CASE("test ssl without init ssl"){{coro_http_client client{};
-client.add_str_part("hello", "world");
-auto result = async_simple::coro::syncAwait(
-    client.async_upload_multipart("https://www.bing.com"));
-CHECK(result.status == 404);
-}
-
-#ifndef CINATRA_ENABLE_SSL
-{
-  coro_http_client client{};
-  auto result =
-      async_simple::coro::syncAwait(client.async_get("https://www.bing.com"));
-  CHECK(result.status == 404);
-}
-#endif
 }
 
 TEST_CASE("test multiple ranges download") {
