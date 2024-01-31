@@ -68,6 +68,16 @@ TEST_CASE("test ssl client") {
 
   {
     coro_http_client client{};
+    auto r =
+        async_simple::coro::syncAwait(client.connect("https://www.baidu.com"));
+    if (r.status == 200) {
+      auto result = client.get("/");
+      CHECK(result.status >= 200);
+    }
+  }
+
+  {
+    coro_http_client client{};
     auto result = client.get("http://www.bing.com");
     CHECK(result.status >= 200);
   }
