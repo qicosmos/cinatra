@@ -146,6 +146,32 @@ bool create_file(View filename, size_t file_size = 1024) {
   return true;
 }
 
+TEST_CASE("test redirect") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.redirect("/test");
+      });
+
+  server.set_http_handler<GET>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "redirect ok");
+      });
+
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 302);
+  for (auto [k, v] : result.resp_headers) {
+    if (k == "Location") {
+      auto r = client.get(std::string(v));
+      CHECK(r.resp_body == "redirect ok");
+      break;
+    }
+  }
+}
+
 TEST_CASE("test multiple download") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(

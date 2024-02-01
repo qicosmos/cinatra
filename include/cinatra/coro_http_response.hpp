@@ -271,6 +271,13 @@ class coro_http_response {
     cookies_[cookie.get_name()] = cookie;
   }
 
+  void redirect(const std::string &url, bool is_forever = false) {
+    add_header("Location", url);
+    is_forever == false
+        ? set_status_and_content(status_type::moved_temporarily)
+        : set_status_and_content(status_type::moved_permanently);
+  }
+
  private:
   status_type status_;
   format_type fmt_type_;
