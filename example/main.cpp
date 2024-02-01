@@ -258,7 +258,7 @@ struct log_t : public base_aspect {
 
 struct get_data : public base_aspect {
   bool before(coro_http_request &req, coro_http_response &res) {
-    req.set_aspect_data("hello", std::string("hello world"));
+    req.set_aspect_data("hello world");
     return true;
   }
 };
@@ -268,9 +268,8 @@ async_simple::coro::Lazy<void> use_aspects() {
   server.set_http_handler<GET>(
       "/get",
       [](coro_http_request &req, coro_http_response &resp) {
-        std::optional<std::string> val =
-            req.get_aspect_data<std::string>("hello");
-        assert(*val == "hello world");
+        auto &val = req.get_aspect_data();
+        assert(val[0] == "hello world");
         resp.set_status_and_content(status_type::ok, "ok");
       },
       std::vector<std::shared_ptr<base_aspect>>{std::make_shared<log_t>(),

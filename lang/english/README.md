@@ -235,7 +235,7 @@ int main() {
 	//将信息从中间件传输到处理程序
 	struct get_data  : public base_aspect {
 		bool before(coro_http_request& req, coro_http_response& res) {
-			req.set_aspect_data("hello", std::string("hello world"));
+			req.set_aspect_data("hello world");
 			return true;
 		}
 	}
@@ -247,7 +247,8 @@ int main() {
 		}, std::vector{std::make_shared<check>(), std::make_shared<log_t>()});
 
 		server.set_http_handler<GET,POST>("/aspect/data", [](coro_http_request& req, coro_http_response& res) {
-			std::string hello = req.get_aspect_data<std::string>("hello");
+      auto &val = req.get_aspect_data();
+			std::string& hello = val[0];
 			res.set_status_and_content(status_type::ok, std::move(hello));
 		}, std::vector{std::make_shared<get_data>()});
 
