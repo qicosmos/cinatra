@@ -15,6 +15,7 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_connection.hpp"
+#include "cinatra/coro_http_reverse_proxy.hpp"
 #include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
@@ -1388,4 +1389,79 @@ TEST_CASE("test coro radix tree restful api") {
   client.get("http://127.0.0.1:9001/user/subid/subscriptions");
   client.get("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:9001/value/guilliman/cawl/yvraine");
+}
+
+TEST_CASE("test reverse proxy") {
+  cinatra::coro_http_server web_one(1, 9001);
+
+  web_one.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web1");
+        });
+      });
+
+  web_one.async_start();
+
+  cinatra::coro_http_server web_two(1, 9002);
+
+  web_two.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web2");
+        });
+      });
+
+  web_two.async_start();
+
+  cinatra::coro_http_server web_three(1, 9003);
+
+  web_three.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "web3");
+        });
+      });
+
+  web_three.async_start();
+
+  std::this_thread::sleep_for(200ms);
+
+  reverse_proxy proxy_wrr;
+  proxy_wrr.add_server("127.0.0.1:9001", 10);
+  proxy_wrr.add_server("127.0.0.1:9002", 5);
+  proxy_wrr.add_server("127.0.0.1:9003", 5);
+  proxy_wrr.new_reverse_proxy(10, 8090, "/wrr", true, lb_type::WRR);
+
+  reverse_proxy proxy_rr;
+  proxy_rr.add_server("127.0.0.1:9001");
+  proxy_rr.add_server("127.0.0.1:9002");
+  proxy_rr.add_server("127.0.0.1:9003");
+  proxy_rr.new_reverse_proxy(10, 8091, "/lb", true, lb_type::RR);
+
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client_wrr;
+  resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web1");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web2");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web3");
+
+  coro_http_client client_rr;
+  resp_data resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  CHECK(resp_rr.resp_body == "web1");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  CHECK(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
+  CHECK(resp_rr.resp_body == "web3");
 }
