@@ -89,6 +89,10 @@ class coro_http_response {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
 
+  void set_headers(const std::vector<resp_header> &headers) {
+    resp_headers_ = headers;
+  }
+
   void set_keepalive(bool r) { keepalive_ = r; }
 
   void need_date_head(bool r) { need_date_ = r; }
