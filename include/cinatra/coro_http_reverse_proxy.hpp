@@ -137,39 +137,6 @@ class reverse_proxy {
     }
   }
 
-  enum http_method method_type(std::string_view method) {
-    if (method == "GET") {
-      return http_method::GET;
-    }
-    else if (method == "POST") {
-      return http_method::POST;
-    }
-    else if (method == "DELETE") {
-      return http_method::DEL;
-    }
-    else if (method == "HEAD") {
-      return http_method::HEAD;
-    }
-    else if (method == "PUT") {
-      return http_method::PUT;
-    }
-    else if (method == "PATCH") {
-      return http_method::PATCH;
-    }
-    else if (method == "CONNECT") {
-      return http_method::CONNECT;
-    }
-    else if (method == "OPTIONS") {
-      return http_method::OPTIONS;
-    }
-    else if (method == "TRACE") {
-      return http_method::TRACE;
-    }
-    else {
-      return http_method::UNKNOW;
-    }
-  }
-
   bool select_server_rr() {
     if (servers_.empty()) {
       return false;
@@ -184,6 +151,7 @@ class reverse_proxy {
       return false;
     int hash_code = hasher_(client_ip_address) % servers_.size();
     current_ = hash_code;
+    return true;
   }
 
   int gcd(int a, int b) { return !b ? a : gcd(b, a % b); }
