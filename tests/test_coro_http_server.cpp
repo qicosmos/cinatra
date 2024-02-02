@@ -147,6 +147,32 @@ bool create_file(View filename, size_t file_size = 1024) {
   return true;
 }
 
+TEST_CASE("test redirect") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.redirect("/test");
+      });
+
+  server.set_http_handler<GET>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "redirect ok");
+      });
+
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 302);
+  for (auto [k, v] : result.resp_headers) {
+    if (k == "Location") {
+      auto r = client.get(std::string(v));
+      CHECK(r.resp_body == "redirect ok");
+      break;
+    }
+  }
+}
+
 TEST_CASE("test multiple download") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
@@ -494,6 +520,13 @@ struct check_t : public base_aspect {
   }
 };
 
+struct get_data : public base_aspect {
+  bool before(coro_http_request &req, coro_http_response &res) {
+    req.set_aspect_data("hello", "world");
+    return true;
+  }
+};
+
 TEST_CASE("test aspects") {
   coro_http_server server(1, 9001);
   server.set_static_res_dir("", "");
@@ -507,19 +540,24 @@ TEST_CASE("test aspects") {
   server.set_http_handler<GET, POST>(
       "/",
       [](coro_http_request &req, coro_http_response &resp) {
+        resp.add_header("aaaa", "bbcc");
         resp.set_status_and_content(status_type::ok, "ok");
       },
       {std::make_shared<log_t>(), std::make_shared<check_t>()});
 
   server.set_http_handler<GET, POST>(
-      "/coro",
+      "/aspect",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto &val = req.get_aspect_data();
+        CHECK(val[0] == "hello");
+        CHECK(val[1] == "world");
         resp.set_status_and_content(status_type::ok, "ok");
         co_return;
       },
-      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+      {std::make_shared<get_data>()});
   server.async_start();
+  std::this_thread::sleep_for(300ms);
 
   coro_http_client client{};
   auto result = client.get("http://127.0.0.1:9001/");
@@ -539,13 +577,13 @@ TEST_CASE("test aspects") {
 
   check(result);
 
-  result = client.get("http://127.0.0.1:9001/coro");
-  check(result);
-
   result = client.get("http://127.0.0.1:9001/test_aspect.txt");
   CHECK(result.status == 200);
 
   result = client.get("http://127.0.0.1:9001/test_file.txt");
+  CHECK(result.status == 200);
+
+  result = client.get("http://127.0.0.1:9001/aspect");
   CHECK(result.status == 200);
 }
 
