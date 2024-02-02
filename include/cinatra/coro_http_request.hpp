@@ -2,8 +2,10 @@
 
 #include <any>
 #include <charconv>
+#include <initializer_list>
 #include <optional>
 #include <regex>
+#include <string>
 
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
@@ -210,6 +212,15 @@ class coro_http_request {
 
   void set_aspect_data(std::string data) {
     aspect_data_.push_back(std::move(data));
+  }
+
+  void set_aspect_data(std::vector<std::string> data) {
+    aspect_data_ = std::move(data);
+  }
+
+  template <typename... Args>
+  void set_aspect_data(Args... args) {
+    (aspect_data_.push_back(std::move(args)), ...);
   }
 
   std::vector<std::string> &get_aspect_data() { return aspect_data_; }
