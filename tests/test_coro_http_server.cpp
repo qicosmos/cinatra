@@ -1508,8 +1508,8 @@ TEST_CASE("test reverse proxy") {
   CHECK(resp.resp_body == "web1");
   resp = client_wrr.get("http://127.0.0.1:8090/wrr");
   CHECK(resp.resp_body == "web1");
-  // resp = client_wrr.get("http://127.0.0.1:8090/wrr");
-  // CHECK(resp.resp_body == "web2");
-  // resp = client_wrr.get("http://127.0.0.1:8090/wrr");
-  // CHECK(resp.resp_body == "web3");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body.find("web1") == std::string_view::npos);
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body.find("web1") == std::string_view::npos);
 }
