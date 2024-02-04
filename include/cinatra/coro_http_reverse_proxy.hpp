@@ -151,9 +151,9 @@ class reverse_proxy {
                                        coro_http_request &req,
                                        coro_http_response &response) {
     auto req_headers = copy_request_headers(req.get_headers());
+    auto ctx = req_context<std::string_view>{.content = req.get_body()};
     auto result = co_await client->async_request(
-        std::move(url_path), method_type(req.get_method()),
-        req_context<std::string_view>{.content = req.get_body()},
+        std::move(url_path), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
     for (auto &[k, v] : result.resp_headers) {
