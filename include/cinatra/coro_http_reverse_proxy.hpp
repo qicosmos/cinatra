@@ -1,184 +1,205 @@
 #pragma once
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_server.hpp"
 
 namespace cinatra {
 
-struct server_info {
+struct host_info {
   std::string url;
   int weight;
 };
 
-enum class lb_type { RR, IPHASH, WRR, NONE };
+// round robin, weith round robin, ip hash
+enum class lb_type { RR, WRR, IPHASH, NONE };
 
 class reverse_proxy {
  public:
-  reverse_proxy() {
-    request_headers_.clear();
+  reverse_proxy(size_t thread_num, unsigned short port)
+      : server_(thread_num, port) {
     resp_headers_.clear();
   }
-  ~reverse_proxy() {
-    request_headers_.clear();
-    resp_headers_.clear();
-  }
+
+  ~reverse_proxy() { clients_.clear(); }
+
   // single url reverse
-  void new_reverse_proxy(std::string server_ip, size_t thread_num,
-                         unsigned short port, std::string url_path = "/",
-                         bool is_async = false) {
-    coro_http_client client{};
-    coro_http_server server(thread_num, port);
-    server.set_http_handler<cinatra::GET, cinatra::POST>(
-        url_path, [&](coro_http_request &req, coro_http_response &response) {
-          request_headers_.clear();
-          resp_headers_.clear();
-          copy_request_headers(req.get_headers());
+  template <http_method... method>
+  void start_single_reverse_proxy(std::string dest_host,
+                                  std::string url_path = "/",
+                                  bool sync = true) {
+    uri_t uri;
+    uri.parse_from(dest_host.data());
+    std::string path = uri.get_path();
+    server_.set_http_handler<method...>(
+        url_path,
+        [this, dest_host = std::move(dest_host), path = std::move(path)](
+            coro_http_request &req,
+            coro_http_response &response) -> async_simple::coro::Lazy<void> {
+          resp_data result{};
+          if (client_ == nullptr) {
+            client_ = std::make_shared<coro_http_client>();
+            result = co_await client_->connect(std::move(dest_host));
+          }
+          else if (client_->has_closed()) {
+            client_->reset();
+            result = co_await client_->connect(std::move(dest_host));
+          }
 
-          resp_data result = async_simple::coro::syncAwait(client.async_request(
-              server_ip, method_type(req.get_method()),
-              req_context<std::string_view>{.content = req.get_body()},
-              request_headers_));
+          if (result.net_err) {
+            response.set_status_and_content(status_type::not_found);
+            co_return;
+          }
 
-          copy_response_headers(result.resp_headers);
-
-          response.set_headers(resp_headers_);
-          response.set_status_and_content(
-              static_cast<status_type>(result.status),
-              std::string(result.resp_body));
+          co_await reply(client_, std::move(path), req, response);
         });
-    if (is_async)
-      server.async_start();
-    else
-      server.sync_start();
-  }
 
-  bool add_req_header(std::string key, std::string val) {
-    if (key.empty())
-      return false;
-
-    request_headers_[key] = std::move(val);
-
-    return true;
+    start(sync);
   }
 
   void add_resp_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
 
-  void add_server(std::string url, int weight = 0) {
-    servers_.push_back({url, weight});
+  void add_dest_host(std::string url, int weight = 0) {
+    dest_hosts_.push_back({url, weight});
   }
 
-  bool set_servers(std::vector<server_info> servers) {
-    if (servers.empty())
+  bool set_dest_hosts(std::vector<host_info> dest_hosts) {
+    if (dest_hosts.empty())
       return false;
-    servers_ = servers;
+    dest_hosts_ = dest_hosts;
     return true;
   }
 
-  void new_reverse_proxy(size_t thread_num, unsigned short port,
-                         std::string url_path = "/", bool is_async = false,
-                         lb_type type = lb_type::RR) {
-    coro_http_server server(thread_num, port);
+  template <http_method... method>
+  void start_reverse_proxy(std::string url_path = "/", bool sync = true,
+                           lb_type type = lb_type::RR) {
+    if (dest_hosts_.empty()) {
+      throw std::invalid_argument("not config hosts yet!");
+    }
     max_gcd_ = get_max_weight_gcd();
     max_weight_ = get_max_weight();
-    server.set_http_handler<cinatra::GET, cinatra::POST>(
-        url_path, [&](coro_http_request &req, coro_http_response &response) {
-          request_headers_.clear();
-          resp_headers_.clear();
-          copy_request_headers(req.get_headers());
-          coro_http_client client{};
+    server_.set_http_handler<method...>(
+        url_path,
+        [this, type, url_path](
+            coro_http_request &req,
+            coro_http_response &response) -> async_simple::coro::Lazy<void> {
+          int current = 0;
           if (type == lb_type::RR) {
-            select_server_rr();
+            current = select_host_with_round_robin();
           }
           else if (type == lb_type::IPHASH) {
-            select_server_iphash(req.get_conn()->remote_address());
+            const auto &remote_address = req.get_conn()->remote_address();
+            if (remote_address.empty()) {
+              response.set_status_and_content(status_type::not_found);
+              co_return;
+            }
+            current =
+                select_server_with_iphash(req.get_conn()->remote_address());
           }
           else if (type == lb_type::WRR) {
-            int wrr_current = select_server_wrr();
-            if (wrr_current == -1) {
-              current_ = 0;
+            int current = select_host_with_weight_round_robin();
+            if (current == -1) {
+              current = 0;
             }
             else {
-              current_ = wrr_current;
+              current_ = current;
             }
           }
           else {
-            current_ = 0;
+            current_ = current;
           }
 
-          resp_data result = async_simple::coro::syncAwait(client.async_request(
-              servers_[current_].url, method_type(req.get_method()),
-              req_context<std::string_view>{.content = req.get_body()},
-              request_headers_));
+          const auto &dest_host = dest_hosts_[current].url;
+          resp_data result{};
+          std::shared_ptr<coro_http_client> client = nullptr;
+          if (auto it = clients_.find(dest_host); it != clients_.end()) {
+            client = it->second;
+            if (client->has_closed()) {
+              client->reset();
+              result = co_await client->connect(dest_host);
+            }
+          }
+          else {
+            client = std::make_shared<coro_http_client>();
+            result = co_await client->connect(dest_host);
+            if (!result.net_err) {
+              clients_.emplace(dest_host, client);
+            }
+          }
 
-          copy_response_headers(result.resp_headers);
+          if (result.net_err) {
+            response.set_status_and_content(status_type::not_found);
+            co_return;
+          }
 
-          response.set_headers(resp_headers_);
-          response.set_status_and_content(
-              static_cast<status_type>(result.status),
-              std::string(result.resp_body));
+          uri_t uri;
+          uri.parse_from(dest_host.data());
+          co_await reply(client, uri.get_path(), req, response);
         });
-    if (is_async)
-      server.async_start();
-    else
-      server.sync_start();
+
+    start(sync);
   }
 
  private:
-  void copy_response_headers(std::span<http_header> response_headers) {
-    for (auto &header : response_headers) {
-      add_resp_header(std::string(header.name), std::string(header.value));
+  async_simple::coro::Lazy<void> reply(std::shared_ptr<coro_http_client> client,
+                                       std::string url_path,
+                                       coro_http_request &req,
+                                       coro_http_response &response) {
+    auto req_headers = copy_request_headers(req.get_headers());
+    auto result = co_await client->async_request(
+        std::move(url_path), method_type(req.get_method()),
+        req_context<std::string_view>{.content = req.get_body()},
+        std::move(req_headers));
+
+    for (auto &[k, v] : result.resp_headers) {
+      response.add_header(std::string(k), std::string(v));
+    }
+
+    response.set_status_and_content_view(
+        static_cast<status_type>(result.status), result.resp_body);
+    co_await response.get_conn()->reply();
+    response.set_delay(true);
+  }
+
+  void start(bool sync) {
+    if (sync) {
+      server_.sync_start();
+    }
+    else {
+      server_.async_start();
     }
   }
 
-  void copy_request_headers(std::span<http_header> req_headers) {
-    for (auto &header : req_headers) {
-      add_req_header(std::string(header.name), std::string(header.value));
+  std::unordered_map<std::string, std::string> copy_request_headers(
+      std::span<http_header> req_headers) {
+    std::unordered_map<std::string, std::string> request_headers;
+    for (auto &[k, v] : req_headers) {
+      request_headers.emplace(k, v);
     }
+
+    return request_headers;
   }
 
-  bool select_server_rr() {
-    if (servers_.empty()) {
-      return false;
-    }
-    current_ = (current_ + 1) % servers_.size();
-
-    return true;
+  int select_host_with_round_robin() {
+    int current = current_ % dest_hosts_.size();
+    current_++;
+    return current;
   }
 
-  bool select_server_iphash(const std::string &client_ip_address) {
-    if (client_ip_address.empty())
-      return false;
-    int hash_code = hasher_(client_ip_address) % servers_.size();
+  int select_server_with_iphash(const std::string &client_ip_address) {
+    int hash_code = hasher_(client_ip_address) % dest_hosts_.size();
     current_ = hash_code;
-    return true;
+    return hash_code;
   }
 
-  int gcd(int a, int b) { return !b ? a : gcd(b, a % b); }
-
-  int get_max_weight_gcd() {
-    int res = servers_[0].weight;
-    int cur_max = 0, cur_min = 0;
-    for (size_t i = 0; i < servers_.size(); i++) {
-      cur_max = std::max(res, servers_[i].weight);
-      cur_min = std::min(res, servers_[i].weight);
-      res = gcd(cur_max, cur_min);
-    }
-    return res;
-  }
-
-  int get_max_weight() {
-    int max = 0;
-    for (size_t i = 0; i < servers_.size(); i++) {
-      if (max < servers_[i].weight)
-        max = servers_[i].weight;
-    }
-    return max;
-  }
-
-  int select_server_wrr() {
+  int select_host_with_weight_round_robin() {
     while (true) {
-      wrr_current_ = (wrr_current_ + 1) % servers_.size();
+      wrr_current_ = (wrr_current_ + 1) % dest_hosts_.size();
       if (wrr_current_ == 0) {
         weight_current_ = weight_current_ - max_gcd_;
         if (weight_current_ <= 0) {
@@ -189,18 +210,43 @@ class reverse_proxy {
         }
       }
 
-      if (servers_[wrr_current_].weight >= weight_current_) {
+      if (dest_hosts_[wrr_current_].weight >= weight_current_) {
         return wrr_current_;
       }
     }
   }
 
+  int gcd(int a, int b) { return !b ? a : gcd(b, a % b); }
+
+  int get_max_weight_gcd() {
+    int res = dest_hosts_[0].weight;
+    int cur_max = 0, cur_min = 0;
+    for (size_t i = 0; i < dest_hosts_.size(); i++) {
+      cur_max = std::max(res, dest_hosts_[i].weight);
+      cur_min = std::min(res, dest_hosts_[i].weight);
+      res = gcd(cur_max, cur_min);
+    }
+    return res;
+  }
+
+  int get_max_weight() {
+    int max = 0;
+    for (size_t i = 0; i < dest_hosts_.size(); i++) {
+      if (max < dest_hosts_[i].weight)
+        max = dest_hosts_[i].weight;
+    }
+    return max;
+  }
+
+  coro_http_server server_;
+  std::shared_ptr<coro_http_client> client_;
+  std::unordered_map<std::string, std::shared_ptr<coro_http_client>> clients_;
   std::unordered_map<std::string, std::string> request_headers_;
   std::vector<resp_header> resp_headers_;
-  // real servers
-  std::vector<server_info> servers_;
-  // index of server hit
-  uint64_t current_ = 0;
+  // real dest hosts
+  std::vector<host_info> dest_hosts_;
+  // index of dest host hit
+  int current_ = 0;
   // wrr
   int max_gcd_ = 0;
   int max_weight_ = 0;
