@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cstdint>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -20,13 +21,11 @@ class reverse_proxy {
     resp_headers_.clear();
   }
 
-  ~reverse_proxy() { clients_.clear(); }
-
   // single url reverse
   template <http_method... method>
-  void start_single_reverse_proxy(std::string dest_host,
-                                  std::string url_path = "/",
-                                  bool sync = true) {
+  void start_single_reverse_proxy(
+      std::string dest_host, std::string url_path = "/", bool sync = true,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     uri_t uri;
     uri.parse_from(dest_host.data());
     std::string path = uri.get_path();
@@ -36,13 +35,21 @@ class reverse_proxy {
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
           resp_data result{};
-          if (client_ == nullptr) {
-            client_ = std::make_shared<coro_http_client>();
-            result = co_await client_->connect(std::move(dest_host));
-          }
-          else if (client_->has_closed()) {
-            client_->reset();
-            result = co_await client_->connect(std::move(dest_host));
+          std::shared_ptr<coro_http_client> client = nullptr;
+          {
+            std::unique_lock lock(wrr_mtx_);
+            if (rr_client_ == nullptr) {
+              rr_client_ = std::make_shared<coro_http_client>();
+              client = rr_client_;
+              lock.unlock();
+              result = co_await rr_client_->connect(std::move(dest_host));
+            }
+            else if (rr_client_->has_closed()) {
+              client = rr_client_;
+              lock.unlock();
+              client->reset();
+              result = co_await client->connect(std::move(dest_host));
+            }
           }
 
           if (result.net_err) {
@@ -50,8 +57,9 @@ class reverse_proxy {
             co_return;
           }
 
-          co_await reply(client_, std::move(path), req, response);
-        });
+          co_await reply(client, std::move(path), req, response);
+        },
+        std::move(aspects));
 
     start(sync);
   }
@@ -66,8 +74,9 @@ class reverse_proxy {
   }
 
   template <http_method... method>
-  void start_reverse_proxy(std::string url_path = "/", bool sync = true,
-                           lb_type type = lb_type::RR) {
+  void start_reverse_proxy(
+      std::string url_path = "/", bool sync = true, lb_type type = lb_type::RR,
+      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     if (dest_hosts_.empty()) {
       throw std::invalid_argument("not config hosts yet!");
     }
@@ -106,18 +115,24 @@ class reverse_proxy {
           const auto &dest_host = dest_hosts_[current];
           resp_data result{};
           std::shared_ptr<coro_http_client> client = nullptr;
-          if (auto it = clients_.find(dest_host); it != clients_.end()) {
-            client = it->second;
-            if (client->has_closed()) {
-              client->reset();
-              result = co_await client->connect(dest_host);
+          {
+            std::unique_lock lock(wrr_mtx_);
+            if (auto it = wrr_clients_.find(dest_host);
+                it != wrr_clients_.end()) {
+              client = it->second;
+              lock.unlock();
+              if (client->has_closed()) {
+                client->reset();
+                result = co_await client->connect(dest_host);
+              }
             }
-          }
-          else {
-            client = std::make_shared<coro_http_client>();
-            result = co_await client->connect(dest_host);
-            if (!result.net_err) {
-              clients_.emplace(dest_host, client);
+            else {
+              lock.unlock();
+              client = std::make_shared<coro_http_client>();
+              result = co_await client->connect(dest_host);
+              if (!result.net_err) {
+                wrr_clients_.emplace(dest_host, client);
+              }
             }
           }
 
@@ -129,7 +144,8 @@ class reverse_proxy {
           uri_t uri;
           uri.parse_from(dest_host.data());
           co_await reply(client, uri.get_path(), req, response);
-        });
+        },
+        std::move(aspects));
 
     start(sync);
   }
@@ -227,8 +243,11 @@ class reverse_proxy {
   }
 
   coro_http_server server_;
-  std::shared_ptr<coro_http_client> client_;
-  std::unordered_map<std::string, std::shared_ptr<coro_http_client>> clients_;
+  std::mutex rr_mtx_;
+  std::shared_ptr<coro_http_client> rr_client_;
+  std::mutex wrr_mtx_;
+  std::unordered_map<std::string, std::shared_ptr<coro_http_client>>
+      wrr_clients_;
   std::unordered_map<std::string, std::string> request_headers_;
   std::vector<resp_header> resp_headers_;
   // real dest hosts
