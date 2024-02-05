@@ -172,6 +172,32 @@ TEST_CASE("test redirect") {
   }
 }
 
+TEST_CASE("test post") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/echo",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok,
+                                    std::string(req.get_body()));
+        co_return;
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  std::string str = "test";
+  auto r =
+      client.post("http://127.0.0.1:9001/echo", str, req_content_type::text);
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "test");
+
+  r = client.post("/echo", "", req_content_type::text);
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "");
+}
+
 TEST_CASE("test multiple download") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
