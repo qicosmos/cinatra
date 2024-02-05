@@ -1508,8 +1508,14 @@ TEST_CASE("test reverse proxy") {
   CHECK(resp.resp_body == "web1");
   resp = client_wrr.get("http://127.0.0.1:8090/wrr");
   CHECK(resp.resp_body == "web1");
-  // resp = client_wrr.get("http://127.0.0.1:8090/wrr");
-  // CHECK(resp.resp_body == "web2");
-  // resp = client_wrr.get("http://127.0.0.1:8090/wrr");
-  // CHECK(resp.resp_body == "web3");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web2");
+  resp = client_wrr.get("http://127.0.0.1:8090/wrr");
+  CHECK(resp.resp_body == "web3");
+
+  coro_http_client client_hash;
+  resp_data resp_hash = client_hash.get("http://127.0.0.1:8092/ip_hash");
+  CHECK(resp_hash.resp_body == "web2");
+  resp_hash = client_hash.get("http://127.0.0.1:8092/ip_hash");
+  CHECK(resp_hash.resp_body == "web2");
 }

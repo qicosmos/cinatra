@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -8,11 +9,6 @@
 #include "cinatra/coro_http_server.hpp"
 
 namespace cinatra {
-
-struct host_info {
-  std::string url;
-  int weight;
-};
 
 // round robin, weith round robin, ip hash
 enum class lb_type { RR, WRR, IPHASH, NONE };
@@ -65,14 +61,8 @@ class reverse_proxy {
   }
 
   void add_dest_host(std::string url, int weight = 0) {
-    dest_hosts_.push_back({url, weight});
-  }
-
-  bool set_dest_hosts(std::vector<host_info> dest_hosts) {
-    if (dest_hosts.empty())
-      return false;
-    dest_hosts_ = dest_hosts;
-    return true;
+    dest_hosts_.push_back(std::move(url));
+    weights_.push_back(weight);
   }
 
   template <http_method... method>
@@ -102,19 +92,18 @@ class reverse_proxy {
                 select_server_with_iphash(req.get_conn()->remote_address());
           }
           else if (type == lb_type::WRR) {
-            int current = select_host_with_weight_round_robin();
+            current = select_host_with_weight_round_robin();
             if (current == -1) {
               current = 0;
             }
-            else {
-              current_ = current;
-            }
+
+            wrr_current_ = current;
           }
           else {
             current_ = current;
           }
 
-          const auto &dest_host = dest_hosts_[current].url;
+          const auto &dest_host = dest_hosts_[current];
           resp_data result{};
           std::shared_ptr<coro_http_client> client = nullptr;
           if (auto it = clients_.find(dest_host); it != clients_.end()) {
@@ -198,6 +187,10 @@ class reverse_proxy {
   }
 
   int select_host_with_weight_round_robin() {
+    if (dest_hosts_.empty()) {
+      throw std::invalid_argument("host list is empty!");
+    }
+
     while (true) {
       wrr_current_ = (wrr_current_ + 1) % dest_hosts_.size();
       if (wrr_current_ == 0) {
@@ -210,7 +203,7 @@ class reverse_proxy {
         }
       }
 
-      if (dest_hosts_[wrr_current_].weight >= weight_current_) {
+      if (weights_[wrr_current_] >= weight_current_) {
         return wrr_current_;
       }
     }
@@ -219,23 +212,18 @@ class reverse_proxy {
   int gcd(int a, int b) { return !b ? a : gcd(b, a % b); }
 
   int get_max_weight_gcd() {
-    int res = dest_hosts_[0].weight;
+    int res = weights_[0];
     int cur_max = 0, cur_min = 0;
     for (size_t i = 0; i < dest_hosts_.size(); i++) {
-      cur_max = std::max(res, dest_hosts_[i].weight);
-      cur_min = std::min(res, dest_hosts_[i].weight);
+      cur_max = (std::max)(res, weights_[i]);
+      cur_min = (std::min)(res, weights_[i]);
       res = gcd(cur_max, cur_min);
     }
     return res;
   }
 
   int get_max_weight() {
-    int max = 0;
-    for (size_t i = 0; i < dest_hosts_.size(); i++) {
-      if (max < dest_hosts_[i].weight)
-        max = dest_hosts_[i].weight;
-    }
-    return max;
+    return *std::max_element(weights_.begin(), weights_.end());
   }
 
   coro_http_server server_;
@@ -244,8 +232,9 @@ class reverse_proxy {
   std::unordered_map<std::string, std::string> request_headers_;
   std::vector<resp_header> resp_headers_;
   // real dest hosts
-  std::vector<host_info> dest_hosts_;
-  // index of dest host hit
+  std::vector<std::string> dest_hosts_;
+  std::vector<int> weights_;
+  // rr index of dest host hit
   int current_ = 0;
   // wrr
   int max_gcd_ = 0;
