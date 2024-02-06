@@ -11,7 +11,7 @@
 
 namespace cinatra {
 
-// round robin, weith round robin, ip hash
+// round robin, weight round robin, ip hash
 enum class lb_type { RR, WRR, IPHASH, NONE };
 
 class reverse_proxy {
@@ -35,21 +35,14 @@ class reverse_proxy {
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
           resp_data result{};
-          std::shared_ptr<coro_http_client> client = nullptr;
-          {
-            std::unique_lock lock(wrr_mtx_);
-            if (rr_client_ == nullptr) {
-              rr_client_ = std::make_shared<coro_http_client>();
-              client = rr_client_;
-              lock.unlock();
-              result = co_await rr_client_->connect(std::move(dest_host));
-            }
-            else if (rr_client_->has_closed()) {
-              client = rr_client_;
-              lock.unlock();
-              client->reset();
-              result = co_await client->connect(std::move(dest_host));
-            }
+
+          if (rr_client_ == nullptr) {
+            rr_client_ = std::make_shared<coro_http_client>();
+            result = co_await rr_client_->connect(std::move(dest_host));
+          }
+          else if (rr_client_->has_closed()) {
+            rr_client_->reset();
+            result = co_await rr_client_->connect(std::move(dest_host));
           }
 
           if (result.net_err) {
@@ -57,7 +50,7 @@ class reverse_proxy {
             co_return;
           }
 
-          co_await reply(client, std::move(path), req, response);
+          co_await reply(rr_client_, path, req, response);
         },
         std::move(aspects));
 
@@ -116,18 +109,15 @@ class reverse_proxy {
           resp_data result{};
           std::shared_ptr<coro_http_client> client = nullptr;
           {
-            std::unique_lock lock(wrr_mtx_);
             if (auto it = wrr_clients_.find(dest_host);
                 it != wrr_clients_.end()) {
               client = it->second;
-              lock.unlock();
               if (client->has_closed()) {
                 client->reset();
                 result = co_await client->connect(dest_host);
               }
             }
             else {
-              lock.unlock();
               client = std::make_shared<coro_http_client>();
               result = co_await client->connect(dest_host);
               if (!result.net_err) {
@@ -243,9 +233,7 @@ class reverse_proxy {
   }
 
   coro_http_server server_;
-  std::mutex rr_mtx_;
   std::shared_ptr<coro_http_client> rr_client_;
-  std::mutex wrr_mtx_;
   std::unordered_map<std::string, std::shared_ptr<coro_http_client>>
       wrr_clients_;
   std::unordered_map<std::string, std::string> request_headers_;
