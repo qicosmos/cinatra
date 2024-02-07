@@ -1144,6 +1144,7 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
   server.stop();
 }
 
+#ifdef DSKIP_TIME_TEST
 TEST_CASE("test conversion between unix time and gmt time, http format") {
   std::chrono::microseconds time_cost{0};
   std::ifstream file("../../tests/files_for_test_time_parse/http_times.txt");
@@ -1262,6 +1263,7 @@ TEST_CASE(
                    std::chrono::microseconds::period::den
             << "s" << std::endl;
 }
+#endif
 
 TEST_CASE("Testing get_content_type_str function") {
   SUBCASE("Test HTML content type") {

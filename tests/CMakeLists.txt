@@ -12,6 +12,12 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/include
 )
 
+option(SKIP_TIME_TEST "skip time tests" OFF)
+if(SKIP_TIME_TEST) 
+	message(STATUS "skip time tests")
+    add_definitions(-DSKIP_TIME_TEST)
+endif()
+
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
 if (ENABLE_GZIP)

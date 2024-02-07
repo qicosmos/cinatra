@@ -258,7 +258,6 @@ class coro_http_request {
   }
 
   bool has_session() { return !cached_session_id_.empty(); }
-
   void clear() { body_ = {}; }
 
   std::unordered_map<std::string, std::string> params_;
