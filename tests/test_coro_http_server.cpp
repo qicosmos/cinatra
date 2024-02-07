@@ -1475,19 +1475,19 @@ TEST_CASE("test reverse proxy") {
   proxy_wrr.add_dest_host("127.0.0.1:9001", 10);
   proxy_wrr.add_dest_host("127.0.0.1:9002", 5);
   proxy_wrr.add_dest_host("127.0.0.1:9003", 5);
-  proxy_wrr.start_reverse_proxy<GET, POST>("/wrr", false, lb_type::WRR);
+  proxy_wrr.start_reverse_proxy<GET, POST>("/wrr", false, coro_io::load_blance_algorithm::WRR);
 
   reverse_proxy proxy_rr(10, 8091);
   proxy_rr.add_dest_host("127.0.0.1:9001");
   proxy_rr.add_dest_host("127.0.0.1:9002");
   proxy_rr.add_dest_host("127.0.0.1:9003");
-  proxy_rr.start_reverse_proxy<GET, POST>("/rr", false, lb_type::RR);
+  proxy_rr.start_reverse_proxy<GET, POST>("/rr", false, coro_io::load_blance_algorithm::RR);
 
   reverse_proxy proxy_hash(10, 8092);
   proxy_hash.add_dest_host("127.0.0.1:9001");
   proxy_hash.add_dest_host("127.0.0.1:9002");
   proxy_hash.add_dest_host("127.0.0.1:9003");
-  proxy_hash.start_reverse_proxy<GET, POST>("/ip_hash", false, lb_type::IPHASH);
+  proxy_hash.start_reverse_proxy<GET, POST>("/ip_hash", false, coro_io::load_blance_algorithm::random);
 
   std::this_thread::sleep_for(200ms);
 
