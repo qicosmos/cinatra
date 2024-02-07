@@ -57,10 +57,6 @@ class reverse_proxy {
     start(sync);
   }
 
-  void add_resp_header(auto k, auto v) {
-    resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
-  }
-
   void add_dest_host(std::string url, int weight = 0) {
     dest_hosts_.push_back(std::move(url));
     weights_.push_back(weight);

@@ -124,7 +124,7 @@ class coro_http_response {
     bool has_len = false;
     bool has_host = false;
     for (auto &[k, v] : resp_headers_) {
-      if (k == "Host") {
+      if (k == "Server") {
         has_host = true;
       }
       if (k == "Content-Length") {
@@ -188,11 +188,14 @@ class coro_http_response {
     bool has_len = false;
     bool has_host = false;
     for (auto &[k, v] : resp_headers_) {
-      if (k == "Host") {
+      if (k == "Server") {
         has_host = true;
       }
-      if (k == "Content-Length") {
+      else if (k == "Content-Length") {
         has_len = true;
+      }
+      else if (k == "Date") {
+        need_date_ = false;
       }
     }
 
@@ -217,10 +220,12 @@ class coro_http_response {
       }
 
       if (!content_.empty()) {
-        handle_content_len(buffers, content_);
+        if (!has_len)
+          handle_content_len(buffers, content_);
       }
       else if (!content_view_.empty()) {
-        handle_content_len(buffers, content_view_);
+        if (!has_len)
+          handle_content_len(buffers, content_view_);
       }
       else {
         if (!has_len && boundary_.empty())
