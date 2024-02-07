@@ -40,7 +40,7 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #define CINATRA_LOG_WARNING \
   cinatra::cerr_logger_t {}
 #else
-#define CINATRA_LOG_WARNING NULL_LOGGER
+#define CINATRA_LOG_WARNING cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -50,7 +50,7 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #define CINATRA_LOG_INFO \
   cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_INFO NULL_LOGGER
+#define CINATRA_LOG_INFO cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -60,7 +60,7 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #define CINATRA_LOG_DEBUG \
   cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_DEBUG NULL_LOGGER
+#define CINATRA_LOG_DEBUG cinatra::NULL_LOGGER
 #endif
 #endif
 
@@ -70,6 +70,6 @@ constexpr inline cinatra::null_logger_t NULL_LOGGER;
 #define CINATRA_LOG_TRACE \
   cinatra::cout_logger_t {}
 #else
-#define CINATRA_LOG_TRACE NULL_LOGGER
+#define CINATRA_LOG_TRACE cinatra::NULL_LOGGER
 #endif
 #endif
