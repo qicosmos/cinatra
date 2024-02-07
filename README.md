@@ -307,6 +307,38 @@ int main() {
 		return 0;
 	}
 
+## 反向代理
+cinatra 支持反向代理也很简单，3步5行代码就可以了。
+先看一个简单的例子：
+
+```c++
+  reverse_proxy proxy_rr(10, 8091);
+  proxy_rr.add_dest_host("127.0.0.1:9001");
+  proxy_rr.add_dest_host("127.0.0.1:9002");
+  proxy_rr.add_dest_host("127.0.0.1:9003");
+  proxy_rr.start_reverse_proxy<GET, POST>("/rr", true,
+                                          coro_io::load_blance_algorithm::RR);
+```
+第一步创建一个代理服务器，设置其线程数和端口；
+第二步添加需要访问的服务器列表；
+第三步启动代理服务，设置loadbalance 策略，这里选择的是round robin 策略。
+
+在浏览器或者client里访问http://127.0.0.1:8091/rr 就会根据RR 策略选择三个服务器中的一个。
+
+如果要选择random 策略就设置为coro_io::load_blance_algorithm::random。
+
+如果要选择weight round robin 策略，就需要设置服务器权重。
+
+```c++
+  reverse_proxy proxy_wrr(10, 8090);
+  proxy_wrr.add_dest_host("127.0.0.1:9001", 10);
+  proxy_wrr.add_dest_host("127.0.0.1:9002", 5);
+  proxy_wrr.add_dest_host("127.0.0.1:9003", 5);
+  proxy_wrr.start_reverse_proxy<GET, POST>("/wrr", true,
+                                           coro_io::load_blance_algorithm::WRR);
+```
+在浏览器或者client里访问http://127.0.0.1:8090/wrr ，第一次和第二次会返回9001服务器的结果，第三次返回9002服务器的结果，第四次返回9003服务器的结果，第五次又重新返回9001服务器的结果，这就是WRR的策略。
+
 ## cinatra客户端使用
 
 [使用文档](lang/coro_http_client_introduction.md)
