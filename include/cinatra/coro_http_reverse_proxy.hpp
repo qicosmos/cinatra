@@ -15,8 +15,7 @@ namespace cinatra {
 class reverse_proxy {
  public:
   reverse_proxy(size_t thread_num, unsigned short port)
-      : server_(thread_num, port) {
-  }
+      : server_(thread_num, port) {}
 
   void add_dest_host(std::string url, int weight = 0) {
     dest_hosts_.push_back(std::move(url));
@@ -25,7 +24,9 @@ class reverse_proxy {
 
   template <http_method... method>
   void start_reverse_proxy(
-      std::string url_path = "/", bool sync = true, coro_io::load_blance_algorithm type = coro_io::load_blance_algorithm::random,
+      std::string url_path = "/", bool sync = true,
+      coro_io::load_blance_algorithm type =
+          coro_io::load_blance_algorithm::random,
       std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
     if (dest_hosts_.empty()) {
       throw std::invalid_argument("not config hosts yet!");
@@ -33,20 +34,23 @@ class reverse_proxy {
 
     std::vector<std::string_view> hosts{dest_hosts_.begin(), dest_hosts_.end()};
 
-    channel_ = std::make_shared<coro_io::channel<coro_http_client>>(coro_io::channel<coro_http_client>::create(
-            hosts, {.lba = type}, weights_));
+    channel_ = std::make_shared<coro_io::channel<coro_http_client>>(
+        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
+                                                   weights_));
 
     server_.set_http_handler<method...>(
         url_path,
         [this, type, url_path](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
-            co_await channel_->send_request([this, &req, &response](coro_http_client &client,
-                                                                                                       std::string_view host)-> async_simple::coro::Lazy<void>{
+          co_await channel_->send_request(
+              [this, &req, &response](
+                  coro_http_client &client,
+                  std::string_view host) -> async_simple::coro::Lazy<void> {
                 uri_t uri;
                 uri.parse_from(host.data());
-              co_await reply(client, uri.get_path(), req, response);
-            });
+                co_await reply(client, uri.get_path(), req, response);
+              });
         },
         std::move(aspects));
 
@@ -54,7 +58,7 @@ class reverse_proxy {
   }
 
  private:
-  async_simple::coro::Lazy<void> reply(coro_http_client& client,
+  async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string url_path,
                                        coro_http_request &req,
                                        coro_http_response &response) {

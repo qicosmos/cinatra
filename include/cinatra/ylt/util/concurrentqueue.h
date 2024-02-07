@@ -691,7 +691,7 @@ struct nomove_if<false> {
 };
 
 template <typename It>
-static inline auto deref_noexcept(It& it) MOODYCAMEL_NOEXCEPT -> decltype(*it) {
+static inline auto deref_noexcept(It& it) MOODYCAMEL_NOEXCEPT->decltype(*it) {
   return *it;
 }
 
