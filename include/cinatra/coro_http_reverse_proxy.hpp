@@ -22,12 +22,11 @@ class reverse_proxy {
     weights_.push_back(weight);
   }
 
-  template <http_method... method>
-  void start_reverse_proxy(
-      std::string url_path = "/", bool sync = true,
-      coro_io::load_blance_algorithm type =
-          coro_io::load_blance_algorithm::random,
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <http_method... method, typename... Aspects>
+  void start_reverse_proxy(std::string url_path = "/", bool sync = true,
+                           coro_io::load_blance_algorithm type =
+                               coro_io::load_blance_algorithm::random,
+                           Aspects &&...aspects) {
     if (dest_hosts_.empty()) {
       throw std::invalid_argument("not config hosts yet!");
     }
@@ -52,7 +51,7 @@ class reverse_proxy {
                 co_await reply(client, uri.get_path(), req, response);
               });
         },
-        std::move(aspects));
+        std::forward<Aspects>(aspects)...);
 
     start(sync);
   }

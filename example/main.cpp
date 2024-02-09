@@ -243,7 +243,7 @@ async_simple::coro::Lazy<void> static_file_server() {
   assert(result.resp_body.size() == 64);
 }
 
-struct log_t : public base_aspect {
+struct log_t {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "before log" << std::endl;
     return true;
@@ -256,7 +256,7 @@ struct log_t : public base_aspect {
   }
 };
 
-struct get_data : public base_aspect {
+struct get_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello world");
     return true;
@@ -272,8 +272,7 @@ async_simple::coro::Lazy<void> use_aspects() {
         assert(val[0] == "hello world");
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      std::vector<std::shared_ptr<base_aspect>>{std::make_shared<log_t>(),
-                                                std::make_shared<get_data>()});
+      log_t{}, get_data{});
 
   server.async_start();
   std::this_thread::sleep_for(300ms);  // wait for server start

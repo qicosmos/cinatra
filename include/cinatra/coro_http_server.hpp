@@ -124,25 +124,24 @@ class coro_http_server {
   // call it after server async_start or sync_start.
   uint16_t port() const { return port_; }
 
-  template <http_method... method, typename Func>
-  void set_http_handler(
-      std::string key, Func handler,
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <http_method... method, typename Func, typename... Aspects>
+  void set_http_handler(std::string key, Func handler, Aspects &&...asps) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
     if constexpr (sizeof...(method) == 1) {
       (router_.set_http_handler<method>(std::move(key), std::move(handler),
-                                        std::move(aspects)),
+                                        std::forward<Aspects>(asps)...),
        ...);
     }
     else {
-      (router_.set_http_handler<method>(key, handler, aspects), ...);
+      (router_.set_http_handler<method>(key, handler,
+                                        std::forward<Aspects>(asps)...),
+       ...);
     }
   }
 
-  template <http_method... method, typename Func, typename Owner>
-  void set_http_handler(
-      std::string key, Func handler, Owner &&owner,
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <http_method... method, typename Func, typename... Aspects>
+  void set_http_handler(std::string key, Func handler,
+                        util::class_type_t<Func> &owner, Aspects &&...asps) {
     static_assert(std::is_member_function_pointer_v<Func>,
                   "must be member function");
     using return_type = typename util::function_traits<Func>::return_type;
@@ -152,14 +151,14 @@ class coro_http_server {
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
-                                  std::move(aspects));
+                                  std::forward<Aspects>(asps)...);
     }
     else {
       std::function<void(coro_http_request & req, coro_http_response & resp)>
           f = std::bind(handler, owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
-                                  std::move(aspects));
+                                  std::forward<Aspects>(asps)...);
     }
   }
 
@@ -196,9 +195,9 @@ class coro_http_server {
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
-  void set_static_res_dir(
-      std::string_view uri_suffix = "", std::string file_path = "www",
-      std::vector<std::shared_ptr<base_aspect>> aspects = {}) {
+  template <typename... Aspects>
+  void set_static_res_dir(std::string_view uri_suffix = "",
+                          std::string file_path = "www", Aspects &&...aspects) {
     bool has_double_dot = (file_path.find("..") != std::string::npos) ||
                           (uri_suffix.find("..") != std::string::npos);
     if (std::filesystem::path(file_path).has_root_path() ||
@@ -417,7 +416,7 @@ class coro_http_server {
               }
             }
           },
-          aspects);
+          std::forward<Aspects>(aspects)...);
     }
   }
 
