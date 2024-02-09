@@ -362,7 +362,7 @@ TEST_CASE("set http handler") {
   my_object o{};
   // member function
   server2.set_http_handler<GET>("/test", &my_object::normal, o);
-  server2.set_http_handler<GET>("/test_lazy", &my_object::lazy, &o);
+  server2.set_http_handler<GET>("/test_lazy", &my_object::lazy, o);
   CHECK(handlers2.size() == 2);
 
   auto coro_func =
@@ -526,7 +526,7 @@ TEST_CASE("test alias") {
   CHECK(result.resp_body == "ok");
 }
 
-struct log_t : public base_aspect {
+struct log_t {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "before log" << std::endl;
     return true;
@@ -539,14 +539,14 @@ struct log_t : public base_aspect {
   }
 };
 
-struct check_t : public base_aspect {
+struct check_t {
   bool before(coro_http_request &, coro_http_response &) {
     std::cout << "check before" << std::endl;
     return true;
   }
 };
 
-struct get_data : public base_aspect {
+struct get_data {
   bool before(coro_http_request &req, coro_http_response &res) {
     req.set_aspect_data("hello", "world");
     return true;
@@ -560,16 +560,14 @@ TEST_CASE("test aspects") {
   create_file("test_aspect.txt", 64);  // in cache
   create_file("test_file.txt", 200);   // not in cache
 
-  std::vector<std::shared_ptr<base_aspect>> aspects = {
-      std::make_shared<log_t>(), std::make_shared<check_t>()};
-  server.set_static_res_dir("", "", aspects);
+  server.set_static_res_dir("", "", log_t{}, check_t{});
   server.set_http_handler<GET, POST>(
       "/",
       [](coro_http_request &req, coro_http_response &resp) {
         resp.add_header("aaaa", "bbcc");
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      {std::make_shared<log_t>(), std::make_shared<check_t>()});
+      log_t{}, check_t{});
 
   server.set_http_handler<GET, POST>(
       "/aspect",
@@ -581,7 +579,7 @@ TEST_CASE("test aspects") {
         resp.set_status_and_content(status_type::ok, "ok");
         co_return;
       },
-      {std::make_shared<get_data>()});
+      get_data{});
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
@@ -1501,8 +1499,8 @@ TEST_CASE("test reverse proxy") {
   proxy_wrr.add_dest_host("127.0.0.1:9001", 10);
   proxy_wrr.add_dest_host("127.0.0.1:9002", 5);
   proxy_wrr.add_dest_host("127.0.0.1:9003", 5);
-  proxy_wrr.start_reverse_proxy<GET, POST>("/wrr", false,
-                                           coro_io::load_blance_algorithm::WRR);
+  proxy_wrr.start_reverse_proxy<GET, POST>(
+      "/wrr", false, coro_io::load_blance_algorithm::WRR, log_t{}, check_t{});
 
   reverse_proxy proxy_rr(10, 8091);
   proxy_rr.add_dest_host("127.0.0.1:9001");
