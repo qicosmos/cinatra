@@ -148,14 +148,14 @@ class coro_http_server {
     if constexpr (is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
                                                    coro_http_response & resp)>
-          f = std::bind(handler, owner, std::placeholders::_1,
+          f = std::bind(handler, &owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
                                   std::forward<Aspects>(asps)...);
     }
     else {
       std::function<void(coro_http_request & req, coro_http_response & resp)>
-          f = std::bind(handler, owner, std::placeholders::_1,
+          f = std::bind(handler, &owner, std::placeholders::_1,
                         std::placeholders::_2);
       set_http_handler<method...>(std::move(key), std::move(f),
                                   std::forward<Aspects>(asps)...);
