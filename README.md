@@ -217,7 +217,7 @@ int main() {
 	using namespace cinatra;
 
 	//日志切面
-	struct log_t : public base_aspect
+	struct log_t
 	{
 		bool before(coro_http_request& req, coro_http_response& res) {
 			std::cout << "before log" << std::endl;
@@ -231,7 +231,7 @@ int main() {
 	};
 	
 	//校验的切面
-	struct check  : public base_aspect {
+	struct check  {
 		bool before(coro_http_request& req, coro_http_response& res) {
 			std::cout << "before check" << std::endl;
 			if (req.get_header_value("name").empty()) {
@@ -248,7 +248,7 @@ int main() {
 	};
 
 	//将信息从中间件传输到处理程序
-	struct get_data  : public base_aspect {
+	struct get_data  {
 		bool before(coro_http_request& req, coro_http_response& res) {
 			req.set_aspect_data("hello world");
 			return true;
@@ -259,12 +259,12 @@ int main() {
 		coro_http_server server(std::thread::hardware_concurrency(), 8080);
 		server.set_http_handler<GET, POST>("/aspect", [](coro_http_request& req, coro_http_response& res) {
 			res.set_status_and_content(status_type::ok, "hello world");
-		}, std::vector{std::make_shared<check>(), std::make_shared<log_t>()});
+		}, check{}, log_t{});
 
 		server.set_http_handler<GET,POST>("/aspect/data", [](coro_http_request& req, coro_http_response& res) {
 			auto& val = req.get_aspect_data();
 			res.set_status_and_content(status_type::ok, std::move(val[0]));
-		}, std::vector{std::make_shared<get_data>()});
+		}, get_data{});
 
 		server.sync_start();
 		return 0;
