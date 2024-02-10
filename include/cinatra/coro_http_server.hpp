@@ -219,8 +219,12 @@ class coro_http_server {
     }
 
     files_.clear();
+    std::error_code ec;
     for (const auto &file :
-         std::filesystem::recursive_directory_iterator(static_dir_)) {
+         std::filesystem::recursive_directory_iterator(static_dir_, ec)) {
+      if (ec) {
+        continue;
+      }
       if (!file.is_directory()) {
         files_.push_back(file.path().string());
       }
