@@ -12,6 +12,16 @@
 
 namespace cinatra {
 
+static std::unordered_map<std::string, bool> hop_headers_ = {
+    {"Connection", true},
+    {"Keep-Alive", true},
+    {"Proxy-Authenticate", true},
+    {"Proxy-Authorization", true},
+    {"Te", true},
+    {"Trailers", true},
+    {"Transfer-Encoding", true},
+    {"Upgrade", true}};
+
 class reverse_proxy {
  public:
   reverse_proxy(size_t thread_num, unsigned short port)
@@ -56,12 +66,51 @@ class reverse_proxy {
     start(sync);
   }
 
+  template <http_method... method, typename... Aspects>
+  void start_http_proxy(std::string url_path, bool sync = true,
+                        Aspects &&...aspects) {
+    server_.set_http_proxy_router();
+    server_.set_http_handler<method...>(
+        "/",
+        [this](coro_http_request &req,
+               coro_http_response &response) -> async_simple::coro::Lazy<void> {
+          // coroutine in other thread.
+          coro_http_client client{};
+          std::cout << req.get_url() << std::endl;
+          co_await proxy_reply(client, std::string(req.get_url()), req,
+                               response);
+        },
+        std::forward<Aspects>(aspects)...);
+
+    start(sync);
+  }
+
  private:
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string url_path,
                                        coro_http_request &req,
                                        coro_http_response &response) {
     auto req_headers = copy_request_headers(req.get_headers());
+    auto ctx = req_context<std::string_view>{.content = req.get_body()};
+    auto result = co_await client.async_request(
+        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        std::move(req_headers));
+
+    for (auto &[k, v] : result.resp_headers) {
+      response.add_header(std::string(k), std::string(v));
+    }
+
+    response.set_status_and_content_view(
+        static_cast<status_type>(result.status), result.resp_body);
+    co_await response.get_conn()->reply();
+    response.set_delay(true);
+  }
+
+  async_simple::coro::Lazy<void> proxy_reply(coro_http_client &client,
+                                             std::string url_path,
+                                             coro_http_request &req,
+                                             coro_http_response &response) {
+    auto req_headers = copy_proxy_headers(req.get_headers());
     auto ctx = req_context<std::string_view>{.content = req.get_body()};
     auto result = co_await client.async_request(
         std::move(url_path), method_type(req.get_method()), std::move(ctx),
@@ -91,6 +140,17 @@ class reverse_proxy {
     std::unordered_map<std::string, std::string> request_headers;
     for (auto &[k, v] : req_headers) {
       request_headers.emplace(k, v);
+    }
+
+    return request_headers;
+  }
+
+  std::unordered_map<std::string, std::string> copy_proxy_headers(
+      std::span<http_header> req_headers) {
+    std::unordered_map<std::string, std::string> request_headers;
+    for (auto &[k, v] : req_headers) {
+      if (hop_headers_.find(std::string(k)) == hop_headers_.end())
+        request_headers.emplace(k, v);
     }
 
     return request_headers;

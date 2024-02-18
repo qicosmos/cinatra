@@ -992,27 +992,30 @@ TEST_CASE("test inject failed") {
 #endif
 
 TEST_CASE("test coro http proxy request") {
+  reverse_proxy http_proxy(10, 7890);
+  http_proxy.start_http_proxy<GET, POST>(false);
+  std::this_thread::sleep_for(200ms);
+
   coro_http_client client{};
   client.set_req_timeout(8s);
   std::string uri = "http://www.baidu.com";
   // Make sure the host and port are matching with your proxy server
-  client.set_proxy("106.14.255.124", "80");
+  client.set_proxy("127.0.0.1", "7890");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-  if (!result.net_err)
-    CHECK(result.status >= 200);
-
-  client.set_proxy("106.14.255.124", "80");
-  result = async_simple::coro::syncAwait(client.async_get(uri));
   if (!result.net_err)
     CHECK(result.status >= 200);
 }
 
 TEST_CASE("test coro http proxy request with port") {
+  reverse_proxy http_proxy(10, 7890);
+  http_proxy.start_http_proxy<GET, POST>(false);
+  std::this_thread::sleep_for(200ms);
+
   coro_http_client client{};
   client.set_req_timeout(8s);
   std::string uri = "http://www.baidu.com:80";
   // Make sure the host and port are matching with your proxy server
-  client.set_proxy("106.14.255.124", "80");
+  client.set_proxy("127.0.0.1", "7890");
   resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
   if (!result.net_err)
     CHECK(result.status >= 200);  // maybe return 500 from that host.

@@ -127,15 +127,26 @@ class coro_http_server {
   template <http_method... method, typename Func, typename... Aspects>
   void set_http_handler(std::string key, Func handler, Aspects &&...asps) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
-    if constexpr (sizeof...(method) == 1) {
-      (router_.set_http_handler<method>(std::move(key), std::move(handler),
-                                        std::forward<Aspects>(asps)...),
-       ...);
+    if (!router_.is_http_proxy_) {
+      if constexpr (sizeof...(method) == 1) {
+        (router_.set_http_handler<method>(std::move(key), std::move(handler),
+                                          std::forward<Aspects>(asps)...),
+         ...);
+      }
+      else {
+        (router_.set_http_handler<method>(key, handler,
+                                          std::forward<Aspects>(asps)...),
+         ...);
+      }
     }
     else {
-      (router_.set_http_handler<method>(key, handler,
-                                        std::forward<Aspects>(asps)...),
-       ...);
+      using return_type = typename util::function_traits<Func>::return_type;
+      if constexpr (is_lazy_v<return_type>) {
+        router_.coro_http_proxy_func_ = handler;
+      }
+      else {
+        router_.http_proxy_func_ = handler;
+      }
     }
   }
 
@@ -161,6 +172,8 @@ class coro_http_server {
                                   std::forward<Aspects>(asps)...);
     }
   }
+
+  void set_http_proxy_router() { router_.is_http_proxy_ = true; }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;

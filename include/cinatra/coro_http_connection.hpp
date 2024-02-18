@@ -261,6 +261,17 @@ class coro_http_connection
                   }
                 }
               }
+
+              if (router_.is_http_proxy_) {
+                if (router_.coro_http_proxy_func_) {
+                  co_await (router_.coro_http_proxy_func_)(request_, response_);
+                }
+                else {
+                  (router_.http_proxy_func_)(request_, response_);
+                }
+                is_matched_regex_router = true;
+              }
+
               // not found
               if (!is_matched_regex_router)
                 response_.set_status(status_type::not_found);
