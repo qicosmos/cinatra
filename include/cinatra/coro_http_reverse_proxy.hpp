@@ -67,8 +67,7 @@ class reverse_proxy {
   }
 
   template <http_method... method, typename... Aspects>
-  void start_http_proxy(std::string url_path, bool sync = true,
-                        Aspects &&...aspects) {
+  void start_http_proxy(bool sync = true, Aspects &&...aspects) {
     server_.set_http_proxy_router();
     server_.set_http_handler<method...>(
         "/",
@@ -76,7 +75,6 @@ class reverse_proxy {
                coro_http_response &response) -> async_simple::coro::Lazy<void> {
           // coroutine in other thread.
           coro_http_client client{};
-          std::cout << req.get_url() << std::endl;
           co_await proxy_reply(client, std::string(req.get_url()), req,
                                response);
         },
