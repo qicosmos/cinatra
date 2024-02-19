@@ -15,7 +15,6 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_connection.hpp"
-#include "cinatra/coro_http_reverse_proxy.hpp"
 #include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
@@ -1454,6 +1453,28 @@ TEST_CASE("test coro radix tree restful api") {
 }
 
 TEST_CASE("test reverse proxy") {
+  SUBCASE(
+      "exception tests: empty hosts, empty weights test or count not equal") {
+    cinatra::coro_http_server server(1, 9002);
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {}, coro_io::load_blance_algorithm::WRR, {2, 1}),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
+                        coro_io::load_blance_algorithm::WRR),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
+                        coro_io::load_blance_algorithm::WRR, {1}),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(
+        server.set_http_proxy_handler<cinatra::http_method::GET>("/", {}),
+        std::invalid_argument);
+  }
+
   cinatra::coro_http_server web_one(1, 9001);
 
   web_one.set_http_handler<cinatra::GET, cinatra::POST>(
@@ -1483,38 +1504,31 @@ TEST_CASE("test reverse proxy") {
   cinatra::coro_http_server web_three(1, 9003);
 
   web_three.set_http_handler<cinatra::GET, cinatra::POST>(
-      "/",
-      [](coro_http_request &req,
-         coro_http_response &response) -> async_simple::coro::Lazy<void> {
-        co_await coro_io::post([&]() {
-          response.set_status_and_content(status_type::ok, "web3");
-        });
+      "/", [](coro_http_request &req, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "web3");
       });
 
   web_three.async_start();
 
   std::this_thread::sleep_for(200ms);
 
-  reverse_proxy proxy_wrr(10, 8090);
-  proxy_wrr.add_dest_host("127.0.0.1:9001", 10);
-  proxy_wrr.add_dest_host("127.0.0.1:9002", 5);
-  proxy_wrr.add_dest_host("127.0.0.1:9003", 5);
-  proxy_wrr.start_reverse_proxy<GET, POST>(
-      "/wrr", false, coro_io::load_blance_algorithm::WRR, log_t{}, check_t{});
+  coro_http_server proxy_wrr(10, 8090);
+  proxy_wrr.set_http_proxy_handler<GET, POST>(
+      "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
-  reverse_proxy proxy_rr(10, 8091);
-  proxy_rr.add_dest_host("127.0.0.1:9001");
-  proxy_rr.add_dest_host("127.0.0.1:9002");
-  proxy_rr.add_dest_host("127.0.0.1:9003");
-  proxy_rr.start_reverse_proxy<GET, POST>("/rr", false,
-                                          coro_io::load_blance_algorithm::RR);
+  coro_http_server proxy_rr(10, 8091);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      coro_io::load_blance_algorithm::RR, {}, log_t{});
 
-  reverse_proxy proxy_hash(10, 8092);
-  proxy_hash.add_dest_host("127.0.0.1:9001");
-  proxy_hash.add_dest_host("127.0.0.1:9002");
-  proxy_hash.add_dest_host("127.0.0.1:9003");
-  proxy_hash.start_reverse_proxy<GET, POST>(
-      "/ip_hash", false, coro_io::load_blance_algorithm::random);
+  coro_http_server proxy_random(10, 8092);
+  proxy_random.set_http_proxy_handler<GET, POST>(
+      "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  proxy_wrr.async_start();
+  proxy_rr.async_start();
+  proxy_random.async_start();
 
   std::this_thread::sleep_for(200ms);
 
@@ -1529,6 +1543,9 @@ TEST_CASE("test reverse proxy") {
   CHECK(resp_rr.resp_body == "web1");
   resp_rr = client_rr.get("http://127.0.0.1:8091/rr");
   CHECK(resp_rr.resp_body == "web2");
+  resp_rr = client_rr.post("http://127.0.0.1:8091/rr", "test content",
+                           req_content_type::text);
+  CHECK(resp_rr.resp_body == "web3");
 
   coro_http_client client_wrr;
   resp_data resp = client_wrr.get("http://127.0.0.1:8090/wrr");
@@ -1541,7 +1558,7 @@ TEST_CASE("test reverse proxy") {
   CHECK(resp.resp_body == "web3");
 
   coro_http_client client_hash;
-  resp_data resp_hash = client_hash.get("http://127.0.0.1:8092/ip_hash");
+  resp_data resp_hash = client_hash.get("http://127.0.0.1:8092/random");
   std::cout << resp_hash.resp_body << "\n";
   CHECK(!resp_hash.resp_body.empty());
 }

@@ -8,11 +8,13 @@
 #include "asio/streambuf.hpp"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
+#include "ylt/coro_io/channel.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -160,6 +162,37 @@ class coro_http_server {
       set_http_handler<method...>(std::move(key), std::move(f),
                                   std::forward<Aspects>(asps)...);
     }
+  }
+
+  template <http_method... method, typename... Aspects>
+  void set_http_proxy_handler(std::string url_path,
+                              std::vector<std::string_view> hosts,
+                              coro_io::load_blance_algorithm type =
+                                  coro_io::load_blance_algorithm::random,
+                              std::vector<int> weights = {},
+                              Aspects &&...aspects) {
+    if (hosts.empty()) {
+      throw std::invalid_argument("not config hosts yet!");
+    }
+
+    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
+        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
+                                                   weights));
+    set_http_handler<method...>(
+        url_path,
+        [this, channel, type, url_path](
+            coro_http_request &req,
+            coro_http_response &response) -> async_simple::coro::Lazy<void> {
+          co_await channel->send_request(
+              [this, &req, &response](
+                  coro_http_client &client,
+                  std::string_view host) -> async_simple::coro::Lazy<void> {
+                uri_t uri;
+                uri.parse_from(host.data());
+                co_await reply(client, uri.get_path(), req, response);
+              });
+        },
+        std::forward<Aspects>(aspects)...);
   }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
@@ -677,6 +710,30 @@ class coro_http_server {
     }
 
     co_return true;
+  }
+
+  async_simple::coro::Lazy<void> reply(coro_http_client &client,
+                                       std::string url_path,
+                                       coro_http_request &req,
+                                       coro_http_response &response) {
+    std::unordered_map<std::string, std::string> req_headers;
+    for (auto &[k, v] : req_headers) {
+      req_headers.emplace(k, v);
+    }
+
+    auto ctx = req_context<std::string_view>{.content = req.get_body()};
+    auto result = co_await client.async_request(
+        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        std::move(req_headers));
+
+    for (auto &[k, v] : result.resp_headers) {
+      response.add_header(std::string(k), std::string(v));
+    }
+
+    response.set_status_and_content_view(
+        static_cast<status_type>(result.status), result.resp_body);
+    co_await response.get_conn()->reply();
+    response.set_delay(true);
   }
 
  private:
