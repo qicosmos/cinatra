@@ -1512,23 +1512,28 @@ TEST_CASE("test reverse proxy") {
 
   std::this_thread::sleep_for(200ms);
 
-  coro_http_server proxy_wrr(10, 8090);
+  coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
       "/wrr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
-  coro_http_server proxy_rr(10, 8091);
+  coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
       "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::RR, {}, log_t{});
 
-  coro_http_server proxy_random(10, 8092);
+  coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
       "/random", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+
+  coro_http_server proxy_all(2, 8093);
+  proxy_all.set_http_proxy_handler(
+      "/all", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
   proxy_random.async_start();
+  proxy_all.async_start();
 
   std::this_thread::sleep_for(200ms);
 
@@ -1557,8 +1562,14 @@ TEST_CASE("test reverse proxy") {
   resp = client_wrr.get("http://127.0.0.1:8090/wrr");
   CHECK(resp.resp_body == "web3");
 
-  coro_http_client client_hash;
-  resp_data resp_hash = client_hash.get("http://127.0.0.1:8092/random");
-  std::cout << resp_hash.resp_body << "\n";
-  CHECK(!resp_hash.resp_body.empty());
+  coro_http_client client_random;
+  resp_data resp_random = client_random.get("http://127.0.0.1:8092/random");
+  std::cout << resp_random.resp_body << "\n";
+  CHECK(!resp_random.resp_body.empty());
+
+  coro_http_client client_all;
+  resp_random = client_all.post("http://127.0.0.1:8093/all", "test content",
+                                req_content_type::text);
+  std::cout << resp_random.resp_body << "\n";
+  CHECK(!resp_random.resp_body.empty());
 }
