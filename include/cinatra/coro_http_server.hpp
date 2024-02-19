@@ -11,6 +11,7 @@
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
+#include "cinatra/define.h"
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
@@ -178,21 +179,31 @@ class coro_http_server {
     auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
         coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
                                                    weights));
-    set_http_handler<method...>(
-        url_path,
+    auto handler =
         [this, channel, type, url_path](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
-          co_await channel->send_request(
-              [this, &req, &response](
-                  coro_http_client &client,
-                  std::string_view host) -> async_simple::coro::Lazy<void> {
-                uri_t uri;
-                uri.parse_from(host.data());
-                co_await reply(client, uri.get_path(), req, response);
-              });
-        },
-        std::forward<Aspects>(aspects)...);
+      co_await channel->send_request(
+          [this, &req, &response](
+              coro_http_client &client,
+              std::string_view host) -> async_simple::coro::Lazy<void> {
+            uri_t uri;
+            uri.parse_from(host.data());
+            co_await reply(client, uri.get_path(), req, response);
+          });
+    };
+
+    if constexpr (sizeof...(method) == 0) {
+      set_http_handler<http_method::GET, http_method::POST, http_method::DEL,
+                       http_method::HEAD, http_method::PUT, http_method::PATCH,
+                       http_method::CONNECT, http_method::TRACE,
+                       http_method::OPTIONS>(url_path, std::move(handler),
+                                             std::forward<Aspects>(aspects)...);
+    }
+    else {
+      set_http_handler<method...>(url_path, std::move(handler),
+                                  std::forward<Aspects>(aspects)...);
+    }
   }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
