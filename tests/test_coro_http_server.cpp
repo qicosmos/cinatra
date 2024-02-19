@@ -15,7 +15,6 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_connection.hpp"
-#include "cinatra/coro_http_reverse_proxy.hpp"
 #include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/response_cv.hpp"
@@ -1456,22 +1455,21 @@ TEST_CASE("test coro radix tree restful api") {
 TEST_CASE("test reverse proxy") {
   SUBCASE(
       "exception tests: empty hosts, empty weights test or count not equal") {
-    CHECK_THROWS_AS(
-        coro_io::channel<coro_http_client>::create(
-            {}, {.lba = coro_io::load_blance_algorithm::WRR}, {2, 1}),
-        std::invalid_argument);
-
-    CHECK_THROWS_AS(coro_io::channel<coro_http_client>::create(
-                        {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blance_algorithm::WRR}),
-                    std::invalid_argument);
-
-    CHECK_THROWS_AS(coro_io::channel<coro_http_client>::create(
-                        {"127.0.0.1:8801", "127.0.0.1:8802"},
-                        {.lba = coro_io::load_blance_algorithm::WRR}, {1}),
-                    std::invalid_argument);
-
     cinatra::coro_http_server server(1, 9002);
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {}, coro_io::load_blance_algorithm::WRR, {2, 1}),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
+                        coro_io::load_blance_algorithm::WRR),
+                    std::invalid_argument);
+
+    CHECK_THROWS_AS(server.set_http_proxy_handler<cinatra::http_method::GET>(
+                        "/", {"127.0.0.1:8801", "127.0.0.1:8802"},
+                        coro_io::load_blance_algorithm::WRR, {1}),
+                    std::invalid_argument);
+
     CHECK_THROWS_AS(
         server.set_http_proxy_handler<cinatra::http_method::GET>("/", {}),
         std::invalid_argument);
@@ -1522,7 +1520,7 @@ TEST_CASE("test reverse proxy") {
   coro_http_server proxy_rr(10, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
       "/rr", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
-      coro_io::load_blance_algorithm::RR);
+      coro_io::load_blance_algorithm::RR, {}, log_t{});
 
   coro_http_server proxy_random(10, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
