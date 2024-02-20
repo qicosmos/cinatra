@@ -130,15 +130,26 @@ class coro_http_server {
   template <http_method... method, typename Func, typename... Aspects>
   void set_http_handler(std::string key, Func handler, Aspects &&...asps) {
     static_assert(sizeof...(method) >= 1, "must set http_method");
-    if constexpr (sizeof...(method) == 1) {
-      (router_.set_http_handler<method>(std::move(key), std::move(handler),
-                                        std::forward<Aspects>(asps)...),
-       ...);
+    if (!router_.is_http_proxy_) {
+      if constexpr (sizeof...(method) == 1) {
+        (router_.set_http_handler<method>(std::move(key), std::move(handler),
+                                          std::forward<Aspects>(asps)...),
+         ...);
+      }
+      else {
+        (router_.set_http_handler<method>(key, handler,
+                                          std::forward<Aspects>(asps)...),
+         ...);
+      }
     }
     else {
-      (router_.set_http_handler<method>(key, handler,
-                                        std::forward<Aspects>(asps)...),
-       ...);
+      using return_type = typename util::function_traits<Func>::return_type;
+      if constexpr (is_lazy_v<return_type>) {
+        router_.coro_http_proxy_func_ = handler;
+      }
+      else {
+        router_.http_proxy_func_ = handler;
+      }
     }
   }
 
@@ -205,6 +216,22 @@ class coro_http_server {
                                   std::forward<Aspects>(aspects)...);
     }
   }
+
+  template <http_method... method, typename... Aspects>
+  void start_http_proxy(Aspects &&...aspects) {
+    set_http_proxy_router();
+    set_http_handler<method...>(
+        "/",
+        [this](coro_http_request &req,
+               coro_http_response &response) -> async_simple::coro::Lazy<void> {
+          coro_http_client client{};
+          co_await proxy_reply(client, std::string(req.get_url()), req,
+                               response);
+        },
+        std::forward<Aspects>(aspects)...);
+  }
+
+  void set_http_proxy_router() { router_.is_http_proxy_ = true; }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
@@ -730,6 +757,31 @@ class coro_http_server {
     std::unordered_map<std::string, std::string> req_headers;
     for (auto &[k, v] : req_headers) {
       req_headers.emplace(k, v);
+    }
+
+    auto ctx = req_context<std::string_view>{.content = req.get_body()};
+    auto result = co_await client.async_request(
+        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        std::move(req_headers));
+
+    for (auto &[k, v] : result.resp_headers) {
+      response.add_header(std::string(k), std::string(v));
+    }
+
+    response.set_status_and_content_view(
+        static_cast<status_type>(result.status), result.resp_body);
+    co_await response.get_conn()->reply();
+    response.set_delay(true);
+  }
+
+  async_simple::coro::Lazy<void> proxy_reply(coro_http_client &client,
+                                             std::string url_path,
+                                             coro_http_request &req,
+                                             coro_http_response &response) {
+    std::unordered_map<std::string, std::string> req_headers;
+    for (auto &[k, v] : req_headers) {
+      if (g_hop_headers.find(std::string(k)) == g_hop_headers.end())
+        req_headers.emplace(k, v);
     }
 
     auto ctx = req_context<std::string_view>{.content = req.get_body()};

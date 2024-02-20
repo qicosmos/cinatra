@@ -278,6 +278,16 @@ inline std::unordered_map<std::string, std::string> g_content_type_map = {
 struct NonSSL {};
 struct SSL {};
 
+static std::unordered_map<std::string, bool> g_hop_headers = {
+    {"Connection", true},
+    {"Keep-Alive", true},
+    {"Proxy-Authenticate", true},
+    {"Proxy-Authorization", true},
+    {"Te", true},
+    {"Trailers", true},
+    {"Transfer-Encoding", true},
+    {"Upgrade", true}};
+
 enum class time_format {
   http_format,
   utc_format,
