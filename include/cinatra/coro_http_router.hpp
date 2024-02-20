@@ -249,6 +249,15 @@ class coro_http_router {
 
   const auto& get_regex_handlers() { return regex_handles_; }
 
+  bool is_http_proxy_ = false;
+
+  std::function<void(coro_http_request& req, coro_http_response& resp)>
+      http_proxy_func_;
+
+  std::function<async_simple::coro::Lazy<void>(coro_http_request& req,
+                                               coro_http_response& resp)>
+      coro_http_proxy_func_;
+
  private:
   std::set<std::string> keys_;
   std::unordered_map<
