@@ -36,12 +36,18 @@ cinatra是基于C++20 无栈协程实现的跨平台、header only、高性能�
 
 ##  1. <a name='benchmarkresult'></a>benchmark result
 
-qps
+测试方法：使用wrk相同的命令行(./wrk -t4 -c240 -d35s http://127.0.0.1:9001/plaintext)测试，服务端返回的内容相同。在4核2.3G主频的ubuntu 云主机上测试，gcc11，开启-O3优化。
 
-brpc:147954
-drogon:216982
-nginx:239629
-cinatra:247841
+qps结果：
+
+```
+brpc:    147954
+drogon:  216982
+nginx:   239629
+cinatra: 247841
+```
+
+![img](qps-comp.png)
 
 ##  2. <a name='http'></a>基本http 请求
 ###  2.1. <a name='http-1'></a>启动http服务器
@@ -706,6 +712,8 @@ http {
         }
     }
 }
+
+./wrk -t4 -c240 -d35s http://127.0.0.1:9001/plaintext
 ```
 
 ###  8.4. <a name='cinatrabenchmarkcode'></a>cinatra benchmark code
@@ -725,4 +733,6 @@ int main() {
       });
   server.sync_start();
 }
+
+./wrk -t4 -c240 -d35s http://127.0.0.1:8090/plaintext
 ```
