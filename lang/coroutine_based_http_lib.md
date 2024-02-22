@@ -36,7 +36,9 @@ cinatra是基于C++20 无栈协程实现的跨平台、header only、高性能�
 
 ##  1. <a name='benchmarkresult'></a>benchmark result
 
-测试方法：使用wrk相同的命令行(./wrk -t4 -c240 -d35s http://127.0.0.1:9001/plaintext)测试，服务端返回的内容相同。在4核2.3G主频的ubuntu 云主机上测试，gcc11，开启-O3优化。
+测试方法：使用wrk相同的命令行(```./wrk -t4 -c240 -d35s http://127.0.0.1:9001/plaintext```)测试，服务端返回的内容相同。
+
+在4核2.3G主频的ubuntu 云主机上测试，gcc11，开启-O3优化。
 
 qps结果：
 
