@@ -880,7 +880,7 @@ static const char *parse_headers(const char *buf, const char *buf_end,
       return NULL;
     }
     if (name_len == 10) {
-      if (std::memcmp(name + 1, "onnection", name_len - 1) == 0) {
+      if (memcmp(name + 1, "onnection", name_len - 1) == 0) {
         // has connection
         has_connection = true;
         char ch = *value;
