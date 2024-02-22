@@ -36,11 +36,13 @@ TEST_CASE("http parser test") {
   cinatra::http_header headers[64];
   size_t num_headers;
   int i, ret;
+  bool has_connection, has_close, has_upgrade, has_query;
 
   num_headers = sizeof(headers) / sizeof(headers[0]);
   ret = cinatra::detail::phr_parse_request(
       REQ, sizeof(REQ) - 1, &method, &method_len, &path, &path_len,
-      &minor_version, headers, &num_headers, 0);
+      &minor_version, headers, &num_headers, 0, has_connection, has_close,
+      has_upgrade, has_query);
   CHECK(ret == 703);
   CHECK(strncmp(method, "GET", method_len) == 0);
   CHECK(minor_version == 1);
