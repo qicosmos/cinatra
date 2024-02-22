@@ -80,13 +80,14 @@ class http_parser {
                           << ", you can define macro "
                              "CINATRA_MAX_HTTP_HEADER_FIELD_SIZE to expand it.";
       }
+      return header_len_;
     }
 
     method_ = {method, method_len};
     url_ = {url, url_len};
 
     auto methd_type = method_type(method_);
-    if (methd_type != http_method::GET || methd_type != http_method::HEAD) {
+    if (methd_type == http_method::GET || methd_type == http_method::HEAD) {
       body_len_ = 0;
     }
     else {
