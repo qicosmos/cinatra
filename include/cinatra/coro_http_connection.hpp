@@ -338,6 +338,7 @@ class coro_http_connection
       buffers_.clear();
       body_.clear();
       resp_str_.clear();
+      multi_buf_ = true;
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
       }
@@ -347,7 +348,7 @@ class coro_http_connection
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
     std::error_code ec;
     size_t size;
-    if (response_.content_size() > 512) {
+    if (multi_buf_) {
       if (need_to_bufffer) {
         response_.to_buffers(buffers_);
       }
@@ -403,6 +404,8 @@ class coro_http_connection
     remote_addr = ss.str();
     return ss.str();
   }
+
+  void set_multi_buf(bool r) { multi_buf_ = r; }
 
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {
     std::vector<asio::const_buffer> buffers;
@@ -830,5 +833,6 @@ class coro_http_connection
   bool use_ssl_ = false;
 #endif
   bool need_shrink_every_time_ = false;
+  bool multi_buf_ = true;
 };
 }  // namespace cinatra
