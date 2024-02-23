@@ -27,6 +27,10 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#endif
 
 namespace coro_io {
 
@@ -107,7 +111,8 @@ get_current_executor() {
 class io_context_pool {
  public:
   using executor_type = asio::io_context::executor_type;
-  explicit io_context_pool(std::size_t pool_size) : next_io_context_(0) {
+  explicit io_context_pool(std::size_t pool_size, bool cpu_affinity = false)
+      : next_io_context_(0), cpu_affinity_(cpu_affinity) {
     if (pool_size == 0) {
       pool_size = 1;  // set default value as 1
     }
@@ -139,6 +144,19 @@ class io_context_pool {
             svr->run();
           },
           io_contexts_[i]));
+
+#ifdef __linux__
+      if (cpu_affinity_) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i, &cpuset);
+        int rc = pthread_setaffinity_np(threads.back()->native_handle(),
+                                        sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+          std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+        }
+      }
+#endif
     }
 
     for (std::size_t i = 0; i < threads.size(); ++i) {
@@ -197,6 +215,7 @@ class io_context_pool {
   std::promise<void> promise_;
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
+  bool cpu_affinity_ = false;
 };
 
 class multithread_context_pool {
