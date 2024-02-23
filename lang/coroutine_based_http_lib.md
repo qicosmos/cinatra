@@ -1,3 +1,5 @@
+# 基于C++20 协程的http 库--cinatra
+
 <!-- vscode-markdown-toc -->
 * 1. [benchmark result](#benchmarkresult)
 * 2. [基本http 请求](#http)
@@ -32,7 +34,7 @@
 
 # 基于C++20 协程的http 库--cinatra
 
-cinatra是基于C++20 无栈协程实现的跨平台、header only、高性能、易用的http/https库(http1.1)，包括http server和http client，功能完备，不仅仅支持最普通的get post 等请求，还支持restful api, websocket、chunked、ranges、multipart、静态文件服务和反向代理等功能。后面会分别介绍这些功能，文末也专门附上cinatra的一些benchmark测试测试代码。
+cinatra是基于C++20 无栈协程实现的跨平台、header only、高性能、易用的http/https库(http1.1)，包括http server和http client，功能完备，不仅仅支持最普通的get post 等请求，还支持restful api, websocket、chunked、ranges、multipart、静态文件服务和反向代理等功能。后面会分别介绍这些功能，文末也会附上benchmark测试代码。
 
 ##  1. <a name='benchmarkresult'></a>benchmark result
 
@@ -661,7 +663,7 @@ using namespace drogon;
 
 int main() {
     app()
-        .setLogPath("./plaintext")
+        .setLogPath("./")
         .setLogLevel(trantor::Logger::kWarn)
         .addListener("0.0.0.0", 9001)
         .setThreadNum(0)
