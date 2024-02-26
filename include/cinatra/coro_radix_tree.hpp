@@ -74,7 +74,6 @@ struct radix_tree_node {
       std::function<void(coro_http_request &req, coro_http_response &resp)>
           handler,
       const std::string &method) {
-
     this->handler = handler_t{method, handler};
 
     return 0;

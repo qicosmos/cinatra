@@ -1386,8 +1386,8 @@ TEST_CASE("test radix tree restful api") {
   client.get("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:9001/value/guilliman/cawl/yvraine");
 
-  client.post("http://127.0.0.1:9001/user/cinatra",
-              "hello", req_content_type::string);
+  client.post("http://127.0.0.1:9001/user/cinatra", "hello",
+              req_content_type::string);
   client.post("http://127.0.0.1:9001/user/subid/subscriptions", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman",
