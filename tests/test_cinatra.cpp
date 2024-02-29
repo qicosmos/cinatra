@@ -205,7 +205,7 @@ TEST_CASE("test coro channel") {
   std::tie(err, val) =
       async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
   CHECK(!err);
-  CHECK(val == 41);
+  CHECK(val == 42);
 }
 
 async_simple::coro::Lazy<void> test_collect_all() {
