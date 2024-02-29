@@ -187,6 +187,28 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   CHECK(s == sum);
 }
 
+TEST_CASE("test coro channel") {
+  auto ctx = coro_io::get_global_block_executor()->get_asio_executor();
+  asio::experimental::channel<void(std::error_code, int)> ch(ctx, 10000);
+  auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
+  CHECK(!ec);
+  ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
+  CHECK(!ec);
+  {
+    auto [err, val] =
+        async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+    CHECK(!err);
+    CHECK(val == 41);
+  }
+
+  {
+    auto [err, val] =
+        async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+    CHECK(!err);
+    CHECK(val == 42);
+  }
+}
+
 async_simple::coro::Lazy<void> test_collect_all() {
   asio::io_context ioc;
   std::thread thd([&] {
