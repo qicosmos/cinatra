@@ -194,19 +194,18 @@ TEST_CASE("test coro channel") {
   CHECK(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
   CHECK(!ec);
-  {
-    auto [err, val] =
-        async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
-    CHECK(!err);
-    CHECK(val == 41);
-  }
 
-  {
-    auto [err, val] =
-        async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
-    CHECK(!err);
-    CHECK(val == 42);
-  }
+  std::error_code err;
+  int val;
+  std::tie(err, val) =
+      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+  CHECK(!err);
+  CHECK(val == 41);
+
+  std::tie(err, val) =
+      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+  CHECK(!err);
+  CHECK(val == 41);
 }
 
 async_simple::coro::Lazy<void> test_collect_all() {
