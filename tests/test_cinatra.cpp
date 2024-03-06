@@ -188,8 +188,7 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
 }
 
 TEST_CASE("test coro channel") {
-  auto ctx = coro_io::get_global_block_executor()->get_asio_executor();
-  asio::experimental::channel<void(std::error_code, int)> ch(ctx, 10000);
+  auto ch = coro_io::create_channel<int>(1000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   CHECK(!ec);
   ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
@@ -198,13 +197,74 @@ TEST_CASE("test coro channel") {
   std::error_code err;
   int val;
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   CHECK(!err);
   CHECK(val == 41);
 
   std::tie(err, val) =
-      async_simple::coro::syncAwait(coro_io::async_receive<int>(ch));
+      async_simple::coro::syncAwait(coro_io::async_receive(ch));
   CHECK(!err);
+  CHECK(val == 42);
+}
+
+async_simple::coro::Lazy<void> test_select_channel() {
+  using namespace coro_io;
+  auto ch1 = coro_io::create_channel<int>(1000);
+  auto ch2 = coro_io::create_channel<int>(1000);
+
+  co_await async_send(ch2, 42);
+  co_await async_send(ch1, 41);
+
+  co_await select_t(ch1, ch2).on_recieve(
+      [](std::pair<std::error_code, int> val) {
+        std::cout << val.second << "\n";
+      },
+      [](std::pair<std::error_code, int> val) {
+        std::cout << val.second << "\n";
+      });
+
+  period_timer timer1(coro_io::get_global_executor());
+  timer1.expires_after(100ms);
+  period_timer timer2(coro_io::get_global_executor());
+  timer2.expires_after(200ms);
+
+  co_await select_t(timer1.async_await(), timer2.async_await())
+      .on_recieve(
+          [](bool) {
+            std::cout << "timer1\n";
+          },
+          [](bool) {
+            std::cout << "timer2\n";
+          });
+
+  co_await select_t(coro_io::post([] {
+                    }),
+                    coro_io::post([] {
+                    }))
+      .on_recieve(
+          []() {
+            std::cout << "post1\n";
+          },
+          []() {
+            std::cout << "post2\n";
+          });
+}
+
+TEST_CASE("test select coro channel") {
+  using namespace coro_io;
+  async_simple::coro::syncAwait(test_select_channel());
+
+  auto ch = coro_io::create_channel<int>(1000);
+
+  async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
+  async_simple::coro::syncAwait(coro_io::async_send(ch, 42));
+
+  std::error_code ec;
+  int val;
+  std::tie(ec, val) = async_simple::coro::syncAwait(coro_io::async_receive(ch));
+  CHECK(val == 41);
+
+  std::tie(ec, val) = async_simple::coro::syncAwait(coro_io::async_receive(ch));
   CHECK(val == 42);
 }
 
