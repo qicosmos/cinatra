@@ -407,36 +407,37 @@ class select_t {
 
   template <typename Tuple>
   struct helper {
-    template <typename T, class Result, std::size_t... Is>
-    void tuple_switch_impl(std::size_t i, Tuple &t, Result &result,
-                           std::index_sequence<Is...>) {
-      if constexpr (std::is_same_v<T, async_simple::Try<void>> ||
-                    std::is_void_v<T>) {
-        ((void)(i == Is && (std::get<Is>(t)(), false)), ...);
+    template <size_t Idx>
+    void call(auto &fn, auto &result) {
+      using ValueType = std::remove_cvref_t<decltype(std::get<Idx>(result))>;
+      using Inner =
+          std::remove_cvref_t<decltype(std::declval<ValueType>().value())>;
+      if constexpr (std::is_same_v<Inner, async_simple::Try<void>> ||
+                    std::is_void_v<Inner>) {
+        fn();
       }
       else {
-        ((void)(i == Is &&
-                (std::get<Is>(t)(std::move(std::get<0>(result).value())),
-                 false)),
-         ...);
+        fn(std::move(std::get<Idx>(result).value()));
       }
     }
 
-    template <typename T, class Result>
+    template <class Result, std::size_t... Is>
+    void tuple_switch_impl(std::size_t i, Tuple &t, Result &result,
+                           std::index_sequence<Is...>) {
+      ((void)(i == Is && (call<Is>(std::get<Is>(t), result), false)), ...);
+    }
+
+    template <class Result>
     void tuple_switch(std::size_t i, Tuple &t, Result &result) {
-      tuple_switch_impl<T>(
-          i, t, result, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+      tuple_switch_impl(i, t, result,
+                        std::make_index_sequence<std::tuple_size_v<Tuple>>{});
     }
 
     async_simple::coro::Lazy<void> operator()(auto &&...tests) {
       auto result =
           co_await async_simple::coro::collectAny(std::move(tests)...);
-      using ValueType = std::remove_cvref_t<decltype(std::get<0>(result))>;
-      using Inner =
-          std::remove_cvref_t<decltype(std::declval<ValueType>().value())>;
-
       try {
-        tuple_switch<Inner>(result.index(), tuple, result);
+        tuple_switch(result.index(), tuple, result);
       } catch (std::exception &ex) {
         CINATRA_LOG_WARNING
             << "index: " << result.index() << ", size: "
