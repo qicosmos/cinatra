@@ -22,6 +22,7 @@
 #include <chrono>
 #include <deque>
 
+#include "../../cinatra_log_wrapper.hpp"
 #include "../util/type_traits.h"
 #include "io_context_pool.hpp"
 
@@ -434,7 +435,11 @@ class select_t {
       using Inner =
           std::remove_cvref_t<decltype(std::declval<ValueType>().value())>;
 
-      tuple_switch<Inner>(result.index(), tuple, result);
+      try {
+        tuple_switch<Inner>(result.index(), tuple, result);
+      } catch (std::exception &ex) {
+        CINATRA_LOG_WARNING << "index: " << result.index();
+      }
     }
 
     Tuple tuple;
