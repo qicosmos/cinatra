@@ -438,8 +438,9 @@ class select_t {
       try {
         tuple_switch<Inner>(result.index(), tuple, result);
       } catch (std::exception &ex) {
-        CINATRA_LOG_WARNING << "index: " << result.index()
-                            << ", exception reason: " << ex.what();
+        CINATRA_LOG_WARNING
+            << "index: " << result.index() << ", size: "
+            << std::tuple_size_v<Tuple> << ", exception reason: " << ex.what();
         throw ex;
       }
     }
