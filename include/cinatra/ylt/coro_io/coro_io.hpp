@@ -22,7 +22,6 @@
 #include <chrono>
 #include <deque>
 
-#include "../../cinatra_log_wrapper.hpp"
 #include "../util/type_traits.h"
 #include "io_context_pool.hpp"
 
@@ -436,17 +435,11 @@ class select_t {
     async_simple::coro::Lazy<void> operator()(auto &&...tests) {
       auto result =
           co_await async_simple::coro::collectAny(std::move(tests)...);
-      try {
-        tuple_switch(result.index(), tuple, result);
-      } catch (std::exception &ex) {
-        CINATRA_LOG_WARNING
-            << "index: " << result.index() << ", size: "
-            << std::tuple_size_v<Tuple> << ", exception reason: " << ex.what();
-        throw ex;
-      }
+
+      tuple_switch(result.index(), tuple_, result);
     }
 
-    Tuple tuple;
+    Tuple tuple_;
   };
 
   std::tuple<async_simple::coro::Lazy<
