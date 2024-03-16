@@ -58,6 +58,7 @@ private:
 
 public:
     using value_type = T;
+
     Future(FutureState<inner_value_type>* fs) : _sharedState(fs) {
         if (_sharedState) {
             _sharedState->attachOne();
@@ -88,6 +89,8 @@ public:
         }
         return *this;
     }
+
+    auto coAwait(Executor*) && noexcept { return std::move(*this); }
 
 public:
     bool valid() const {
@@ -349,7 +352,9 @@ template <typename T>
 Future<T> makeReadyFuture(std::exception_ptr ex) {
     return Future<T>(Try<T>(ex));
 }
-inline Future<void> makeReadyFuture() { return Future<void>(Try<Unit>()); }
+inline Future<void> makeReadyFuture() {
+    return Future<void>(Try<Unit>(Unit()));
+}
 
 }  // namespace async_simple
 
