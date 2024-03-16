@@ -4,6 +4,8 @@
 #include <async_simple/coro/Sleep.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include "async_simple/coro/Collect.h"
+
 #if defined(YLT_ENABLE_SSL) || defined(CINATRA_ENABLE_SSL)
 #include <asio/ssl.hpp>
 #endif
@@ -333,8 +335,24 @@ post(Func func,
   co_return co_await awaitor.await_resume(helper);
 }
 
+template <typename R>
+struct coro_channel
+    : public asio::experimental::channel<void(std::error_code, R)> {
+  using return_type = R;
+  using ValueType = std::pair<std::error_code, R>;
+  using asio::experimental::channel<void(std::error_code, R)>::channel;
+};
+
+template <typename R>
+inline coro_channel<R> create_channel(
+    size_t capacity,
+    asio::io_context::executor_type executor =
+        coro_io::get_global_block_executor()->get_asio_executor()) {
+  return coro_channel<R>(executor, capacity);
+}
+
 template <typename T>
-async_simple::coro::Lazy<std::error_code> async_send(
+inline async_simple::coro::Lazy<std::error_code> async_send(
     asio::experimental::channel<void(std::error_code, T)> &channel, T val) {
   callback_awaitor<std::error_code> awaitor;
   co_return co_await awaitor.await_resume(
@@ -345,15 +363,22 @@ async_simple::coro::Lazy<std::error_code> async_send(
       });
 }
 
-template <typename R>
-async_simple::coro::Lazy<std::pair<std::error_code, R>> async_receive(
-    asio::experimental::channel<void(std::error_code, R)> &channel) {
-  callback_awaitor<std::pair<std::error_code, R>> awaitor;
+template <typename Channel>
+async_simple::coro::Lazy<std::pair<
+    std::error_code,
+    typename Channel::return_type>> inline async_receive(Channel &channel) {
+  callback_awaitor<std::pair<std::error_code, typename Channel::return_type>>
+      awaitor;
   co_return co_await awaitor.await_resume([&](auto handler) {
     channel.async_receive([handler](auto ec, auto val) {
       handler.set_value_then_resume(std::make_pair(ec, std::move(val)));
     });
   });
+}
+
+template <typename... T>
+auto select(T &&...args) {
+  return async_simple::coro::collectAny(std::forward<T>(args)...);
 }
 
 template <typename Socket, typename AsioBuffer>
