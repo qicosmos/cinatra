@@ -31,6 +31,7 @@
 #include "async_simple/coro/Traits.h"
 
 #include <atomic>
+#include <cassert>
 #include <mutex>
 #include <utility>
 
@@ -60,10 +61,7 @@ public:
                 auto& pr = h.promise();
                 // promise will remain valid across final_suspend point
                 if (pr._ex) {
-                    std::function<void()> func = [&pr]() {
-                        pr._continuation.resume();
-                    };
-                    pr._ex->checkin(func, _ctx);
+                    pr._ex->checkin(pr._continuation, _ctx);
                 } else {
                     pr._continuation.resume();
                 }
@@ -178,7 +176,8 @@ struct [[nodiscard]] ViaAsyncAwaiter {
 template <typename Awaitable>
 inline auto coAwait(Executor* ex, Awaitable&& awaitable) {
     if constexpr (detail::HasCoAwaitMethod<Awaitable>) {
-        return std::forward<Awaitable>(awaitable).coAwait(ex);
+        return detail::getAwaiter(
+            std::forward<Awaitable>(awaitable).coAwait(ex));
     } else {
         using AwaiterType =
             decltype(detail::getAwaiter(std::forward<Awaitable>(awaitable)));

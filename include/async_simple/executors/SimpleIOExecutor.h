@@ -17,6 +17,11 @@
 #define FUTURE_SIMPLE_IO_EXECUTOR_H
 
 #include "async_simple/IOExecutor.h"
+
+#if !__has_include(<libaio.h>) && !defined(ASYNC_SIMPLE_HAS_NOT_AIO)
+#define ASYNC_SIMPLE_HAS_NOT_AIO
+#endif
+
 #ifndef ASYNC_SIMPLE_HAS_NOT_AIO
 #include <libaio.h>
 #endif

@@ -39,7 +39,11 @@ int main()
 endmacro()
 
 # Enable address sanitizer
-option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" ON)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" OFF)
+else()
+    option(ENABLE_SANITIZER "Enable sanitizer(Debug+Gcc/Clang/AppleClang)" ON)
+endif()
 if(ENABLE_SANITIZER AND NOT MSVC)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         check_asan(HAS_ASAN)
