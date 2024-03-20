@@ -288,7 +288,25 @@ get_cookies_map(std::string_view cookies_str) {
     }
   }
   return cookies;
-};
+}
+
+template <typename T, typename... Ts>
+constexpr T constexpr_max(T a, Ts... ts) {
+  T list[] = {ts..., a};  // 0-length arrays are illegal
+  for (auto i = 0u; i < sizeof...(Ts); ++i) {
+    a = list[i] < a ? a : list[i];
+  }
+  return a;
+}
+
+template <typename T, typename... Ts>
+constexpr T constexpr_min(T a, Ts... ts) {
+  T list[] = {ts..., a};  // 0-length arrays are illegal
+  for (auto i = 0u; i < sizeof...(Ts); ++i) {
+    a = list[i] < a ? list[i] : a;
+  }
+  return a;
+}
 
 }  // namespace cinatra
 

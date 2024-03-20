@@ -309,6 +309,19 @@ int main() {
 		return 0;
 	}
 
+## 示例6: 全局令牌桶限流设置
+
+	#include "cinatra.hpp"
+	using namespace cinatra;
+	
+	int main() {
+		int max_thread_num = std::thread::hardware_concurrency();
+		coro_http_server server(max_thread_num, 8080);
+    // 打开全局令牌桶限制,该桶每s生成3个令牌,桶存储最大令牌数量为3
+    server.set_rate_limiter(true, 3, 3);
+    // ......
+  }
+
 ## 反向代理
 cinatra 支持反向代理也很简单，3步5行代码就可以了。
 先看一个简单的例子：

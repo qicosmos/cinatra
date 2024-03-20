@@ -13,6 +13,7 @@
 #include "cinatra/coro_http_router.hpp"
 #include "cinatra/define.h"
 #include "cinatra/mime_types.hpp"
+#include "cinatra/token_bucket.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
 #include "ylt/coro_io/channel.hpp"
@@ -488,6 +489,13 @@ class coro_http_server {
     return connections_.size();
   }
 
+  void set_rate_limiter(bool is_enable, int gen_rate = 0, int burst_size = 0) {
+    need_rate_limiter_ = is_enable;
+    if (need_rate_limiter_) {
+      token_bucket_.reset(gen_rate, burst_size);
+    }
+  }
+
  private:
   std::errc listen() {
     CINATRA_LOG_INFO << "begin to listen";
@@ -579,7 +587,18 @@ class coro_http_server {
         connections_.emplace(conn_id, conn);
       }
 
-      start_one(conn).via(&conn->get_executor()).detach();
+      if (need_rate_limiter_) {
+        if (token_bucket_.consume(1)) {
+          // there are enough tokens to allow request.
+          start_one(conn).via(&conn->get_executor()).detach();
+        }
+        else {
+          conn->close();
+        }
+      }
+      else {
+        start_one(conn).via(&conn->get_executor()).detach();
+      }
     }
   }
 
@@ -785,6 +804,11 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
+
+  bool need_rate_limiter_ = false;
+  // 100 tokens are generated per second
+  // and the maximum number of token buckets is 100
+  token_bucket token_bucket_ = token_bucket{100, 100};
 };
 
 using http_server = coro_http_server;

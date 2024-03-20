@@ -301,6 +301,21 @@ int main() {
 }
 ```
 
+### Example : global token bucket traffic limit settings
+
+```cpp
+#include "cinatra.hpp"
+using namespace cinatra;
+
+int main() {
+  int max_thread_num = std::thread::hardware_concurrency();
+  coro_http_server server(max_thread_num, 8080);
+  // Set up a global token bucket. The bucket generates 3 tokens every s, and a maximum of 3 tokens are stored in the bucket.
+  server.set_rate_limiter(true, 3, 3);
+  // ......
+}
+```
+
 ### Example : cinatra client usage
 
 #### sync_send get/post message
