@@ -1,6 +1,4 @@
 #pragma once
-#include <async_simple/coro/Lazy.h>
-
 #include <algorithm>
 #include <functional>
 #include <set>
@@ -17,17 +15,6 @@
 #include "ylt/util/type_traits.h"
 
 namespace cinatra {
-template <template <typename...> class U, typename T>
-struct is_template_instant_of : std::false_type {};
-
-template <template <typename...> class U, typename... args>
-struct is_template_instant_of<U, U<args...>> : std::true_type {};
-
-template <typename T>
-constexpr inline bool is_lazy_v =
-    is_template_instant_of<async_simple::coro::Lazy,
-                           std::remove_cvref_t<T>>::value;
-
 template <class, class = void>
 struct has_before : std::false_type {};
 
@@ -64,7 +51,7 @@ class coro_http_router {
     // hold keys to make sure map_handles_ key is
     // std::string_view, avoid memcpy when route
     using return_type = typename util::function_traits<Func>::return_type;
-    if constexpr (is_lazy_v<return_type>) {
+    if constexpr (coro_io::is_lazy_v<return_type>) {
       std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
                                                    coro_http_response & resp)>
           http_handler;
