@@ -116,7 +116,7 @@ class token_bucket_storage {
 
   static constexpr size_t align_zero_time =
       constexpr_max(align::value, alignof(atom<double>));
-  alignas(align_zero_time) atom<double> zero_time_;  // 原子变量
+  alignas(align_zero_time) atom<double> zero_time_;
 };
 
 template <typename policy = token_bucket_policy_default>
@@ -154,7 +154,6 @@ class basic_dynamic_token_bucket {
           return available < to_consume ? 0.0 : to_consume;
         });
 
-    assert(consumed == to_consume || consumed == 0.0);
     return consumed == to_consume;
   }
 

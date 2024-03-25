@@ -494,6 +494,10 @@ async_simple::coro::Lazy<void> test_websocket() {
 }
 ```
 
+## 流控设计文档
+
+[流量控制设计](lang/token_bucket.md)
+
 ## 基于cinatra客户端的http/https压测工具使用
 
 cinatra提供了一个高性能的http1.1 压测工具, 它是基于coro_http_client 实现的，内部通过多线程和协程实现了高效的压测，能够在单核或多核cpu上发送大量请求以此来测试服务器性能。
