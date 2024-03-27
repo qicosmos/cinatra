@@ -121,61 +121,49 @@ class token_bucket_storage {
 
 template <typename policy = token_bucket_policy_default>
 class basic_token_bucket {
- private:
-  using impl = basic_dynamic_token_bucket<policy>;
+  template <typename T>
+  using atom = typename policy::template atom_type<T>;
+  using align = typename policy::align_type;
+  using clock = typename policy::clock_type;
+  using concurrent = typename policy::concurrent_type;
 
  public:
-  basic_token_bucket(double gen_rate, double burst_size,
-                     double zero_time = 0) noexcept
-      : token_bucket_(zero_time), rate_(gen_rate), burst_size_(burst_size) {}
+  explicit basic_token_bucket(double rate, double burst_size,
+                              double zero_time = 0) noexcept
+      : rate_(rate), burst_size_(burst_size), bucket_(zero_time) {}
 
   basic_token_bucket(const basic_token_bucket& other) noexcept = default;
-
   basic_token_bucket& operator=(const basic_token_bucket& other) noexcept =
       default;
-
-  static double default_clock_now() noexcept(
-      noexcept(impl::default_clock_now())) {
-    return impl::default_clock_now();
-  }
 
   void reset(double gen_rate, double burst_size,
              double now_in_seconds = default_clock_now()) noexcept {
     const double avail_tokens = available(now_in_seconds);
     rate_ = gen_rate;
     burst_size_ = burst_size;
-    set_capacity(avail_tokens, now_in_seconds);
+    bucket_.reset(now_in_seconds - avail_tokens / rate_);
   }
 
-  void set_capacity(double tokens, double now_in_seconds) noexcept {
-    token_bucket_.reset(now_in_seconds - tokens / rate_);
+  static double default_clock_now() noexcept {
+    auto const now = clock::now().time_since_epoch();
+    return std::chrono::duration<double>(now).count();
   }
 
   bool consume(double to_consume, double now_in_seconds = default_clock_now()) {
-    return token_bucket_.consume(to_consume, rate_, burst_size_,
-                                 now_in_seconds);
-  }
+    if (bucket_.balance(rate_, burst_size_, now_in_seconds) < 0.0) {
+      return 0;
+    }
 
-  double consume_or_drain(double to_consume,
-                          double now_in_seconds = default_clock_now()) {
-    return token_bucket_.consume_or_drain(to_consume, rate_, burst_size_,
-                                          now_in_seconds);
+    double consumed = bucket_.consume(
+        rate_, burst_size_, now_in_seconds, [to_consume](double available) {
+          return available < to_consume ? 0.0 : to_consume;
+        });
+
+    return consumed == to_consume;
   }
 
   void return_tokens(double tokens_to_return) {
-    return token_bucket_.return_tokens(tokens_to_return, rate_);
-  }
-
-  std::optional<double> consume_with_borrow_nonblocking(
-      double to_consume, double now_in_seconds = default_clock_now()) {
-    return token_bucket_.consume_with_borrow_nonblocking(
-        to_consume, rate_, burst_size_, now_in_seconds);
-  }
-
-  bool consume_with_borrow_and_wait(
-      double to_consume, double now_in_seconds = default_clock_now()) {
-    return token_bucket_.consume_with_borrow_and_wait(
-        to_consume, rate_, burst_size_, now_in_seconds);
+    bucket_.return_tokens(tokens_to_return, rate_);
   }
 
   double available(double now_in_seconds = default_clock_now()) const noexcept {
@@ -183,15 +171,11 @@ class basic_token_bucket {
   }
 
   double balance(double now_in_seconds = default_clock_now()) const noexcept {
-    return token_bucket_.balance(rate_, burst_size_, now_in_seconds);
+    return bucket_.balance(rate_, burst_size_, now_in_seconds);
   }
 
-  double rate() const noexcept { return rate_; }
-
-  double burst() const noexcept { return burst_size_; }
-
  private:
-  impl token_bucket_;
+  token_bucket_storage<policy> bucket_;
   double rate_;
   double burst_size_;
 };
