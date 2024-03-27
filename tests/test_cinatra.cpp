@@ -362,7 +362,7 @@ TEST_CASE("test bad address") {
   }
 
   {
-    coro_http_server server(1, 9001, "test");
+    coro_http_server server(1, 9001, "x.x.x.x");
     server.async_start();
     auto ec = server.get_errc();
     CHECK(ec == std::errc::bad_address);
