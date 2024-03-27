@@ -1,14 +1,5 @@
 #pragma once
 
-#include <asio/dispatch.hpp>
-#include <chrono>
-#include <cstdint>
-#include <mutex>
-#include <type_traits>
-
-#include "asio/streambuf.hpp"
-#include "async_simple/Promise.h"
-#include "async_simple/coro/Lazy.h"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
