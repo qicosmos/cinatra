@@ -174,6 +174,10 @@ class basic_token_bucket {
     return bucket_.balance(rate_, burst_size_, now_in_seconds);
   }
 
+  double rate() const noexcept { return rate_; }
+
+  double burst() const noexcept { return burst_size_; }
+
  private:
   token_bucket_storage<policy> bucket_;
   double rate_;
