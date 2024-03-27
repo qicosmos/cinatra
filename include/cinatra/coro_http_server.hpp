@@ -529,7 +529,6 @@ class coro_http_server {
   std::string_view address() { return address_; }
   std::errc get_errc() { return errc_; }
 
-
  private:
   std::errc listen() {
     CINATRA_LOG_INFO << "begin to listen";
