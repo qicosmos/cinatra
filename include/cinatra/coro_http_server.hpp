@@ -793,8 +793,17 @@ class coro_http_server {
 
   void init_address(std::string address) {
     if (size_t pos = address.find(':'); pos != std::string::npos) {
-      auto port = std::string_view(address).substr(pos + 1);
-      port_ = (uint16_t)atoi(port.data());
+      auto port_sv = std::string_view(address).substr(pos + 1);
+
+      uint16_t port;
+      auto [ptr, ec] =
+          std::from_chars(port_sv.begin(), port_sv.end(), port, 10);
+      if (ec != std::errc{}) {
+        address_ = std::move(address);
+        return;
+      }
+
+      port_ = port;
       address = address.substr(0, pos);
     }
 

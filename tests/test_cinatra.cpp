@@ -360,10 +360,19 @@ TEST_CASE("test bad address") {
     auto ec = server.get_errc();
     CHECK(ec == std::errc{});
   }
-  coro_http_server server(1, 9001, "x.x.x");
-  server.async_start();
-  auto ec = server.get_errc();
-  CHECK(ec == std::errc::bad_address);
+
+  {
+    coro_http_server server(1, 9001, "x.x.x");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc::bad_address);
+  }
+  {
+    coro_http_server server(1, "localhost:aaa");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc::bad_address);
+  }
 }
 
 async_simple::coro::Lazy<void> test_collect_all() {
