@@ -512,8 +512,7 @@ class coro_http_server {
     asio::error_code ec;
 
     asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
-    asio::ip::tcp::resolver resolver(
-        pool_->get_executor()->get_asio_executor());
+    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
     asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
 
     asio::ip::tcp::resolver::iterator it_end;
