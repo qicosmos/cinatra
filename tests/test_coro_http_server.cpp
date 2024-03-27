@@ -1591,3 +1591,65 @@ TEST_CASE("test reverse proxy") {
   std::cout << resp_random.resp_body << "\n";
   CHECK(!resp_random.resp_body.empty());
 }
+
+TEST_CASE("test global rate limiter") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_rate_limiter(cinatra::limiter_type::global, 3, 3);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "ok");
+        });
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(1s);
+
+  coro_http_client client1, client2, client3, client4, client5;
+  auto result = client1.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client2.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client3.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client4.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 404);
+  std::this_thread::sleep_for(1s);
+  result = client5.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+}
+
+TEST_CASE("test per ip rate limiter") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_rate_limiter(cinatra::limiter_type::perip, 3, 3);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          response.set_status_and_content(status_type::ok, "ok");
+        });
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(1s);
+
+  coro_http_client client1, client2, client3, client4, client5, client6;
+  auto result = client1.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client2.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client3.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+  result = client4.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 404);
+  result = client5.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 404);
+  std::this_thread::sleep_for(1s);
+  result = client6.get("http://127.0.0.1:9001/");
+  CHECK(result.status == 200);
+}

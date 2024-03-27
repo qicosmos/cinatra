@@ -405,6 +405,10 @@ class coro_http_connection
     return ss.str();
   }
 
+  std::string remote_ip_address() {
+    return socket_.remote_endpoint().address().to_string();
+  }
+
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
   async_simple::coro::Lazy<bool> write_data(std::string_view message) {

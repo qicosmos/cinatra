@@ -5,6 +5,7 @@
 #include "cinatra/coro_http_router.hpp"
 #include "cinatra/define.h"
 #include "cinatra/mime_types.hpp"
+#include "cinatra/token_bucket.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
 #include "ylt/coro_io/channel.hpp"
@@ -16,6 +17,11 @@ namespace cinatra {
 enum class file_resp_format_type {
   chunked,
   range,
+};
+enum class limiter_type {
+  disable,
+  global,
+  perip,
 };
 class coro_http_server {
  public:
@@ -502,6 +508,24 @@ class coro_http_server {
     return connections_.size();
   }
 
+  void set_rate_limiter(enum limiter_type type, int gen_rate = 1000,
+                        int burst_size = 1000) {
+    limiter_type_ = type;
+    if (limiter_type_ == limiter_type::global) {
+      token_bucket_.reset(gen_rate, burst_size);
+    }
+    else if (limiter_type_ == limiter_type::perip) {
+      per_rate_ = gen_rate;
+      per_burst_size_ = burst_size;
+    }
+    else {
+      per_rate_ = 0.0;
+      per_burst_size_ = 0.0;
+    }
+  }
+
+  void clear_per_ip_limiter_cache() { req_limiter_.clear(); }
+
   std::string_view address() { return address_; }
   std::errc get_errc() { return errc_; }
 
@@ -618,7 +642,45 @@ class coro_http_server {
         connections_.emplace(conn_id, conn);
       }
 
-      start_one(conn).via(&conn->get_executor()).detach();
+      switch (limiter_type_) {
+        case limiter_type::disable: {
+          start_one(conn).via(&conn->get_executor()).detach();
+          break;
+        }
+        case limiter_type::global: {
+          if (token_bucket_.consume(1)) {
+            // there are enough tokens to allow request.
+            start_one(conn).via(&conn->get_executor()).detach();
+          }
+          else {
+            conn->close();
+          }
+          break;
+        }
+        case limiter_type::perip: {
+          if (req_limiter_.empty() ||
+              req_limiter_.find(conn->remote_ip_address()) ==
+                  req_limiter_.end()) {
+            req_limiter_.emplace(
+                std::make_pair<std::string, std::shared_ptr<token_bucket>>(
+                    conn->remote_ip_address(),
+                    std::make_shared<token_bucket>(per_rate_,
+                                                   per_burst_size_)));
+          }
+
+          if (req_limiter_[conn->remote_ip_address()]->consume(1)) {
+            start_one(conn).via(&conn->get_executor()).detach();
+          }
+          else {
+            conn->close();
+          }
+          break;
+        }
+        default: {
+          start_one(conn).via(&conn->get_executor()).detach();
+          break;
+        }
+      }
     }
   }
 
@@ -845,6 +907,15 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
+
+  enum limiter_type limiter_type_ = limiter_type::disable;
+  // 1000 tokens are generated per second
+  // and the maximum number of token buckets is 1000
+  token_bucket token_bucket_ = token_bucket{1000.0, 1000.0};
+
+  double per_rate_ = 0.0;
+  double per_burst_size_ = 0.0;
+  std::unordered_map<std::string, std::shared_ptr<token_bucket>> req_limiter_;
 };
 
 using http_server = coro_http_server;
