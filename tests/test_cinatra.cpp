@@ -317,6 +317,64 @@ TEST_CASE("test select coro channel") {
   CHECK(val == 42);
 }
 
+TEST_CASE("test bad address") {
+  {
+    coro_http_server server(1, 9001, "127.0.0.1");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, 9001, "localhost");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, 9001, "0.0.0.0");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, 9001);
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, "0.0.0.0:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, "127.0.0.1:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, "localhost:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+
+  {
+    coro_http_server server(1, 9001, "x.x.x");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc::bad_address);
+  }
+  {
+    coro_http_server server(1, "localhost:aaa");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc::bad_address);
+  }
+}
+
 async_simple::coro::Lazy<void> test_collect_all() {
   asio::io_context ioc;
   std::thread thd([&] {
