@@ -120,110 +120,6 @@ class token_bucket_storage {
 };
 
 template <typename policy = token_bucket_policy_default>
-class basic_dynamic_token_bucket {
-  template <typename T>
-  using atom = typename policy::template atom_type<T>;
-  using align = typename policy::align_type;
-  using clock = typename policy::clock_type;
-  using concurrent = typename policy::concurrent_type;
-
- public:
-  explicit basic_dynamic_token_bucket(double zero_time = 0) noexcept
-      : bucket_(zero_time) {}
-
-  basic_dynamic_token_bucket(const basic_dynamic_token_bucket& other) noexcept =
-      default;
-  basic_dynamic_token_bucket& operator=(
-      const basic_dynamic_token_bucket& other) noexcept = default;
-
-  void reset(double zero_time = 0) noexcept { bucket_.reset(zero_time); }
-
-  static double default_clock_now() noexcept {
-    auto const now = clock::now().time_since_epoch();
-    return std::chrono::duration<double>(now).count();
-  }
-
-  bool consume(double to_consume, double rate, double burst_size,
-               double now_in_seconds = default_clock_now()) {
-    if (bucket_.balance(rate, burst_size, now_in_seconds) < 0.0) {
-      return 0;
-    }
-
-    double consumed = bucket_.consume(
-        rate, burst_size, now_in_seconds, [to_consume](double available) {
-          return available < to_consume ? 0.0 : to_consume;
-        });
-
-    return consumed == to_consume;
-  }
-
-  double consume_or_drain(double to_consume, double rate, double burst_size,
-                          double now_in_seconds = default_clock_now()) {
-    if (bucket_.balance(rate, burst_size, now_in_seconds) <= 0.0) {
-      return 0;
-    }
-
-    double consumed = bucket_.consume(
-        rate, burst_size, now_in_seconds, [to_consume](double available) {
-          return constexpr_min(available, to_consume);
-        });
-    return consumed;
-  }
-
-  void return_tokens(double tokens_to_return, double rate) {
-    bucket_.return_tokens(tokens_to_return, rate);
-  }
-
-  std::optional<double> consume_with_borrow_nonblocking(
-      double to_consume, double rate, double burst_size,
-      double now_in_seconds = default_clock_now()) {
-    if (burst_size < to_consume) {
-      return std::nullopt;
-    }
-
-    while (to_consume > 0) {
-      double consumed =
-          consume_or_drain(to_consume, rate, burst_size, now_in_seconds);
-      if (consumed > 0) {
-        to_consume -= consumed;
-      }
-      else {
-        bucket_.return_tokens(-to_consume, rate);
-        double debt_paid = bucket_.time_when_bucket(rate, 0);
-        double nap_time = std::max(0.0, debt_paid - now_in_seconds);
-        return nap_time;
-      }
-    }
-    return 0;
-  }
-
-  bool consume_with_borrow_and_wait(
-      double to_consume, double rate, double burst_size,
-      double now_in_seconds = default_clock_now()) {
-    auto res = consume_with_borrow_nonblocking(to_consume, rate, burst_size,
-                                               now_in_seconds);
-    if (res.value_or(0) > 0) {
-      const auto nap_usec = static_cast<int64_t>(res.value() * 1000000);
-      std::this_thread::sleep_for(std::chrono::microseconds(nap_usec));
-    }
-    return res.has_value();
-  }
-
-  double available(double rate, double burst_size,
-                   double now_in_seconds = default_clock_now()) const noexcept {
-    return std::max(0.0, balance(rate, burst_size, now_in_seconds));
-  }
-
-  double balance(double rate, double burst_size,
-                 double now_in_seconds = default_clock_now()) const noexcept {
-    return bucket_.balance(rate, burst_size, now_in_seconds);
-  }
-
- private:
-  token_bucket_storage<policy> bucket_;
-};
-
-template <typename policy = token_bucket_policy_default>
 class basic_token_bucket {
  private:
   using impl = basic_dynamic_token_bucket<policy>;
@@ -301,5 +197,4 @@ class basic_token_bucket {
 };
 
 using token_bucket = basic_token_bucket<>;
-using dynamic_token_bucket = basic_dynamic_token_bucket<>;
 }  // namespace cinatra

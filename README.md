@@ -317,9 +317,16 @@ int main() {
 	int main() {
 		int max_thread_num = std::thread::hardware_concurrency();
 		coro_http_server server(max_thread_num, 8080);
-    server.set_rate_limiter(true, 3, 3);
+    server.set_rate_limiter(cinatra::limiter_type::global, 3, 3);
     ......
   }
+
+## 示例7: 每IP请求限制设置
+
+依然使用`set_rate_limiter`函数。
+
+  server.set_rate_limiter(cinatra::limiter_type::perip, 3, 3);
+
 
 ## 反向代理
 cinatra 支持反向代理也很简单，3步5行代码就可以了。

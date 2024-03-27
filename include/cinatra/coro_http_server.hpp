@@ -508,8 +508,8 @@ class coro_http_server {
     return connections_.size();
   }
 
-  void set_rate_limiter(enum limiter_type type, int gen_rate = 0,
-                        int burst_size = 0) {
+  void set_rate_limiter(enum limiter_type type, int gen_rate = 1000,
+                        int burst_size = 1000) {
     limiter_type_ = type;
     if (limiter_type_ == limiter_type::global) {
       token_bucket_.reset(gen_rate, burst_size);
@@ -661,7 +661,7 @@ class coro_http_server {
           if (req_limiter_.empty() ||
               req_limiter_.find(conn->remote_ip_address()) ==
                   req_limiter_.end()) {
-            req_limiter_.insert(
+            req_limiter_.emplace(
                 std::make_pair<std::string, std::shared_ptr<token_bucket>>(
                     conn->remote_ip_address(),
                     std::make_shared<token_bucket>(per_rate_,
@@ -909,9 +909,9 @@ class coro_http_server {
   bool need_shrink_every_time_ = false;
 
   enum limiter_type limiter_type_ = limiter_type::disable;
-  // 100 tokens are generated per second
-  // and the maximum number of token buckets is 100
-  token_bucket token_bucket_ = token_bucket{100, 100};
+  // 1000 tokens are generated per second
+  // and the maximum number of token buckets is 1000
+  token_bucket token_bucket_ = token_bucket{1000.0, 1000.0};
 
   double per_rate_ = 0.0;
   double per_burst_size_ = 0.0;
