@@ -342,6 +342,24 @@ TEST_CASE("test bad address") {
     auto ec = server.get_errc();
     CHECK(ec == std::errc{});
   }
+  {
+    coro_http_server server(1, "0.0.0.0:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, "127.0.0.1:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
+  {
+    coro_http_server server(1, "localhost:9001");
+    server.async_start();
+    auto ec = server.get_errc();
+    CHECK(ec == std::errc{});
+  }
   coro_http_server server(1, 9001, "x.x.x");
   server.async_start();
   auto ec = server.get_errc();
