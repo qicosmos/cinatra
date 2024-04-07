@@ -391,7 +391,7 @@ TEST_CASE("test server start and stop") {
   auto future2 = server2.async_start();
   future2.wait();
   auto ec = future2.value();
-  CHECK(ec == std::errc::address_in_use);
+  CHECK(ec == asio::error::address_in_use);
 }
 
 TEST_CASE("test server sync_start and stop") {
@@ -408,7 +408,7 @@ TEST_CASE("test server sync_start and stop") {
   server.stop();
   thd.join();
   CHECK(server.port() > 0);
-  CHECK(ec == std::errc::operation_canceled);
+  CHECK(ec == asio::error::operation_aborted);
 }
 
 TEST_CASE("get post") {
