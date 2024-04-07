@@ -398,7 +398,7 @@ TEST_CASE("test server sync_start and stop") {
   cinatra::coro_http_server server(1, 0);
 
   std::promise<void> promise;
-  std::errc ec;
+  std::error_code ec;
   std::thread thd([&] {
     promise.set_value();
     ec = server.sync_start();
