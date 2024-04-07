@@ -196,16 +196,14 @@ class coro_http_server {
         coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
                                                    weights));
     auto handler =
-        [this, channel, type, url_path](
+        [this, channel, type](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
       co_await channel->send_request(
           [this, &req, &response](
               coro_http_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
-            uri_t uri;
-            uri.parse_from(host.data());
-            co_await reply(client, uri.get_path(), req, response);
+            co_await reply(client, host, req, response);
           });
     };
 
@@ -769,17 +767,28 @@ class coro_http_server {
   }
 
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
-                                       std::string url_path,
+                                       std::string_view host,
                                        coro_http_request &req,
                                        coro_http_response &response) {
+    uri_t uri;
+    std::string proxy_host;
+
+    if (host.find("//") == std::string_view::npos) {
+      proxy_host.append("http://").append(host);
+      uri.parse_from(proxy_host.data());
+    }
+    else {
+      uri.parse_from(host.data());
+    }
     std::unordered_map<std::string, std::string> req_headers;
-    for (auto &[k, v] : req_headers) {
+    for (auto &[k, v] : req.get_headers()) {
       req_headers.emplace(k, v);
     }
+    req_headers["Host"] = uri.host;
 
     auto ctx = req_context<std::string_view>{.content = req.get_body()};
     auto result = co_await client.async_request(
-        std::move(url_path), method_type(req.get_method()), std::move(ctx),
+        req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
     for (auto &[k, v] : result.resp_headers) {
