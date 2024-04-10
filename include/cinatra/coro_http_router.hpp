@@ -65,9 +65,8 @@ class coro_http_router {
           (do_before(asps, req, resp, ok), ...);
           if (ok) {
             co_await handler(req, resp);
-
-            (do_after(asps, req, resp, ok), ...);
           }
+          (do_after(asps, req, resp, ok), ...);
         };
       }
       else {
@@ -113,8 +112,8 @@ class coro_http_router {
           (do_before(asps, req, resp, ok), ...);
           if (ok) {
             handler(req, resp);
-            (do_after(asps, req, resp, ok), ...);
           }
+          (do_after(asps, req, resp, ok), ...);
         };
       }
       else {
