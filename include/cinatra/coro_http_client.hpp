@@ -646,20 +646,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     coro_http_client *self;
   };
 
-  async_simple::coro::Lazy<std::error_code> wait_future(
-      async_simple::Future<async_simple::Unit> &&future) {
-    if (!enable_timeout_) {
-      co_return std::error_code{};
-    }
-    std::error_code err_code;
-    timer_.cancel(err_code);
-    co_await std::move(future);
-    if (socket_->is_timeout_) {
-      co_return std::make_error_code(std::errc::timed_out);
-    }
-    co_return std::error_code{};
-  }
-
   async_simple::coro::Lazy<resp_data> async_upload_multipart(std::string uri) {
     std::shared_ptr<int> guard(nullptr, [this](auto) {
       req_headers_.clear();
