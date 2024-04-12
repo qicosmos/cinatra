@@ -707,7 +707,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       data = co_await send_single_part(key, part);
 
       if (data.net_err) {
-        if (data.net_err == asio::error::operation_aborted) {
+        if (socket_->is_timeout_) {
           data.net_err = std::make_error_code(std::errc::timed_out);
         }
         co_return data;
@@ -718,6 +718,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     last_part.append("--").append(BOUNDARY).append("--").append(CRCF);
     if (std::tie(ec, size) = co_await async_write(asio::buffer(last_part));
         ec) {
+      if (socket_->is_timeout_) {
+        ec = std::make_error_code(std::errc::timed_out);
+      }
       co_return resp_data{ec, 404};
     }
 
@@ -888,6 +891,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         timer_guard(this, conn_timeout_duration_, "request timer");
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
+      if (socket_->is_timeout_) {
+        ec = std::make_error_code(std::errc::timed_out);
+      }
       co_return resp_data{ec, 404};
     }
 
@@ -939,18 +945,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
     }
-    if (ec && ec == asio::error::operation_aborted) {
-      ec = std::make_error_code(std::errc::timed_out);
+    if (ec) {
+      if (socket_->is_timeout_) {
+        ec = std::make_error_code(std::errc::timed_out);
+      }
       co_return resp_data{ec, 404};
     }
 
     bool is_keep_alive = true;
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
                                 http_method::POST);
-    if (socket_->is_timeout_) {
+    if (ec && socket_->is_timeout_) {
       ec = std::make_error_code(std::errc::timed_out);
     }
-
     handle_result(data, ec, is_keep_alive);
     co_return data;
   }
@@ -1015,8 +1022,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (socket_->has_closed_) {
         host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
         port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
-        auto guard =
-            timer_guard(this, conn_timeout_duration_, "connect timer");
+        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
         if (ec = co_await coro_io::async_connect(&executor_wrapper_,
                                                  socket_->impl_, host_, port_);
             ec) {
@@ -1084,7 +1090,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       data =
           co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
     } while (0);
-    if (socket_->is_timeout_) {
+    if (ec && socket_->is_timeout_) {
       ec = std::make_error_code(std::errc::timed_out);
     }
     handle_result(data, ec, is_keep_alive);
@@ -1952,13 +1958,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<bool> timeout(
       auto &timer, std::chrono::steady_clock::duration duration,
       std::string msg) {
-    auto watcher=std::weak_ptr(socket_);
+    auto watcher = std::weak_ptr(socket_);
     timer.expires_after(duration);
     auto is_timeout = co_await timer.async_await();
     if (!is_timeout) {
       co_return false;
     }
-    if (auto socket=watcher.lock();socket) {
+    if (auto socket = watcher.lock(); socket) {
       socket_->is_timeout_ = true;
       CINATRA_LOG_WARNING << msg << " timeout";
       close_socket(*socket_);
