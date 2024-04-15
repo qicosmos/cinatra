@@ -1029,6 +1029,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           break;
         }
 
+        if (socket_->is_timeout_) {
+          data.net_err = std::make_error_code(std::errc::timed_out);
+          co_return data;
+        }
+
         if (enable_tcp_no_delay_) {
           socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
           if (ec) {
@@ -1658,6 +1663,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (auto ec = co_await coro_io::async_connect(
               &executor_wrapper_, socket_->impl_, host_, port_);
           ec) {
+        co_return resp_data{ec, 404};
+      }
+
+      if (socket_->is_timeout_) {
+        auto ec = std::make_error_code(std::errc::timed_out);
         co_return resp_data{ec, 404};
       }
 
