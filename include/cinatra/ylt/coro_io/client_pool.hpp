@@ -78,12 +78,12 @@ class client_pool : public std::enable_shared_from_this<
       }
       while (true) {
         CINATRA_LOG_DEBUG << "start collect timeout client of pool{"
-                   << self->host_name_
-                   << "}, now client count: " << clients.size();
+                          << self->host_name_
+                          << "}, now client count: " << clients.size();
         std::size_t is_all_cleared = clients.clear_old(clear_cnt);
         CINATRA_LOG_DEBUG << "finish collect timeout client of pool{"
-                   << self->host_name_
-                   << "}, now client cnt: " << clients.size();
+                          << self->host_name_
+                          << "}, now client cnt: " << clients.size();
         if (is_all_cleared != 0) [[unlikely]] {
           try {
             co_await async_simple::coro::Yield{};
@@ -115,32 +115,33 @@ class client_pool : public std::enable_shared_from_this<
   async_simple::coro::Lazy<void> reconnect(std::unique_ptr<client_t>& client) {
     using namespace std::chrono_literals;
     for (unsigned int i = 0; i < pool_config_.connect_retry_count; ++i) {
-      CINATRA_LOG_DEBUG << "try to reconnect client{" << client.get() << "},host:{"
-                 << client->get_host() << ":" << client->get_port()
-                 << "}, try count:" << i
-                 << "max retry limit:" << pool_config_.connect_retry_count;
+      CINATRA_LOG_DEBUG << "try to reconnect client{" << client.get()
+                        << "},host:{" << client->get_host() << ":"
+                        << client->get_port() << "}, try count:" << i
+                        << "max retry limit:"
+                        << pool_config_.connect_retry_count;
       auto pre_time_point = std::chrono::steady_clock::now();
       bool ok = client_t::is_ok(co_await client->reconnect(host_name_));
       auto post_time_point = std::chrono::steady_clock::now();
       auto cost_time = post_time_point - pre_time_point;
       CINATRA_LOG_DEBUG << "reconnect client{" << client.get()
-                 << "} cost time: " << cost_time / std::chrono::milliseconds{1}
-                 << "ms";
+                        << "} cost time: "
+                        << cost_time / std::chrono::milliseconds{1} << "ms";
       if (ok) {
         CINATRA_LOG_DEBUG << "reconnect client{" << client.get() << "} success";
         co_return;
       }
       CINATRA_LOG_DEBUG << "reconnect client{" << client.get()
-                 << "} failed. If client close:{" << client->has_closed()
-                 << "}";
+                        << "} failed. If client close:{" << client->has_closed()
+                        << "}";
       auto wait_time = rand_time(
           (pool_config_.reconnect_wait_time * (i + 1) - cost_time) / 1ms * 1ms);
       if (wait_time.count() > 0)
         co_await coro_io::sleep_for(wait_time, &client->get_executor());
     }
     CINATRA_LOG_WARNING << "reconnect client{" << client.get() << "},host:{"
-              << client->get_host() << ":" << client->get_port()
-              << "} out of max limit, stop retry. connect failed";
+                        << client->get_host() << ":" << client->get_port()
+                        << "} out of max limit, stop retry. connect failed";
     client = nullptr;
   }
 
@@ -153,7 +154,7 @@ class client_pool : public std::enable_shared_from_this<
       std::unique_ptr<client_t> client, std::weak_ptr<client_pool> watcher,
       std::shared_ptr<promise_handler> handler) {
     CINATRA_LOG_DEBUG << "try to connect client{" << client.get()
-               << "} to host:" << host_name_;
+                      << "} to host:" << host_name_;
     auto result = co_await client->connect(host_name_);
     std::shared_ptr<client_pool> self = watcher.lock();
     if (!client_t::is_ok(result)) {
@@ -216,16 +217,17 @@ class client_pool : public std::enable_shared_from_this<
               auto has_get_connect = handler->flag_.exchange(true);
               if (!has_get_connect) {
                 CINATRA_LOG_ERROR << "Out of max limitation of connect "
-                              "time, connect "
-                              "failed. skip wait client{"
-                           << client_ptr << "} connect. ";
+                                     "time, connect "
+                                     "failed. skip wait client{"
+                                  << client_ptr << "} connect. ";
                 handler->promise_.setValue(std::unique_ptr<client_t>{nullptr});
               }
             });
           }
         }
       });
-      CINATRA_LOG_DEBUG << "wait client by promise {" << &handler->promise_ << "}";
+      CINATRA_LOG_DEBUG << "wait client by promise {" << &handler->promise_
+                        << "}";
       client = co_await handler->promise_.getFuture();
       if (client) {
         executor->schedule([timer] {
@@ -235,7 +237,8 @@ class client_pool : public std::enable_shared_from_this<
       }
     }
     else {
-      CINATRA_LOG_DEBUG << "get free client{" << client.get() << "}. from queue";
+      CINATRA_LOG_DEBUG << "get free client{" << client.get()
+                        << "}. from queue";
     }
     co_return std::move(client);
   }
@@ -248,7 +251,7 @@ class client_pool : public std::enable_shared_from_this<
       std::size_t expected = 0;
       if (clients.collecter_cnt_.compare_exchange_strong(expected, 1)) {
         CINATRA_LOG_DEBUG << "start timeout client collecter of client_pool{"
-                   << host_name_ << "}";
+                          << host_name_ << "}";
         collect_idle_timeout_client(
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
@@ -272,7 +275,8 @@ class client_pool : public std::enable_shared_from_this<
             handler->promise_.setValue(std::move(client));
             promise_cnt_ -= cnt;
             CINATRA_LOG_DEBUG << "collect free client{" << client.get()
-                       << "} and wake up promise{" << &handler->promise_ << "}";
+                              << "} and wake up promise{" << &handler->promise_
+                              << "}";
             return;
           }
         }
@@ -281,21 +285,23 @@ class client_pool : public std::enable_shared_from_this<
 
       if (free_clients_.size() < pool_config_.max_connection) {
         if (client) {
-          CINATRA_LOG_DEBUG << "collect free client{" << client.get() << "} enqueue";
+          CINATRA_LOG_DEBUG << "collect free client{" << client.get()
+                            << "} enqueue";
           enqueue(free_clients_, std::move(client), pool_config_.idle_timeout);
         }
       }
       else {
         CINATRA_LOG_DEBUG << "out of max connection limit <<"
-                   << pool_config_.max_connection << ", collect free client{"
-                   << client.get() << "} enqueue short connect queue";
+                          << pool_config_.max_connection
+                          << ", collect free client{" << client.get()
+                          << "} enqueue short connect queue";
         enqueue(short_connect_clients_, std::move(client),
                 pool_config_.short_connect_idle_timeout);
       }
     }
     else {
       CINATRA_LOG_DEBUG << "client{" << client.get()
-                 << "} is closed. we won't collect it";
+                        << "} is closed. we won't collect it";
     }
 
     return;
@@ -369,7 +375,7 @@ class client_pool : public std::enable_shared_from_this<
     auto client = co_await get_client(client_config);
     if (!client) {
       CINATRA_LOG_WARNING << "send request to " << host_name_
-                << " failed. connection refused.";
+                          << " failed. connection refused.";
       co_return return_type<T>{tl::unexpect, std::errc::connection_refused};
     }
     if constexpr (std::is_same_v<typename return_type<T>::value_type, void>) {
@@ -423,7 +429,7 @@ class client_pool : public std::enable_shared_from_this<
     auto client = co_await get_client(client_config);
     if (!client) {
       CINATRA_LOG_WARNING << "send request to " << endpoint
-                << " failed. connection refused.";
+                          << " failed. connection refused.";
       co_return return_type_with_host<T>{tl::unexpect,
                                          std::errc::connection_refused};
     }
