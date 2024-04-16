@@ -282,3 +282,73 @@ TEST_CASE("test client quit after send msg") {
 
   async_simple::coro::syncAwait(test_websocket());
 }
+
+#ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("test websocket permessage defalte") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_extesion",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_TEXT_FRAME ||
+              result.type == ws_frame_type::WS_BINARY_FRAME) {
+            CHECK(result.data == "test");
+          }
+          else if (result.type == ws_frame_type::WS_PING_FRAME ||
+                   result.type == ws_frame_type::WS_PONG_FRAME) {
+            // ping pong frame just need to continue, no need echo anything,
+            // because framework has reply ping/pong msg to client
+            // automatically.
+            continue;
+          }
+          else {
+            // error frame
+            break;
+          }
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+
+  server.async_start();
+
+  coro_http_client client{};
+  REQUIRE(async_simple::coro::syncAwait(
+      client.async_ws_connect("ws://localhost:8090/ws_extesion", true)));
+
+  std::string send_str("test");
+
+  client.on_ws_msg([&, send_str](resp_data data) {
+    if (data.net_err) {
+      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
+      return;
+    }
+
+    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
+    REQUIRE(data.resp_body.size() == send_str.size());
+    CHECK(data.resp_body == send_str);
+  });
+
+  async_simple::coro::syncAwait(client.async_send_ws(send_str));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  server.stop();
+  client.close();
+}
+#endif

@@ -21,6 +21,9 @@
 #include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#ifdef CINATRA_ENABLE_GZIP
+#include "gzip.hpp"
+#endif
 #include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
@@ -319,13 +322,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
 
-  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri) {
+  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri, bool enable_ws_deflate = false) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
       CINATRA_LOG_WARNING << "url error:";
       co_return false;
     }
+
+    enable_ws_deflate_ = enable_ws_deflate;
 
     req_context<> ctx{};
     if (u.is_websocket()) {
@@ -337,10 +342,33 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       add_header("Sec-WebSocket-Key", ws_sec_key_);
       add_header("Sec-WebSocket-Version", "13");
+#ifdef CINATRA_ENABLE_GZIP
+      add_header("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits");
+#endif
     }
 
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
+#ifdef CINATRA_ENABLE_GZIP
+    if (enable_ws_deflate_) {
+      for (auto c : data.resp_headers) {
+        std::cout << c.name << " value is: " << c.value << std::endl;
+        if (c.name == "Sec-WebSocket-Extensions") {
+          std::cout << "have extensions\n";
+          if (c.value.find("permessage-deflate;") != std::string::npos) {
+            std::cout << "support deflate extensions\n";
+            is_server_support_ws_deflate_ = true;
+          }
+          else {
+            std::cout << "not support deflate extensions\n";
+            is_server_support_ws_deflate_ = false;
+          }
+          break;
+        }
+      }
+    }
+#endif
+
     async_read_ws().start([](auto &&) {
     });
     co_return !data.net_err;
@@ -376,6 +404,30 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     if constexpr (is_span_v<Source>) {
+#ifdef CINATRA_ENABLE_GZIP
+      if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
+        std::string dest_buf;
+        if (cinatra::gzip_codec::deflate(std::string(source.begin(), source.end()), dest_buf)) {
+          std::span<char> msg(dest_buf.data(), dest_buf.size());
+          auto header = ws.encode_frame(msg, op, need_mask, true, true);
+          std::vector<asio::const_buffer> buffers;
+          buffers.push_back(asio::buffer(header));
+          buffers.push_back(asio::buffer(dest_buf));
+
+          auto [ec, sz] = co_await async_write(buffers);
+          if (ec) {
+            data.net_err = ec;
+            data.status = 404;
+          }
+        }
+        else {
+          CINATRA_LOG_ERROR << "compuress data error, data: " << std::string(source.begin(), source.end());
+          data.net_err = std::make_error_code(std::errc::protocol_error);
+          data.status = 404;
+        }
+      }
+      else {
+#endif
       std::string encode_header = ws.encode_frame(source, op, need_mask);
       std::vector<asio::const_buffer> buffers{
           asio::buffer(encode_header.data(), encode_header.size()),
@@ -386,10 +438,39 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         data.net_err = ec;
         data.status = 404;
       }
+#ifdef CINATRA_ENABLE_GZIP
+    }
+#endif
     }
     else {
       while (true) {
         auto result = co_await source();
+
+#ifdef CINATRA_ENABLE_GZIP
+      if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
+        std::string dest_buf;
+        if (cinatra::gzip_codec::deflate(std::string(result), dest_buf)) {
+          std::span<char> msg(dest_buf.data(), dest_buf.size());
+          std::string header =
+              ws.encode_frame(msg, op, need_mask, result.eof, true);
+          std::vector<asio::const_buffer> buffers;
+          buffers.push_back(asio::buffer(header));
+          buffers.push_back(asio::buffer(dest_buf));
+
+          auto [ec, sz] = co_await async_write(buffers);
+          if (ec) {
+            data.net_err = ec;
+            data.status = 404;
+          }
+        }
+        else {
+          CINATRA_LOG_ERROR << "compuress data error, data: " << std::string(source.begin(), source.end());
+          data.net_err = std::make_error_code(std::errc::protocol_error);
+          data.status = 404;
+        }
+      }
+      else {
+#endif
 
         std::span<char> msg(result.buf.data(), result.buf.size());
         std::string encode_header =
@@ -409,6 +490,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           break;
         }
       }
+#ifdef CINATRA_ENABLE_GZIP   
+    }
+#endif
     }
 
     co_return data;
@@ -1848,9 +1932,27 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data_ptr += sizeof(uint16_t);
         }
       }
+#ifdef CINATRA_ENABLE_GZIP
+      if (!is_close_frame && is_server_support_ws_deflate_ && enable_ws_deflate_) {
+        std::string out;
+        if (!cinatra::gzip_codec::inflate(std::string(data_ptr), out))
+        {
+          CINATRA_LOG_ERROR << "uncompuress data error";
+          data.status = 404;
+          data.net_err = std::make_error_code(std::errc::protocol_error);
+          break;
+        }
 
+        data.status = 200;
+        data.resp_body = {out.data(), out.size()};
+      }
+      else {
+#endif
       data.status = 200;
       data.resp_body = {data_ptr, payload_len};
+#ifdef CINATRA_ENABLE_GZIP
+      }
+#endif
 
       read_buf.consume(read_buf.size());
       header_size = 2;
@@ -2041,6 +2143,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_tcp_no_delay_ = false;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
+
+  bool enable_ws_deflate_ = false;
+#ifdef CINATRA_ENABLE_GZIP
+  bool is_server_support_ws_deflate_ = false;
+#endif
 
 #ifdef BENCHMARK_TEST
   std::string req_str_;
