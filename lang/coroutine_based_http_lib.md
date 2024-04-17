@@ -205,23 +205,14 @@ client端：
   cinatra::coro_http_client client{};
   std::string message(100, 'x');
 
-  client.on_ws_close([](std::string_view reason) {
-      std::cout << "web socket close " << reason << std::endl;
-  });
-
-  client.on_ws_msg([message](cinatra::resp_data data) {
-    if (data.net_err) {
-      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      return;
-    }
-
-    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    REQUIRE(data.resp_body == message);
-  });
-
   co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
-  co_await client.async_send_ws(message);
-  co_await client.async_send_ws_close("test close");
+  co_await client.write_websocket(std::string(message));
+  auto data = co_await client.read_websocket();
+  CHECK(data.resp_body == message);
+  co_await client.write_websocket_close("test close");
+  data = co_await client.read_websocket();
+  CHECK(data.resp_body == "test close");
+  CHECK(data.net_err == asio::error::eof);
 ```
 client 设置读回调和close回调分别处理收到的websocket 消息和websocket close消息。
 

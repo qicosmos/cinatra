@@ -472,13 +472,16 @@ async_simple::coro::Lazy<void> test_websocket() {
     co_return;
   }
 
-  auto result =
-      co_await client.async_send_ws("hello websocket");  // mask as default.
-  std::cout << result.status << "\n";
-  result = co_await client.async_send_ws("test again", /*need_mask = */ false);
-  std::cout << result.status << "\n";
-  result = co_await client.async_send_ws_close("ws close");
-  std::cout << result.status << "\n";
+  co_await client.write_websocket("hello websocket");  // mask as default.
+  auto data = co_await client.read_websocket();
+  CHECK(data.resp_body == "hello websocket");
+  co_await client.write_websocket("test again", /*need_mask = */ false);
+  data = co_await client.read_websocket();
+  CHECK(data.resp_body == "test again");
+  co_await client.write_websocket("ws close");
+  data = co_await client.read_websocket();
+  CHECK(data.net_err == asio::error::eof);
+  CHECK(data.resp_body == "ws close");
 }
 ```
 

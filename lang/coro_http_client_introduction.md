@@ -460,10 +460,13 @@ enum opcode : std::uint8_t {
 /// \param msg 要发送的websocket 数据
 /// \param need_mask 是否需要对数据进行mask，默认会mask
 /// \param op opcode 一般为text、binary或 close 等类型
-async_simple::coro::Lazy<resp_data> async_send_ws(std::string msg,
+async_simple::coro::Lazy<resp_data> write_websocket(std::string msg,
                                                   bool need_mask = true,
                                                   opcode op = opcode::text);
 ```
+
+/// 读websocket 数据
+async_simple::coro::Lazy<resp_data> read_websocket();
 
 websocket 例子:
 
@@ -474,20 +477,12 @@ websocket 例子:
       client.async_ws_connect("ws://localhost:8090"));
 
   std::string send_str(len, 'a');
-  // 设置读数据回调
-  client.on_ws_msg([&, send_str](resp_data data) {
-    if (data.net_err) {
-      std::cout << "ws_msg net error " << data.net_err.message() << "\n";
-      return;
-    }
-
-    std::cout << "ws msg len: " << data.resp_body.size() << std::endl;
-    REQUIRE(data.resp_body.size() == send_str.size());
-    CHECK(data.resp_body == send_str);
-  });
-
   // 发送websocket 数据
-  async_simple::coro::syncAwait(client.async_send_ws(send_str));
+  async_simple::coro::syncAwait(client.write_websocket(send_str));
+  // 读websocket 数据
+  auto data = async_simple::coro::syncAwait(client.read_websocket());
+  REQUIRE(data.resp_body.size() == send_str.size());
+  CHECK(data.resp_body == send_str);
 ```
 
 # 线程模型
