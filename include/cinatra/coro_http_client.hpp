@@ -341,28 +341,32 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     data = co_await async_request(std::move(uri), http_method::GET,
                                   std::move(ctx));
-    async_read_ws().start([](auto &&) {
-    });
     co_return !data.net_err;
   }
 
-  async_simple::coro::Lazy<resp_data> async_send_ws(const char *data,
-                                                    bool need_mask = true,
-                                                    opcode op = opcode::text) {
-    std::string str(data);
-    co_return co_await async_send_ws(std::span<char>(str), need_mask, op);
+  async_simple::coro::Lazy<resp_data> read_websocket() {
+    co_return co_await async_read_ws();
   }
 
-  async_simple::coro::Lazy<resp_data> async_send_ws(std::string data,
-                                                    bool need_mask = true,
-                                                    opcode op = opcode::text) {
-    co_return co_await async_send_ws(std::span<char>(data), need_mask, op);
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      const char *data, bool need_mask = true, opcode op = opcode::text) {
+    std::string str(data);
+    co_return co_await write_websocket(std::span<char>(str), need_mask, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      std::string &data, bool need_mask = true, opcode op = opcode::text) {
+    co_return co_await write_websocket(std::span<char>(data), need_mask, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      std::string &&data, bool need_mask = true, opcode op = opcode::text) {
+    co_return co_await write_websocket(std::span<char>(data), need_mask, op);
   }
 
   template <typename Source>
-  async_simple::coro::Lazy<resp_data> async_send_ws(Source source,
-                                                    bool need_mask = true,
-                                                    opcode op = opcode::text) {
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      Source source, bool need_mask = true, opcode op = opcode::text) {
     resp_data data{};
 
     websocket ws{};
@@ -414,16 +418,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return data;
   }
 
-  async_simple::coro::Lazy<resp_data> async_send_ws_close(
+  async_simple::coro::Lazy<resp_data> write_websocket_close(
       std::string msg = "") {
-    co_return co_await async_send_ws(std::move(msg), false, opcode::close);
-  }
-
-  void on_ws_msg(std::function<void(resp_data)> on_ws_msg) {
-    on_ws_msg_ = std::move(on_ws_msg);
-  }
-  void on_ws_close(std::function<void(std::string_view)> on_ws_close) {
-    on_ws_close_ = std::move(on_ws_close);
+    co_return co_await write_websocket(std::move(msg), false, opcode::close);
   }
 
 #ifdef BENCHMARK_TEST
@@ -1783,14 +1780,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   // this function must be called before async_ws_connect.
-  async_simple::coro::Lazy<void> async_read_ws() {
+  async_simple::coro::Lazy<resp_data> async_read_ws() {
     resp_data data{};
 
     head_buf_.consume(head_buf_.size());
     size_t header_size = 2;
     std::shared_ptr sock = socket_;
-    auto on_ws_msg = on_ws_msg_;
-    auto on_ws_close = on_ws_close_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
 #ifdef CINATRA_ENABLE_SSL
@@ -1805,14 +1800,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         data.status = 404;
 
         if (sock->has_closed_) {
-          co_return;
+          co_return data;
         }
 
         close_socket(*sock);
-
-        if (on_ws_msg)
-          on_ws_msg(data);
-        co_return;
+        co_return data;
       }
 
       const char *data_ptr = asio::buffer_cast<const char *>(read_buf.data());
@@ -1835,9 +1827,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data.net_err = ec;
           data.status = 404;
           close_socket(*sock);
-          if (on_ws_msg)
-            on_ws_msg(data);
-          co_return;
+          co_return data;
         }
       }
 
@@ -1856,9 +1846,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       header_size = 2;
 
       if (is_close_frame) {
-        if (on_ws_close)
-          on_ws_close(data.resp_body);
-
         std::string reason = "close";
         auto close_str = ws.format_close_payload(close_code::normal,
                                                  reason.data(), reason.size());
@@ -1873,12 +1860,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
         data.net_err = asio::error::eof;
         data.status = 404;
-        if (on_ws_msg)
-          on_ws_msg(data);
-        co_return;
+        co_return data;
       }
-      if (on_ws_msg)
-        on_ws_msg(data);
+      co_return data;
     }
   }
 
@@ -2019,8 +2003,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::map<std::string, multipart_t> form_data_;
   size_t max_single_part_size_ = 1024 * 1024;
 
-  std::function<void(resp_data)> on_ws_msg_;
-  std::function<void(std::string_view)> on_ws_close_;
   std::string ws_sec_key_;
   std::string host_;
   std::string port_;
