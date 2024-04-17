@@ -48,7 +48,7 @@ TEST_CASE("test wss client") {
 
   async_simple::coro::syncAwait(client.write_websocket("hello"));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
-  CHECK(data == "hello");
+  CHECK(data.resp_body == "hello");
 
   client.close();
 
