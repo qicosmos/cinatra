@@ -289,6 +289,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     {
       auto time_out_guard =
           timer_guard(this, conn_timeout_duration_, "connect timer");
+      if (u.is_websocket()) {
+        // build websocket http header
+        add_header("Upgrade", "websocket");
+        add_header("Connection", "Upgrade");
+        if (ws_sec_key_.empty()) {
+          ws_sec_key_ = "s//GYHa/XO7Hd2F2eOGfyA==";  // provide a random string.
+        }
+        add_header("Sec-WebSocket-Key", ws_sec_key_);
+        add_header("Sec-WebSocket-Version", "13");
+
+        req_context<> ctx{};
+        data = co_await async_request(std::move(uri), http_method::GET,
+                                      std::move(ctx));
+        co_return data;
+      }
       data = co_await connect(u);
     }
     if (socket_->is_timeout_) {
@@ -318,31 +333,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
-
-  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri) {
-    resp_data data{};
-    auto [r, u] = handle_uri(data, uri);
-    if (!r) {
-      CINATRA_LOG_WARNING << "url error:";
-      co_return false;
-    }
-
-    req_context<> ctx{};
-    if (u.is_websocket()) {
-      // build websocket http header
-      add_header("Upgrade", "websocket");
-      add_header("Connection", "Upgrade");
-      if (ws_sec_key_.empty()) {
-        ws_sec_key_ = "s//GYHa/XO7Hd2F2eOGfyA==";  // provide a random string.
-      }
-      add_header("Sec-WebSocket-Key", ws_sec_key_);
-      add_header("Sec-WebSocket-Version", "13");
-    }
-
-    data = co_await async_request(std::move(uri), http_method::GET,
-                                  std::move(ctx));
-    co_return !data.net_err;
-  }
 
   async_simple::coro::Lazy<resp_data> read_websocket() {
     co_return co_await async_read_ws();
@@ -1779,7 +1769,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     co_return resp_data{{}, 200};
   }
 
-  // this function must be called before async_ws_connect.
   async_simple::coro::Lazy<resp_data> async_read_ws() {
     resp_data data{};
 

@@ -433,7 +433,7 @@ void on_ws_msg(std::function<void(resp_data)> on_ws_msg);
 ```
 websocket 连接服务器接口:
 ```c++
-async_simple::coro::Lazy<bool> async_ws_connect(std::string uri);
+async_simple::coro::Lazy<resp_data> connect(std::string uri);
 ```
 websocket 发送数据接口：
 ```c++
@@ -474,7 +474,7 @@ websocket 例子:
   coro_http_client client;
   // 连接websocket 服务器
   async_simple::coro::syncAwait(
-      client.async_ws_connect("ws://localhost:8090"));
+      client.connect("ws://localhost:8090"));
 
   std::string send_str(len, 'a');
   // 发送websocket 数据

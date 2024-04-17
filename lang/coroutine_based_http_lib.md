@@ -205,7 +205,7 @@ client端：
   cinatra::coro_http_client client{};
   std::string message(100, 'x');
 
-  co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
+  co_await client.connect("ws://127.0.0.1:9001/ws_echo");
   co_await client.write_websocket(std::string(message));
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == message);

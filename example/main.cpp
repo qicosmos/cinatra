@@ -195,8 +195,8 @@ async_simple::coro::Lazy<void> use_websocket() {
   std::this_thread::sleep_for(300ms);  // wait for server start
 
   coro_http_client client{};
-  bool r = co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
-  if (!r) {
+  auto r = co_await client.connect("ws://127.0.0.1:9001/ws_echo");
+  if (r.net_err) {
     co_return;
   }
 

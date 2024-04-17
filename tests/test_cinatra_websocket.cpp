@@ -43,8 +43,7 @@ TEST_CASE("test wss client") {
                             "../../include/cinatra/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
-  REQUIRE(async_simple::coro::syncAwait(
-      client.async_ws_connect("wss://localhost:9001")));
+  async_simple::coro::syncAwait(client.connect("wss://localhost:9001"));
 
   async_simple::coro::syncAwait(client.write_websocket("hello"));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
@@ -57,8 +56,8 @@ TEST_CASE("test wss client") {
 #endif
 
 async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
-  bool r = co_await client.async_ws_connect("ws://localhost:8090/ws");
-  if (!r) {
+  auto r = co_await client.connect("ws://localhost:8090/ws");
+  if (r.net_err) {
     co_return;
   }
 
@@ -133,7 +132,7 @@ void test_websocket_content(size_t len) {
 
   auto lazy = [len]() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.async_ws_connect("ws://localhost:8090");
+    co_await client.connect("ws://localhost:8090");
     std::string send_str(len, 'a');
     co_await client.write_websocket(std::string(send_str));
     auto data = co_await client.read_websocket();
@@ -170,8 +169,7 @@ TEST_CASE("test send after server stop") {
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   coro_http_client client{};
-  REQUIRE(async_simple::coro::syncAwait(
-      client.async_ws_connect("ws://127.0.0.1:8090")));
+  async_simple::coro::syncAwait(client.connect("ws://127.0.0.1:8090"));
 
   server.stop();
 
@@ -222,7 +220,7 @@ TEST_CASE("test read write in different threads") {
   });
 
   auto lazy = [client, weak, &send_str]() -> async_simple::coro::Lazy<void> {
-    co_await client->async_ws_connect("ws://localhost:8090");
+    co_await client->connect("ws://localhost:8090");
     for (int i = 0; i < 100; i++) {
       auto data = co_await client->write_websocket(std::string(send_str));
       if (data.net_err) {
@@ -240,8 +238,8 @@ TEST_CASE("test read write in different threads") {
 
 async_simple::coro::Lazy<void> test_websocket() {
   coro_http_client client{};
-  bool r = co_await client.async_ws_connect("ws://127.0.0.1:8089/ws_echo");
-  if (!r) {
+  auto r = co_await client.connect("ws://127.0.0.1:8089/ws_echo");
+  if (r.net_err) {
     co_return;
   }
 
