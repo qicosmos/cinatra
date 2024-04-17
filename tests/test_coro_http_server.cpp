@@ -825,7 +825,7 @@ TEST_CASE("test websocket with chunked") {
 
   coro_http_client client{};
   async_simple::coro::syncAwait(
-      client.async_ws_connect("ws://127.0.0.1:9001/ws_source"));
+      client.connect("ws://127.0.0.1:9001/ws_source"));
 
   std::string filename = "test.tmp";
   create_file(filename);
@@ -911,7 +911,7 @@ TEST_CASE("test websocket") {
 
   auto lazy = []() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo");
+    co_await client.connect("ws://127.0.0.1:9001/ws_echo");
     co_await client.write_websocket("test2fdsaf", true, opcode::binary);
     auto data = co_await client.read_websocket();
     CHECK(data.resp_body == "test2fdsaf");
@@ -1027,7 +1027,7 @@ TEST_CASE("test websocket binary data") {
 
   auto client1 = std::make_shared<coro_http_client>();
   async_simple::coro::syncAwait(
-      client1->async_ws_connect("ws://127.0.0.1:9001/short_binary"));
+      client1->connect("ws://127.0.0.1:9001/short_binary"));
 
   std::string short_str(127, 'A');
   async_simple::coro::syncAwait(
@@ -1035,7 +1035,7 @@ TEST_CASE("test websocket binary data") {
 
   auto client2 = std::make_shared<coro_http_client>();
   async_simple::coro::syncAwait(
-      client2->async_ws_connect("ws://127.0.0.1:9001/medium_binary"));
+      client2->connect("ws://127.0.0.1:9001/medium_binary"));
 
   std::string medium_str(65535, 'A');
   async_simple::coro::syncAwait(
@@ -1043,7 +1043,7 @@ TEST_CASE("test websocket binary data") {
 
   auto client3 = std::make_shared<coro_http_client>();
   async_simple::coro::syncAwait(
-      client3->async_ws_connect("ws://127.0.0.1:9001/long_binary"));
+      client3->connect("ws://127.0.0.1:9001/long_binary"));
 
   std::string long_str(65536, 'A');
   async_simple::coro::syncAwait(
@@ -1106,7 +1106,7 @@ TEST_CASE("test websocket with different message size") {
 
   auto lazy = [](std::string &str) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.async_ws_connect("ws://127.0.0.1:9001/ws_echo1");
+    co_await client.connect("ws://127.0.0.1:9001/ws_echo1");
     co_await client.write_websocket(str);
     auto data = co_await client.read_websocket();
     CHECK(data.resp_body.size() == str.size());
