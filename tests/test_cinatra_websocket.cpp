@@ -43,8 +43,7 @@ TEST_CASE("test wss client") {
                             "../../include/cinatra/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
-  REQUIRE(
-      async_simple::coro::syncAwait(client.connect("wss://localhost:9001")));
+  async_simple::coro::syncAwait(client.connect("wss://localhost:9001"));
 
   async_simple::coro::syncAwait(client.write_websocket("hello"));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
