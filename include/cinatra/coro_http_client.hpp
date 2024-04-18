@@ -354,15 +354,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_GZIP
     if (enable_ws_deflate_) {
       for (auto c : data.resp_headers) {
-        std::cout << c.name << " value is: " << c.value << std::endl;
         if (c.name == "Sec-WebSocket-Extensions") {
-          std::cout << "have extensions\n";
           if (c.value.find("permessage-deflate;") != std::string::npos) {
-            std::cout << "support deflate extensions\n";
             is_server_support_ws_deflate_ = true;
           }
           else {
-            std::cout << "not support deflate extensions\n";
             is_server_support_ws_deflate_ = false;
           }
           break;
