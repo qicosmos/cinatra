@@ -423,13 +423,13 @@ auto r = async_simple::coro::syncAwait(
 ```
 # websocket
 websocket 的支持需要3步：
-- 设置读websocket 数据的回调函数；
 - 连接服务器；
 - 发送websocket 数据；
+- 读websocket 数据；
 
-设置websocket 读数据接口:
+websocket 读数据接口:
 ```c++
-void on_ws_msg(std::function<void(resp_data)> on_ws_msg);
+async_simple::coro::Lazy<resp_data> read_websocket();
 ```
 websocket 连接服务器接口:
 ```c++
@@ -458,10 +458,8 @@ enum opcode : std::uint8_t {
 
 /// 发送websocket 数据
 /// \param msg 要发送的websocket 数据
-/// \param need_mask 是否需要对数据进行mask，默认会mask
 /// \param op opcode 一般为text、binary或 close 等类型
 async_simple::coro::Lazy<resp_data> write_websocket(std::string msg,
-                                                  bool need_mask = true,
                                                   opcode op = opcode::text);
 ```
 

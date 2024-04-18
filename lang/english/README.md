@@ -414,26 +414,15 @@ async_simple::coro::Lazy<void> test_download() {
 ```c++
 async_simple::coro::Lazy<void> test_websocket() {
   coro_http_client client{};
-  client.on_ws_close([](std::string_view reason) {
-    std::cout << "web socket close " << reason << std::endl;
-  });
-  client.on_ws_msg([](resp_data data) {
-    if (data.net_err) {
-      std::cout << data.net_err.message() << "\n";
-      return;
-    }
-    std::cout << data.resp_body << std::endl;
-  });
-
   auto r = co_await client.connect("ws://localhost:8090/ws");
   if (r.net_err) {
     co_return;
   }
 
-  co_await client.write_websocket("hello websocket");  // mask as default.
+  co_await client.write_websocket("hello websocket");
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == "hello websocket");
-  co_await client.write_websocket("test again", /*need_mask = */ false);
+  co_await client.write_websocket("test again");
   data = co_await client.read_websocket();
   CHECK(data.resp_body == "test again");
   co_await client.write_websocket("ws close");
