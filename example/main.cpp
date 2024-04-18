@@ -201,7 +201,7 @@ async_simple::coro::Lazy<void> use_websocket() {
   }
 
   auto result =
-      co_await client.write_websocket("hello websocket");  // mask as default.
+      co_await client.write_websocket("hello websocket");
   assert(!result.net_err);
   auto data = co_await client.read_websocket();
   assert(data.resp_body == "hello websocket");
