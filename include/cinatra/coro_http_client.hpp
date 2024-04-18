@@ -1612,14 +1612,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-      if (chunk_size == 0) {
-        // all finished, no more data
-        chunked_buf_.consume(CRCF.size());
-        data.status = 200;
-        data.eof = true;
-        break;
-      }
-
       if (additional_size < size_t(chunk_size + 2)) {
         // not a complete chunk, read left chunk data.
         size_t size_to_read = chunk_size + 2 - additional_size;
@@ -1628,6 +1620,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             ec) {
           break;
         }
+      }
+
+      if (chunk_size == 0) {
+        // all finished, no more data
+        chunked_buf_.consume(chunked_buf_.size());
+        data.status = 200;
+        data.eof = true;
+        break;
       }
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
