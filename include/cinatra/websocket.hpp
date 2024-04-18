@@ -127,8 +127,8 @@ class websocket {
     return {msg_header_, header_length};
   }
 
-
-  std::string encode_frame(std::span<char> &data, opcode op, bool eof, bool need_compression = false) {
+  std::string encode_frame(std::span<char> &data, opcode op, bool eof,
+                           bool need_compression = false) {
     std::string header;
     /// Base header.
     frame_header hdr{};

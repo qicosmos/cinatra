@@ -64,7 +64,8 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
   auto result = co_await client.write_websocket("hello websocket");
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == "hello websocket");
-  co_await client.write_websocket("test again");
+  co_await client.write_websocket("test again", /*need_mask = */
+                                  false);
   data = co_await client.read_websocket();
   CHECK(data.resp_body == "test again");
   co_await client.write_websocket_close("ws close");
@@ -242,8 +243,7 @@ async_simple::coro::Lazy<void> test_websocket() {
     co_return;
   }
 
-  co_await client.write_websocket(std::string_view("test2fdsaf"),
-                                  opcode::binary);
+  co_await client.write_websocket("test2fdsaf", true, opcode::binary);
   auto data = co_await client.read_websocket();
   CHECK(data.resp_body == "test2fdsaf");
 
