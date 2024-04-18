@@ -802,6 +802,8 @@ TEST_CASE("test websocket with chunked") {
             break;
           }
 
+          std::cout << result.data.size() << "\n";
+
           if (result.data.size() < ws_chunk_size) {
             CHECK(result.data.size() == 24);
             CHECK(result.eof);
@@ -841,7 +843,7 @@ TEST_CASE("test websocket with chunked") {
   };
 
   async_simple::coro::syncAwait(
-      client.write_websocket(std::move(source_fn), true, opcode::binary));
+      client.write_websocket(std::move(source_fn), opcode::binary));
 
   auto data = async_simple::coro::syncAwait(client.read_websocket());
   if (data.net_err) {
@@ -912,16 +914,17 @@ TEST_CASE("test websocket") {
   auto lazy = []() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
     co_await client.connect("ws://127.0.0.1:9001/ws_echo");
-    co_await client.write_websocket("test2fdsaf", true, opcode::binary);
+    co_await client.write_websocket(std::string_view("test2fdsaf"),
+                                    opcode::binary);
     auto data = co_await client.read_websocket();
     CHECK(data.resp_body == "test2fdsaf");
     co_await client.write_websocket("test_ws");
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "test_ws");
-    co_await client.write_websocket("PING", false, opcode::ping);
+    co_await client.write_websocket("PING", opcode::ping);
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "pong");
-    co_await client.write_websocket("PONG", false, opcode::pong);
+    co_await client.write_websocket("PONG", opcode::pong);
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "ping");
     co_await client.write_websocket_close("normal close");
@@ -1031,7 +1034,7 @@ TEST_CASE("test websocket binary data") {
 
   std::string short_str(127, 'A');
   async_simple::coro::syncAwait(
-      client1->write_websocket(std::move(short_str), true, opcode::binary));
+      client1->write_websocket(std::move(short_str), opcode::binary));
 
   auto client2 = std::make_shared<coro_http_client>();
   async_simple::coro::syncAwait(
@@ -1039,7 +1042,7 @@ TEST_CASE("test websocket binary data") {
 
   std::string medium_str(65535, 'A');
   async_simple::coro::syncAwait(
-      client2->write_websocket(std::move(medium_str), true, opcode::binary));
+      client2->write_websocket(std::move(medium_str), opcode::binary));
 
   auto client3 = std::make_shared<coro_http_client>();
   async_simple::coro::syncAwait(
@@ -1047,7 +1050,7 @@ TEST_CASE("test websocket binary data") {
 
   std::string long_str(65536, 'A');
   async_simple::coro::syncAwait(
-      client3->write_websocket(std::move(long_str), true, opcode::binary));
+      client3->write_websocket(std::move(long_str), opcode::binary));
 
   async_simple::coro::syncAwait(client1->write_websocket_close());
   async_simple::coro::syncAwait(client2->write_websocket_close());
