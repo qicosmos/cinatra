@@ -524,13 +524,6 @@ class coro_http_connection
 
     chunked_buf_.consume(size);
 
-    if (chunk_size == 0) {
-      // all finished, no more data
-      chunked_buf_.consume(CRCF.size());
-      result.eof = true;
-      co_return result;
-    }
-
     if (additional_size < size_t(chunk_size + 2)) {
       // not a complete chunk, read left chunk data.
       size_t size_to_read = chunk_size + 2 - additional_size;
@@ -540,6 +533,13 @@ class coro_http_connection
         close();
         co_return result;
       }
+    }
+
+    if (chunk_size == 0) {
+      // all finished, no more data
+      chunked_buf_.consume(chunked_buf_.size());
+      result.eof = true;
+      co_return result;
     }
 
     data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
