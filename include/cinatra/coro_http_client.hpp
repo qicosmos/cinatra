@@ -362,24 +362,36 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<resp_data> write_websocket(
-      const char *data, bool need_mask = true, opcode op = opcode::text) {
+      const char *data, opcode op = opcode::text) {
     std::string str(data);
-    co_return co_await write_websocket(std::span<char>(str), need_mask, op);
+    co_return co_await write_websocket(str, op);
   }
 
   async_simple::coro::Lazy<resp_data> write_websocket(
-      std::string &data, bool need_mask = true, opcode op = opcode::text) {
-    co_return co_await write_websocket(std::span<char>(data), need_mask, op);
+      const char *data, size_t size, opcode op = opcode::text) {
+    std::string str(data, size);
+    co_return co_await write_websocket(str, op);
   }
 
   async_simple::coro::Lazy<resp_data> write_websocket(
-      std::string &&data, bool need_mask = true, opcode op = opcode::text) {
-    co_return co_await write_websocket(std::span<char>(data), need_mask, op);
+      std::string_view data, opcode op = opcode::text) {
+    std::string str(data);
+    co_return co_await write_websocket(str, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      std::string &data, opcode op = opcode::text) {
+    co_return co_await write_websocket(std::span<char>(data), op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      std::string &&data, opcode op = opcode::text) {
+    co_return co_await write_websocket(std::span<char>(data), op);
   }
 
   template <typename Source>
   async_simple::coro::Lazy<resp_data> write_websocket(
-      Source source, bool need_mask = true, opcode op = opcode::text) {
+      Source source, opcode op = opcode::text) {
     resp_data data{};
 
     websocket ws{};
@@ -399,7 +411,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         if (cinatra::gzip_codec::deflate(
                 std::string(source.begin(), source.end()), dest_buf)) {
           std::span<char> msg(dest_buf.data(), dest_buf.size());
-          auto header = ws.encode_frame(msg, op, need_mask, true, true);
+          auto header = ws.encode_frame(msg, op, true, true);
           std::vector<asio::const_buffer> buffers;
           buffers.push_back(asio::buffer(header));
           buffers.push_back(asio::buffer(dest_buf));
@@ -418,8 +430,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
       else {
-#endif
-        std::string encode_header = ws.encode_frame(source, op, need_mask);
+      std::string encode_header = ws.encode_frame(source, op, true);
+      std::vector<asio::const_buffer> buffers{
+          asio::buffer(encode_header.data(), encode_header.size()),
+          asio::buffer(source.data(), source.size())};
+
+      auto [ec, _] = co_await async_write(buffers);
+      if (ec) {
+        data.net_err = ec;
+        data.status = 404;
+      }
+    }
+    else {
+      while (true) {
+        auto result = co_await source();
+
+        std::span<char> msg(result.buf.data(), result.buf.size());
+        std::string encode_header = ws.encode_frame(msg, op, result.eof);
         std::vector<asio::const_buffer> buffers{
             asio::buffer(encode_header.data(), encode_header.size()),
             asio::buffer(source.data(), source.size())};
@@ -443,7 +470,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           if (cinatra::gzip_codec::deflate(std::string(result), dest_buf)) {
             std::span<char> msg(dest_buf.data(), dest_buf.size());
             std::string header =
-                ws.encode_frame(msg, op, need_mask, result.eof, true);
+                ws.encode_frame(msg, op, result.eof, true);
             std::vector<asio::const_buffer> buffers;
             buffers.push_back(asio::buffer(header));
             buffers.push_back(asio::buffer(dest_buf));
@@ -466,7 +493,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
           std::span<char> msg(result.buf.data(), result.buf.size());
           std::string encode_header =
-              ws.encode_frame(msg, op, need_mask, result.eof);
+              ws.encode_frame(msg, op, result.eof);
           std::vector<asio::const_buffer> buffers{
               asio::buffer(encode_header.data(), encode_header.size()),
               asio::buffer(msg.data(), msg.size())};
@@ -492,7 +519,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> write_websocket_close(
       std::string msg = "") {
-    co_return co_await write_websocket(std::move(msg), false, opcode::close);
+    co_return co_await write_websocket(std::move(msg), opcode::close);
   }
 
 #ifdef BENCHMARK_TEST
@@ -1940,7 +1967,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         auto close_str = ws.format_close_payload(close_code::normal,
                                                  reason.data(), reason.size());
         auto span = std::span<char>(close_str);
-        std::string encode_header = ws.encode_frame(span, opcode::close, false);
+        std::string encode_header = ws.encode_frame(span, opcode::close, true);
         std::vector<asio::const_buffer> buffers{asio::buffer(encode_header),
                                                 asio::buffer(reason)};
 

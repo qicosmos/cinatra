@@ -220,6 +220,61 @@ class coro_http_server {
     }
   }
 
+  template <http_method... method, typename... Aspects>
+  void set_websocket_proxy_handler(std::string url_path,
+                                   std::vector<std::string_view> hosts,
+                                   coro_io::load_blance_algorithm type =
+                                       coro_io::load_blance_algorithm::random,
+                                   std::vector<int> weights = {},
+                                   Aspects &&...aspects) {
+    if (hosts.empty()) {
+      throw std::invalid_argument("not config hosts yet!");
+    }
+
+    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
+        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
+                                                   weights));
+
+    set_http_handler<cinatra::GET>(
+        url_path,
+        [channel](coro_http_request &req,
+                  coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          websocket_result result{};
+          while (true) {
+            result = co_await req.get_conn()->read_websocket();
+            if (result.ec) {
+              break;
+            }
+
+            if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+              CINATRA_LOG_INFO << "close frame";
+              break;
+            }
+
+            co_await channel->send_request(
+                [&req, result](
+                    coro_http_client &client,
+                    std::string_view host) -> async_simple::coro::Lazy<void> {
+                  auto r =
+                      co_await client.write_websocket(std::string(result.data));
+                  if (r.net_err) {
+                    co_return;
+                  }
+                  auto data = co_await client.read_websocket();
+                  if (data.net_err) {
+                    co_return;
+                  }
+                  auto ec = co_await req.get_conn()->write_websocket(
+                      std::string(result.data));
+                  if (ec) {
+                    co_return;
+                  }
+                });
+          }
+        },
+        std::forward<Aspects>(aspects)...);
+  }
+
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
     for (const auto &file :
