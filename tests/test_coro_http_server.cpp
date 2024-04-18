@@ -1487,3 +1487,43 @@ TEST_CASE("test reverse proxy") {
   std::cout << resp_random.resp_body << "\n";
   CHECK(!resp_random.resp_body.empty());
 }
+
+TEST_CASE("test reverse proxy websocket") {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_echo",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_content_type() == content_type::websocket);
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+  server.async_start();
+
+  coro_http_server proxy_server(1, 9002);
+  proxy_server.set_websocket_proxy_handler("/ws_echo",
+                                           {"ws://127.0.0.1:9001/ws_echo"});
+  proxy_server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  auto r = async_simple::coro::syncAwait(
+      client.connect("ws://127.0.0.1:9002/ws_echo"));
+  CHECK(!r.net_err);
+  for (int i = 0; i < 10; i++) {
+    async_simple::coro::syncAwait(client.write_websocket("test websocket"));
+    auto data = async_simple::coro::syncAwait(client.read_websocket());
+    std::cout << data.resp_body << "\n";
+    CHECK(data.resp_body == "test websocket");
+  }
+}
