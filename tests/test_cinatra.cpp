@@ -397,6 +397,26 @@ async_simple::coro::Lazy<void> test_collect_all() {
   thd.join();
 }
 
+TEST_CASE("test default http handler") {
+  coro_http_server server(1, 9001);
+  server.set_default_handler([](coro_http_request &req,
+                                coro_http_response &resp) {
+    resp.set_status_and_content(status_type::ok, "It is from default handler");
+  });
+  server.async_start();
+
+  for (int i = 0; i < 5; i++) {
+    coro_http_client client{};
+    async_simple::coro::syncAwait(client.connect("http://127.0.0.1:9001"));
+    auto data = client.get("/test");
+    CHECK(data.resp_body == "It is from default handler");
+    data = client.get("/test_again");
+    CHECK(data.resp_body == "It is from default handler");
+    data = client.get("/any");
+    CHECK(data.resp_body == "It is from default handler");
+  }
+}
+
 TEST_CASE("test request with out buffer") {
   std::string str;
   str.resize(10);
