@@ -550,6 +550,11 @@ class coro_http_server {
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
 
+  void set_default_handler(
+      std::function<void(coro_http_request &, coro_http_response &)> handler) {
+    default_handler_ = std::move(handler);
+  }
+
   size_t connection_count() {
     std::scoped_lock lock(conn_mtx_);
     return connections_.size();
@@ -654,6 +659,9 @@ class coro_http_server {
       }
       if (need_check_) {
         conn->set_check_timeout(true);
+      }
+      if (default_handler_) {
+        conn->set_default_handler(default_handler_);
       }
 
 #ifdef CINATRA_ENABLE_SSL
@@ -915,6 +923,8 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
+  std::function<void(coro_http_request &, coro_http_response &)>
+      default_handler_ = nullptr;
 };
 
 using http_server = coro_http_server;
