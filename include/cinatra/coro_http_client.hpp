@@ -340,8 +340,27 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   async_simple::coro::Lazy<resp_data> write_websocket(
       const char *data, bool need_mask = true, opcode op = opcode::text) {
-    std::string str(data);
-    co_return co_await write_websocket(std::span<char>(str), need_mask, op);
+    std::string_view str(data);
+    co_return co_await write_websocket(str, need_mask, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      const char *data, size_t size, bool need_mask = true,
+      opcode op = opcode::text) {
+    std::string_view str(data, size);
+    co_return co_await write_websocket(str, need_mask, op);
+  }
+
+  async_simple::coro::Lazy<resp_data> write_websocket(
+      std::string_view data, bool need_mask = true, opcode op = opcode::text) {
+    std::string str;
+    if (need_mask) {
+      str = std::string{data};
+      data = str;
+    }
+    return write_websocket(
+        std::span<char>(const_cast<char *>(data.data()), data.size()),
+        need_mask, op);
   }
 
   async_simple::coro::Lazy<resp_data> write_websocket(
