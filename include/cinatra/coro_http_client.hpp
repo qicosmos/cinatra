@@ -322,7 +322,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   void set_ws_sec_key(std::string sec_key) { ws_sec_key_ = std::move(sec_key); }
 
-  async_simple::coro::Lazy<bool> async_ws_connect(std::string uri, bool enable_ws_deflate = false) {
+  async_simple::coro::Lazy<bool> async_ws_connect(
+      std::string uri, bool enable_ws_deflate = false) {
     resp_data data{};
     auto [r, u] = handle_uri(data, uri);
     if (!r) {
@@ -343,7 +344,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       add_header("Sec-WebSocket-Key", ws_sec_key_);
       add_header("Sec-WebSocket-Version", "13");
 #ifdef CINATRA_ENABLE_GZIP
-      add_header("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits");
+      add_header("Sec-WebSocket-Extensions",
+                 "permessage-deflate; client_max_window_bits");
 #endif
     }
 
@@ -407,7 +409,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_GZIP
       if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
         std::string dest_buf;
-        if (cinatra::gzip_codec::deflate(std::string(source.begin(), source.end()), dest_buf)) {
+        if (cinatra::gzip_codec::deflate(
+                std::string(source.begin(), source.end()), dest_buf)) {
           std::span<char> msg(dest_buf.data(), dest_buf.size());
           auto header = ws.encode_frame(msg, op, need_mask, true, true);
           std::vector<asio::const_buffer> buffers;
@@ -421,25 +424,26 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           }
         }
         else {
-          CINATRA_LOG_ERROR << "compuress data error, data: " << std::string(source.begin(), source.end());
+          CINATRA_LOG_ERROR << "compuress data error, data: "
+                            << std::string(source.begin(), source.end());
           data.net_err = std::make_error_code(std::errc::protocol_error);
           data.status = 404;
         }
       }
       else {
 #endif
-      std::string encode_header = ws.encode_frame(source, op, need_mask);
-      std::vector<asio::const_buffer> buffers{
-          asio::buffer(encode_header.data(), encode_header.size()),
-          asio::buffer(source.data(), source.size())};
+        std::string encode_header = ws.encode_frame(source, op, need_mask);
+        std::vector<asio::const_buffer> buffers{
+            asio::buffer(encode_header.data(), encode_header.size()),
+            asio::buffer(source.data(), source.size())};
 
-      auto [ec, _] = co_await async_write(buffers);
-      if (ec) {
-        data.net_err = ec;
-        data.status = 404;
-      }
+        auto [ec, _] = co_await async_write(buffers);
+        if (ec) {
+          data.net_err = ec;
+          data.status = 404;
+        }
 #ifdef CINATRA_ENABLE_GZIP
-    }
+      }
 #endif
     }
     else {
@@ -447,51 +451,52 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         auto result = co_await source();
 
 #ifdef CINATRA_ENABLE_GZIP
-      if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
-        std::string dest_buf;
-        if (cinatra::gzip_codec::deflate(std::string(result), dest_buf)) {
-          std::span<char> msg(dest_buf.data(), dest_buf.size());
-          std::string header =
-              ws.encode_frame(msg, op, need_mask, result.eof, true);
-          std::vector<asio::const_buffer> buffers;
-          buffers.push_back(asio::buffer(header));
-          buffers.push_back(asio::buffer(dest_buf));
+        if (enable_ws_deflate_ && is_server_support_ws_deflate_) {
+          std::string dest_buf;
+          if (cinatra::gzip_codec::deflate(std::string(result), dest_buf)) {
+            std::span<char> msg(dest_buf.data(), dest_buf.size());
+            std::string header =
+                ws.encode_frame(msg, op, need_mask, result.eof, true);
+            std::vector<asio::const_buffer> buffers;
+            buffers.push_back(asio::buffer(header));
+            buffers.push_back(asio::buffer(dest_buf));
 
-          auto [ec, sz] = co_await async_write(buffers);
-          if (ec) {
-            data.net_err = ec;
+            auto [ec, sz] = co_await async_write(buffers);
+            if (ec) {
+              data.net_err = ec;
+              data.status = 404;
+            }
+          }
+          else {
+            CINATRA_LOG_ERROR << "compuress data error, data: "
+                              << std::string(source.begin(), source.end());
+            data.net_err = std::make_error_code(std::errc::protocol_error);
             data.status = 404;
           }
         }
         else {
-          CINATRA_LOG_ERROR << "compuress data error, data: " << std::string(source.begin(), source.end());
-          data.net_err = std::make_error_code(std::errc::protocol_error);
-          data.status = 404;
-        }
-      }
-      else {
 #endif
 
-        std::span<char> msg(result.buf.data(), result.buf.size());
-        std::string encode_header =
-            ws.encode_frame(msg, op, need_mask, result.eof);
-        std::vector<asio::const_buffer> buffers{
-            asio::buffer(encode_header.data(), encode_header.size()),
-            asio::buffer(msg.data(), msg.size())};
+          std::span<char> msg(result.buf.data(), result.buf.size());
+          std::string encode_header =
+              ws.encode_frame(msg, op, need_mask, result.eof);
+          std::vector<asio::const_buffer> buffers{
+              asio::buffer(encode_header.data(), encode_header.size()),
+              asio::buffer(msg.data(), msg.size())};
 
-        auto [ec, _] = co_await async_write(buffers);
-        if (ec) {
-          data.net_err = ec;
-          data.status = 404;
-          break;
-        }
+          auto [ec, _] = co_await async_write(buffers);
+          if (ec) {
+            data.net_err = ec;
+            data.status = 404;
+            break;
+          }
 
-        if (result.eof) {
-          break;
+          if (result.eof) {
+            break;
+          }
         }
+#ifdef CINATRA_ENABLE_GZIP
       }
-#ifdef CINATRA_ENABLE_GZIP   
-    }
 #endif
     }
 
@@ -1933,10 +1938,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
 #ifdef CINATRA_ENABLE_GZIP
-      if (!is_close_frame && is_server_support_ws_deflate_ && enable_ws_deflate_) {
+      if (!is_close_frame && is_server_support_ws_deflate_ &&
+          enable_ws_deflate_) {
         std::string out;
-        if (!cinatra::gzip_codec::inflate(std::string(data_ptr), out))
-        {
+        if (!cinatra::gzip_codec::inflate(std::string(data_ptr), out)) {
           CINATRA_LOG_ERROR << "uncompuress data error";
           data.status = 404;
           data.net_err = std::make_error_code(std::errc::protocol_error);
@@ -1948,8 +1953,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else {
 #endif
-      data.status = 200;
-      data.resp_body = {data_ptr, payload_len};
+        data.status = 200;
+        data.resp_body = {data_ptr, payload_len};
 #ifdef CINATRA_ENABLE_GZIP
       }
 #endif

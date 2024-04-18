@@ -121,7 +121,8 @@ class websocket {
     return ws_frame_type::WS_BINARY_FRAME;
   }
 
-  std::string format_header(size_t length, opcode code, bool is_compressed = false) {
+  std::string format_header(size_t length, opcode code,
+                            bool is_compressed = false) {
     size_t header_length = encode_header(length, code, is_compressed);
     return {msg_header_, header_length};
   }

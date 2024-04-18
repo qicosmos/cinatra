@@ -652,16 +652,15 @@ class coro_http_connection
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
 #ifdef CINATRA_ENABLE_GZIP
             std::string out;
-            if (is_client_ws_compressed_)
-            {
-                if (!cinatra::gzip_codec::inflate(std::string(payload.begin(), payload.end()), out))
-                {
-                  CINATRA_LOG_ERROR << "uncompuress data error";
-                  result.ec = std::make_error_code(std::errc::protocol_error);
-                  break;
-                }
-                result.eof = true;
-                result.data = {out.data(), out.size()};
+            if (is_client_ws_compressed_) {
+              if (!cinatra::gzip_codec::inflate(
+                      std::string(payload.begin(), payload.end()), out)) {
+                CINATRA_LOG_ERROR << "uncompuress data error";
+                result.ec = std::make_error_code(std::errc::protocol_error);
+                break;
+              }
+              result.eof = true;
+              result.data = {out.data(), out.size()};
             }
             else {
               result.eof = true;
@@ -862,7 +861,8 @@ class coro_http_connection
     }
 #ifdef CINATRA_ENABLE_GZIP
     if (is_client_ws_compressed_) {
-      response_.add_header("Sec-WebSocket-Extensions", "permessage-deflate; client_no_context_takeover");
+      response_.add_header("Sec-WebSocket-Extensions",
+                           "permessage-deflate; client_no_context_takeover");
     }
 #endif
   }
