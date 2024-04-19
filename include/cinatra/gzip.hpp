@@ -141,7 +141,7 @@ inline int uncompress_file(const char *src_file, const char *out_file_name) {
   return 0;
 }
 
-inline bool inflate(const std::string &str_src, std::string &str_dest) {
+inline bool inflate(std::string_view str_src, std::string &str_dest) {
   int err = Z_DATA_ERROR;
   // Create stream
   z_stream zs = {0};
@@ -157,7 +157,7 @@ inline bool inflate(const std::string &str_src, std::string &str_dest) {
   }
 
   // Use whatever input is provided
-  zs.next_in = (Bytef *)(str_src.c_str());
+  zs.next_in = (Bytef *)(str_src.data());
   zs.avail_in = str_src.length();
 
   do {
@@ -217,7 +217,7 @@ inline bool inflate(const std::string &str_src, std::string &str_dest) {
   return err == Z_OK;
 }
 
-inline bool deflate(const std::string &str_src, std::string &str_dest) {
+inline bool deflate(std::string_view str_src, std::string &str_dest) {
   int err = Z_DATA_ERROR;
   // Create stream
   z_stream zs = {0};
@@ -232,7 +232,7 @@ inline bool deflate(const std::string &str_src, std::string &str_dest) {
     return false;
   }
   // Use whatever input is provided
-  zs.next_in = (Bytef *)(str_src.c_str());
+  zs.next_in = (Bytef *)(str_src.data());
   zs.avail_in = str_src.length();
 
   do {

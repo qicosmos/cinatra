@@ -573,38 +573,30 @@ class coro_http_connection
 
   async_simple::coro::Lazy<std::error_code> write_websocket(
       std::string_view msg, opcode op = opcode::text) {
+    std::vector<asio::const_buffer> buffers;
+    std::string header;
 #ifdef CINATRA_ENABLE_GZIP
+    std::string dest_buf;
     if (is_client_ws_compressed_ && msg.size() > 0) {
-      std::string dest_buf;
-      std::cout << "msg before: " << msg << std::endl;
-      if (!cinatra::gzip_codec::deflate(std::string(msg), dest_buf)) {
+      if (!cinatra::gzip_codec::deflate(msg, dest_buf)) {
         CINATRA_LOG_ERROR << "compuress data error, data: " << msg;
         co_return std::make_error_code(std::errc::protocol_error);
       }
 
-      std::cout << "dest_buf is: " << dest_buf << std::endl;
-
-      auto header = ws_.format_header(dest_buf.length(), op, true);
-      std::vector<asio::const_buffer> buffers;
+      header = ws_.format_header(dest_buf.length(), op, true);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(dest_buf));
-
-      auto [ec, sz] = co_await async_write(buffers);
-      co_return ec;
     }
     else {
 #endif
-
-      auto header = ws_.format_header(msg.length(), op);
-      std::vector<asio::const_buffer> buffers;
+      header = ws_.format_header(msg.length(), op);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(msg));
-
-      auto [ec, sz] = co_await async_write(buffers);
-      co_return ec;
 #ifdef CINATRA_ENABLE_GZIP
     }
 #endif
+    auto [ec, sz] = co_await async_write(buffers);
+    co_return ec;
   }
 
   async_simple::coro::Lazy<websocket_result> read_websocket() {
@@ -661,16 +653,15 @@ class coro_http_connection
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
 #ifdef CINATRA_ENABLE_GZIP
             if (is_client_ws_compressed_) {
-              std::cout << "come to inflate logic\n";
-              std::string out;
+              inflate_str_.clear();
               if (!cinatra::gzip_codec::inflate(
-                      std::string(payload.begin(), payload.end()), out)) {
+                      {payload.data(), payload.size()}, inflate_str_)) {
                 CINATRA_LOG_ERROR << "uncompuress data error";
                 result.ec = std::make_error_code(std::errc::protocol_error);
                 break;
               }
               result.eof = true;
-              result.data = {out.data(), out.size()};
+              result.data = {inflate_str_.data(), inflate_str_.size()};
               break;
             }
             else {
@@ -901,6 +892,7 @@ class coro_http_connection
 
 #ifdef CINATRA_ENABLE_GZIP
   bool is_client_ws_compressed_ = false;
+  std::string inflate_str_;
 #endif
 
   websocket ws_;
