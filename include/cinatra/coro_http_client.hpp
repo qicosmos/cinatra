@@ -276,17 +276,20 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return std::move(body_);
   }
 
+#ifdef CINATRA_ENABLE_GZIP
+  void set_ws_deflate(bool enable_ws_deflate) {
+    enable_ws_deflate_ = enable_ws_deflate;
+  }
+#endif
+
   // only make socket connet(or handshake) to the host
-  async_simple::coro::Lazy<resp_data> connect(std::string uri,
-                                              bool enable_ws_deflate = false) {
+  async_simple::coro::Lazy<resp_data> connect(std::string uri) {
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
     if (no_schema) {
       append_uri.append("http://").append(uri);
     }
-
-    enable_ws_deflate_ = enable_ws_deflate;
 
     auto [ok, u] = handle_uri(data, no_schema ? append_uri : uri);
     if (!ok) {
@@ -2123,8 +2126,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
 
-  bool enable_ws_deflate_ = false;
 #ifdef CINATRA_ENABLE_GZIP
+  bool enable_ws_deflate_ = false;
   bool is_server_support_ws_deflate_ = false;
   std::string inflate_str_;
 #endif

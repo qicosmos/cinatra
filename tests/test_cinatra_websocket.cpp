@@ -325,8 +325,9 @@ TEST_CASE("test websocket permessage defalte") {
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   coro_http_client client{};
+  client.set_ws_deflate(true);
   async_simple::coro::syncAwait(
-      client.connect("ws://localhost:8090/ws_extesion", true));
+      client.connect("ws://localhost:8090/ws_extesion"));
 
   std::string send_str("test");
 
