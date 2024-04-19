@@ -21,6 +21,9 @@
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
+#ifdef CINATRA_ENABLE_GZIP
+#include "gzip.hpp"
+#endif
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 
@@ -132,6 +135,14 @@ class coro_http_connection
         if (body_len == 0) {
           if (parser_.method() == "GET"sv) {
             if (request_.is_upgrade()) {
+#ifdef CINATRA_ENABLE_GZIP
+              if (request_.is_support_compressed()) {
+                is_client_ws_compressed_ = true;
+              }
+              else {
+                is_client_ws_compressed_ = false;
+              }
+#endif
               // websocket
               build_ws_handshake_head();
               bool ok = co_await reply(true);  // response ws handshake
@@ -562,11 +573,28 @@ class coro_http_connection
 
   async_simple::coro::Lazy<std::error_code> write_websocket(
       std::string_view msg, opcode op = opcode::text) {
-    auto header = ws_.format_header(msg.length(), op);
     std::vector<asio::const_buffer> buffers;
-    buffers.push_back(asio::buffer(header));
-    buffers.push_back(asio::buffer(msg));
+    std::string header;
+#ifdef CINATRA_ENABLE_GZIP
+    std::string dest_buf;
+    if (is_client_ws_compressed_ && msg.size() > 0) {
+      if (!cinatra::gzip_codec::deflate(msg, dest_buf)) {
+        CINATRA_LOG_ERROR << "compuress data error, data: " << msg;
+        co_return std::make_error_code(std::errc::protocol_error);
+      }
 
+      header = ws_.format_header(dest_buf.length(), op, true);
+      buffers.push_back(asio::buffer(header));
+      buffers.push_back(asio::buffer(dest_buf));
+    }
+    else {
+#endif
+      header = ws_.format_header(msg.length(), op);
+      buffers.push_back(asio::buffer(header));
+      buffers.push_back(asio::buffer(msg));
+#ifdef CINATRA_ENABLE_GZIP
+    }
+#endif
     auto [ec, sz] = co_await async_write(buffers);
     co_return ec;
   }
@@ -623,8 +651,27 @@ class coro_http_connection
             break;
           case cinatra::ws_frame_type::WS_TEXT_FRAME:
           case cinatra::ws_frame_type::WS_BINARY_FRAME: {
-            result.eof = true;
-            result.data = {payload.data(), payload.size()};
+#ifdef CINATRA_ENABLE_GZIP
+            if (is_client_ws_compressed_) {
+              inflate_str_.clear();
+              if (!cinatra::gzip_codec::inflate(
+                      {payload.data(), payload.size()}, inflate_str_)) {
+                CINATRA_LOG_ERROR << "uncompuress data error";
+                result.ec = std::make_error_code(std::errc::protocol_error);
+                break;
+              }
+              result.eof = true;
+              result.data = {inflate_str_.data(), inflate_str_.size()};
+              break;
+            }
+            else {
+#endif
+              result.eof = true;
+              result.data = {payload.data(), payload.size()};
+              break;
+#ifdef CINATRA_ENABLE_GZIP
+            }
+#endif
           } break;
           case cinatra::ws_frame_type::WS_CLOSE_FRAME: {
             close_frame close_frame =
@@ -811,6 +858,12 @@ class coro_http_connection
     response_.add_header("Connection", "Upgrade");
     response_.add_header("Sec-WebSocket-Accept", std::string(accept_key, 28));
     auto protocal_str = request_.get_header_value("sec-websocket-protocol");
+#ifdef CINATRA_ENABLE_GZIP
+    if (is_client_ws_compressed_) {
+      response_.add_header("Sec-WebSocket-Extensions",
+                           "permessage-deflate; client_no_context_takeover");
+    }
+#endif
     if (!protocal_str.empty()) {
       response_.add_header("Sec-WebSocket-Protocol", std::string(protocal_str));
     }
@@ -836,6 +889,11 @@ class coro_http_connection
   std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
   uint64_t max_part_size_ = 8 * 1024 * 1024;
   std::string resp_str_;
+
+#ifdef CINATRA_ENABLE_GZIP
+  bool is_client_ws_compressed_ = false;
+  std::string inflate_str_;
+#endif
 
   websocket ws_;
 #ifdef CINATRA_ENABLE_SSL

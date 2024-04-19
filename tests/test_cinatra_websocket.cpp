@@ -278,3 +278,66 @@ TEST_CASE("test client quit after send msg") {
 
   async_simple::coro::syncAwait(test_websocket());
 }
+
+#ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("test websocket permessage defalte") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::GET>(
+      "/ws_extesion",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        websocket_result result{};
+        while (true) {
+          result = co_await req.get_conn()->read_websocket();
+          if (result.ec) {
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_CLOSE_FRAME) {
+            std::cout << "close frame\n";
+            break;
+          }
+
+          if (result.type == ws_frame_type::WS_TEXT_FRAME ||
+              result.type == ws_frame_type::WS_BINARY_FRAME) {
+            CHECK(result.data == "test");
+          }
+          else if (result.type == ws_frame_type::WS_PING_FRAME ||
+                   result.type == ws_frame_type::WS_PONG_FRAME) {
+            // ping pong frame just need to continue, no need echo anything,
+            // because framework has reply ping/pong msg to client
+            // automatically.
+            continue;
+          }
+          else {
+            // error frame
+            break;
+          }
+
+          auto ec = co_await req.get_conn()->write_websocket(result.data);
+          if (ec) {
+            break;
+          }
+        }
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  coro_http_client client{};
+  client.set_ws_deflate(true);
+  async_simple::coro::syncAwait(
+      client.connect("ws://localhost:8090/ws_extesion"));
+
+  std::string send_str("test");
+
+  async_simple::coro::syncAwait(client.write_websocket(send_str));
+  auto data = async_simple::coro::syncAwait(client.read_websocket());
+  CHECK(data.resp_body == "test");
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  server.stop();
+  client.close();
+}
+#endif
