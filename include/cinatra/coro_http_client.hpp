@@ -986,7 +986,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         size_t rd_size =
             source->read(file_data.data(), file_data.size()).gcount();
         std::vector<asio::const_buffer> bufs;
-        cinatra::to_chunked_buffers(bufs, {file_data.data(), rd_size},
+        std::string size_str;
+        cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
                                     source->eof());
         if (std::tie(ec, size) = co_await async_write(bufs); ec) {
           break;
@@ -1005,7 +1006,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         auto [rd_ec, rd_size] =
             co_await file.async_read(file_data.data(), file_data.size());
         std::vector<asio::const_buffer> bufs;
-        cinatra::to_chunked_buffers(bufs, {file_data.data(), rd_size},
+        std::string size_str;
+        cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
                                     file.eof());
         if (std::tie(ec, size) = co_await async_write(bufs); ec) {
           break;
@@ -1016,8 +1018,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       while (true) {
         auto result = co_await source();
         std::vector<asio::const_buffer> bufs;
+        std::string size_str;
         cinatra::to_chunked_buffers(
-            bufs, {result.buf.data(), result.buf.size()}, result.eof);
+            bufs, size_str, {result.buf.data(), result.buf.size()}, result.eof);
         if (std::tie(ec, size) = co_await async_write(bufs); ec) {
           break;
         }

@@ -367,7 +367,7 @@ class coro_http_connection
     size_t size;
     if (multi_buf_) {
       if (need_to_bufffer) {
-        response_.to_buffers(buffers_);
+        response_.to_buffers(buffers_, chunk_size_str_);
       }
       std::tie(ec, size) = co_await async_write(buffers_);
     }
@@ -392,35 +392,9 @@ class coro_http_connection
     co_return true;
   }
 
-  std::string local_address() {
-    if (has_closed_) {
-      return "";
-    }
+  std::string local_address() { return get_address_impl(false); }
 
-    std::stringstream ss;
-    std::error_code ec;
-    ss << socket_.local_endpoint(ec);
-    if (ec) {
-      return "";
-    }
-    return ss.str();
-  }
-
-  std::string remote_address() {
-    static std::string remote_addr;
-    if (has_closed_) {
-      return remote_addr;
-    }
-
-    std::stringstream ss;
-    std::error_code ec;
-    ss << socket_.remote_endpoint(ec);
-    if (ec) {
-      return remote_addr;
-    }
-    remote_addr = ss.str();
-    return ss.str();
-  }
+  std::string remote_address() { return get_address_impl(); }
 
   void set_multi_buf(bool r) { multi_buf_ = r; }
 
@@ -459,7 +433,7 @@ class coro_http_connection
                                                bool eof = false) {
     response_.set_delay(true);
     buffers_.clear();
-    to_chunked_buffers(buffers_, chunked_data, eof);
+    to_chunked_buffers(buffers_, chunk_size_str_, chunked_data, eof);
     co_return co_await reply(false);
   }
 
@@ -869,6 +843,24 @@ class coro_http_connection
     }
   }
 
+  std::string get_address_impl(bool remote = true) {
+    if (has_closed_) {
+      return "";
+    }
+
+    std::error_code ec;
+    auto pt = remote ? socket_.remote_endpoint(ec) : socket_.local_endpoint(ec);
+    if (ec) {
+      return "";
+    }
+    auto addr = pt.address().to_string(ec);
+    if (ec) {
+      return "";
+    }
+    addr.append(":").append(std::to_string(pt.port()));
+    return addr;
+  }
+
  private:
   friend class multipart_reader_t<coro_http_connection>;
   async_simple::Executor *executor_;
@@ -905,5 +897,6 @@ class coro_http_connection
   bool multi_buf_ = true;
   std::function<void(coro_http_request &, coro_http_response &)>
       default_handler_ = nullptr;
+  std::string chunk_size_str_;
 };
 }  // namespace cinatra
