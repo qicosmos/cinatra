@@ -343,9 +343,6 @@ class coro_http_server {
       }
     }
 
-    std::filesystem::path router_path =
-        std::filesystem::path(static_dir_router_path_);
-
     std::string uri;
     for (auto &file : files_) {
       auto relative_path =
