@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - coro_http_server
+      - some_fix
   pull_request:
     branches:
       - main
