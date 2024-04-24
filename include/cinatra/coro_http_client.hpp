@@ -1722,7 +1722,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (chunk_size == 0) {
         // all finished, no more data
         chunked_buf_.consume(chunked_buf_.size());
-        data.status = 200;
         data.eof = true;
         break;
       }
@@ -2125,7 +2124,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
-  bool enable_tcp_no_delay_ = false;
+  bool enable_tcp_no_delay_ = true;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
 
