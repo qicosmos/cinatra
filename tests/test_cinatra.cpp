@@ -399,10 +399,22 @@ async_simple::coro::Lazy<void> test_collect_all() {
 
 TEST_CASE("test default http handler") {
   coro_http_server server(1, 9001);
-  server.set_default_handler([](coro_http_request &req,
-                                coro_http_response &resp) {
-    resp.set_status_and_content(status_type::ok, "It is from default handler");
-  });
+  server.set_default_handler(
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok,
+                                    "It is from default handler");
+        co_return;
+      });
+  server.set_http_handler<POST>(
+      "/view",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content_view(status_type::ok,
+                                         req.get_body());  // no copy
+        co_await resp.get_conn()->reply();
+      });
   server.async_start();
 
   for (int i = 0; i < 5; i++) {
@@ -414,6 +426,10 @@ TEST_CASE("test default http handler") {
     CHECK(data.resp_body == "It is from default handler");
     data = client.get("/any");
     CHECK(data.resp_body == "It is from default handler");
+    data = async_simple::coro::syncAwait(
+        client.async_post("/view", "post string", req_content_type::string));
+    CHECK(data.status == 200);
+    CHECK(data.resp_body == "post string");
   }
 }
 
@@ -562,6 +578,7 @@ TEST_CASE("test head put and some other request") {
         std::string result = ec ? "delete failed" : "delete ok";
         resp.set_status_and_content(status_type::ok, result);
       });
+
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
