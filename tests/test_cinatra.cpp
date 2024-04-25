@@ -406,6 +406,15 @@ TEST_CASE("test default http handler") {
                                     "It is from default handler");
         co_return;
       });
+  server.set_http_handler<POST>(
+      "/view",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content_view(status_type::ok,
+                                         req.get_body());  // no copy
+        co_await resp.get_conn()->reply();
+      });
   server.async_start();
 
   for (int i = 0; i < 5; i++) {
@@ -417,6 +426,10 @@ TEST_CASE("test default http handler") {
     CHECK(data.resp_body == "It is from default handler");
     data = client.get("/any");
     CHECK(data.resp_body == "It is from default handler");
+    data = async_simple::coro::syncAwait(
+        client.async_post("/view", "post string", req_content_type::string));
+    CHECK(data.status == 200);
+    CHECK(data.resp_body == "post string");
   }
 }
 
@@ -565,21 +578,7 @@ TEST_CASE("test head put and some other request") {
         std::string result = ec ? "delete failed" : "delete ok";
         resp.set_status_and_content(status_type::ok, result);
       });
-  server.set_http_handler<POST>(
-      "/view",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        resp.set_delay(true);
-        resp.set_status_and_content_view(status_type::ok,
-                                         req.get_body());  // no copy
-        co_await resp.get_conn()->reply();
-      });
-  server.set_default_handler(
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        resp.set_status_and_content(status_type::ok, "default string");
-        co_return;
-      });
+
   server.async_start();
   std::this_thread::sleep_for(300ms);
 
@@ -588,16 +587,6 @@ TEST_CASE("test head put and some other request") {
   auto result = async_simple::coro::syncAwait(
       client.async_head("http://127.0.0.1:8090/headers"));
   CHECK(result.status == 200);
-
-  result = async_simple::coro::syncAwait(client.async_post(
-      "/not_registered", "post string", req_content_type::string));
-  CHECK(result.status == 200);
-  CHECK(result.resp_body == "default string");
-
-  result = async_simple::coro::syncAwait(
-      client.async_post("/view", "post string", req_content_type::string));
-  CHECK(result.status == 200);
-  CHECK(result.resp_body == "post string");
 
   result = async_simple::coro::syncAwait(
       client.async_patch("http://127.0.0.1:8090/"));
