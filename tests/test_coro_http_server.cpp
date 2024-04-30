@@ -1347,6 +1347,16 @@ TEST_CASE("test coro radix tree restful api") {
         });
       });
 
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/ai/robot/:messages",
+      [](coro_http_request &req,
+         coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        co_await coro_io::post([&]() {
+          CHECK(req.params_["messages"] == "android");
+          response.set_status_and_content(status_type::ok, "ok");
+        });
+      });
+
   server.async_start();
   std::this_thread::sleep_for(200ms);
 
@@ -1363,6 +1373,8 @@ TEST_CASE("test coro radix tree restful api") {
   client.post("http://127.0.0.1:9001/user/ultramarines/subscriptions/guilliman",
               "hello", req_content_type::string);
   client.post("http://127.0.0.1:9001/value/guilliman/cawl/yvraine", "hello",
+              req_content_type::string);
+  client.post("http://127.0.0.1:9001/ai/robot/android", "hello",
               req_content_type::string);
 }
 
