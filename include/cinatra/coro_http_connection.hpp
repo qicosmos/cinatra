@@ -557,7 +557,7 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<std::error_code> write_websocket(
-      std::string_view msg, opcode op = opcode::text) {
+      std::string_view msg, opcode op = opcode::text, bool eof = true) {
     std::vector<asio::const_buffer> buffers;
     std::string_view header;
 #ifdef CINATRA_ENABLE_GZIP
@@ -568,13 +568,13 @@ class coro_http_connection
         co_return std::make_error_code(std::errc::protocol_error);
       }
 
-      header = ws_.encode_ws_header(dest_buf.length(), op, true, true, false);
+      header = ws_.encode_ws_header(dest_buf.length(), op, eof, true, false);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(dest_buf));
     }
     else {
 #endif
-      header = ws_.encode_ws_header(msg.length(), op, true, false, false);
+      header = ws_.encode_ws_header(msg.length(), op, eof, false, false);
       buffers.push_back(asio::buffer(header));
       buffers.push_back(asio::buffer(msg));
 #ifdef CINATRA_ENABLE_GZIP
