@@ -260,7 +260,7 @@ class websocket {
   unsigned char msg_opcode_ = 0;
   unsigned char msg_fin_ = 0;
 
-  char msg_header_[10];
+  char msg_header_[14];
   ws_head_len len_bytes_ = SHORT_HEADER;
 };
 
