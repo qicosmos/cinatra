@@ -201,14 +201,12 @@ class websocket {
 
   std::string format_close_payload(uint16_t code, char *message,
                                    size_t length) {
-    if (length == 0) {
-      return "";
-    }
     std::string close_payload;
-    if (code) {
-      close_payload.resize(length + 2);
-      code = htons(code);
-      std::memcpy(close_payload.data(), &code, 2);
+    close_payload.resize(length + 2);
+    code = htons(code);
+    std::memcpy(close_payload.data(), &code, 2);
+
+    if (length > 0) {
       std::memcpy(close_payload.data() + 2, message, length);
     }
     return close_payload;
