@@ -50,6 +50,10 @@ add_executable(test_corofile
         test_corofile.cpp
         )
 
+add_executable(test_metric
+        test_metric.cpp
+        )
+
 if(ENABLE_FILE_IO_URING)
 if (UNIX)
         target_link_libraries(test_corofile PRIVATE uring)

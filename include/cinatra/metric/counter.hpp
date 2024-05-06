@@ -1,40 +1,31 @@
 #pragma once
+#include "guage.hpp"
 #include "metric.hpp"
 
 namespace cinatra {
-class counter_t : public metric_t {
+class counter_t {
  public:
   counter_t(std::string name, std::string help,
             std::pair<std::string, std::string> labels = {})
-      : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {}
-
-  void inc() {
-    std::lock_guard guard(mtx_);
-    value_map_[{}]++;
+      : guage_(std::move(name), std::move(help), std::move(labels)) {
+    guage_.set_metric_type(MetricType::Counter);
   }
 
+  void inc() { guage_.inc(); }
+
   void inc(const std::pair<std::string, std::string> &label, double value) {
-    assert(value > 0);
-    std::lock_guard guard(mtx_);
-    value_map_[label] += value;
+    guage_.inc(label, value);
   }
 
   void update(const std::pair<std::string, std::string> &label, double value) {
-    assert(value > 0);
-    std::lock_guard guard(mtx_);
-    value_map_[label] = value;
+    guage_.update(label, value);
   }
 
-  void reset() {
-    std::lock_guard guard(mtx_);
-    for (auto &pair : value_map_) {
-      pair.second = 0;
-    }
-  }
+  void reset() { guage_.reset(); }
+
+  auto values() { return guage_.values(); }
 
  private:
-  std::mutex mtx_;
-  std::map<std::pair<std::string, std::string>, double> value_map_;
+  guage_t guage_;
 };
 }  // namespace cinatra

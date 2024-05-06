@@ -28,6 +28,7 @@ class metric_t {
   std::string_view help() { return help_; }
 
   MetricType metric_type() { return type_; }
+  void set_metric_type(MetricType type) { type_ = type; }
 
   const std::pair<std::string, std::string> &label() { return label_; }
 
