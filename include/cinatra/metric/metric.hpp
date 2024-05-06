@@ -5,6 +5,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace cinatra {
 enum class MetricType {
@@ -13,6 +14,11 @@ enum class MetricType {
   Histogram,
   Summary,
   Nil,
+};
+
+struct sample_t {
+  double value;
+  int64_t timestamp;
 };
 
 class metric_t {
@@ -30,7 +36,9 @@ class metric_t {
   MetricType metric_type() { return type_; }
   void set_metric_type(MetricType type) { type_ = type; }
 
-  const std::pair<std::string, std::string> &label() { return label_; }
+  const std::pair<std::string, std::string>& label() { return label_; }
+
+  virtual std::map<std::pair<std::string, std::string>, sample_t> values() = 0;
 
   static void regiter_metric(std::shared_ptr<metric_t> metric) {
     std::scoped_lock guard(mtx_);
@@ -39,6 +47,33 @@ class metric_t {
     if (!pair.second) {
       throw std::invalid_argument("duplicate metric name: " + name);
     }
+  }
+
+  static void remove_metric(std::string name) {
+    std::scoped_lock guard(mtx_);
+    metric_map_.erase(name);
+  }
+
+  static auto collect() {
+    std::scoped_lock guard(mtx_);
+    return metric_map_;
+  }
+
+  static size_t metric_count() {
+    std::scoped_lock guard(mtx_);
+    return metric_map_.size();
+  }
+
+  static std::vector<std::string> metric_keys() {
+    std::vector<std::string> keys;
+    {
+      std::scoped_lock guard(mtx_);
+      for (auto& pair : metric_map_) {
+        keys.push_back(pair.first);
+      }
+    }
+
+    return keys;
   }
 
  protected:

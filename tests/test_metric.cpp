@@ -58,6 +58,32 @@ TEST_CASE("test guage") {
   CHECK(g.values()[{"GET", "200"}].value == 0);
 }
 
+TEST_CASE("test register metric") {
+  auto c = std::make_shared<counter_t>(std::string("get_count"),
+                                       std::string("get counter"),
+                                       std::pair<std::string, std::string>{});
+  metric_t::regiter_metric(c);
+  CHECK_THROWS_AS(metric_t::regiter_metric(c), std::invalid_argument);
+
+  auto g = std::make_shared<guage_t>(std::string("get_guage_count"),
+                                     std::string("get counter"),
+                                     std::pair<std::string, std::string>{});
+  metric_t::regiter_metric(g);
+
+  CHECK(metric_t::metric_count() == 2);
+  CHECK(metric_t::metric_keys().size() == 2);
+
+  c->inc();
+  g->inc();
+
+  auto map = metric_t::collect();
+  CHECK(map["get_count"]->values()[{}].value == 1);
+  CHECK(map["get_guage_count"]->values()[{}].value == 1);
+
+  metric_t::remove_metric("get_count");
+  CHECK(metric_t::metric_count() == 1);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char **argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

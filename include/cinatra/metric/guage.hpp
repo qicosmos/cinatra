@@ -4,11 +4,6 @@
 #include "metric.hpp"
 
 namespace cinatra {
-struct sample_t {
-  double value;
-  int64_t timestamp;
-};
-
 class guage_t : public metric_t {
  public:
   guage_t(std::string name, std::string help,
@@ -21,7 +16,7 @@ class guage_t : public metric_t {
     set_value(value_map_[{}], 1, op_type_t::INC);
   }
 
-  void inc(const std::pair<std::string, std::string> &label, double value) {
+  void inc(const std::pair<std::string, std::string> &label, double value = 1) {
     if (value == 0) {
       return;
     }
@@ -60,7 +55,7 @@ class guage_t : public metric_t {
     }
   }
 
-  auto values() {
+  std::map<std::pair<std::string, std::string>, sample_t> values() {
     std::lock_guard guard(mtx_);
     return value_map_;
   }

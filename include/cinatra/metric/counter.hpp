@@ -3,17 +3,19 @@
 #include "metric.hpp"
 
 namespace cinatra {
-class counter_t {
+class counter_t : public metric_t {
  public:
   counter_t(std::string name, std::string help,
             std::pair<std::string, std::string> labels = {})
-      : guage_(std::move(name), std::move(help), std::move(labels)) {
-    guage_.set_metric_type(MetricType::Counter);
+      : guage_(std::move(name), std::move(help), std::move(labels)),
+        metric_t(MetricType::Counter, std::move(name), std::move(help),
+                 std::move(labels)) {
+    // guage_.set_metric_type(MetricType::Counter);
   }
 
   void inc() { guage_.inc(); }
 
-  void inc(const std::pair<std::string, std::string> &label, double value) {
+  void inc(const std::pair<std::string, std::string> &label, double value = 1) {
     guage_.inc(label, value);
   }
 
@@ -23,7 +25,9 @@ class counter_t {
 
   void reset() { guage_.reset(); }
 
-  auto values() { return guage_.values(); }
+  std::map<std::pair<std::string, std::string>, sample_t> values() {
+    return guage_.values();
+  }
 
  private:
   guage_t guage_;
