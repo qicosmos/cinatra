@@ -17,7 +17,7 @@ class guage_t : public metric_t {
     set_value(value_map_[{}], 1, op_type_t::INC);
   }
 
-  void inc(const std::pair<std::string, std::string> &label, double value = 1) {
+  void inc(const std::vector<std::string> &label, double value = 1) {
     if (value == 0) {
       return;
     }
@@ -33,7 +33,7 @@ class guage_t : public metric_t {
     set_value(value_map_[{}], 1, op_type_t::DEC);
   }
 
-  void dec(const std::pair<std::string, std::string> &label, double value) {
+  void dec(const std::vector<std::string> &label, double value) {
     if (value == 0) {
       return;
     }
@@ -44,7 +44,7 @@ class guage_t : public metric_t {
     set_value(value_map_[label], value, op_type_t::DEC);
   }
 
-  void update(const std::pair<std::string, std::string> &label, double value) {
+  void update(const std::vector<std::string> &label, double value) {
     std::lock_guard guard(mtx_);
     set_value(value_map_[label], value, op_type_t::SET);
   }
@@ -56,7 +56,9 @@ class guage_t : public metric_t {
     }
   }
 
-  std::map<std::pair<std::string, std::string>, sample_t> values() {
+  std::map<std::vector<std::string>, sample_t,
+           std::less<std::vector<std::string>>>
+  values() {
     std::lock_guard guard(mtx_);
     return value_map_;
   }
@@ -82,6 +84,8 @@ class guage_t : public metric_t {
   }
 
   std::mutex mtx_;
-  std::map<std::pair<std::string, std::string>, sample_t> value_map_;
+  std::map<std::vector<std::string>, sample_t,
+           std::less<std::vector<std::string>>>
+      value_map_;
 };
 }  // namespace cinatra

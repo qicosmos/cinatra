@@ -1,3 +1,5 @@
+#include <unordered_map>
+
 #include "cinatra/metric/guage.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "cinatra/metric/counter.hpp"
@@ -48,15 +50,16 @@ TEST_CASE("test guage") {
   g.dec();
   CHECK(g.values().begin()->second.value == 0);
 
-  g.inc({"GET", "200"}, 1);
-  CHECK(g.values()[{"GET", "200"}].value == 1);
-  g.inc({"GET", "200"}, 2);
-  CHECK(g.values()[{"GET", "200"}].value == 3);
+  // method, status code, url
+  g.inc({"GET", "200", "/"}, 1);
+  CHECK(g.values()[{"GET", "200", "/"}].value == 1);
+  g.inc({"GET", "200", "/"}, 2);
+  CHECK(g.values()[{"GET", "200", "/"}].value == 3);
 
-  g.dec({"GET", "200"}, 1);
-  CHECK(g.values()[{"GET", "200"}].value == 2);
-  g.dec({"GET", "200"}, 2);
-  CHECK(g.values()[{"GET", "200"}].value == 0);
+  g.dec({"GET", "200", "/"}, 1);
+  CHECK(g.values()[{"GET", "200", "/"}].value == 2);
+  g.dec({"GET", "200", "/"}, 2);
+  CHECK(g.values()[{"GET", "200", "/"}].value == 0);
 }
 
 TEST_CASE("test histogram") {

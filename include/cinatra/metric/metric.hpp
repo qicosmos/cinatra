@@ -39,7 +39,9 @@ class metric_t {
 
   const std::pair<std::string, std::string>& label() { return label_; }
 
-  virtual std::map<std::pair<std::string, std::string>, sample_t> values() {
+  virtual std::map<std::vector<std::string>, sample_t,
+                   std::less<std::vector<std::string>>>
+  values() {
     return {};
   }
 

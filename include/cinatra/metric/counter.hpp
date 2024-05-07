@@ -14,17 +14,19 @@ class counter_t : public metric_t {
 
   void inc() { guage_.inc(); }
 
-  void inc(const std::pair<std::string, std::string> &label, double value = 1) {
+  void inc(const std::vector<std::string> &label, double value = 1) {
     guage_.inc(label, value);
   }
 
-  void update(const std::pair<std::string, std::string> &label, double value) {
+  void update(const std::vector<std::string> &label, double value) {
     guage_.update(label, value);
   }
 
   void reset() { guage_.reset(); }
 
-  std::map<std::pair<std::string, std::string>, sample_t> values() {
+  std::map<std::vector<std::string>, sample_t,
+           std::less<std::vector<std::string>>>
+  values() {
     return guage_.values();
   }
 

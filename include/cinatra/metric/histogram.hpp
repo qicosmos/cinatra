@@ -37,7 +37,7 @@ class histogram_t : public metric_t {
     bucket_counts_[bucket_index]->inc();
   }
 
-  void observe(const std::pair<std::string, std::string>& label, double value) {
+  void observe(const std::vector<std::string>& label, double value) {
     const auto bucket_index = static_cast<std::size_t>(
         std::distance(bucket_boundaries_.begin(),
                       std::lower_bound(bucket_boundaries_.begin(),
