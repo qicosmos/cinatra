@@ -8,24 +8,28 @@ class guage_t : public metric_t {
  public:
   guage_t() = default;
   guage_t(std::string name, std::string help,
-          std::pair<std::string, std::string> labels = {})
+          std::vector<std::string> labels_name = {})
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {}
+                 std::move(labels_name)) {}
 
   void inc() {
     std::lock_guard guard(mtx_);
     set_value(value_map_[{}], 1, op_type_t::INC);
   }
 
-  void inc(const std::vector<std::string> &label, double value = 1) {
+  void inc(const std::vector<std::string> &labels_value, double value = 1) {
     if (value == 0) {
       return;
     }
     if (value < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
+    if (labels_name_.size() != labels_value.size()) {
+      throw std::invalid_argument(
+          "the number of labels_value name and labels_value is not match");
+    }
     std::lock_guard guard(mtx_);
-    set_value(value_map_[label], value, op_type_t::INC);
+    set_value(value_map_[labels_value], value, op_type_t::INC);
   }
 
   void dec() {
@@ -33,20 +37,28 @@ class guage_t : public metric_t {
     set_value(value_map_[{}], 1, op_type_t::DEC);
   }
 
-  void dec(const std::vector<std::string> &label, double value) {
+  void dec(const std::vector<std::string> &labels_value, double value) {
     if (value == 0) {
       return;
     }
     if (value < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
+    if (labels_name_.size() != labels_value.size()) {
+      throw std::invalid_argument(
+          "the number of labels_value name and labels_value is not match");
+    }
     std::lock_guard guard(mtx_);
-    set_value(value_map_[label], value, op_type_t::DEC);
+    set_value(value_map_[labels_value], value, op_type_t::DEC);
   }
 
-  void update(const std::vector<std::string> &label, double value) {
+  void update(const std::vector<std::string> &labels_value, double value) {
+    if (labels_name_.size() != labels_value.size()) {
+      throw std::invalid_argument(
+          "the number of labels_value name and labels_value is not match");
+    }
     std::lock_guard guard(mtx_);
-    set_value(value_map_[label], value, op_type_t::SET);
+    set_value(value_map_[labels_value], value, op_type_t::SET);
   }
 
   void reset() {

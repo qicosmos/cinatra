@@ -1,5 +1,3 @@
-#include <unordered_map>
-
 #include "cinatra/metric/guage.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "cinatra/metric/counter.hpp"
@@ -8,58 +6,72 @@
 using namespace cinatra;
 
 TEST_CASE("test counter") {
-  counter_t c("get_count", "get counter", {});
-  c.inc();
-  CHECK(c.values().begin()->second.value == 1);
-  c.inc();
-  CHECK(c.values().begin()->second.value == 2);
-  c.inc({}, 0);
+  {
+    counter_t c("get_count", "get counter");
+    c.inc();
+    CHECK(c.values().begin()->second.value == 1);
+    c.inc();
+    CHECK(c.values().begin()->second.value == 2);
+    c.inc({}, 0);
 
-  CHECK(c.values().begin()->second.value == 2);
+    CHECK(c.values().begin()->second.value == 2);
 
-  CHECK_THROWS_AS(c.inc({}, -2), std::invalid_argument);
+    CHECK_THROWS_AS(c.inc({}, -2), std::invalid_argument);
 
-  c.update({}, 10);
-  CHECK(c.values().begin()->second.value == 10);
+    c.update({}, 10);
+    CHECK(c.values().begin()->second.value == 10);
 
-  c.update({}, 0);
-  CHECK(c.values().begin()->second.value == 0);
+    c.update({}, 0);
+    CHECK(c.values().begin()->second.value == 0);
+  }
 
-  c.inc({"GET", "200"}, 1);
-  CHECK(c.values()[{"GET", "200"}].value == 1);
-  c.inc({"GET", "200"}, 2);
-  CHECK(c.values()[{"GET", "200"}].value == 3);
+  {
+    counter_t c("get_count", "get counter", {"method", "code"});
+    c.inc({"GET", "200"}, 1);
+    CHECK(c.values()[{"GET", "200"}].value == 1);
+    c.inc({"GET", "200"}, 2);
+    CHECK(c.values()[{"GET", "200"}].value == 3);
 
-  c.update({"GET", "200"}, 20);
-  CHECK(c.values()[{"GET", "200"}].value == 20);
-  c.reset();
-  CHECK(c.values()[{"GET", "200"}].value == 0);
-  CHECK(c.values().begin()->second.value == 0);
+    CHECK_THROWS_AS(c.inc({"GET", "200", "/"}, 2), std::invalid_argument);
+
+    c.update({"GET", "200"}, 20);
+    CHECK(c.values()[{"GET", "200"}].value == 20);
+    c.reset();
+    CHECK(c.values()[{"GET", "200"}].value == 0);
+    CHECK(c.values().begin()->second.value == 0);
+  }
 }
 
 TEST_CASE("test guage") {
-  guage_t g("get_count", "get counter", {});
-  g.inc();
-  CHECK(g.values().begin()->second.value == 1);
-  g.inc();
-  CHECK(g.values().begin()->second.value == 2);
-  g.inc({}, 0);
+  {
+    guage_t g("get_count", "get counter");
+    g.inc();
+    CHECK(g.values().begin()->second.value == 1);
+    g.inc();
+    CHECK(g.values().begin()->second.value == 2);
+    g.inc({}, 0);
 
-  g.dec();
-  CHECK(g.values().begin()->second.value == 1);
-  g.dec();
-  CHECK(g.values().begin()->second.value == 0);
+    g.dec();
+    CHECK(g.values().begin()->second.value == 1);
+    g.dec();
+    CHECK(g.values().begin()->second.value == 0);
+  }
 
-  // method, status code, url
-  g.inc({"GET", "200", "/"}, 1);
-  CHECK(g.values()[{"GET", "200", "/"}].value == 1);
-  g.inc({"GET", "200", "/"}, 2);
-  CHECK(g.values()[{"GET", "200", "/"}].value == 3);
+  {
+    guage_t g("get_count", "get counter", {"method", "code", "url"});
+    // method, status code, url
+    g.inc({"GET", "200", "/"}, 1);
+    CHECK(g.values()[{"GET", "200", "/"}].value == 1);
+    g.inc({"GET", "200", "/"}, 2);
+    CHECK(g.values()[{"GET", "200", "/"}].value == 3);
 
-  g.dec({"GET", "200", "/"}, 1);
-  CHECK(g.values()[{"GET", "200", "/"}].value == 2);
-  g.dec({"GET", "200", "/"}, 2);
-  CHECK(g.values()[{"GET", "200", "/"}].value == 0);
+    CHECK_THROWS_AS(g.dec({"GET", "200"}, 1), std::invalid_argument);
+
+    g.dec({"GET", "200", "/"}, 1);
+    CHECK(g.values()[{"GET", "200", "/"}].value == 2);
+    g.dec({"GET", "200", "/"}, 2);
+    CHECK(g.values()[{"GET", "200", "/"}].value == 0);
+  }
 }
 
 TEST_CASE("test histogram") {
@@ -79,14 +91,12 @@ TEST_CASE("test histogram") {
 
 TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
-                                       std::string("get counter"),
-                                       std::pair<std::string, std::string>{});
+                                       std::string("get counter"));
   metric_t::regiter_metric(c);
   CHECK_THROWS_AS(metric_t::regiter_metric(c), std::invalid_argument);
 
   auto g = std::make_shared<guage_t>(std::string("get_guage_count"),
-                                     std::string("get counter"),
-                                     std::pair<std::string, std::string>{});
+                                     std::string("get counter"));
   metric_t::regiter_metric(g);
 
   CHECK(metric_t::metric_count() == 2);

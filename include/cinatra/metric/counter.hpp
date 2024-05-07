@@ -7,10 +7,10 @@ class counter_t : public metric_t {
  public:
   counter_t() = default;
   counter_t(std::string name, std::string help,
-            std::pair<std::string, std::string> labels = {})
-      : guage_(std::move(name), std::move(help), std::move(labels)),
+            std::vector<std::string> labels_name = {})
+      : guage_(std::move(name), std::move(help), labels_name),
         metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {}
+                 labels_name) {}
 
   void inc() { guage_.inc(); }
 

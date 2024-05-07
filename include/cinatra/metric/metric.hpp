@@ -25,11 +25,11 @@ class metric_t {
  public:
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help,
-           std::pair<std::string, std::string> labels = {})
+           std::vector<std::string> labels_name = {})
       : type_(type),
         name_(std::move(name)),
         help_(std::move(help)),
-        label_(std::move(labels)) {}
+        labels_name_(std::move(labels_name)) {}
   std::string_view name() { return name_; }
 
   std::string_view help() { return help_; }
@@ -37,7 +37,7 @@ class metric_t {
   MetricType metric_type() { return type_; }
   void set_metric_type(MetricType type) { type_ = type; }
 
-  const std::pair<std::string, std::string>& label() { return label_; }
+  const std::vector<std::string>& labels_name() { return labels_name_; }
 
   virtual std::map<std::vector<std::string>, sample_t,
                    std::less<std::vector<std::string>>>
@@ -85,7 +85,7 @@ class metric_t {
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
-  std::pair<std::string, std::string> label_;
+  std::vector<std::string> labels_name_;
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 };
