@@ -48,13 +48,45 @@ class counter_t : public metric_t {
 
   std::map<std::vector<std::string>, sample_t,
            std::less<std::vector<std::string>>>
-  values() {
+  values() override {
     std::lock_guard guard(mtx_);
     return value_map_;
   }
 
+  void serialize(std::string &str) override {
+    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
+    str.append("# TYPE ")
+        .append(name_)
+        .append(" ")
+        .append(metric_name())
+        .append("\n");
+    for (auto &[labels_value, sample] : value_map_) {
+      str.append(name_);
+      if (labels_name_.empty()) {
+        str.append(" ");
+      }
+      else {
+        str.append("{");
+        build_string(str, labels_name_, labels_value);
+        str.append("} ");
+      }
+
+      str.append(std::to_string((int64_t)sample.value));
+      str.append(" ");
+      str.append(std::to_string(sample.timestamp));
+      str.append("\n");
+    }
+  }
+
  protected:
   enum class op_type_t { INC, DEC, SET };
+  void build_string(std::string &str, const std::vector<std::string> &v1,
+                    const std::vector<std::string> &v2) {
+    for (size_t i = 0; i < v1.size(); i++) {
+      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
+    }
+    str.pop_back();
+  }
 
   void validate(const std::vector<std::string> &labels_value, double value) {
     if (value < 0) {

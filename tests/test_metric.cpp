@@ -34,6 +34,7 @@ TEST_CASE("test counter") {
     auto g = std::make_shared<guage_t>("get_count", "get counter",
                                        std::vector{"method", "code"});
     CHECK(g->name() == "get_count");
+    CHECK(g->metric_name() == "guage");
   }
 
   {

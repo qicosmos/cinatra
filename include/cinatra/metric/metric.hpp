@@ -35,7 +35,21 @@ class metric_t {
   std::string_view help() { return help_; }
 
   MetricType metric_type() { return type_; }
-  void set_metric_type(MetricType type) { type_ = type; }
+
+  std::string_view metric_name() {
+    switch (type_) {
+      case MetricType::Counter:
+        return "counter";
+      case MetricType::Guage:
+        return "guage";
+      case MetricType::Histogram:
+        return "histogram";
+      case MetricType::Summary:
+        return "summary";
+      case MetricType::Nil:
+        return "unknown";
+    }
+  }
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
 
@@ -44,6 +58,8 @@ class metric_t {
   values() {
     return {};
   }
+
+  virtual void serialize(std::string& out) {}
 
   static void regiter_metric(std::shared_ptr<metric_t> metric) {
     std::scoped_lock guard(mtx_);
@@ -82,6 +98,8 @@ class metric_t {
   }
 
  protected:
+  void set_metric_type(MetricType type) { type_ = type; }
+
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
