@@ -1,6 +1,7 @@
 #include "cinatra/metric/guage.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "cinatra/metric/counter.hpp"
+#include "cinatra/metric/histogram.hpp"
 #include "doctest/doctest.h"
 using namespace cinatra;
 
@@ -56,6 +57,21 @@ TEST_CASE("test guage") {
   CHECK(g.values()[{"GET", "200"}].value == 2);
   g.dec({"GET", "200"}, 2);
   CHECK(g.values()[{"GET", "200"}].value == 0);
+}
+
+TEST_CASE("test histogram") {
+  histogram_t h("test", {5.0, 10.0, 20.0, 50.0, 100.0});
+  h.observe(23);
+  auto counts = h.bucket_counts();
+  CHECK(counts[3]->values()[{}].value == 1);
+  h.observe(42);
+  CHECK(counts[3]->values()[{}].value == 2);
+  h.observe(60);
+  CHECK(counts[4]->values()[{}].value == 1);
+  h.observe(120);
+  CHECK(counts[5]->values()[{}].value == 1);
+  h.observe(1);
+  CHECK(counts[0]->values()[{}].value == 1);
 }
 
 TEST_CASE("test register metric") {

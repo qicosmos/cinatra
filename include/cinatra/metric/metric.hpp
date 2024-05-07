@@ -23,6 +23,7 @@ struct sample_t {
 
 class metric_t {
  public:
+  metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help,
            std::pair<std::string, std::string> labels = {})
       : type_(type),
@@ -38,7 +39,9 @@ class metric_t {
 
   const std::pair<std::string, std::string>& label() { return label_; }
 
-  virtual std::map<std::pair<std::string, std::string>, sample_t> values() = 0;
+  virtual std::map<std::pair<std::string, std::string>, sample_t> values() {
+    return {};
+  }
 
   static void regiter_metric(std::shared_ptr<metric_t> metric) {
     std::scoped_lock guard(mtx_);

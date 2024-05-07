@@ -5,13 +5,12 @@
 namespace cinatra {
 class counter_t : public metric_t {
  public:
+  counter_t() = default;
   counter_t(std::string name, std::string help,
             std::pair<std::string, std::string> labels = {})
       : guage_(std::move(name), std::move(help), std::move(labels)),
         metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels)) {
-    // guage_.set_metric_type(MetricType::Counter);
-  }
+                 std::move(labels)) {}
 
   void inc() { guage_.inc(); }
 

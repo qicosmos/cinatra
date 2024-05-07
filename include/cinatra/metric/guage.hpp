@@ -6,6 +6,7 @@
 namespace cinatra {
 class guage_t : public metric_t {
  public:
+  guage_t() = default;
   guage_t(std::string name, std::string help,
           std::pair<std::string, std::string> labels = {})
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
