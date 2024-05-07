@@ -28,6 +28,15 @@ TEST_CASE("test counter") {
   }
 
   {
+    auto c = std::make_shared<counter_t>("get_count", "get counter",
+                                         std::vector{"method", "code"});
+    CHECK(c->name() == "get_count");
+    auto g = std::make_shared<guage_t>("get_count", "get counter",
+                                       std::vector{"method", "code"});
+    CHECK(g->name() == "get_count");
+  }
+
+  {
     counter_t c("get_count", "get counter", {"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);

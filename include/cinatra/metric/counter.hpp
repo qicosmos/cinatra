@@ -10,6 +10,12 @@ class counter_t : public metric_t {
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels_name)) {}
 
+  counter_t(const char *name, const char *help,
+            std::vector<const char *> labels_name = {})
+      : counter_t(
+            std::string(name), std::string(help),
+            std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
+
   void inc() {
     std::lock_guard guard(mtx_);
     set_value(value_map_[{}], 1, op_type_t::INC);
