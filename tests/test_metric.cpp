@@ -8,6 +8,8 @@ using namespace cinatra;
 TEST_CASE("test counter") {
   {
     counter_t c("get_count", "get counter");
+    CHECK(c.metric_type() == MetricType::Counter);
+    CHECK(c.labels_name().empty());
     c.inc();
     CHECK(c.values().begin()->second.value == 1);
     c.inc();
@@ -27,6 +29,7 @@ TEST_CASE("test counter") {
 
   {
     counter_t c("get_count", "get counter", {"method", "code"});
+    CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
     CHECK(c.values()[{"GET", "200"}].value == 1);
     c.inc({"GET", "200"}, 2);
@@ -45,6 +48,8 @@ TEST_CASE("test counter") {
 TEST_CASE("test guage") {
   {
     guage_t g("get_count", "get counter");
+    CHECK(g.metric_type() == MetricType::Guage);
+    CHECK(g.labels_name().empty());
     g.inc();
     CHECK(g.values().begin()->second.value == 1);
     g.inc();
@@ -59,6 +64,7 @@ TEST_CASE("test guage") {
 
   {
     guage_t g("get_count", "get counter", {"method", "code", "url"});
+    CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
     CHECK(g.values()[{"GET", "200", "/"}].value == 1);
