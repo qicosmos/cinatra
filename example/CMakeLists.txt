@@ -8,8 +8,10 @@ set(CINATRA_EXAMPLE
 add_executable(${project_name} ${CINATRA_EXAMPLE})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 
-add_executable(benchmark benchmark.cpp)
-target_compile_definitions(benchmark PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+if (BUILD_BENCHMARK)
+	add_executable(benchmark benchmark.cpp)
+	target_compile_definitions(benchmark PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+endif()
 
 if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
