@@ -121,7 +121,7 @@ TEST_CASE("test register metric") {
   c->inc();
   g->inc();
 
-  auto map = metric_t::collect();
+  auto map = metric_t::metric_map();
   CHECK(map["get_count"]->values()[{}].value == 1);
   CHECK(map["get_guage_count"]->values()[{}].value == 1);
 

@@ -430,8 +430,8 @@ void use_metric() {
   server.set_http_handler<GET, POST>(
       "/metrics", [](coro_http_request &req, coro_http_response &resp) {
         std::string str;
-        auto map = metric_t::collect();
-        for (auto &[k, m] : map) {
+        auto metrics = metric_t::collect();
+        for (auto &m : metrics) {
           m->serialize(str);
         }
         std::cout << str;

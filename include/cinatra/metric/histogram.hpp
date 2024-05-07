@@ -63,6 +63,8 @@ class histogram_t : public metric_t {
     return bucket_counts_;
   }
 
+  void serialize(std::string& str) override {}
+
  private:
   template <class ForwardIterator>
   bool is_strict_sorted(ForwardIterator first, ForwardIterator last) {

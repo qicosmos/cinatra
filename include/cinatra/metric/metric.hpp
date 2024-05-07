@@ -76,6 +76,17 @@ class metric_t {
   }
 
   static auto collect() {
+    std::vector<std::shared_ptr<metric_t>> metrics;
+    {
+      std::scoped_lock guard(mtx_);
+      for (auto& pair : metric_map_) {
+        metrics.push_back(pair.second);
+      }
+    }
+    return metrics;
+  }
+
+  static auto metric_map() {
     std::scoped_lock guard(mtx_);
     return metric_map_;
   }
