@@ -55,7 +55,7 @@ class metric_t {
 
   virtual std::map<std::vector<std::string>, sample_t,
                    std::less<std::vector<std::string>>>
-  values() {
+  values(bool need_lock = true) {
     return {};
   }
 

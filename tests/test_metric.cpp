@@ -45,6 +45,13 @@ TEST_CASE("test counter") {
     c.inc({"GET", "200"}, 2);
     CHECK(c.values()[{"GET", "200"}].value == 3);
 
+    std::string str;
+    c.serialize(str);
+    std::cout << str;
+    CHECK(str.find("# TYPE get_count counter") != std::string::npos);
+    CHECK(str.find("get_count{method=\"GET\",code=\"200\"} 3") !=
+          std::string::npos);
+
     CHECK_THROWS_AS(c.inc({"GET", "200", "/"}, 2), std::invalid_argument);
 
     c.update({"GET", "200"}, 20);
@@ -81,6 +88,13 @@ TEST_CASE("test guage") {
     g.inc({"GET", "200", "/"}, 2);
     CHECK(g.values()[{"GET", "200", "/"}].value == 3);
 
+    std::string str;
+    g.serialize(str);
+    std::cout << str;
+    CHECK(str.find("# TYPE get_count guage") != std::string::npos);
+    CHECK(str.find("get_count{method=\"GET\",code=\"200\",url=\"/\"} 3") !=
+          std::string::npos);
+
     CHECK_THROWS_AS(g.dec({"GET", "200"}, 1), std::invalid_argument);
 
     g.dec({"GET", "200", "/"}, 1);
@@ -103,6 +117,13 @@ TEST_CASE("test histogram") {
   CHECK(counts[5]->values()[{}].value == 1);
   h.observe(1);
   CHECK(counts[0]->values()[{}].value == 1);
+  std::string str;
+  h.serialize(str);
+  std::cout << str;
+  CHECK(str.find("test_count") != std::string::npos);
+  CHECK(str.find("test_sum") != std::string::npos);
+  CHECK(str.find("test_bucket{le=\"5") != std::string::npos);
+  CHECK(str.find("test_bucket{le=\"+Inf\"}") != std::string::npos);
 }
 
 TEST_CASE("test register metric") {

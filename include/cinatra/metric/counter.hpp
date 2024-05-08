@@ -48,7 +48,10 @@ class counter_t : public metric_t {
 
   std::map<std::vector<std::string>, sample_t,
            std::less<std::vector<std::string>>>
-  values() override {
+  values(bool need_lock = true) override {
+    if (need_lock) {
+      return value_map_;
+    }
     std::lock_guard guard(mtx_);
     return value_map_;
   }

@@ -63,7 +63,42 @@ class histogram_t : public metric_t {
     return bucket_counts_;
   }
 
-  void serialize(std::string& str) override {}
+  void serialize(std::string& str) override {
+    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
+    str.append("# TYPE ")
+        .append(name_)
+        .append(" ")
+        .append(metric_name())
+        .append("\n");
+    double count = 0;
+    for (size_t i = 0; i < bucket_counts_.size(); i++) {
+      auto counter = bucket_counts_[i];
+      auto values = counter->values(false);
+      for (auto& [labels_value, sample] : values) {
+        str.append(name_).append("_bucket{");
+        if (i == bucket_boundaries_.size()) {
+          str.append("le=\"").append("+Inf").append("\"} ");
+        }
+        else {
+          str.append("le=\"")
+              .append(std::to_string(bucket_boundaries_[i]))
+              .append("\"} ");
+        }
+
+        count += sample.value;
+        str.append(std::to_string(count));
+        str.append(" ").append(std::to_string(sample.timestamp)).append("\n");
+      }
+    }
+    str.append(name_)
+        .append("_count ")
+        .append(std::to_string(count))
+        .append("\n");
+    str.append(name_)
+        .append("_sum ")
+        .append(std::to_string((sum_->values()[{}].value)))
+        .append("\n");
+  }
 
  private:
   template <class ForwardIterator>
