@@ -57,6 +57,9 @@ class counter_t : public metric_t {
   }
 
   void serialize(std::string &str) override {
+    if (value_map_.empty()) {
+      return;
+    }
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
@@ -75,8 +78,10 @@ class counter_t : public metric_t {
       }
 
       str.append(std::to_string((int64_t)sample.value));
-      str.append(" ");
-      str.append(std::to_string(sample.timestamp));
+      if (enable_timestamp_) {
+        str.append(" ");
+        str.append(std::to_string(sample.timestamp));
+      }
       str.append("\n");
     }
   }

@@ -64,6 +64,9 @@ class histogram_t : public metric_t {
   }
 
   void serialize(std::string& str) override {
+    if (sum_->values(false).empty()) {
+      return;
+    }
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
@@ -86,8 +89,11 @@ class histogram_t : public metric_t {
         }
 
         count += sample.value;
-        str.append(std::to_string(count));
-        str.append(" ").append(std::to_string(sample.timestamp)).append("\n");
+        if (enable_timestamp_) {
+          str.append(std::to_string(count));
+          str.append(" ").append(std::to_string(sample.timestamp));
+        }
+        str.append("\n");
       }
     }
     str.append(name_)
@@ -96,7 +102,7 @@ class histogram_t : public metric_t {
         .append("\n");
     str.append(name_)
         .append("_sum ")
-        .append(std::to_string((sum_->values()[{}].value)))
+        .append(std::to_string((sum_->values(false)[{}].value)))
         .append("\n");
   }
 

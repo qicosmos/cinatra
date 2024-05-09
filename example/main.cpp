@@ -8,6 +8,7 @@
 
 #include "../include/cinatra.hpp"
 #include "cinatra/metric/guage.hpp"
+#include "cinatra/metric/histogram.hpp"
 
 using namespace cinatra;
 using namespace std::chrono_literals;
@@ -391,9 +392,28 @@ void use_metric() {
                                           std::vector{"method", "code", "url"});
   auto total =
       std::make_shared<counter_t>("total_request_count", "total request count");
+
+  auto h = std::make_shared<histogram_t>(
+      std::string("test"), std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
+  h->observe(23);
+  h->observe(42);
+  h->observe(60);
+  h->observe(120);
+  h->observe(1);
+
   metric_t::regiter_metric(c);
   metric_t::regiter_metric(total);
   metric_t::regiter_metric(failed);
+  metric_t::regiter_metric(h);
+
+  std::thread thd([=] {
+    while (true) {
+      c->inc({"GET", "/test"});
+      total->inc();
+      std::this_thread::sleep_for(1s);
+    }
+  });
+  thd.detach();
 
   coro_http_server server(1, 9001);
   server.set_default_handler(
@@ -435,6 +455,7 @@ void use_metric() {
           m->serialize(str);
         }
         std::cout << str;
+        resp.need_date_head(false);
         resp.set_status_and_content(status_type::ok, std::move(str));
       });
   server.sync_start();

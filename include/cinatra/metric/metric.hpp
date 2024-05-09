@@ -52,6 +52,7 @@ class metric_t {
   }
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
+  void enable_timestamp(bool r) { enable_timestamp_ = r; }
 
   virtual std::map<std::vector<std::string>, sample_t,
                    std::less<std::vector<std::string>>>
@@ -115,6 +116,7 @@ class metric_t {
   std::string name_;
   std::string help_;
   std::vector<std::string> labels_name_;
+  bool enable_timestamp_ = false;
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 };
