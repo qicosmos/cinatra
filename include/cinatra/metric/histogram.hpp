@@ -96,13 +96,15 @@ class histogram_t : public metric_t {
         str.append("\n");
       }
     }
-    str.append(name_)
-        .append("_count ")
-        .append(std::to_string(count))
-        .append("\n");
+
     str.append(name_)
         .append("_sum ")
         .append(std::to_string((sum_->values(false)[{}].value)))
+        .append("\n");
+
+    str.append(name_)
+        .append("_count ")
+        .append(std::to_string(count))
         .append("\n");
   }
 

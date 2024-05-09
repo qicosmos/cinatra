@@ -1,7 +1,10 @@
 #include "cinatra/metric/guage.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
+#include <random>
+
 #include "cinatra/metric/counter.hpp"
 #include "cinatra/metric/histogram.hpp"
+#include "cinatra/metric/summary.hpp"
 #include "doctest/doctest.h"
 using namespace cinatra;
 
@@ -124,6 +127,26 @@ TEST_CASE("test histogram") {
   CHECK(str.find("test_sum") != std::string::npos);
   CHECK(str.find("test_bucket{le=\"5") != std::string::npos);
   CHECK(str.find("test_bucket{le=\"+Inf\"}") != std::string::npos);
+}
+
+TEST_CASE("test summary") {
+  summary_t summary{"test_summary",
+                    "summary help",
+                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe(distr(gen));
+  }
+
+  std::string str;
+  summary.serialize(str);
+  std::cout << str;
+  CHECK(str.find("test_summary") != std::string::npos);
+  CHECK(str.find("test_summary_count") != std::string::npos);
+  CHECK(str.find("test_summary_sum") != std::string::npos);
+  CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
 }
 
 TEST_CASE("test register metric") {

@@ -9,6 +9,7 @@
 #include "../include/cinatra.hpp"
 #include "cinatra/metric/guage.hpp"
 #include "cinatra/metric/histogram.hpp"
+#include "cinatra/metric/summary.hpp"
 
 using namespace cinatra;
 using namespace std::chrono_literals;
@@ -401,15 +402,26 @@ void use_metric() {
   h->observe(120);
   h->observe(1);
 
+  auto summary = std::make_shared<summary_t>(
+      std::string("test_summary"), std::string("summary help"),
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
+
   metric_t::regiter_metric(c);
   metric_t::regiter_metric(total);
   metric_t::regiter_metric(failed);
   metric_t::regiter_metric(h);
+  metric_t::regiter_metric(summary);
 
-  std::thread thd([=] {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+
+  std::thread thd([&] {
     while (true) {
       c->inc({"GET", "/test"});
       total->inc();
+      summary->observe(distr(gen));
       std::this_thread::sleep_for(1s);
     }
   });
