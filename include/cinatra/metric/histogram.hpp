@@ -89,8 +89,8 @@ class histogram_t : public metric_t {
         }
 
         count += sample.value;
+        str.append(std::to_string(count));
         if (enable_timestamp_) {
-          str.append(std::to_string(count));
           str.append(" ").append(std::to_string(sample.timestamp));
         }
         str.append("\n");

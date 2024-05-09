@@ -396,11 +396,6 @@ void use_metric() {
 
   auto h = std::make_shared<histogram_t>(
       std::string("test"), std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
-  h->observe(23);
-  h->observe(42);
-  h->observe(60);
-  h->observe(120);
-  h->observe(1);
 
   auto summary = std::make_shared<summary_t>(
       std::string("test_summary"), std::string("summary help"),
@@ -421,6 +416,7 @@ void use_metric() {
     while (true) {
       c->inc({"GET", "/test"});
       total->inc();
+      h->observe(distr(gen));
       summary->observe(distr(gen));
       std::this_thread::sleep_for(1s);
     }
