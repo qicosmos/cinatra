@@ -394,8 +394,9 @@ void use_metric() {
   auto total =
       std::make_shared<counter_t>("total_request_count", "total request count");
 
-  auto h = std::make_shared<histogram_t>(
-      std::string("test"), std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
+  auto h =
+      std::make_shared<histogram_t>(std::string("test"), std::string("help"),
+                                    std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
 
   auto summary = std::make_shared<summary_t>(
       std::string("test_summary"), std::string("summary help"),

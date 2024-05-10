@@ -108,7 +108,7 @@ TEST_CASE("test guage") {
 }
 
 TEST_CASE("test histogram") {
-  histogram_t h("test", {5.0, 10.0, 20.0, 50.0, 100.0});
+  histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
   h.observe(23);
   auto counts = h.bucket_counts();
   CHECK(counts[3]->values()[{}].value == 1);

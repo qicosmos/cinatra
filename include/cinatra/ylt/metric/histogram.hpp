@@ -11,8 +11,7 @@
 namespace cinatra {
 class histogram_t : public metric_t {
  public:
-  histogram_t(std::string name, std::vector<double> buckets,
-              std::string help = "")
+  histogram_t(std::string name, std::string help, std::vector<double> buckets)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
         sum_(std::make_shared<guage_t>()) {
