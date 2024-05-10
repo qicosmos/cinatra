@@ -43,6 +43,7 @@ class CKMSQuantiles {
       compress();
     }
   }
+
   double get(double q) {
     insertBatch();
     compress();
@@ -95,7 +96,9 @@ class CKMSQuantiles {
         minError = error;
       }
     }
+    return minError;
   }
+
   bool insertBatch() {
     if (buffer_count_ == 0) {
       return false;
