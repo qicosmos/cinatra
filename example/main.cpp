@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
-#include "cinatra/metric/guage.hpp"
-#include "cinatra/metric/histogram.hpp"
-#include "cinatra/metric/summary.hpp"
+#include "cinatra/ylt/metric/guage.hpp"
+#include "cinatra/ylt/metric/histogram.hpp"
+#include "cinatra/ylt/metric/summary.hpp"
 
 using namespace cinatra;
 using namespace std::chrono_literals;

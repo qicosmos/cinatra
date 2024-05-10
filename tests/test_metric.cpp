@@ -1,10 +1,10 @@
-#include "cinatra/metric/guage.hpp"
+#include "cinatra/ylt/metric/guage.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <random>
 
-#include "cinatra/metric/counter.hpp"
-#include "cinatra/metric/histogram.hpp"
-#include "cinatra/metric/summary.hpp"
+#include "cinatra/ylt/metric/counter.hpp"
+#include "cinatra/ylt/metric/histogram.hpp"
+#include "cinatra/ylt/metric/summary.hpp"
 #include "doctest/doctest.h"
 using namespace cinatra;
 

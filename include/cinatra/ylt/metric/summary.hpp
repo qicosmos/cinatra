@@ -5,7 +5,6 @@
 namespace cinatra {
 class summary_t : public metric_t {
  public:
-  summary_t() = default;
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
   summary_t(std::string name, std::string help, Quantiles quantiles,
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
