@@ -7,6 +7,9 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
+#include "cinatra/ylt/metric/gauge.hpp"
+#include "cinatra/ylt/metric/histogram.hpp"
+#include "cinatra/ylt/metric/summary.hpp"
 
 using namespace cinatra;
 using namespace std::chrono_literals;
@@ -382,7 +385,93 @@ async_simple::coro::Lazy<void> basic_usage() {
 #endif
 }
 
+void use_metric() {
+  auto c = std::make_shared<counter_t>("request_count", "request count",
+                                       std::vector{"method", "url"});
+  auto failed = std::make_shared<gauge_t>("not_found_request_count",
+                                          "not found request count",
+                                          std::vector{"method", "code", "url"});
+  auto total =
+      std::make_shared<counter_t>("total_request_count", "total request count");
+
+  auto h =
+      std::make_shared<histogram_t>(std::string("test"), std::string("help"),
+                                    std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
+
+  auto summary = std::make_shared<summary_t>(
+      std::string("test_summary"), std::string("summary help"),
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
+
+  metric_t::regiter_metric(c);
+  metric_t::regiter_metric(total);
+  metric_t::regiter_metric(failed);
+  metric_t::regiter_metric(h);
+  metric_t::regiter_metric(summary);
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+
+  std::thread thd([&] {
+    while (true) {
+      c->inc({"GET", "/test"});
+      total->inc();
+      h->observe(distr(gen));
+      summary->observe(distr(gen));
+      std::this_thread::sleep_for(1s);
+    }
+  });
+  thd.detach();
+
+  coro_http_server server(1, 9001);
+  server.set_default_handler(
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        failed->inc({std::string(req.get_method()),
+                     std::to_string((int)status_type::not_found),
+                     std::string(req.get_url())});
+        total->inc();
+        resp.set_status_and_content(status_type::not_found, "not found");
+        co_return;
+      });
+
+  server.set_http_handler<GET>(
+      "/get", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+        c->inc({std::string(req.get_method()), std::string(req.get_url())});
+        total->inc();
+      });
+
+  server.set_http_handler<GET>(
+      "/test", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+        c->inc({std::string(req.get_method()), std::string(req.get_url())});
+        total->inc();
+      });
+
+  server.set_http_handler<GET, POST>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+        total->inc();
+      });
+
+  server.set_http_handler<GET, POST>(
+      "/metrics", [](coro_http_request &req, coro_http_response &resp) {
+        std::string str;
+        auto metrics = metric_t::collect();
+        for (auto &m : metrics) {
+          m->serialize(str);
+        }
+        std::cout << str;
+        resp.need_date_head(false);
+        resp.set_status_and_content(status_type::ok, std::move(str));
+      });
+  server.sync_start();
+}
+
 int main() {
+  // use_metric();
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
   async_simple::coro::syncAwait(static_file_server());
