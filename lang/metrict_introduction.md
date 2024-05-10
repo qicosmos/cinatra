@@ -67,7 +67,7 @@ prometheus_tsdb_wal_fsync_duration_seconds_sum 2.888716127000002
 prometheus_tsdb_wal_fsync_duration_seconds_count 216
 ```
 
-# 如何使用cinatra的 metric功能
+# 如何使用metric功能
 
 ## 使用counter指标统计http 请求总数
 http 请求数量随着时间推移是不断增加的，不可能会减少，因此使用counter类型的指标是合适的，如果数量可能会减少则应该使用guage类型的指标。
@@ -193,7 +193,7 @@ guage和counter的用法几乎一样，guage比counter多了一个dec方法用�
 
 创建一个guage:
 ```cpp
-auto g = std::make_shared<guage_t>("not_found_request_count",
+auto g = std::make_shared<gauge_t>("not_found_request_count",
                                          "not found request count",
                                          std::vector{"method", "code", "url"});
 metric_t::regiter_metric(g);
