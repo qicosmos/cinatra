@@ -187,7 +187,61 @@ TEST_CASE("test cinatra::string SSO to no SSO") {
   CHECK(s == sum);
 }
 
+async_simple::coro::Lazy<void> send_data(auto &ch, size_t count) {
+  for (int i = 0; i < count; i++) {
+    co_await coro_io::async_send(ch, i);
+  }
+}
+
+async_simple::coro::Lazy<void> recieve_data(auto &ch, auto &vec, size_t count) {
+  while (true) {
+    if (vec.size() == count) {
+      std::cout << std::this_thread::get_id() << "\n";
+      break;
+    }
+
+    auto [ec, i] = co_await coro_io::async_receive(ch);
+    vec.push_back(i);
+  }
+}
+
+TEST_CASE("test coro channel with multi thread") {
+  size_t count = 10000;
+  auto ch = coro_io::create_channel<int>(count);
+  send_data(ch, count).via(ch.get_executor()).start([](auto &&) {
+  });
+
+  std::vector<int> vec;
+  std::vector<std::thread> group;
+  for (int i = 0; i < 10; i++) {
+    group.emplace_back(std::thread([&]() {
+      async_simple::coro::syncAwait(
+          recieve_data(ch, vec, count).via(ch.get_executor()));
+    }));
+  }
+  for (auto &thd : group) {
+    thd.join();
+  }
+
+  for (int i = 0; i < count; i++) {
+    CHECK(vec.at(i) == i);
+  }
+}
+
 TEST_CASE("test coro channel") {
+  {
+    auto ch = coro_io::create_shared_channel<std::string>(100);
+    auto ec = async_simple::coro::syncAwait(
+        coro_io::async_send(*ch, std::string("test")));
+    CHECK(!ec);
+
+    std::string val;
+    std::error_code err;
+    std::tie(err, val) =
+        async_simple::coro::syncAwait(coro_io::async_receive(*ch));
+    CHECK(!err);
+    CHECK(val == "test");
+  }
   auto ch = coro_io::create_channel<int>(1000);
   auto ec = async_simple::coro::syncAwait(coro_io::async_send(ch, 41));
   CHECK(!ec);
