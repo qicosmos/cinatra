@@ -17,7 +17,7 @@ class summary_t : public metric_t {
 
   void observe(double value) {
     count_ += 1;
-    sum_ += value;
+    sum_.fetch_add(value);
     std::lock_guard<std::mutex> lock(mutex_);
     quantile_values_.insert(value);
   }
