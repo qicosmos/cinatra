@@ -48,16 +48,14 @@ class counter_t : public metric_t {
 
   std::map<std::vector<std::string>, sample_t,
            std::less<std::vector<std::string>>>
-  values(bool need_lock = true) override {
-    if (need_lock) {
-      return value_map_;
-    }
+  values() override {
     std::lock_guard guard(mtx_);
     return value_map_;
   }
 
   void serialize(std::string &str) override {
-    if (value_map_.empty()) {
+    auto value_map = values();
+    if (value_map.empty()) {
       return;
     }
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
@@ -66,7 +64,7 @@ class counter_t : public metric_t {
         .append(" ")
         .append(metric_name())
         .append("\n");
-    for (auto &[labels_value, sample] : value_map_) {
+    for (auto &[labels_value, sample] : value_map) {
       str.append(name_);
       if (labels_name_.empty()) {
         str.append(" ");
