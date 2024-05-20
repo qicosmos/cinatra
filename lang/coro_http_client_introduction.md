@@ -240,7 +240,7 @@ async_simple::coro::Lazy<void> test_async_client() {
 ```
 
 # http 重连
-当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用reconnect 去重连host，这样就可以复用http client 了。
+当http 请求失败之后，这个http client是不允许复用的，因为内部的socket 都已经关闭了，除非你调用connect 去重连host，这样就可以复用http client 了。
 
 ```c++
   coro_http_client client1{};
@@ -250,7 +250,7 @@ async_simple::coro::Lazy<void> test_async_client() {
   CHECK(r.status != 200);
 
   // 通过重连复用client1
-  r = async_simple::coro::syncAwait(client1.reconnect("http://cn.bing.com"));
+  r = async_simple::coro::syncAwait(client1.connect("http://cn.bing.com"));
   CHECK(client1.get_host() == "cn.bing.com");
   CHECK(client1.get_port() == "http");
   CHECK(r.status == 200);
