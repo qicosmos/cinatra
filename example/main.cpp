@@ -301,7 +301,11 @@ async_simple::coro::Lazy<void> basic_usage() {
       "/form_data",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        assert(req.get_content_type() == content_type::multipart);
+        if (req.get_content_type() != content_type::multipart) {
+          resp.set_status_and_content(status_type::bad_request,
+                                      "bad request, not multipart request");
+          co_return;
+        }
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
         while (true) {
@@ -374,7 +378,7 @@ async_simple::coro::Lazy<void> basic_usage() {
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 
-  server.sync_start();
+  server.async_start();
   std::this_thread::sleep_for(300ms);  // wait for server start
 
   coro_http_client client{};
