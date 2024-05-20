@@ -17,14 +17,19 @@ class summary_t : public metric_t {
 
   void observe(double value) {
     count_ += 1;
-    sum_.fetch_add(value);
     std::lock_guard<std::mutex> lock(mutex_);
+    sum_ += value;
     quantile_values_.insert(value);
   }
 
   auto get_quantile_values() {
     std::lock_guard<std::mutex> lock(mutex_);
     return quantile_values_;
+  }
+
+  auto get_sum() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sum_;
   }
 
   void serialize(std::string& str) override {
@@ -49,7 +54,10 @@ class summary_t : public metric_t {
           .append("\n");
     }
 
-    str.append(name_).append("_sum ").append(std::to_string(sum_)).append("\n");
+    str.append(name_)
+        .append("_sum ")
+        .append(std::to_string(get_sum()))
+        .append("\n");
     str.append(name_)
         .append("_count ")
         .append(std::to_string(count_))
@@ -60,7 +68,7 @@ class summary_t : public metric_t {
   Quantiles quantiles_;
   mutable std::mutex mutex_;
   std::atomic<std::uint64_t> count_{};
-  std::atomic<double> sum_{};
+  double sum_{};
   TimeWindowQuantiles quantile_values_;
 };
 }  // namespace cinatra
