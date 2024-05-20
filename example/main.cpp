@@ -297,6 +297,37 @@ async_simple::coro::Lazy<void> basic_usage() {
         co_return;
       });
 
+  server.set_http_handler<POST>(
+      "/form_data",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::multipart);
+        auto boundary = req.get_boundary();
+        multipart_reader_t multipart(req.get_conn());
+        while (true) {
+          auto part_head = co_await multipart.read_part_head();
+          if (part_head.ec) {
+            co_return;
+          }
+
+          std::cout << part_head.name << "\n";
+          std::cout << part_head.filename << "\n";  // if form data, no filename
+
+          auto part_body = co_await multipart.read_part_body(boundary);
+          if (part_body.ec) {
+            co_return;
+          }
+
+          std::cout << part_body.data << "\n";
+
+          if (part_body.eof) {
+            break;
+          }
+        }
+
+        resp.set_status_and_content(status_type::ok, "multipart finished");
+      });
+
   server.set_http_handler<GET>(
       "/in_thread_pool",
       [](coro_http_request &req,
@@ -343,7 +374,7 @@ async_simple::coro::Lazy<void> basic_usage() {
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 
-  server.async_start();
+  server.sync_start();
   std::this_thread::sleep_for(300ms);  // wait for server start
 
   coro_http_client client{};
@@ -356,6 +387,13 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   result = co_await client.async_get("/coro");
   assert(result.status == 200);
+
+  client.add_str_part("hello", "form_data");
+  client.add_str_part("test", "value");
+  result =
+      co_await client.async_upload_multipart("http://127.0.0.1:9001/form_data");
+  assert(result.status == 200);
+  assert(result.resp_body == "multipart finished");
 
   result = co_await client.async_get("/in_thread_pool");
   assert(result.status == 200);
