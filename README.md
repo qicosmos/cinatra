@@ -418,17 +418,50 @@ async_simple::coro::Lazy<void> test_async_client() {
 ```
 
 ### upload(multipart) file
+```cpp
+void start_server() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<POST>(
+      "/form_data",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        assert(req.get_content_type() == content_type::multipart);
+        auto boundary = req.get_boundary();
+        multipart_reader_t multipart(req.get_conn());
+        while (true) {
+          auto part_head = co_await multipart.read_part_head();
+          if (part_head.ec) {
+            co_return;
+          }
+
+          std::cout << part_head.name << "\n";
+          std::cout << part_head.filename << "\n";// if form data, no filename
+
+          auto part_body = co_await multipart.read_part_body(boundary);
+          if (part_body.ec) {
+            co_return;
+          }
+
+          std::cout << part_body.data << "\n";
+
+          if (part_body.eof) {
+            break;
+          }
+        }
+
+        resp.set_status_and_content(status_type::ok, "multipart finished");
+      });
+  server.start();      
+}
+```
 ```
 async_simple::coro::Lazy<void> test_upload() {
-  std::string uri = "http://example.com/";
+  std::string uri = "http://127.0.0.1:9001/form_data";
   coro_http_client client{};
-  auto result = co_await client.async_upload(uri, "test", "yourfile.jpg");
-  print(result.status);
-  std::cout << "upload finished\n";
 
   client.add_str_part("hello", "coro_http_client");
   client.add_file_part("test", "yourfile.jpg");
-  result = co_await client.async_upload(uri);
+  result = co_await client.async_upload_multipart(uri);
   print(result.status);
   std::cout << "upload finished\n";
 }
