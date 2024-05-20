@@ -57,13 +57,13 @@ class histogram_t : public metric_t {
     sum_->reset();
   }
 
-  auto bucket_counts() {
+  auto get_bucket_counts() {
     std::lock_guard guard(mtx_);
     return bucket_counts_;
   }
 
   void serialize(std::string& str) override {
-    if (sum_->values(false).empty()) {
+    if (sum_->values().empty()) {
       return;
     }
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
@@ -73,9 +73,10 @@ class histogram_t : public metric_t {
         .append(metric_name())
         .append("\n");
     double count = 0;
-    for (size_t i = 0; i < bucket_counts_.size(); i++) {
-      auto counter = bucket_counts_[i];
-      auto values = counter->values(false);
+    auto bucket_counts = get_bucket_counts();
+    for (size_t i = 0; i < bucket_counts.size(); i++) {
+      auto counter = bucket_counts[i];
+      auto values = counter->values();
       for (auto& [labels_value, sample] : values) {
         str.append(name_).append("_bucket{");
         if (i == bucket_boundaries_.size()) {
@@ -98,7 +99,7 @@ class histogram_t : public metric_t {
 
     str.append(name_)
         .append("_sum ")
-        .append(std::to_string((sum_->values(false)[{}].value)))
+        .append(std::to_string((sum_->values()[{}].value)))
         .append("\n");
 
     str.append(name_)

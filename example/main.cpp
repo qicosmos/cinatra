@@ -458,14 +458,8 @@ void use_metric() {
 
   server.set_http_handler<GET, POST>(
       "/metrics", [](coro_http_request &req, coro_http_response &resp) {
-        std::string str;
-        auto metrics = metric_t::collect();
-        for (auto &m : metrics) {
-          m->serialize(str);
-        }
-        std::cout << str;
         resp.need_date_head(false);
-        resp.set_status_and_content(status_type::ok, std::move(str));
+        resp.set_status_and_content(status_type::ok, metric_t::serialize());
       });
   server.sync_start();
 }

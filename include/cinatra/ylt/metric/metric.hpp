@@ -56,7 +56,7 @@ class metric_t {
 
   virtual std::map<std::vector<std::string>, sample_t,
                    std::less<std::vector<std::string>>>
-  values(bool need_lock = true) {
+  values() {
     return {};
   }
 
@@ -85,6 +85,15 @@ class metric_t {
       }
     }
     return metrics;
+  }
+
+  static std::string serialize() {
+    std::string str;
+    auto metrics = metric_t::collect();
+    for (auto& m : metrics) {
+      m->serialize(str);
+    }
+    return str;
   }
 
   static auto metric_map() {

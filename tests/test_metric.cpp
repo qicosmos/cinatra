@@ -1,4 +1,7 @@
+#include <string>
+
 #include "cinatra/ylt/metric/gauge.hpp"
+#include "cinatra/ylt/metric/metric.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <random>
 
@@ -110,7 +113,7 @@ TEST_CASE("test guage") {
 TEST_CASE("test histogram") {
   histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
   h.observe(23);
-  auto counts = h.bucket_counts();
+  auto counts = h.get_bucket_counts();
   CHECK(counts[3]->values()[{}].value == 1);
   h.observe(42);
   CHECK(counts[3]->values()[{}].value == 2);
@@ -168,6 +171,11 @@ TEST_CASE("test register metric") {
   auto map = metric_t::metric_map();
   CHECK(map["get_count"]->values()[{}].value == 1);
   CHECK(map["get_guage_count"]->values()[{}].value == 1);
+
+  auto s = metric_t::serialize();
+  std::cout << s << "\n";
+  CHECK(s.find("get_count 1") != std::string::npos);
+  CHECK(s.find("get_guage_count 1") != std::string::npos);
 
   metric_t::remove_metric("get_count");
   CHECK(metric_t::metric_count() == 1);
