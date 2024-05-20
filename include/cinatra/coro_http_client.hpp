@@ -284,6 +284,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   // only make socket connet(or handshake) to the host
   async_simple::coro::Lazy<resp_data> connect(std::string uri) {
+    if (should_reset_) {
+      reset();
+    }
+    else {
+      should_reset_ = true;
+    }
     resp_data data{};
     bool no_schema = !has_schema(uri);
     std::string append_uri;
@@ -894,11 +900,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     head_buf_.consume(head_buf_.size());
     chunked_buf_.consume(chunked_buf_.size());
     resp_chunk_str_.clear();
-  }
-
-  async_simple::coro::Lazy<resp_data> reconnect(std::string uri) {
-    reset();
-    co_return co_await connect(std::move(uri));
   }
 
   std::string_view get_host() { return host_; }
@@ -2126,6 +2127,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_tcp_no_delay_ = true;
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
+  bool should_reset_ = false;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
