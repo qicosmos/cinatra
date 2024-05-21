@@ -687,7 +687,7 @@ TEST_CASE("test upload file") {
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
         while (true) {
-          auto part_head = co_await multipart.read_part_head();
+          auto part_head = co_await multipart.read_part_head(boundary);
           if (part_head.ec) {
             co_return;
           }
@@ -897,7 +897,7 @@ TEST_CASE("test coro_http_client multipart upload") {
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
         while (true) {
-          auto part_head = co_await multipart.read_part_head();
+          auto part_head = co_await multipart.read_part_head(boundary);
           if (part_head.ec) {
             co_return;
           }

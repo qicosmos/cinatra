@@ -1640,7 +1640,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string boundary = std::string{parser_.get_boundary()};
     multipart_reader_t multipart(this);
     while (true) {
-      auto part_head = co_await multipart.read_part_head();
+      auto part_head = co_await multipart.read_part_head(boundary);
       if (part_head.ec) {
         co_return part_head.ec;
       }
