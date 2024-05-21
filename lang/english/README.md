@@ -269,7 +269,7 @@ see[example](../../example/main.cpp)
 
 This code demonstrates how to use RESTful path parameters. Two RESTful APIs are set up below. When accessing the first API, such as the url `http://127.0.0.1:8080/numbers/1234/test/5678`, the server can get the two parameters of 1234 and 5678, the first RESTful API The parameter is `(\d+)`, which is a regex expression, which means that the parameter can only be a number. The code to get the first parameter is `req.get_matches ()[1]`. Because each req is different, each matched parameter is placed in the `request` structure.
 
-At the same time, it also supports RESTful API with any character, that is, the second RESTful API in the example, and the path parameter is set to `"/string/{:id}/test/{:name}"`. To get the corresponding parameters, use the `req.get_query_value` function. The parameters can only be registered variables (if you access non-registered variables, it will run but report an error). In the example, the parameter names are id and name. To get the id parameter, call `req.get_query_value("id")` will do. After the sample code is displayed, when accessing `http://127.0.0.1:8080/string/params_1/test/api_test`, the browser will return the `api_test` string.
+At the same time, it also supports RESTful API with any character, that is, the second RESTful API in the example, and the path parameter is set to `"/string/:id/test/:name"`. To get the corresponding parameters, use the `req.get_query_value` function. The parameters can only be registered variables (if you access non-registered variables, it will run but report an error). In the example, the parameter names are id and name. To get the id parameter, call `req.get_query_value("id")` will do. After the sample code is displayed, when accessing `http://127.0.0.1:8080/string/params_1/test/api_test`, the browser will return the `api_test` string.
 
 ```cpp
 #include "cinatra.hpp"
@@ -282,14 +282,14 @@ int main() {
 
 	server.set_http_handler<GET, POST>(
 		R"(/numbers/(\d+)/test/(\d+))", [](request &req, response &res) {
-			std::cout << " matches[1] is : " << req.get_matches()[1]
-					<< " matches[2] is: " << req.get_matches()[2] << std::endl;
+			std::cout << " matches[1] is : " << req.matches_[1]
+					<< " matches[2] is: " << req.matches_[2] << std::endl;
 
 			res.set_status_and_content(status_type::ok, "hello world");
 		});
 
 	server.set_http_handler<GET, POST>(
-		"/string/{:id}/test/{:name}", [](request &req, response &res) {
+		"/string/:id/test/:name", [](request &req, response &res) {
 			std::string id = req.get_query_value("id");
 			std::cout << "id value is: " << id << std::endl;
 			std::cout << "name value is: " << std::string(req.get_query_value("name")) << std::endl;
