@@ -301,16 +301,14 @@ async_simple::coro::Lazy<void> basic_usage() {
       "/form_data",
       [](coro_http_request &req,
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-        if (req.get_content_type() != content_type::multipart) {
-          resp.set_status_and_content(status_type::bad_request,
-                                      "bad request, not multipart request");
-          co_return;
-        }
+        assert(req.get_content_type() == content_type::multipart);
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
         while (true) {
-          auto part_head = co_await multipart.read_part_head();
+          auto part_head = co_await multipart.read_part_head(boundary);
           if (part_head.ec) {
+            resp.set_status_and_content(status_type::bad_request,
+                                        "bad_request");
             co_return;
           }
 
