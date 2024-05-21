@@ -30,7 +30,6 @@ press_config init_conf(const cmdline::parser& parser) {
     std::cerr << "number of connections must be >= threads\n";
     exit(1);
   }
-  conf.read_fix = parser.get<int>("readfix");
 
   std::string duration_str = parser.get<std::string>("duration");
   if (duration_str.size() < 2) {
@@ -94,7 +93,7 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
         for (auto& single_header : conf.add_headers)
           client->add_header(single_header.first, single_header.second);
       }
-      result = co_await client->async_get(conf.url);
+      result = co_await client->connect(conf.url);
       if (result.status != 200) {
         client->reset();
         std::cout << "create client " << i + 1 << " failed, retry " << j + 1
@@ -111,23 +110,15 @@ async_simple::coro::Lazy<void> create_clients(const press_config& conf,
       exit(1);
     }
 
-    if (conf.read_fix > 0) {
-      client->set_read_fix();
-    }
-
     thd_counter.conns.push_back(std::move(client));
   }
 
   std::cout << "create " << conf.connections << " connections"
-            << " successfully";
-  if (conf.read_fix > 0) {
-    std::cout << ", will read fixed len response";
-  }
-  std::cout << "\n";
+            << " successfully\n";
 }
 
 async_simple::coro::Lazy<void> press(thread_counter& counter,
-                                     const std::string& url,
+                                     const std::string& path,
                                      std::atomic_bool& stop) {
   size_t err_count = 0;
   size_t conn_num = counter.conns.size();
@@ -141,7 +132,7 @@ async_simple::coro::Lazy<void> press(thread_counter& counter,
         continue;
       }
 
-      futures.push_back(conn->async_get(url));
+      futures.push_back(conn->async_get(path));
     }
 
     auto start = std::chrono::steady_clock::now();
@@ -203,11 +194,15 @@ int main(int argc, char* argv[]) {
       "            e.g. \"User-Agent: coro_http_press && x-frame-options: "
       "SAMEORIGIN\"",
       false, "");
-  parser.add<int>("readfix", 'r', "read fixed response", false, 0);
 
   parser.parse_check(argc, argv);
 
   press_config conf = init_conf(parser);
+
+  if (conf.connections <= 0) {
+    std::cout << "connection number is negative: " << conf.connections << "\n";
+    std::exit(1);
+  }
 
   // create threads
   std::vector<thread_counter> v;
@@ -227,8 +222,9 @@ int main(int argc, char* argv[]) {
   // create parallel request
   std::vector<async_simple::coro::Lazy<void>> futures;
   std::atomic_bool stop = false;
+  std::string path = conf.url.substr(conf.url.rfind('/'));
   for (auto& counter : v) {
-    futures.push_back(press(counter, conf.url, stop));
+    futures.push_back(press(counter, path, stop));
   }
 
   // start timer
