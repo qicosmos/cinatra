@@ -528,7 +528,7 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
         while (true) {
-          auto part_head = co_await multipart.read_part_head();
+          auto part_head = co_await multipart.read_part_head(boundary);
           if (part_head.ec) {
             co_return;
           }
