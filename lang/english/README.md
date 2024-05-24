@@ -510,6 +510,14 @@ e.g. `-H User-Agent: coro_http_press` is to add an http header, and `-H User-Age
 
 `-r `parameter, which indicates whether to read a fixed-length response, this parameter can avoid frequent parsing of the response to optimize performance, some servers may return different lengths for the same request, in this case, do not set -r to 1, or do not set this parameter.
 
+# submodule
+
+A submodule of cinatra is iguana.
+
+When you want to use this submodule, using the command `git submodule init` will pull the iguana library.
+
+If you want to use the latest iguana, please use the command `git submodule update --remote`.
+
 ## Performance
 
 ![qps](../qps.png "qps")
