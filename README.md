@@ -569,6 +569,14 @@ cinatra depends on asio and async_simple.
 
 press_tool depends on cinatra and cmdline.
 
+# submodule
+
+A submodule of cinatra is iguana.
+
+When you want to use this submodule, using the command `git submodule init` will pull the iguana library.
+
+If you want to use the latest iguana, please use the command `git submodule update --remote`.
+
 # 联系方式
 
 purecpp@163.com
