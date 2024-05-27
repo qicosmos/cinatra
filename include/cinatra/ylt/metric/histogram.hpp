@@ -29,27 +29,11 @@ class histogram_t : public metric_t {
         std::distance(bucket_boundaries_.begin(),
                       std::lower_bound(bucket_boundaries_.begin(),
                                        bucket_boundaries_.end(), value)));
-
-    std::lock_guard guard(mtx_);
-    std::lock_guard<std::mutex> lock(mutex_);
     sum_->inc(value);
     bucket_counts_[bucket_index]->inc();
   }
 
-  void observe(const std::vector<std::string>& label, double value) {
-    const auto bucket_index = static_cast<std::size_t>(
-        std::distance(bucket_boundaries_.begin(),
-                      std::lower_bound(bucket_boundaries_.begin(),
-                                       bucket_boundaries_.end(), value)));
-
-    std::lock_guard guard(mtx_);
-    std::lock_guard<std::mutex> lock(mutex_);
-    sum_->inc(label, value);
-    bucket_counts_[bucket_index]->inc(label);
-  }
-
   void reset() {
-    std::lock_guard guard(mtx_);
     for (auto& c : bucket_counts_) {
       c->reset();
     }
@@ -57,10 +41,7 @@ class histogram_t : public metric_t {
     sum_->reset();
   }
 
-  auto get_bucket_counts() {
-    std::lock_guard guard(mtx_);
-    return bucket_counts_;
-  }
+  auto get_bucket_counts() { return bucket_counts_; }
 
   void serialize(std::string& str) override {
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
@@ -108,8 +89,7 @@ class histogram_t : public metric_t {
   }
 
   std::vector<double> bucket_boundaries_;
-  std::mutex mutex_;
-  std::vector<std::shared_ptr<counter_t>> bucket_counts_;
+  std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
 }  // namespace cinatra
