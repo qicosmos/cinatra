@@ -59,7 +59,10 @@ class metric_t {
     return {};
   }
 
-  virtual double value() { return 0; }
+  virtual double value() { return {}; }
+  virtual double value(const std::vector<std::string>& labels_value) {
+    return {};
+  }
 
   virtual void serialize(std::string& out) {}
 
@@ -125,7 +128,8 @@ class metric_t {
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
-  std::vector<std::string> labels_name_;
+  std::vector<std::string> labels_name_;   // read only
+  std::vector<std::string> labels_value_;  // read only
   bool enable_timestamp_ = false;
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;

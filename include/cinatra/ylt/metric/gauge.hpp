@@ -13,6 +13,12 @@ class gauge_t : public counter_t {
     set_metric_type(MetricType::Guage);
   }
 
+  gauge_t(std::string name, std::string help,
+          std::map<std::string, std::string> labels)
+      : counter_t(std::move(name), std::move(help), std::move(labels)) {
+    set_metric_type(MetricType::Guage);
+  }
+
   gauge_t(const char* name, const char* help,
           std::vector<const char*> labels_name = {})
       : gauge_t(
@@ -23,14 +29,23 @@ class gauge_t : public counter_t {
 
   void dec(double value) { default_lable_value_ -= value; }
 
-  void dec(const std::vector<std::string>& labels_value, double value) {
+  void dec(const std::vector<std::string>& labels_value, double value = 1) {
     if (value == 0) {
       return;
     }
 
     validate(labels_value, value);
-    std::lock_guard guard(mtx_);
-    set_value(value_map_[labels_value], value, op_type_t::DEC);
+    if (use_atomic_) {
+      if (labels_value != labels_value_) {
+        throw std::invalid_argument(
+            "the given labels_value is not match with origin labels_value");
+      }
+      set_value(atomic_value_map_[labels_value], value, op_type_t::DEC);
+    }
+    else {
+      std::lock_guard guard(mtx_);
+      set_value(value_map_[labels_value], value, op_type_t::DEC);
+    }
   }
 };
 }  // namespace cinatra

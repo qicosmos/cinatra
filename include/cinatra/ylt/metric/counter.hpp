@@ -18,6 +18,18 @@ class counter_t : public metric_t {
             std::string(name), std::string(help),
             std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
 
+  counter_t(std::string name, std::string help,
+            std::map<std::string, std::string> labels)
+      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
+    for (auto &[k, v] : labels) {
+      labels_name_.push_back(k);
+      labels_value_.push_back(v);
+    }
+
+    atomic_value_map_.emplace(labels_value_, 0);
+    use_atomic_ = true;
+  }
+
   void inc() { default_lable_value_ += 1; }
 
   void inc(double val) {
@@ -32,9 +44,19 @@ class counter_t : public metric_t {
     if (value == 0) {
       return;
     }
+
     validate(labels_value, value);
-    std::lock_guard guard(mtx_);
-    set_value(value_map_[labels_value], value, op_type_t::INC);
+    if (use_atomic_) {
+      if (labels_value != labels_value_) {
+        throw std::invalid_argument(
+            "the given labels_value is not match with origin labels_value");
+      }
+      set_value(atomic_value_map_[labels_value], value, op_type_t::INC);
+    }
+    else {
+      std::lock_guard guard(mtx_);
+      set_value(value_map_[labels_value], value, op_type_t::INC);
+    }
   }
 
   void update(double value) { default_lable_value_ = value; }
@@ -44,8 +66,17 @@ class counter_t : public metric_t {
       throw std::invalid_argument(
           "the number of labels_value name and labels_value is not match");
     }
-    std::lock_guard guard(mtx_);
-    set_value(value_map_[labels_value], value, op_type_t::SET);
+    if (use_atomic_) {
+      if (labels_value != labels_value_) {
+        throw std::invalid_argument(
+            "the given labels_value is not match with origin labels_value");
+      }
+      set_value(atomic_value_map_[labels_value], value, op_type_t::SET);
+    }
+    else {
+      std::lock_guard guard(mtx_);
+      set_value(value_map_[labels_value], value, op_type_t::SET);
+    }
   }
 
   void reset() {
@@ -65,6 +96,44 @@ class counter_t : public metric_t {
 
   double value() override { return default_lable_value_; }
 
+  double value(const std::vector<std::string> &labels_value) override {
+    if (use_atomic_) {
+      return atomic_value_map_[labels_value];
+    }
+    else {
+      std::lock_guard guard(mtx_);
+      return value_map_[labels_value];
+    }
+  }
+
+  void serialize(std::string &str) override {
+    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
+    str.append("# TYPE ")
+        .append(name_)
+        .append(" ")
+        .append(metric_name())
+        .append("\n");
+
+    if (labels_name_.empty()) {
+      serialize_default_lable(str);
+      return;
+    }
+
+    if (use_atomic_) {
+      serialize_atomic(str);
+      return;
+    }
+
+    auto value_map = values();
+    if (value_map.empty()) {
+      str.clear();
+      return;
+    }
+
+    serialize_map(value_map_, str);
+  }
+
+ protected:
   void serialize_default_lable(std::string &str) {
     str.append(name_);
     if (labels_name_.empty()) {
@@ -81,25 +150,12 @@ class counter_t : public metric_t {
     str.append("\n");
   }
 
-  void serialize(std::string &str) override {
-    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
-    str.append("# TYPE ")
-        .append(name_)
-        .append(" ")
-        .append(metric_name())
-        .append("\n");
+  void serialize_atomic(std::string &str) {
+    serialize_map(atomic_value_map_, str);
+  }
 
-    if (labels_name_.empty()) {
-      serialize_default_lable(str);
-      return;
-    }
-
-    auto value_map = values();
-    if (value_map.empty()) {
-      str.clear();
-      return;
-    }
-
+  template <typename T>
+  void serialize_map(T &value_map, std::string &str) {
     for (auto &[labels_value, value] : value_map) {
       str.append(name_);
       str.append("{");
@@ -117,7 +173,6 @@ class counter_t : public metric_t {
     }
   }
 
- protected:
   enum class op_type_t { INC, DEC, SET };
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const std::vector<std::string> &v2) {
@@ -137,7 +192,8 @@ class counter_t : public metric_t {
     }
   }
 
-  void set_value(double &label_val, double value, op_type_t type) {
+  template <typename T>
+  void set_value(T &label_val, double value, op_type_t type) {
     switch (type) {
       case op_type_t::INC:
         label_val += value;
@@ -155,6 +211,10 @@ class counter_t : public metric_t {
   std::map<std::vector<std::string>, double,
            std::less<std::vector<std::string>>>
       value_map_;
+  std::map<std::vector<std::string>, std::atomic<double>,
+           std::less<std::vector<std::string>>>
+      atomic_value_map_;
   std::atomic<double> default_lable_value_ = 0;
+  bool use_atomic_ = false;
 };
 }  // namespace cinatra

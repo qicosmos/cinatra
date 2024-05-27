@@ -58,6 +58,41 @@ TEST_CASE("test no lable") {
   }
 }
 
+TEST_CASE("test with atomic") {
+  counter_t c(
+      "get_count", "get counter",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  std::vector<std::string> labels_value{"GET", "/"};
+  c.inc(labels_value);
+  c.inc(labels_value, 2);
+  CHECK(c.value(labels_value) == 3);
+  CHECK_THROWS_AS(c.inc({"GET", "/test"}), std::invalid_argument);
+  CHECK_THROWS_AS(c.inc({"POST", "/"}), std::invalid_argument);
+  c.update(labels_value, 10);
+  CHECK(c.value(labels_value) == 10);
+
+  gauge_t g(
+      "get_qps", "get qps",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  g.inc(labels_value);
+  g.inc(labels_value, 2);
+  CHECK(g.value(labels_value) == 3);
+  CHECK_THROWS_AS(g.inc({"GET", "/test"}), std::invalid_argument);
+  CHECK_THROWS_AS(g.inc({"POST", "/"}), std::invalid_argument);
+  g.dec(labels_value);
+  g.dec(labels_value, 1);
+  CHECK(g.value(labels_value) == 1);
+
+  std::string str;
+  c.serialize(str);
+  std::cout << str;
+  std::string str1;
+  g.serialize(str1);
+  std::cout << str1;
+  CHECK(str.find("} 10") != std::string::npos);
+  CHECK(str1.find("} 1") != std::string::npos);
+}
+
 TEST_CASE("test counter") {
   {
     auto c = std::make_shared<counter_t>("get_count", "get counter",
