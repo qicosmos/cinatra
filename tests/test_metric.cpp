@@ -73,9 +73,9 @@ TEST_CASE("test counter") {
     counter_t c("get_count", "get counter", {"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
-    CHECK(c.values()[{"GET", "200"}].value == 1);
+    CHECK(c.values()[{"GET", "200"}] == 1);
     c.inc({"GET", "200"}, 2);
-    CHECK(c.values()[{"GET", "200"}].value == 3);
+    CHECK(c.values()[{"GET", "200"}] == 3);
 
     std::string str;
     c.serialize(str);
@@ -87,10 +87,10 @@ TEST_CASE("test counter") {
     CHECK_THROWS_AS(c.inc({"GET", "200", "/"}, 2), std::invalid_argument);
 
     c.update({"GET", "200"}, 20);
-    CHECK(c.values()[{"GET", "200"}].value == 20);
+    CHECK(c.values()[{"GET", "200"}] == 20);
     c.reset();
-    CHECK(c.values()[{"GET", "200"}].value == 0);
-    CHECK(c.values().begin()->second.value == 0);
+    CHECK(c.values()[{"GET", "200"}] == 0);
+    CHECK(c.values().begin()->second == 0);
   }
 }
 
@@ -116,9 +116,9 @@ TEST_CASE("test guage") {
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
-    CHECK(g.values()[{"GET", "200", "/"}].value == 1);
+    CHECK(g.values()[{"GET", "200", "/"}] == 1);
     g.inc({"GET", "200", "/"}, 2);
-    CHECK(g.values()[{"GET", "200", "/"}].value == 3);
+    CHECK(g.values()[{"GET", "200", "/"}] == 3);
 
     std::string str;
     g.serialize(str);
@@ -130,9 +130,9 @@ TEST_CASE("test guage") {
     CHECK_THROWS_AS(g.dec({"GET", "200"}, 1), std::invalid_argument);
 
     g.dec({"GET", "200", "/"}, 1);
-    CHECK(g.values()[{"GET", "200", "/"}].value == 2);
+    CHECK(g.values()[{"GET", "200", "/"}] == 2);
     g.dec({"GET", "200", "/"}, 2);
-    CHECK(g.values()[{"GET", "200", "/"}].value == 0);
+    CHECK(g.values()[{"GET", "200", "/"}] == 0);
   }
 }
 

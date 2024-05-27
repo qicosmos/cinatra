@@ -1,4 +1,6 @@
 #pragma once
+#include <atomic>
+
 #include "metric.hpp"
 
 namespace cinatra {
@@ -54,7 +56,7 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, sample_t,
+  std::map<std::vector<std::string>, double,
            std::less<std::vector<std::string>>>
   values() override {
     std::lock_guard guard(mtx_);
@@ -98,23 +100,19 @@ class counter_t : public metric_t {
       return;
     }
 
-    for (auto &[labels_value, sample] : value_map) {
+    for (auto &[labels_value, value] : value_map) {
       str.append(name_);
       str.append("{");
       build_string(str, labels_name_, labels_value);
       str.append("} ");
 
       if (type_ == MetricType::Counter) {
-        str.append(std::to_string((int64_t)sample.value));
+        str.append(std::to_string((int64_t)value));
       }
       else {
-        str.append(std::to_string(sample.value));
+        str.append(std::to_string(value));
       }
 
-      if (enable_timestamp_) {
-        str.append(" ");
-        str.append(std::to_string(sample.timestamp));
-      }
       str.append("\n");
     }
   }
@@ -139,25 +137,22 @@ class counter_t : public metric_t {
     }
   }
 
-  void set_value(sample_t &sample, double value, op_type_t type) {
-    sample.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
+  void set_value(double &label_val, double value, op_type_t type) {
     switch (type) {
       case op_type_t::INC:
-        sample.value += value;
+        label_val += value;
         break;
       case op_type_t::DEC:
-        sample.value -= value;
+        label_val -= value;
         break;
       case op_type_t::SET:
-        sample.value = value;
+        label_val = value;
         break;
     }
   }
 
   std::mutex mtx_;
-  std::map<std::vector<std::string>, sample_t,
+  std::map<std::vector<std::string>, double,
            std::less<std::vector<std::string>>>
       value_map_;
   std::atomic<double> default_lable_value_ = 0;

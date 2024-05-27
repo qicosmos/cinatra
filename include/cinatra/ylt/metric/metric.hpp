@@ -19,7 +19,6 @@ enum class MetricType {
 
 struct sample_t {
   double value;
-  int64_t timestamp;
 };
 
 class metric_t {
@@ -53,9 +52,8 @@ class metric_t {
   }
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
-  void enable_timestamp(bool r) { enable_timestamp_ = r; }
 
-  virtual std::map<std::vector<std::string>, sample_t,
+  virtual std::map<std::vector<std::string>, double,
                    std::less<std::vector<std::string>>>
   values() {
     return {};
