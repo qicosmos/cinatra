@@ -16,9 +16,14 @@ class counter_t : public metric_t {
             std::string(name), std::string(help),
             std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
 
-  void inc() {
-    std::lock_guard guard(mtx_);
-    set_value(value_map_[{}], 1, op_type_t::INC);
+  void inc() { default_lable_value_ += 1; }
+
+  void inc(double val) {
+    if (val < 0) {
+      throw std::invalid_argument("the value is less than zero");
+    }
+
+    default_lable_value_ += val;
   }
 
   void inc(const std::vector<std::string> &labels_value, double value = 1) {
@@ -30,8 +35,10 @@ class counter_t : public metric_t {
     set_value(value_map_[labels_value], value, op_type_t::INC);
   }
 
+  void update(double value) { default_lable_value_ = value; }
+
   void update(const std::vector<std::string> &labels_value, double value) {
-    if (labels_name_.size() != labels_value.size()) {
+    if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
       throw std::invalid_argument(
           "the number of labels_value name and labels_value is not match");
     }
@@ -40,6 +47,7 @@ class counter_t : public metric_t {
   }
 
   void reset() {
+    default_lable_value_ = 0;
     std::lock_guard guard(mtx_);
     for (auto &pair : value_map_) {
       pair.second = {};
@@ -53,29 +61,56 @@ class counter_t : public metric_t {
     return value_map_;
   }
 
-  void serialize(std::string &str) override {
-    auto value_map = values();
-    if (value_map.empty()) {
-      return;
+  double value() override { return default_lable_value_; }
+
+  void serialize_default_lable(std::string &str) {
+    str.append(name_);
+    if (labels_name_.empty()) {
+      str.append(" ");
     }
+
+    if (type_ == MetricType::Counter) {
+      str.append(std::to_string((int64_t)default_lable_value_));
+    }
+    else {
+      str.append(std::to_string(default_lable_value_));
+    }
+
+    str.append("\n");
+  }
+
+  void serialize(std::string &str) override {
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
         .append(" ")
         .append(metric_name())
         .append("\n");
+
+    if (labels_name_.empty()) {
+      serialize_default_lable(str);
+      return;
+    }
+
+    auto value_map = values();
+    if (value_map.empty()) {
+      str.clear();
+      return;
+    }
+
     for (auto &[labels_value, sample] : value_map) {
       str.append(name_);
-      if (labels_name_.empty()) {
-        str.append(" ");
+      str.append("{");
+      build_string(str, labels_name_, labels_value);
+      str.append("} ");
+
+      if (type_ == MetricType::Counter) {
+        str.append(std::to_string((int64_t)sample.value));
       }
       else {
-        str.append("{");
-        build_string(str, labels_name_, labels_value);
-        str.append("} ");
+        str.append(std::to_string(sample.value));
       }
 
-      str.append(std::to_string((int64_t)sample.value));
       if (enable_timestamp_) {
         str.append(" ");
         str.append(std::to_string(sample.timestamp));
@@ -98,7 +133,7 @@ class counter_t : public metric_t {
     if (value < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
-    if (labels_name_.size() != labels_value.size()) {
+    if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
       throw std::invalid_argument(
           "the number of labels_value name and labels_value is not match");
     }
@@ -125,5 +160,6 @@ class counter_t : public metric_t {
   std::map<std::vector<std::string>, sample_t,
            std::less<std::vector<std::string>>>
       value_map_;
+  std::atomic<double> default_lable_value_ = 0;
 };
 }  // namespace cinatra

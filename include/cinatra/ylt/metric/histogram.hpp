@@ -32,7 +32,7 @@ class histogram_t : public metric_t {
 
     std::lock_guard guard(mtx_);
     std::lock_guard<std::mutex> lock(mutex_);
-    sum_->inc({}, value);
+    sum_->inc(value);
     bucket_counts_[bucket_index]->inc();
   }
 
@@ -63,9 +63,6 @@ class histogram_t : public metric_t {
   }
 
   void serialize(std::string& str) override {
-    if (sum_->values().empty()) {
-      return;
-    }
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
@@ -76,30 +73,24 @@ class histogram_t : public metric_t {
     auto bucket_counts = get_bucket_counts();
     for (size_t i = 0; i < bucket_counts.size(); i++) {
       auto counter = bucket_counts[i];
-      auto values = counter->values();
-      for (auto& [labels_value, sample] : values) {
-        str.append(name_).append("_bucket{");
-        if (i == bucket_boundaries_.size()) {
-          str.append("le=\"").append("+Inf").append("\"} ");
-        }
-        else {
-          str.append("le=\"")
-              .append(std::to_string(bucket_boundaries_[i]))
-              .append("\"} ");
-        }
-
-        count += sample.value;
-        str.append(std::to_string(count));
-        if (enable_timestamp_) {
-          str.append(" ").append(std::to_string(sample.timestamp));
-        }
-        str.append("\n");
+      str.append(name_).append("_bucket{");
+      if (i == bucket_boundaries_.size()) {
+        str.append("le=\"").append("+Inf").append("\"} ");
       }
+      else {
+        str.append("le=\"")
+            .append(std::to_string(bucket_boundaries_[i]))
+            .append("\"} ");
+      }
+
+      count += counter->value();
+      str.append(std::to_string(count));
+      str.append("\n");
     }
 
     str.append(name_)
         .append("_sum ")
-        .append(std::to_string((sum_->values()[{}].value)))
+        .append(std::to_string(sum_->value()))
         .append("\n");
 
     str.append(name_)

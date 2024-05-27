@@ -19,15 +19,15 @@ class gauge_t : public counter_t {
             std::string(name), std::string(help),
             std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
 
-  void dec() {
-    std::lock_guard guard(mtx_);
-    set_value(value_map_[{}], 1, op_type_t::DEC);
-  }
+  void dec() { default_lable_value_ -= 1; }
+
+  void dec(double value) { default_lable_value_ -= value; }
 
   void dec(const std::vector<std::string>& labels_value, double value) {
     if (value == 0) {
       return;
     }
+
     validate(labels_value, value);
     std::lock_guard guard(mtx_);
     set_value(value_map_[labels_value], value, op_type_t::DEC);

@@ -11,28 +11,54 @@
 #include "doctest/doctest.h"
 using namespace cinatra;
 
-TEST_CASE("test counter") {
+TEST_CASE("test no lable") {
+  {
+    gauge_t g{"test_gauge", "help"};
+    g.inc();
+    g.inc();
+
+    std::string str;
+    g.serialize(str);
+    CHECK(str.find("test_gauge 2") != std::string::npos);
+
+    g.dec();
+    CHECK(g.value() == 1);
+    CHECK_THROWS_AS(g.dec({}, 1), std::invalid_argument);
+    CHECK_THROWS_AS(g.inc({}, 1), std::invalid_argument);
+    CHECK_THROWS_AS(g.update({}, 1), std::invalid_argument);
+
+    counter_t c{"test_counter", "help"};
+    c.inc();
+    c.inc();
+    std::string str1;
+    c.serialize(str1);
+    CHECK(str1.find("test_counter 2") != std::string::npos);
+  }
   {
     counter_t c("get_count", "get counter");
     CHECK(c.metric_type() == MetricType::Counter);
     CHECK(c.labels_name().empty());
     c.inc();
-    CHECK(c.values().begin()->second.value == 1);
+    CHECK(c.value() == 1);
     c.inc();
-    CHECK(c.values().begin()->second.value == 2);
-    c.inc({}, 0);
+    CHECK(c.value() == 2);
+    c.inc(0);
 
-    CHECK(c.values().begin()->second.value == 2);
+    CHECK(c.value() == 2);
 
-    CHECK_THROWS_AS(c.inc({}, -2), std::invalid_argument);
+    CHECK_THROWS_AS(c.inc(-2), std::invalid_argument);
+    CHECK_THROWS_AS(c.inc({}, 1), std::invalid_argument);
+    CHECK_THROWS_AS(c.update({}, 1), std::invalid_argument);
 
-    c.update({}, 10);
-    CHECK(c.values().begin()->second.value == 10);
+    c.update(10);
+    CHECK(c.value() == 10);
 
-    c.update({}, 0);
-    CHECK(c.values().begin()->second.value == 0);
+    c.update(0);
+    CHECK(c.value() == 0);
   }
+}
 
+TEST_CASE("test counter") {
   {
     auto c = std::make_shared<counter_t>("get_count", "get counter",
                                          std::vector{"method", "code"});
@@ -74,15 +100,15 @@ TEST_CASE("test guage") {
     CHECK(g.metric_type() == MetricType::Guage);
     CHECK(g.labels_name().empty());
     g.inc();
-    CHECK(g.values().begin()->second.value == 1);
+    CHECK(g.value() == 1);
     g.inc();
-    CHECK(g.values().begin()->second.value == 2);
-    g.inc({}, 0);
+    CHECK(g.value() == 2);
+    g.inc(0);
 
     g.dec();
-    CHECK(g.values().begin()->second.value == 1);
+    CHECK(g.value() == 1);
     g.dec();
-    CHECK(g.values().begin()->second.value == 0);
+    CHECK(g.value() == 0);
   }
 
   {
@@ -114,15 +140,15 @@ TEST_CASE("test histogram") {
   histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
   h.observe(23);
   auto counts = h.get_bucket_counts();
-  CHECK(counts[3]->values()[{}].value == 1);
+  CHECK(counts[3]->value() == 1);
   h.observe(42);
-  CHECK(counts[3]->values()[{}].value == 2);
+  CHECK(counts[3]->value() == 2);
   h.observe(60);
-  CHECK(counts[4]->values()[{}].value == 1);
+  CHECK(counts[4]->value() == 1);
   h.observe(120);
-  CHECK(counts[5]->values()[{}].value == 1);
+  CHECK(counts[5]->value() == 1);
   h.observe(1);
-  CHECK(counts[0]->values()[{}].value == 1);
+  CHECK(counts[0]->value() == 1);
   std::string str;
   h.serialize(str);
   std::cout << str;
@@ -169,8 +195,8 @@ TEST_CASE("test register metric") {
   g->inc();
 
   auto map = metric_t::metric_map();
-  CHECK(map["get_count"]->values()[{}].value == 1);
-  CHECK(map["get_guage_count"]->values()[{}].value == 1);
+  CHECK(map["get_count"]->value() == 1);
+  CHECK(map["get_guage_count"]->value() == 1);
 
   auto s = metric_t::serialize();
   std::cout << s << "\n";

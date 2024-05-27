@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cassert>
 #include <map>
 #include <memory>
@@ -59,6 +60,8 @@ class metric_t {
   values() {
     return {};
   }
+
+  virtual double value() { return 0; }
 
   virtual void serialize(std::string& out) {}
 
