@@ -794,7 +794,7 @@ class coro_http_connection
     return last_rwtime_;
   }
 
-  auto &get_executor() { return *executor_; }
+  auto get_executor() { return executor_; }
 
   void close(bool need_cb = true) {
     if (has_closed_) {
@@ -884,7 +884,7 @@ class coro_http_connection
 
  private:
   friend class multipart_reader_t<coro_http_connection>;
-  async_simple::Executor *executor_;
+  coro_io::ExecutorWrapper<> *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
   asio::streambuf head_buf_;

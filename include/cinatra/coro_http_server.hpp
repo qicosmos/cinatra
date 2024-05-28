@@ -684,7 +684,7 @@ class coro_http_server {
         connections_.emplace(conn_id, conn);
       }
 
-      start_one(conn).via(&conn->get_executor()).detach();
+      start_one(conn).via(conn->get_executor()).detach();
     }
   }
 
