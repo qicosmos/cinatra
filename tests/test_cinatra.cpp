@@ -61,6 +61,21 @@ TEST_CASE("test for gzip") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl client") {
   {
+    coro_http_client client4{};
+    client4.set_ssl_schema(true);
+    auto result = client4.get("www.baidu.com");
+    assert(result.status == 200);
+
+    auto lazy = []() -> async_simple::coro::Lazy<void> {
+      coro_http_client client5{};
+      client5.set_ssl_schema(true);
+      co_await client5.connect("www.baidu.com");
+      auto result = co_await client5.async_get("/");
+      assert(result.status == 200);
+    };
+    async_simple::coro::syncAwait(lazy());
+  }
+  {
     coro_http_client client{};
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
