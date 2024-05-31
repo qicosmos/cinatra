@@ -66,11 +66,14 @@ TEST_CASE("test ssl client") {
     auto result = client4.get("www.baidu.com");
     assert(result.status == 200);
 
-    coro_http_client client5{};
-    client5.set_ssl_schema(true);
-    co_await client5.connect("www.baidu.com");
-    result = co_await client5.async_get("/");
-    assert(result.status == 200);
+    auto lazy = []() -> async_simple::coro::Lazy<void> {
+      coro_http_client client5{};
+      client5.set_ssl_schema(true);
+      co_await client5.connect("www.baidu.com");
+      auto result = co_await client5.async_get("/");
+      assert(result.status == 200);
+    };
+    async_simple::coro::syncAwait(lazy());
   }
   {
     coro_http_client client{};
