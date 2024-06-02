@@ -63,11 +63,12 @@ class metric_t {
                        std::less<std::vector<std::string>>>{};
   }
 
-  virtual double value() { return {}; }
-  virtual async_simple::coro::Lazy<double> value(
-      const std::vector<std::string>& labels_value) {
-    co_return 0;
+  virtual double atomic_value() { return {}; }
+  virtual double atomic_value(const std::vector<std::string>& labels_value) {
+    return 0;
   }
+
+  virtual void serialize_atomic(std::string& str) {}
 
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
     co_return;
@@ -102,7 +103,12 @@ class metric_t {
     std::string str;
     auto metrics = metric_t::collect();
     for (auto& m : metrics) {
-      co_await m->serialize_async(str);
+      if (m->use_atomic_) {
+        m->serialize_atomic(str);
+      }
+      else {
+        co_await m->serialize_async(str);
+      }
     }
     co_return str;
   }
@@ -131,13 +137,21 @@ class metric_t {
 
  protected:
   void set_metric_type(MetricType type) { type_ = type; }
+  void serialize_head(std::string& str) {
+    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
+    str.append("# TYPE ")
+        .append(name_)
+        .append(" ")
+        .append(metric_name())
+        .append("\n");
+  }
 
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
-  bool enable_timestamp_ = false;
+  bool use_atomic_ = false;
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 };

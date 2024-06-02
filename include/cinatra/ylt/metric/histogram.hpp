@@ -36,12 +36,7 @@ class histogram_t : public metric_t {
   auto get_bucket_counts() { return bucket_counts_; }
 
   void serialize_atomic(std::string& str) {
-    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
-    str.append("# TYPE ")
-        .append(name_)
-        .append(" ")
-        .append(metric_name())
-        .append("\n");
+    serialize_head(str);
     double count = 0;
     auto bucket_counts = get_bucket_counts();
     for (size_t i = 0; i < bucket_counts.size(); i++) {

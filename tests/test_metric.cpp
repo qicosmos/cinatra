@@ -242,8 +242,8 @@ TEST_CASE("test register metric") {
   g->inc();
 
   auto map = metric_t::metric_map();
-  CHECK(map["get_count"]->value() == 1);
-  CHECK(map["get_guage_count"]->value() == 1);
+  CHECK(map["get_count"]->atomic_value() == 1);
+  CHECK(map["get_guage_count"]->atomic_value() == 1);
 
   auto s = async_simple::coro::syncAwait(metric_t::serialize());
   std::cout << s << "\n";

@@ -32,14 +32,9 @@ class summary_t : public metric_t {
       co_return;
     }
 
-    auto quantile_values = get_quantile_values();
+    serialize_head(str);
 
-    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
-    str.append("# TYPE ")
-        .append(name_)
-        .append(" ")
-        .append(metric_name())
-        .append("\n");
+    auto quantile_values = get_quantile_values();
 
     for (const auto& quantile : quantiles_) {
       str.append(name_);
