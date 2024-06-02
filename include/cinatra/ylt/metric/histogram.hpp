@@ -14,13 +14,13 @@ class histogram_t : public metric_t {
   histogram_t(std::string name, std::string help, std::vector<double> buckets)
       : bucket_boundaries_(buckets),
         metric_t(MetricType::Histogram, std::move(name), std::move(help)),
-        sum_(std::make_shared<gauge_t>()) {
+        sum_(std::make_shared<gauge_t>("", "")) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");
     }
 
     for (size_t i = 0; i < buckets.size() + 1; i++) {
-      bucket_counts_.push_back(std::make_shared<counter_t>());
+      bucket_counts_.push_back(std::make_shared<counter_t>("", ""));
     }
   }
 
@@ -33,17 +33,9 @@ class histogram_t : public metric_t {
     bucket_counts_[bucket_index]->inc();
   }
 
-  void reset() {
-    for (auto& c : bucket_counts_) {
-      c->reset();
-    }
-
-    sum_->reset();
-  }
-
   auto get_bucket_counts() { return bucket_counts_; }
 
-  void serialize(std::string& str) override {
+  void serialize_atomic(std::string& str) {
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
@@ -64,14 +56,14 @@ class histogram_t : public metric_t {
             .append("\"} ");
       }
 
-      count += counter->value();
+      count += counter->atomic_value();
       str.append(std::to_string(count));
       str.append("\n");
     }
 
     str.append(name_)
         .append("_sum ")
-        .append(std::to_string(sum_->value()))
+        .append(std::to_string(sum_->atomic_value()))
         .append("\n");
 
     str.append(name_)

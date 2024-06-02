@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "async_simple/coro/Lazy.h"
+
 namespace cinatra {
 enum class MetricType {
   Counter,
@@ -47,24 +49,29 @@ class metric_t {
       case MetricType::Summary:
         return "summary";
       case MetricType::Nil:
+      default:
         return "unknown";
     }
   }
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
 
-  virtual std::map<std::vector<std::string>, double,
-                   std::less<std::vector<std::string>>>
-  values() {
-    return {};
+  virtual async_simple::coro::Lazy<std::map<
+      std::vector<std::string>, double, std::less<std::vector<std::string>>>>
+  async_value_map() {
+    co_return std::map<std::vector<std::string>, double,
+                       std::less<std::vector<std::string>>>{};
   }
 
   virtual double value() { return {}; }
-  virtual double value(const std::vector<std::string>& labels_value) {
-    return {};
+  virtual async_simple::coro::Lazy<double> value(
+      const std::vector<std::string>& labels_value) {
+    co_return 0;
   }
 
-  virtual void serialize(std::string& out) {}
+  virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
+    co_return;
+  }
 
   static void regiter_metric(std::shared_ptr<metric_t> metric) {
     std::scoped_lock guard(mtx_);
@@ -91,13 +98,13 @@ class metric_t {
     return metrics;
   }
 
-  static std::string serialize() {
+  static async_simple::coro::Lazy<std::string> serialize() {
     std::string str;
     auto metrics = metric_t::collect();
     for (auto& m : metrics) {
-      m->serialize(str);
+      co_await m->serialize_async(str);
     }
-    return str;
+    co_return str;
   }
 
   static auto metric_map() {

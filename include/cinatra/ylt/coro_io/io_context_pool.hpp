@@ -22,6 +22,7 @@
 #include <asio/steady_timer.hpp>
 #include <atomic>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <thread>

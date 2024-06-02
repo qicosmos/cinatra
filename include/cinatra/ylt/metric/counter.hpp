@@ -1,25 +1,55 @@
 #pragma once
 #include <atomic>
+#include <chrono>
 
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#include "cinatra/ylt/util/concurrentqueue.h"
 #include "metric.hpp"
 
 namespace cinatra {
+enum class op_type_t { INC, DEC, SET };
+struct counter_sample {
+  op_type_t op_type;
+  std::vector<std::string> labels_value;
+  double value;
+};
+
 class counter_t : public metric_t {
  public:
-  counter_t() = default;
+  struct block_t {
+    std::atomic<bool> stop_ = false;
+    std::shared_ptr<coro_io::period_timer> timer_;
+    moodycamel::ConcurrentQueue<counter_sample> sample_queue_;
+    std::map<std::vector<std::string>, double,
+             std::less<std::vector<std::string>>>
+        value_map_;
+  };
+
+  // default, no labels, only contains an atomic value.
+  counter_t(std::string name, std::string help)
+      : counter_t(std::move(name), std::move(help), std::vector<std::string>{},
+                  coro_io::get_global_block_executor()) {}
+
+  // dynamic labels value, contains a lock free queue.
   counter_t(std::string name, std::string help,
-            std::vector<std::string> labels_name = {})
+            std::vector<std::string> labels_name,
+            coro_io::ExecutorWrapper<> *excutor =
+                coro_io::get_global_block_executor())
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)) {}
+                 std::move(labels_name)),
+        excutor_(excutor) {
+    block_ = std::make_shared<block_t>();
+    block_->timer_ = std::make_shared<coro_io::period_timer>(excutor);
 
-  counter_t(const char *name, const char *help,
-            std::vector<const char *> labels_name = {})
-      : counter_t(
-            std::string(name), std::string(help),
-            std::vector<std::string>(labels_name.begin(), labels_name.end())) {}
+    start_timer(block_).via(excutor_).start([](auto &&) {
+    });
+  }
 
+  // static labels value, contains a map with atomic value.
   counter_t(std::string name, std::string help,
-            std::map<std::string, std::string> labels)
+            std::map<std::string, std::string> labels,
+            coro_io::ExecutorWrapper<> *excutor =
+                coro_io::get_global_block_executor())
       : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
     for (auto &[k, v] : labels) {
       labels_name_.push_back(k);
@@ -28,6 +58,27 @@ class counter_t : public metric_t {
 
     atomic_value_map_.emplace(labels_value_, 0);
     use_atomic_ = true;
+  }
+
+  ~counter_t() {}
+
+  async_simple::coro::Lazy<void> start_timer(std::shared_ptr<block_t> block) {
+    counter_sample sample;
+    while (!block->stop_) {
+      block->timer_->expires_after(std::chrono::milliseconds(5));
+      auto ec = co_await block->timer_->async_await();
+      if (!ec) {
+        break;
+      }
+
+      bool has_value = false;
+      while (block->sample_queue_.try_dequeue(sample)) {
+        has_value = true;
+        set_value(block->value_map_[sample.labels_value], sample.value,
+                  sample.op_type);
+      }
+    }
+    co_return;
   }
 
   void inc() { default_lable_value_ += 1; }
@@ -54,8 +105,7 @@ class counter_t : public metric_t {
       set_value(atomic_value_map_[labels_value], value, op_type_t::INC);
     }
     else {
-      std::lock_guard guard(mtx_);
-      set_value(value_map_[labels_value], value, op_type_t::INC);
+      block_->sample_queue_.enqueue({op_type_t::INC, labels_value, value});
     }
   }
 
@@ -74,39 +124,44 @@ class counter_t : public metric_t {
       set_value(atomic_value_map_[labels_value], value, op_type_t::SET);
     }
     else {
-      std::lock_guard guard(mtx_);
-      set_value(value_map_[labels_value], value, op_type_t::SET);
+      block_->sample_queue_.enqueue({op_type_t::SET, labels_value, value});
     }
   }
 
-  void reset() {
-    default_lable_value_ = 0;
-    std::lock_guard guard(mtx_);
-    for (auto &pair : value_map_) {
-      pair.second = {};
-    }
+  double atomic_value() { return default_lable_value_; }
+
+  double atomic_value(const std::vector<std::string> &labels_value) {
+    return atomic_value_map_[labels_value];
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  values() override {
-    std::lock_guard guard(mtx_);
-    return value_map_;
+  auto &atomic_value_map() { return atomic_value_map_; }
+
+  async_simple::coro::Lazy<double> async_value(
+      const std::vector<std::string> &labels_value) {
+    auto ret = co_await coro_io::post([this, &labels_value] {
+      return block_->value_map_[labels_value];
+    });
+    co_return ret.value();
   }
 
-  double value() override { return default_lable_value_; }
-
-  double value(const std::vector<std::string> &labels_value) override {
+  async_simple::coro::Lazy<std::map<std::vector<std::string>, double,
+                                    std::less<std::vector<std::string>>>>
+  async_value_map() override {
+    std::map<std::vector<std::string>, double,
+             std::less<std::vector<std::string>>>
+        map;
     if (use_atomic_) {
-      return atomic_value_map_[labels_value];
+      map = {atomic_value_map_.begin(), atomic_value_map_.end()};
     }
     else {
-      std::lock_guard guard(mtx_);
-      return value_map_[labels_value];
+      co_await coro_io::post([this, &map] {
+        map = block_->value_map_;
+      });
     }
+    co_return map;
   }
 
-  void serialize(std::string &str) override {
+  void serialize_atomic(std::string &str) {
     str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
     str.append("# TYPE ")
         .append(name_)
@@ -115,26 +170,47 @@ class counter_t : public metric_t {
         .append("\n");
 
     if (labels_name_.empty()) {
-      serialize_default_lable(str);
+      serialize_default_label(str);
       return;
     }
 
     if (use_atomic_) {
+      serialize_map(atomic_value_map_, str);
+      return;
+    }
+  }
+
+  async_simple::coro::Lazy<void> serialize_async(std::string &str) override {
+    str.append("# HELP ").append(name_).append(" ").append(help_).append("\n");
+    str.append("# TYPE ")
+        .append(name_)
+        .append(" ")
+        .append(metric_name())
+        .append("\n");
+
+    if (labels_name_.empty()) {
+      serialize_default_label(str);
+      co_return;
+    }
+
+    if (use_atomic_) {
       serialize_atomic(str);
-      return;
+      co_return;
     }
 
-    auto value_map = values();
-    if (value_map.empty()) {
-      str.clear();
-      return;
-    }
-
-    serialize_map(value_map_, str);
+    co_await coro_io::post(
+        [this, &str] {
+          if (block_->value_map_.empty()) {
+            str.clear();
+            return;
+          }
+          serialize_map(block_->value_map_, str);
+        },
+        excutor_);
   }
 
  protected:
-  void serialize_default_lable(std::string &str) {
+  void serialize_default_label(std::string &str) {
     str.append(name_);
     if (labels_name_.empty()) {
       str.append(" ");
@@ -148,10 +224,6 @@ class counter_t : public metric_t {
     }
 
     str.append("\n");
-  }
-
-  void serialize_atomic(std::string &str) {
-    serialize_map(atomic_value_map_, str);
   }
 
   template <typename T>
@@ -173,7 +245,6 @@ class counter_t : public metric_t {
     }
   }
 
-  enum class op_type_t { INC, DEC, SET };
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const std::vector<std::string> &v2) {
     for (size_t i = 0; i < v1.size(); i++) {
@@ -207,14 +278,12 @@ class counter_t : public metric_t {
     }
   }
 
-  std::mutex mtx_;
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-      value_map_;
   std::map<std::vector<std::string>, std::atomic<double>,
            std::less<std::vector<std::string>>>
       atomic_value_map_;
   std::atomic<double> default_lable_value_ = 0;
   bool use_atomic_ = false;
+  coro_io::ExecutorWrapper<> *excutor_ = nullptr;
+  std::shared_ptr<block_t> block_;
 };
 }  // namespace cinatra

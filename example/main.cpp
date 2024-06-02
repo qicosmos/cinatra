@@ -420,8 +420,10 @@ async_simple::coro::Lazy<void> basic_usage() {
   // make sure you have install openssl and enable CINATRA_ENABLE_SSL
 #ifdef CINATRA_ENABLE_SSL
   coro_http_client client2{};
-  result = co_await client2.async_get("https://baidu.com");
-  assert(result.status == 200);
+
+  result = client2.post("https://baidu.com", "test", req_content_type::string);
+  std::cout << result.resp_body << "\n";
+  result.net_err.value() assert(result.status == 200);
 #endif
 }
 
@@ -499,7 +501,7 @@ void use_metric() {
   server.set_http_handler<GET, POST>(
       "/metrics", [](coro_http_request &req, coro_http_response &resp) {
         resp.need_date_head(false);
-        resp.set_status_and_content(status_type::ok, metric_t::serialize());
+        resp.set_status_and_content(status_type::ok, "");
       });
   server.sync_start();
 }

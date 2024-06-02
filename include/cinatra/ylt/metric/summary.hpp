@@ -27,9 +27,9 @@ class summary_t : public metric_t {
     return quantile_values_;
   }
 
-  void serialize(std::string& str) override {
+  async_simple::coro::Lazy<void> serialize_async(std::string& str) override {
     if (quantiles_.empty()) {
-      return;
+      co_return;
     }
 
     auto quantile_values = get_quantile_values();
