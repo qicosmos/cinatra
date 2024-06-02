@@ -146,6 +146,24 @@ class metric_t {
         .append("\n");
   }
 
+#ifdef __APPLE__
+  template <typename T>
+  T mac_os_atomic_fetch_add(std::atomic<T>* obj, T arg) {
+    T expected = obj->load();
+    while (!atomic_compare_exchange_weak(obj, &expected, expected + arg))
+      ;
+    return expected;
+  }
+
+  template <typename T>
+  T mac_os_atomic_fetch_sub(std::atomic<T>* obj, T arg) {
+    T expected = obj->load();
+    while (!atomic_compare_exchange_weak(obj, &expected, expected - arg))
+      ;
+    return expected;
+  }
+#endif
+
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;

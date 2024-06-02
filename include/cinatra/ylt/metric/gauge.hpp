@@ -22,9 +22,21 @@ class gauge_t : public counter_t {
     set_metric_type(MetricType::Guage);
   }
 
-  void dec() { default_lable_value_ -= 1; }
+  void dec() {
+#ifdef __APPLE__
+    mac_os_atomic_fetch_sub(&default_lable_value_, double(1));
+#else
+    default_lable_value_ -= 1;
+#endif
+  }
 
-  void dec(double value) { default_lable_value_ -= value; }
+  void dec(double value) {
+#ifdef __APPLE__
+    mac_os_atomic_fetch_sub(&default_lable_value_, value);
+#else
+    default_lable_value_ -= value;
+#endif
+  }
 
   void dec(const std::vector<std::string>& labels_value, double value = 1) {
     if (value == 0) {

@@ -117,14 +117,24 @@ class counter_t : public metric_t {
         excutor_);
   }
 
-  void inc() { default_lable_value_ += 1; }
+  void inc() {
+#ifdef __APPLE__
+    mac_os_atomic_fetch_add(&default_lable_value_, double(1));
+#else
+    default_lable_value_ += 1;
+#endif
+  }
 
   void inc(double val) {
     if (val < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
 
+#ifdef __APPLE__
+    mac_os_atomic_fetch_add(&default_lable_value_, val);
+#else
     default_lable_value_ += val;
+#endif
   }
 
   void inc(const std::vector<std::string> &labels_value, double value = 1) {
@@ -254,10 +264,18 @@ class counter_t : public metric_t {
   void set_value(T &label_val, double value, op_type_t type) {
     switch (type) {
       case op_type_t::INC:
+#ifdef __APPLE__
+        mac_os_atomic_fetch_add(&label_val, value);
+#else
         label_val += value;
+#endif
         break;
       case op_type_t::DEC:
+#ifdef __APPLE__
+        mac_os_atomic_fetch_sub(&label_val, value);
+#else
         label_val -= value;
+#endif
         break;
       case op_type_t::SET:
         label_val = value;
