@@ -428,11 +428,12 @@ async_simple::coro::Lazy<void> basic_usage() {
 }
 
 void use_metric() {
-  auto c = std::make_shared<counter_t>("request_count", "request count",
-                                       std::vector{"method", "url"});
-  auto failed = std::make_shared<gauge_t>("not_found_request_count",
-                                          "not found request count",
-                                          std::vector{"method", "code", "url"});
+  auto c =
+      std::make_shared<counter_t>("request_count", "request count",
+                                  std::vector<std::string>{"method", "url"});
+  auto failed = std::make_shared<gauge_t>(
+      "not_found_request_count", "not found request count",
+      std::vector<std::string>{"method", "code", "url"});
   auto total =
       std::make_shared<counter_t>("total_request_count", "total request count");
 
