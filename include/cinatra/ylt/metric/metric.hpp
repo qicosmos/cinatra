@@ -74,66 +74,7 @@ class metric_t {
     co_return;
   }
 
-  static void regiter_metric(std::shared_ptr<metric_t> metric) {
-    std::scoped_lock guard(mtx_);
-    std::string name(metric->name());
-    auto pair = metric_map_.emplace(name, std::move(metric));
-    if (!pair.second) {
-      throw std::invalid_argument("duplicate metric name: " + name);
-    }
-  }
-
-  static void remove_metric(std::string name) {
-    std::scoped_lock guard(mtx_);
-    metric_map_.erase(name);
-  }
-
-  static auto collect() {
-    std::vector<std::shared_ptr<metric_t>> metrics;
-    {
-      std::scoped_lock guard(mtx_);
-      for (auto& pair : metric_map_) {
-        metrics.push_back(pair.second);
-      }
-    }
-    return metrics;
-  }
-
-  static async_simple::coro::Lazy<std::string> serialize() {
-    std::string str;
-    auto metrics = metric_t::collect();
-    for (auto& m : metrics) {
-      if (m->use_atomic_) {
-        m->serialize_atomic(str);
-      }
-      else {
-        co_await m->serialize_async(str);
-      }
-    }
-    co_return str;
-  }
-
-  static auto metric_map() {
-    std::scoped_lock guard(mtx_);
-    return metric_map_;
-  }
-
-  static size_t metric_count() {
-    std::scoped_lock guard(mtx_);
-    return metric_map_.size();
-  }
-
-  static std::vector<std::string> metric_keys() {
-    std::vector<std::string> keys;
-    {
-      std::scoped_lock guard(mtx_);
-      for (auto& pair : metric_map_) {
-        keys.push_back(pair.first);
-      }
-    }
-
-    return keys;
-  }
+  bool use_atomic() const { return use_atomic_; }
 
  protected:
   void set_metric_type(MetricType type) { type_ = type; }
@@ -170,7 +111,120 @@ class metric_t {
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   bool use_atomic_ = false;
+};
+
+template <size_t ID = 0>
+struct metric_manager_t {
+  struct null_mutex_t {
+    void lock() {}
+    void unlock() {}
+  };
+
+  template <bool need_lock>
+  static void check_lock() {
+    if (need_lock_ != need_lock) {
+      std::string str = "need lock ";
+      std::string s = need_lock_ ? "true" : "false";
+      std::string r = need_lock ? "true" : "false";
+      str.append(s).append(" but set as ").append(r);
+      throw std::invalid_argument(str);
+    }
+  }
+
+  template <bool need_lock = true>
+  static auto get_lock() {
+    check_lock<need_lock>();
+    if constexpr (need_lock) {
+      return std::scoped_lock(mtx_);
+    }
+    else {
+      return std::scoped_lock(null_mtx_);
+    }
+  }
+
+  template <bool need_lock = true>
+  static void regiter_metric(std::shared_ptr<metric_t> metric) {
+    // the first time regiter_metric will set metric_manager_t lock or not lock.
+    // visit metric_manager_t with different lock strategy will cause throw
+    // exception.
+    std::call_once(flag_, [] {
+      need_lock_ = need_lock;
+    });
+
+    auto lock = get_lock<need_lock>();
+    std::string name(metric->name());
+    auto pair = metric_map_.emplace(name, std::move(metric));
+    if (!pair.second) {
+      throw std::invalid_argument("duplicate metric name: " + name);
+    }
+  }
+
+  template <bool need_lock = true>
+  static auto metric_map() {
+    auto lock = get_lock<need_lock>();
+    return metric_map_;
+  }
+
+  template <bool need_lock = true>
+  static size_t metric_count() {
+    auto lock = get_lock<need_lock>();
+    return metric_map_.size();
+  }
+
+  template <bool need_lock = true>
+  static std::vector<std::string> metric_keys() {
+    std::vector<std::string> keys;
+    {
+      auto lock = get_lock<need_lock>();
+      for (auto& pair : metric_map_) {
+        keys.push_back(pair.first);
+      }
+    }
+
+    return keys;
+  }
+
+  template <bool need_lock = true>
+  static std::shared_ptr<metric_t> get_metric(const std::string& name) {
+    auto lock = get_lock<need_lock>();
+    return metric_map_.at(name);
+  }
+
+  template <bool need_lock = true>
+  static auto collect() {
+    std::vector<std::shared_ptr<metric_t>> metrics;
+    {
+      auto lock = get_lock<need_lock>();
+      for (auto& pair : metric_map_) {
+        metrics.push_back(pair.second);
+      }
+    }
+    return metrics;
+  }
+
+  template <bool need_lock = true>
+  static async_simple::coro::Lazy<std::string> serialize() {
+    std::string str;
+    auto metrics = collect<need_lock>();
+    for (auto& m : metrics) {
+      if (m->use_atomic()) {
+        m->serialize_atomic(str);
+      }
+      else {
+        co_await m->serialize_async(str);
+      }
+    }
+    co_return str;
+  }
+
+ private:
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
+
+  static inline null_mutex_t null_mtx_;
+  static inline std::atomic_bool need_lock_ = true;
+  static inline std::once_flag flag_;
 };
+
+using default_metric_manger = metric_manager_t<0>;
 }  // namespace cinatra

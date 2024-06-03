@@ -446,11 +446,11 @@ void use_metric() {
       summary_t::Quantiles{
           {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
 
-  metric_t::regiter_metric(c);
-  metric_t::regiter_metric(total);
-  metric_t::regiter_metric(failed);
-  metric_t::regiter_metric(h);
-  metric_t::regiter_metric(summary);
+  default_metric_manger::regiter_metric(c);
+  default_metric_manger::regiter_metric(total);
+  default_metric_manger::regiter_metric(failed);
+  default_metric_manger::regiter_metric(h);
+  default_metric_manger::regiter_metric(summary);
 
   std::random_device rd;
   std::mt19937 gen(rd());

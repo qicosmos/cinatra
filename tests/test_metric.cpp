@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <string>
 
 #include "cinatra/ylt/metric/gauge.hpp"
@@ -228,30 +229,50 @@ TEST_CASE("test summary") {
 TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"));
-  metric_t::regiter_metric(c);
-  CHECK_THROWS_AS(metric_t::regiter_metric(c), std::invalid_argument);
+  default_metric_manger::regiter_metric<false>(c);
+  CHECK_THROWS_AS(default_metric_manger::regiter_metric(c),
+                  std::invalid_argument);
 
   auto g = std::make_shared<gauge_t>(std::string("get_guage_count"),
                                      std::string("get counter"));
-  metric_t::regiter_metric(g);
+  default_metric_manger::regiter_metric<false>(g);
 
-  CHECK(metric_t::metric_count() == 2);
-  CHECK(metric_t::metric_keys().size() == 2);
+  CHECK(default_metric_manger::metric_count<false>() == 2);
+  CHECK(default_metric_manger::metric_keys<false>().size() == 2);
 
   c->inc();
   g->inc();
 
-  auto map = metric_t::metric_map();
+  auto map = default_metric_manger::metric_map<false>();
   CHECK(map["get_count"]->atomic_value() == 1);
   CHECK(map["get_guage_count"]->atomic_value() == 1);
 
-  auto s = async_simple::coro::syncAwait(metric_t::serialize());
+  auto s =
+      async_simple::coro::syncAwait(default_metric_manger::serialize<false>());
   std::cout << s << "\n";
   CHECK(s.find("get_count 1") != std::string::npos);
   CHECK(s.find("get_guage_count 1") != std::string::npos);
 
-  metric_t::remove_metric("get_count");
-  CHECK(metric_t::metric_count() == 1);
+  auto m = default_metric_manger::get_metric<false>("get_count");
+  CHECK(m->atomic_value() == 1);
+
+  auto m1 = default_metric_manger::get_metric<false>("get_guage_count");
+  CHECK(m1->atomic_value() == 1);
+
+  {
+    // because the first regiter_metric is set no lock, so visit
+    // default_metric_manger with lock will throw.
+    auto c1 = std::make_shared<counter_t>(std::string(""), std::string(""));
+    CHECK_THROWS_AS(default_metric_manger::regiter_metric(c1),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(default_metric_manger::metric_count(),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(default_metric_manger::metric_keys(),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(default_metric_manger::metric_map(), std::invalid_argument);
+    CHECK_THROWS_AS(default_metric_manger::get_metric(""),
+                    std::invalid_argument);
+  }
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
