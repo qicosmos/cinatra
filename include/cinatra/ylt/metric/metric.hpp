@@ -88,20 +88,20 @@ class metric_t {
   }
 
 #ifdef __APPLE__
-  template <typename T>
-  T mac_os_atomic_fetch_add(std::atomic<T>* obj, T arg) {
-    T expected = obj->load();
-    while (!atomic_compare_exchange_weak(obj, &expected, expected + arg))
-      ;
-    return expected;
+  double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
+    double v;
+    do {
+      v = obj->load();
+    } while (!std::atomic_compare_exchange_weak(obj, &v, v + arg));
+    return v;
   }
 
-  template <typename T>
-  T mac_os_atomic_fetch_sub(std::atomic<T>* obj, T arg) {
-    T expected = obj->load();
-    while (!atomic_compare_exchange_weak(obj, &expected, expected - arg))
-      ;
-    return expected;
+  double mac_os_atomic_fetch_sub(std::atomic<double>* obj, double arg) {
+    double v;
+    do {
+      v = obj->load();
+    } while (!std::atomic_compare_exchange_weak(obj, &v, v - arg));
+    return v;
   }
 #endif
 

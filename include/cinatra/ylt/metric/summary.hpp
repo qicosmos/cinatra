@@ -31,25 +31,22 @@ class summary_t : public metric_t {
     std::shared_ptr<coro_io::period_timer> timer_;
     moodycamel::ConcurrentQueue<double> sample_queue_;
     std::shared_ptr<TimeWindowQuantiles> quantile_values_;
+    std::uint64_t count_;
+    double sum_;
   };
 
-  void observe(double value) {
-    count_ += 1;
-#ifdef __APPLE__
-    mac_os_atomic_fetch_add(&sum_, value);
-#else
-    sum_ += value;
-#endif
-    block_->sample_queue_.enqueue(value);
-  }
+  void observe(double value) { block_->sample_queue_.enqueue(value); }
 
-  async_simple::coro::Lazy<std::vector<double>> get_rates() {
+  async_simple::coro::Lazy<std::vector<double>> get_result(double &sum,
+                                                           uint64_t &count) {
     std::vector<double> vec;
     if (quantiles_.empty()) {
       co_return std::vector<double>{};
     }
 
-    co_await coro_io::post([this, &vec] {
+    co_await coro_io::post([this, &vec, &sum, &count] {
+      sum = block_->sum_;
+      count = block_->count_;
       for (const auto &quantile : quantiles_) {
         vec.push_back(block_->quantile_values_->get(quantile.quantile));
       }
@@ -58,9 +55,21 @@ class summary_t : public metric_t {
     co_return vec;
   }
 
-  double get_sum() { return sum_; }
+  async_simple::coro::Lazy<double> get_sum() {
+    auto ret = co_await coro_io::post([this] {
+      return block_->sum_;
+    });
+    co_return ret.value();
+  }
 
-  uint64_t get_count() { return count_; }
+  async_simple::coro::Lazy<uint64_t> get_count() {
+    auto ret = co_await coro_io::post([this] {
+      return block_->count_;
+    });
+    co_return ret.value();
+  }
+
+  size_t size_approx() { return block_->sample_queue_.size_approx(); }
 
   async_simple::coro::Lazy<void> serialize_async(std::string &str) override {
     if (quantiles_.empty()) {
@@ -69,7 +78,9 @@ class summary_t : public metric_t {
 
     serialize_head(str);
 
-    auto rates = co_await get_rates();
+    double sum = 0;
+    uint64_t count = 0;
+    auto rates = co_await get_result(sum, count);
 
     for (size_t i = 0; i < quantiles_.size(); i++) {
       str.append(name_);
@@ -78,10 +89,10 @@ class summary_t : public metric_t {
       str.append(std::to_string(rates[i])).append("\n");
     }
 
-    str.append(name_).append("_sum ").append(std::to_string(sum_)).append("\n");
+    str.append(name_).append("_sum ").append(std::to_string(sum)).append("\n");
     str.append(name_)
         .append("_count ")
-        .append(std::to_string((uint64_t)count_))
+        .append(std::to_string((uint64_t)count))
         .append("\n");
   }
 
@@ -97,14 +108,13 @@ class summary_t : public metric_t {
 
       while (block->sample_queue_.try_dequeue(sample)) {
         block_->quantile_values_->insert(sample);
+        block_->count_ += 1;
+        block_->sum_ += sample;
       }
     }
   }
 
   Quantiles quantiles_;  // readonly
-  mutable std::mutex mutex_;
-  std::atomic<std::uint64_t> count_{};
-  std::atomic<double> sum_{};
   std::shared_ptr<block_t> block_;
   coro_io::ExecutorWrapper<> *excutor_ = nullptr;
 };
