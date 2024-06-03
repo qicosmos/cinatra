@@ -148,7 +148,7 @@ class counter_t : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value(atomic_value_map_[labels_value], value, op_type_t::INC);
+      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::INC);
     }
     else {
       block_->sample_queue_.enqueue({op_type_t::INC, labels_value, value});
@@ -167,7 +167,7 @@ class counter_t : public metric_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value(atomic_value_map_[labels_value], value, op_type_t::SET);
+      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::SET);
     }
     else {
       block_->sample_queue_.enqueue({op_type_t::SET, labels_value, value});
@@ -260,19 +260,30 @@ class counter_t : public metric_t {
     }
   }
 
-  template <typename T>
+  template <bool is_atomic = false, typename T>
   void set_value(T &label_val, double value, op_type_t type) {
     switch (type) {
-      case op_type_t::INC:
+      case op_type_t::INC: {
 #ifdef __APPLE__
-        mac_os_atomic_fetch_add(&label_val, value);
+        if constexpr (is_atomic) {
+          mac_os_atomic_fetch_add(&label_val, value);
+        }
+        else {
+          label_val += value;
+        }
 #else
         label_val += value;
 #endif
-        break;
+      } break;
       case op_type_t::DEC:
 #ifdef __APPLE__
-        mac_os_atomic_fetch_sub(&label_val, value);
+        if constexpr (is_atomic) {
+          mac_os_atomic_fetch_sub(&label_val, value);
+        }
+        else {
+          label_val -= value;
+        }
+
 #else
         label_val -= value;
 #endif

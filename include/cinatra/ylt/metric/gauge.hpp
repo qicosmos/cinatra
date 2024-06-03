@@ -49,7 +49,7 @@ class gauge_t : public counter_t {
         throw std::invalid_argument(
             "the given labels_value is not match with origin labels_value");
       }
-      set_value(atomic_value_map_[labels_value], value, op_type_t::DEC);
+      set_value<true>(atomic_value_map_[labels_value], value, op_type_t::DEC);
     }
     else {
       block_->sample_queue_.enqueue({op_type_t::DEC, labels_value, value});

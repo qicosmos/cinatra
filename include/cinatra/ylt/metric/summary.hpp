@@ -18,7 +18,7 @@ class summary_t : public metric_t {
   void observe(double value) {
     count_ += 1;
 #ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_lable_value_, value);
+    mac_os_atomic_fetch_add(&sum_, value);
 #else
     sum_ += value;
 #endif
