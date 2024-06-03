@@ -198,9 +198,7 @@ class counter_t : public metric_t {
         break;
       }
 
-      bool has_value = false;
       while (block->sample_queue_.try_dequeue(sample)) {
-        has_value = true;
         set_value(block->value_map_[sample.labels_value], sample.value,
                   sample.op_type);
       }

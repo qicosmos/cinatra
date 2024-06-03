@@ -1,6 +1,8 @@
 #pragma once
 #include <atomic>
 
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+#include "cinatra/ylt/util/concurrentqueue.h"
 #include "detail/time_window_quantiles.hpp"
 #include "metric.hpp"
 
@@ -9,11 +11,27 @@ class summary_t : public metric_t {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
   summary_t(std::string name, std::string help, Quantiles quantiles,
+            coro_io::ExecutorWrapper<> *excutor =
+                coro_io::get_global_block_executor(),
             std::chrono::milliseconds max_age = std::chrono::seconds{60},
             int age_buckets = 5)
       : quantiles_{std::move(quantiles)},
-        quantile_values_{quantiles_, max_age, age_buckets},
-        metric_t(MetricType::Summary, std::move(name), std::move(help)) {}
+        excutor_(excutor),
+        metric_t(MetricType::Summary, std::move(name), std::move(help)) {
+    block_ = std::make_shared<block_t>();
+    block_->timer_ = std::make_shared<coro_io::period_timer>(excutor);
+    block_->quantile_values_ =
+        std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
+    start_timer(block_).via(excutor_).start([](auto &&) {
+    });
+  }
+
+  struct block_t {
+    std::atomic<bool> stop_ = false;
+    std::shared_ptr<coro_io::period_timer> timer_;
+    moodycamel::ConcurrentQueue<double> sample_queue_;
+    std::shared_ptr<TimeWindowQuantiles> quantile_values_;
+  };
 
   void observe(double value) {
     count_ += 1;
@@ -22,44 +40,72 @@ class summary_t : public metric_t {
 #else
     sum_ += value;
 #endif
-    std::lock_guard<std::mutex> lock(mutex_);
-    quantile_values_.insert(value);
+    block_->sample_queue_.enqueue(value);
   }
 
-  auto get_quantile_values() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return quantile_values_;
+  async_simple::coro::Lazy<std::vector<double>> get_rates() {
+    std::vector<double> vec;
+    if (quantiles_.empty()) {
+      co_return std::vector<double>{};
+    }
+
+    co_await coro_io::post([this, &vec] {
+      for (const auto &quantile : quantiles_) {
+        vec.push_back(block_->quantile_values_->get(quantile.quantile));
+      }
+    });
+
+    co_return vec;
   }
 
-  async_simple::coro::Lazy<void> serialize_async(std::string& str) override {
+  double get_sum() { return sum_; }
+
+  uint64_t get_count() { return count_; }
+
+  async_simple::coro::Lazy<void> serialize_async(std::string &str) override {
     if (quantiles_.empty()) {
       co_return;
     }
 
     serialize_head(str);
 
-    auto quantile_values = get_quantile_values();
+    auto rates = co_await get_rates();
 
-    for (const auto& quantile : quantiles_) {
+    for (size_t i = 0; i < quantiles_.size(); i++) {
       str.append(name_);
       str.append("{quantile=\"");
-      str.append(std::to_string(quantile.quantile)).append("\"} ");
-      str.append(std::to_string(quantile_values.get(quantile.quantile)))
-          .append("\n");
+      str.append(std::to_string(quantiles_[i].quantile)).append("\"} ");
+      str.append(std::to_string(rates[i])).append("\n");
     }
 
     str.append(name_).append("_sum ").append(std::to_string(sum_)).append("\n");
     str.append(name_)
         .append("_count ")
-        .append(std::to_string(count_))
+        .append(std::to_string((uint64_t)count_))
         .append("\n");
   }
 
  private:
+  async_simple::coro::Lazy<void> start_timer(std::shared_ptr<block_t> block) {
+    double sample;
+    while (!block->stop_) {
+      block->timer_->expires_after(std::chrono::milliseconds(5));
+      auto ec = co_await block->timer_->async_await();
+      if (!ec) {
+        break;
+      }
+
+      while (block->sample_queue_.try_dequeue(sample)) {
+        block_->quantile_values_->insert(sample);
+      }
+    }
+  }
+
   Quantiles quantiles_;  // readonly
   mutable std::mutex mutex_;
   std::atomic<std::uint64_t> count_{};
   std::atomic<double> sum_{};
-  TimeWindowQuantiles quantile_values_;
+  std::shared_ptr<block_t> block_;
+  coro_io::ExecutorWrapper<> *excutor_ = nullptr;
 };
 }  // namespace cinatra
