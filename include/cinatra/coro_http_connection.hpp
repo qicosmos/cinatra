@@ -11,6 +11,10 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/response_cv.hpp"
+#include "cinatra/ylt/metric/counter.hpp"
+#include "cinatra/ylt/metric/gauge.hpp"
+#include "cinatra/ylt/metric/histogram.hpp"
+#include "cinatra/ylt/metric/metric.hpp"
 #include "cookie.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
@@ -47,9 +51,17 @@ class coro_http_connection
         request_(parser_, this),
         response_(this) {
     buffers_.reserve(3);
+    default_metric_manger::regiter_metric(fd_counter_);
+    default_metric_manger::regiter_metric(total_counter_);
+    default_metric_manger::regiter_metric(failed_counter_);
+    default_metric_manger::regiter_metric(latency_his_);
+    fd_counter_->inc();
   }
 
-  ~coro_http_connection() { close(); }
+  ~coro_http_connection() {
+    fd_counter_->dec();
+    close();
+  }
 
 #ifdef CINATRA_ENABLE_SSL
   bool init_ssl(const std::string &cert_file, const std::string &key_file,
@@ -113,13 +125,18 @@ class coro_http_connection
         if (ec != asio::error::eof) {
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
+
+        failed_counter_->inc();
         close();
         break;
       }
 
+      total_counter_->inc();
+
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       int head_len = parser_.parse_request(data_ptr, size, 0);
       if (head_len <= 0) {
+        failed_counter_->inc();
         CINATRA_LOG_ERROR << "parse http header error";
         close();
         break;
@@ -375,6 +392,9 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
+    if (response_.status() >= status_type::bad_request) {
+      failed_counter_->inc();
+    }
     std::error_code ec;
     size_t size;
     if (multi_buf_) {
@@ -921,5 +941,16 @@ class coro_http_connection
       default_handler_ = nullptr;
   std::string chunk_size_str_;
   std::string remote_addr_;
+
+  inline static std::shared_ptr<counter_t> total_counter_ =
+      std::make_shared<counter_t>("total_qps", "total qps");
+  inline static std::shared_ptr<counter_t> failed_counter_ =
+      std::make_shared<counter_t>("failed_qps", "failed qps");
+  inline static std::shared_ptr<gauge_t> fd_counter_ =
+      std::make_shared<gauge_t>("failed_qps", "failed qps");
+  inline static std::shared_ptr<histogram_t> latency_his_ =
+      std::make_shared<histogram_t>(
+          "failed_qps", "failed qps",
+          std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
 };
 }  // namespace cinatra

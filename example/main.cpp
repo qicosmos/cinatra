@@ -373,6 +373,8 @@ async_simple::coro::Lazy<void> basic_usage() {
         response.set_status_and_content(status_type::ok, "ok");
       });
 
+  server.set_metric_handler();
+
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 

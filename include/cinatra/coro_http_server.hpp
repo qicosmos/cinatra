@@ -5,6 +5,7 @@
 #include "cinatra/coro_http_router.hpp"
 #include "cinatra/define.h"
 #include "cinatra/mime_types.hpp"
+#include "cinatra/ylt/metric/metric.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
 #include "ylt/coro_io/channel.hpp"
@@ -179,6 +180,15 @@ class coro_http_server {
       set_http_handler<method...>(std::move(key), std::move(f),
                                   std::forward<Aspects>(asps)...);
     }
+  }
+
+  void set_metric_handler(std::string url_path = "/metrics") {
+    set_http_handler<http_method::GET>(
+        url_path, [](coro_http_request &req, coro_http_response &res) {
+          std::string str = async_simple::coro::syncAwait(
+              default_metric_manger::serialize<false>());
+          res.set_status_and_content(status_type::ok, std::move(str));
+        });
   }
 
   template <http_method... method, typename... Aspects>
