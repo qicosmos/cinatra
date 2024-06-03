@@ -50,10 +50,6 @@ add_executable(test_corofile
         test_corofile.cpp
         )
 
-add_executable(test_metric
-        test_metric.cpp
-        )
-
 if(ENABLE_FILE_IO_URING)
 if (UNIX)
         target_link_libraries(test_corofile PRIVATE uring)
@@ -69,13 +65,17 @@ add_executable(test_time_util
         )
 add_test(NAME test_time_util COMMAND test_time_util)
 
-option(CINATRA_ENABLE_SSL "Enable ssl support" OFF)
-if (CINATRA_ENABLE_SSL)
+add_executable(test_metric
+        test_metric.cpp
+        )
+
+if (ENABLE_SSL)
     message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
-    target_link_libraries(test_corofile  PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_corofile  OpenSSL::SSL OpenSSL::Crypto)
+	target_link_libraries(test_metric  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
 add_executable(test_http_parse
