@@ -48,10 +48,10 @@ struct server_metric {
       std::make_shared<gauge_t>("server_fd_counter", "fd counter");
   std::shared_ptr<histogram_t> req_latency_his = std::make_shared<histogram_t>(
       "server_req_latency", "req latency",
-      std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
+      std::vector<double>{1, 3, 5, 7, 10, 15, 20, 30, 50});
   std::shared_ptr<histogram_t> read_latency_his = std::make_shared<histogram_t>(
       "server_read_latency", "read latency",
-      std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
+      std::vector<double>{1, 3, 5, 7, 10, 15, 20, 30, 50});
 };
 
 class coro_http_connection
@@ -336,7 +336,7 @@ class coro_http_connection
 
       auto mid = std::chrono::high_resolution_clock::now();
       double count =
-          std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
+          std::chrono::duration_cast<std::chrono::milliseconds>(mid - start)
               .count();
       metrics_->req_latency_his->observe(count);
 
