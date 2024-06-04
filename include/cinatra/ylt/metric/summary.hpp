@@ -1,10 +1,10 @@
 #pragma once
 #include <atomic>
 
-#include "cinatra/ylt/coro_io/coro_io.hpp"
-#include "cinatra/ylt/util/concurrentqueue.h"
 #include "detail/time_window_quantiles.hpp"
 #include "metric.hpp"
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/util/concurrentqueue.h"
 
 namespace cinatra {
 class summary_t : public metric_t {

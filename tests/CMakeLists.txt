@@ -10,6 +10,7 @@ add_executable(${project_name}
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO INJECT_FOR_HTTP_CLIENT_TEST)
 target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/include
+		${cinatra_SOURCE_DIR}/include/cinatra
 )
 
 option(SKIP_TIME_TEST "skip time tests" OFF)
@@ -45,6 +46,7 @@ endif()
 
 ## manual import
 include_directories(${cinatra_SOURCE_DIR}/include)
+include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
 
 add_executable(test_corofile
         test_corofile.cpp
