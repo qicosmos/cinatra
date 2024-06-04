@@ -186,7 +186,7 @@ class coro_http_server {
     set_http_handler<http_method::GET>(
         url_path, [](coro_http_request &req, coro_http_response &res) {
           std::string str = async_simple::coro::syncAwait(
-              default_metric_manger::serialize<false>());
+              default_metric_manger::serialize_static());
           res.set_status_and_content(status_type::ok, std::move(str));
         });
   }
@@ -661,7 +661,7 @@ class coro_http_server {
       uint64_t conn_id = ++conn_id_;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
-          executor, std::move(socket), router_);
+          executor, std::move(socket), router_, &metrics_);
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -878,6 +878,11 @@ class coro_http_server {
     easylog::logger<>::instance();  // init easylog singleton to make sure
                                     // server destruct before easylog.
 #endif
+    // register metrics
+    default_metric_manger::register_metric_static(metrics_.total_counter);
+    default_metric_manger::register_metric_static(metrics_.failed_counter);
+    default_metric_manger::register_metric_static(metrics_.fd_counter);
+    default_metric_manger::register_metric_static(metrics_.latency_his);
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
@@ -937,6 +942,7 @@ class coro_http_server {
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;
+  server_metric metrics_{};
 };
 
 using http_server = coro_http_server;

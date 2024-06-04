@@ -39,27 +39,37 @@ struct websocket_result {
   bool eof;
 };
 
+struct server_metric {
+  std::shared_ptr<counter_t> total_counter =
+      std::make_shared<counter_t>("total_qps", "total qps");
+  std::shared_ptr<counter_t> failed_counter =
+      std::make_shared<counter_t>("failed_qps", "failed qps");
+  std::shared_ptr<gauge_t> fd_counter =
+      std::make_shared<gauge_t>("fd_counter", "failed qps");
+  std::shared_ptr<histogram_t> latency_his = std::make_shared<histogram_t>(
+      "latency", "failed qps",
+      std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
+};
+
 class coro_http_connection
     : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
-                       coro_http_router &router)
+                       coro_http_router &router, server_metric *metrics)
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
         request_(parser_, this),
-        response_(this) {
+        response_(this),
+        metrics_(metrics) {
     buffers_.reserve(3);
-    default_metric_manger::regiter_metric(fd_counter_);
-    default_metric_manger::regiter_metric(total_counter_);
-    default_metric_manger::regiter_metric(failed_counter_);
-    default_metric_manger::regiter_metric(latency_his_);
-    fd_counter_->inc();
+
+    metrics_->fd_counter->inc();
   }
 
   ~coro_http_connection() {
-    fd_counter_->dec();
+    metrics_->fd_counter->dec();
     close();
   }
 
@@ -126,17 +136,17 @@ class coro_http_connection
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
 
-        failed_counter_->inc();
+        metrics_->failed_counter->inc();
         close();
         break;
       }
 
-      total_counter_->inc();
+      metrics_->total_counter->inc();
 
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       int head_len = parser_.parse_request(data_ptr, size, 0);
       if (head_len <= 0) {
-        failed_counter_->inc();
+        metrics_->failed_counter->inc();
         CINATRA_LOG_ERROR << "parse http header error";
         close();
         break;
@@ -393,7 +403,7 @@ class coro_http_connection
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
     if (response_.status() >= status_type::bad_request) {
-      failed_counter_->inc();
+      metrics_->failed_counter->inc();
     }
     std::error_code ec;
     size_t size;
@@ -942,15 +952,6 @@ class coro_http_connection
   std::string chunk_size_str_;
   std::string remote_addr_;
 
-  inline static std::shared_ptr<counter_t> total_counter_ =
-      std::make_shared<counter_t>("total_qps", "total qps");
-  inline static std::shared_ptr<counter_t> failed_counter_ =
-      std::make_shared<counter_t>("failed_qps", "failed qps");
-  inline static std::shared_ptr<gauge_t> fd_counter_ =
-      std::make_shared<gauge_t>("failed_qps", "failed qps");
-  inline static std::shared_ptr<histogram_t> latency_his_ =
-      std::make_shared<histogram_t>(
-          "failed_qps", "failed qps",
-          std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
+  server_metric *metrics_ = nullptr;
 };
 }  // namespace cinatra

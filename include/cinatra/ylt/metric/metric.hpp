@@ -120,6 +120,46 @@ struct metric_manager_t {
     void unlock() {}
   };
 
+  static void register_metric_dynamic(std::shared_ptr<metric_t> metric) {
+    register_metric_impl<true>(metric);
+  }
+
+  static void register_metric_static(std::shared_ptr<metric_t> metric) {
+    register_metric_impl<false>(metric);
+  }
+
+  static auto metric_map_static() { return metric_map_impl<false>(); }
+  static auto metric_map_dynamic() { return metric_map_impl<true>(); }
+
+  static size_t metric_count_static() { return metric_count_impl<false>(); }
+
+  static size_t metric_count_dynamic() { return metric_count_impl<true>(); }
+
+  static std::vector<std::string> metric_keys_static() {
+    return metric_keys_impl<false>();
+  }
+
+  static std::vector<std::string> metric_keys_dynamic() {
+    return metric_keys_impl<true>();
+  }
+
+  static std::shared_ptr<metric_t> get_metric_static(const std::string& name) {
+    return get_metric_impl<false>(name);
+  }
+
+  static std::shared_ptr<metric_t> get_metric_dynamic(const std::string& name) {
+    return get_metric_impl<true>(name);
+  }
+
+  static async_simple::coro::Lazy<std::string> serialize_static() {
+    return serialize_impl<false>();
+  }
+
+  static async_simple::coro::Lazy<std::string> serialize_dynamic() {
+    return serialize_impl<true>();
+  }
+
+ private:
   template <bool need_lock>
   static void check_lock() {
     if (need_lock_ != need_lock) {
@@ -142,8 +182,8 @@ struct metric_manager_t {
     }
   }
 
-  template <bool need_lock = true>
-  static void regiter_metric(std::shared_ptr<metric_t> metric) {
+  template <bool need_lock>
+  static void register_metric_impl(std::shared_ptr<metric_t> metric) {
     // the first time regiter_metric will set metric_manager_t lock or not lock.
     // visit metric_manager_t with different lock strategy will cause throw
     // exception.
@@ -159,20 +199,20 @@ struct metric_manager_t {
     }
   }
 
-  template <bool need_lock = true>
-  static auto metric_map() {
+  template <bool need_lock>
+  static auto metric_map_impl() {
     auto lock = get_lock<need_lock>();
     return metric_map_;
   }
 
-  template <bool need_lock = true>
-  static size_t metric_count() {
+  template <bool need_lock>
+  static size_t metric_count_impl() {
     auto lock = get_lock<need_lock>();
     return metric_map_.size();
   }
 
-  template <bool need_lock = true>
-  static std::vector<std::string> metric_keys() {
+  template <bool need_lock>
+  static std::vector<std::string> metric_keys_impl() {
     std::vector<std::string> keys;
     {
       auto lock = get_lock<need_lock>();
@@ -184,13 +224,13 @@ struct metric_manager_t {
     return keys;
   }
 
-  template <bool need_lock = true>
-  static std::shared_ptr<metric_t> get_metric(const std::string& name) {
+  template <bool need_lock>
+  static std::shared_ptr<metric_t> get_metric_impl(const std::string& name) {
     auto lock = get_lock<need_lock>();
     return metric_map_.at(name);
   }
 
-  template <bool need_lock = true>
+  template <bool need_lock>
   static auto collect() {
     std::vector<std::shared_ptr<metric_t>> metrics;
     {
@@ -203,7 +243,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock = true>
-  static async_simple::coro::Lazy<std::string> serialize() {
+  static async_simple::coro::Lazy<std::string> serialize_impl() {
     std::string str;
     auto metrics = collect<need_lock>();
     for (auto& m : metrics) {
@@ -217,7 +257,6 @@ struct metric_manager_t {
     co_return str;
   }
 
- private:
   static inline std::mutex mtx_;
   static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
 
