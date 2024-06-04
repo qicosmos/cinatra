@@ -983,6 +983,159 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   template <typename S, typename String>
+  async_simple::coro::Lazy<resp_data> async_request_upgrade(
+      S uri, http_method method, req_context<String> ctx,
+      std::unordered_map<std::string, std::string> headers = {},
+      std::span<char> out_buf = {}) {
+    if (!resp_chunk_str_.empty()) {
+      resp_chunk_str_.clear();
+    }
+    if (!body_.empty()) {
+      body_.clear();
+    }
+    if (!out_buf.empty()) {
+      out_buf_ = out_buf;
+    }
+
+    std::shared_ptr<int> guard(nullptr, [this](auto) {
+      if (!req_headers_.empty()) {
+        req_headers_.clear();
+      }
+      if (!out_buf_.empty()) {
+        out_buf_ = {};
+      }
+    });
+
+    resp_data data{};
+
+    std::error_code ec{};
+    size_t size = 0;
+    bool is_keep_alive = true;
+
+    do {
+      uri_t u;
+      std::string append_uri;
+
+      if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
+        bool no_schema = !has_schema(uri);
+
+        if (no_schema) {
+#ifdef CINATRA_ENABLE_SSL
+          if (is_ssl_schema_) {
+            append_uri.append("https://").append(uri);
+          }
+          else
+#endif
+          {
+            append_uri.append("http://").append(uri);
+          }
+        }
+        bool ok = false;
+        std::tie(ok, u) = handle_uri(data, no_schema ? append_uri : uri);
+        if (!ok) {
+          break;
+        }
+      }
+      else {
+        u.path = uri;
+      }
+      if (socket_->has_closed_) {
+        host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
+        port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
+        auto guard = timer_guard(this, conn_timeout_duration_, "connect timer");
+        if (ec = co_await coro_io::async_connect(&executor_wrapper_,
+                                                 socket_->impl_, host_, port_);
+            ec) {
+          break;
+        }
+
+        if (socket_->is_timeout_) {
+          data.net_err = std::make_error_code(std::errc::timed_out);
+          co_return data;
+        }
+
+        if (enable_tcp_no_delay_) {
+          socket_->impl_.set_option(asio::ip::tcp::no_delay(true), ec);
+          if (ec) {
+            break;
+          }
+        }
+        socket_->has_closed_ = false;
+      }
+
+      std::vector<asio::const_buffer> vec;
+      std::string req_head_str = build_proxy_header(u, http_method::CONNECT, headers);
+
+      std::cout << "req head str is: " << req_head_str << std::endl;
+      
+
+      if (!proxy_raw_path_.empty())
+        u.path = std::string_view(proxy_raw_path_);
+      std::string req_head_str2 = build_proxy_header(u, method, headers);
+
+      std::cout << "req str2 is: " << req_head_str2 << std::endl;
+
+      bool has_body = !ctx.content.empty();
+      if (has_body) {
+        vec.push_back(asio::buffer(req_head_str));
+        vec.push_back(asio::buffer(ctx.content.data(), ctx.content.size()));
+      }
+
+#ifdef CORO_HTTP_PRINT_REQ_HEAD
+      CINATRA_LOG_DEBUG << req_head_str;
+#endif
+      auto guard = timer_guard(this, req_timeout_duration_, "request timer");
+      if (has_body) {
+        std::tie(ec, size) = co_await async_write_http(vec);
+      }
+      else {
+        std::tie(ec, size) = co_await async_write_http(asio::buffer(req_head_str));
+      }
+      if (ec) {
+        break;
+      }
+      data =
+          co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
+      
+      // update socket
+      if (!has_init_ssl_) {
+        size_t pos = u.host.find("www.");
+        std::string host;
+        if (pos != std::string_view::npos) {
+          host = std::string{u.host.substr(pos + 4)};
+        }
+        else {
+          host = std::string{u.host};
+        }
+        bool r = init_ssl(asio::ssl::verify_none, "", host);
+        if (!r) {
+          data.net_err = std::make_error_code(std::errc::invalid_argument);
+          co_return data;
+        }
+      }
+
+      if (ec = co_await handle_shake(); ec) {
+        break;
+      }
+
+      guard = timer_guard(this, req_timeout_duration_, "request timer");
+      std::cout << req_head_str2 << std::endl;
+      std::tie(ec, size) = co_await async_write(asio::buffer(req_head_str2));
+      if (ec) {
+        break;
+      }
+      data =
+          co_await handle_read(ec, size, is_keep_alive, std::move(ctx), method);
+
+    } while (0);
+    if (ec && socket_->is_timeout_) {
+      ec = std::make_error_code(std::errc::timed_out);
+    }
+    handle_result(data, ec, is_keep_alive);
+    co_return data;
+  }
+
+  template <typename S, typename String>
   async_simple::coro::Lazy<resp_data> async_request(
       S uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {},
@@ -1236,17 +1389,55 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         proxy_request_uri_ += "80";
       }
       else if (u.get_port() == "https") {
-        proxy_request_uri_ += "https://" + u.get_host() + ":";
+        proxy_raw_path_ = u.get_path();
+        std::cout << proxy_raw_path_ << std::endl;
+        proxy_request_uri_ += u.get_host() + ":";
         proxy_request_uri_ += "443";
+        is_https_proxy_ = true;
       }
       else {
         // all be http
         proxy_request_uri_ += "http://" + u.get_host() + ":";
         proxy_request_uri_ += u.get_port();
       }
-      proxy_request_uri_ += u.get_path();
+
+      if (!is_https_proxy_)
+        proxy_request_uri_ += u.get_path();
+
       u.path = std::string_view(proxy_request_uri_);
+      std::cout << "path is: " << proxy_request_uri_ << std::endl;
     }
+  }
+
+  std::string build_proxy_header(const uri_t &u, http_method method, std::unordered_map<std::string, std::string> headers = {})
+  {
+    std::string req_str(method_name(method));
+    req_str.append(" ")
+           .append(std::string(u.path))
+           .append(" HTTP/1.1\r\nAccept: */*\r\n");
+    bool has_host = false;
+    // https proxy must give host
+    if (!u.get_host().empty()) {
+      req_str.append("Host: ")
+          .append(std::string(u.get_host()))
+          .append("\r\n");
+      has_host = true;
+    }
+
+    for (auto &header : headers) {
+      if (header.first == "Host" && !has_host) {
+        continue;
+      }
+
+      req_str.append(header.first)
+          .append(": ")
+          .append(header.second)
+          .append("\r\n");
+    }
+
+    req_str.append("\r\n");
+
+    return req_str;
   }
 
   std::string build_request_header(
@@ -1965,6 +2156,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write_http(
+      AsioBuffer &&buffer) {
+      return coro_io::async_write(socket_->impl_, buffer);
+
+  }
+
+  template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
 #ifdef CINATRA_ENABLE_SSL
@@ -2028,6 +2226,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   std::unordered_map<std::string, std::string> req_headers_;
 
+  std::string proxy_raw_path_ = "";
   std::string proxy_request_uri_ = "";
   std::string proxy_host_;
   std::string proxy_port_;
@@ -2050,6 +2249,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool is_ssl_schema_ = false;
   bool need_set_sni_host_ = true;
 #endif
+  bool is_https_proxy_ = false;
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;
   bool enable_timeout_ = false;
