@@ -882,7 +882,8 @@ class coro_http_server {
     default_metric_manger::register_metric_static(metrics_.total_counter);
     default_metric_manger::register_metric_static(metrics_.failed_counter);
     default_metric_manger::register_metric_static(metrics_.fd_counter);
-    default_metric_manger::register_metric_static(metrics_.latency_his);
+    default_metric_manger::register_metric_static(metrics_.req_latency_his);
+    default_metric_manger::register_metric_static(metrics_.read_latency_his);
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
