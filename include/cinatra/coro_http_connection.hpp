@@ -41,13 +41,13 @@ struct websocket_result {
 
 struct server_metric {
   std::shared_ptr<counter_t> total_counter =
-      std::make_shared<counter_t>("total_qps", "total qps");
+      std::make_shared<counter_t>("server_total_qps", "total qps");
   std::shared_ptr<counter_t> failed_counter =
-      std::make_shared<counter_t>("failed_qps", "failed qps");
+      std::make_shared<counter_t>("server_failed_qps", "failed qps");
   std::shared_ptr<gauge_t> fd_counter =
-      std::make_shared<gauge_t>("fd_counter", "failed qps");
+      std::make_shared<gauge_t>("server_fd_counter", "failed qps");
   std::shared_ptr<histogram_t> latency_his = std::make_shared<histogram_t>(
-      "latency", "failed qps",
+      "server_latency", "failed qps",
       std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
 };
 
