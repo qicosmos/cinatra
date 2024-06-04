@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
+#include "cinatra/cinatra_log_wrapper.hpp"
 
 namespace cinatra {
 enum class MetricType {
@@ -120,12 +121,26 @@ struct metric_manager_t {
     void unlock() {}
   };
 
-  static void register_metric_dynamic(std::shared_ptr<metric_t> metric) {
-    register_metric_impl<true>(metric);
+  static bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
+    return register_metric_impl<true>(metric);
   }
 
-  static void register_metric_static(std::shared_ptr<metric_t> metric) {
-    register_metric_impl<false>(metric);
+  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
+    return register_metric_impl<false>(metric);
+  }
+
+  template <typename... Metrics>
+  static bool register_metric_dynamic(Metrics... metrics) {
+    bool r = true;
+    ((void)(r && (r = register_metric_impl<true>(metrics), true)), ...);
+    return r;
+  }
+
+  template <typename... Metrics>
+  static bool register_metric_static(Metrics... metrics) {
+    bool r = true;
+    ((void)(r && (r = register_metric_impl<false>(metrics), true)), ...);
+    return r;
   }
 
   static auto metric_map_static() { return metric_map_impl<false>(); }
@@ -183,7 +198,7 @@ struct metric_manager_t {
   }
 
   template <bool need_lock>
-  static void register_metric_impl(std::shared_ptr<metric_t> metric) {
+  static bool register_metric_impl(std::shared_ptr<metric_t> metric) {
     // the first time regiter_metric will set metric_manager_t lock or not lock.
     // visit metric_manager_t with different lock strategy will cause throw
     // exception.
@@ -191,12 +206,13 @@ struct metric_manager_t {
       need_lock_ = need_lock;
     });
 
-    auto lock = get_lock<need_lock>();
     std::string name(metric->name());
-    auto pair = metric_map_.emplace(name, std::move(metric));
-    if (!pair.second) {
-      throw std::invalid_argument("duplicate metric name: " + name);
+    auto lock = get_lock<need_lock>();
+    bool r = metric_map_.emplace(name, std::move(metric)).second;
+    if (!r) {
+      CINATRA_LOG_ERROR << "duplicate registered metric name: " << name;
     }
+    return r;
   }
 
   template <bool need_lock>

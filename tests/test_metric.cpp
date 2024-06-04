@@ -233,8 +233,7 @@ TEST_CASE("test register metric") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"));
   default_metric_manger::register_metric_static(c);
-  CHECK_THROWS_AS(default_metric_manger::register_metric_dynamic(c),
-                  std::invalid_argument);
+  CHECK_FALSE(default_metric_manger::register_metric_static(c));
 
   auto g = std::make_shared<gauge_t>(std::string("get_guage_count"),
                                      std::string("get counter"));
