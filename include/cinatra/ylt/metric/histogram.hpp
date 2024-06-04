@@ -22,6 +22,7 @@ class histogram_t : public metric_t {
     for (size_t i = 0; i < buckets.size() + 1; i++) {
       bucket_counts_.push_back(std::make_shared<counter_t>("", ""));
     }
+    use_atomic_ = true;
   }
 
   void observe(double value) {

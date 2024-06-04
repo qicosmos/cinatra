@@ -41,13 +41,16 @@ struct websocket_result {
 
 struct server_metric {
   std::shared_ptr<counter_t> total_counter =
-      std::make_shared<counter_t>("server_total_qps", "total qps");
+      std::make_shared<counter_t>("server_total_req", "total req count");
   std::shared_ptr<counter_t> failed_counter =
-      std::make_shared<counter_t>("server_failed_qps", "failed qps");
+      std::make_shared<counter_t>("server_failed_req", "failed req count");
   std::shared_ptr<gauge_t> fd_counter =
-      std::make_shared<gauge_t>("server_fd_counter", "failed qps");
-  std::shared_ptr<histogram_t> latency_his = std::make_shared<histogram_t>(
-      "server_latency", "failed qps",
+      std::make_shared<gauge_t>("server_fd_counter", "fd counter");
+  std::shared_ptr<histogram_t> req_latency_his = std::make_shared<histogram_t>(
+      "server_req_latency", "req latency",
+      std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
+  std::shared_ptr<histogram_t> read_latency_his = std::make_shared<histogram_t>(
+      "server_read_latency", "read latency",
       std::vector<double>{0.1, 0.3, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2});
 };
 
@@ -140,6 +143,7 @@ class coro_http_connection
         close();
         break;
       }
+      auto start = std::chrono::high_resolution_clock::now();
 
       metrics_->total_counter->inc();
 
@@ -179,6 +183,14 @@ class coro_http_connection
               }
               response_.set_delay(true);
             }
+            else {
+              auto mid = std::chrono::high_resolution_clock::now();
+              double count =
+                  std::chrono::duration_cast<std::chrono::milliseconds>(mid -
+                                                                        start)
+                      .count();
+              metrics_->read_latency_his->observe(count);
+            }
           }
         }
         else if (body_len <= head_buf_.size()) {
@@ -202,8 +214,17 @@ class coro_http_connection
               size_to_read);
           if (ec) {
             CINATRA_LOG_ERROR << "async_read error: " << ec.message();
+            metrics_->failed_counter->inc();
             close();
             break;
+          }
+          else {
+            auto mid = std::chrono::high_resolution_clock::now();
+            double count =
+                std::chrono::duration_cast<std::chrono::milliseconds>(mid -
+                                                                      start)
+                    .count();
+            metrics_->read_latency_his->observe(count);
           }
         }
       }
@@ -312,6 +333,12 @@ class coro_http_connection
           }
         }
       }
+
+      auto mid = std::chrono::high_resolution_clock::now();
+      double count =
+          std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
+              .count();
+      metrics_->req_latency_his->observe(count);
 
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
