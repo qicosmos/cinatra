@@ -14,7 +14,7 @@
 namespace cinatra {
 enum class MetricType {
   Counter,
-  Guage,
+  Gauge,
   Histogram,
   Summary,
   Nil,
@@ -43,8 +43,8 @@ class metric_t {
     switch (type_) {
       case MetricType::Counter:
         return "counter";
-      case MetricType::Guage:
-        return "guage";
+      case MetricType::Gauge:
+        return "gauge";
       case MetricType::Histogram:
         return "histogram";
       case MetricType::Summary:

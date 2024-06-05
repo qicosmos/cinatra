@@ -102,7 +102,7 @@ TEST_CASE("test counter with dynamic labels value") {
     auto g = std::make_shared<gauge_t>(
         "get_count", "get counter", std::vector<std::string>{"method", "code"});
     CHECK(g->name() == "get_count");
-    CHECK(g->metric_name() == "guage");
+    CHECK(g->metric_name() == "gauge");
   }
 
   {
@@ -134,10 +134,10 @@ TEST_CASE("test counter with dynamic labels value") {
   }
 }
 
-TEST_CASE("test guage") {
+TEST_CASE("test gauge") {
   {
     gauge_t g("get_count", "get counter");
-    CHECK(g.metric_type() == MetricType::Guage);
+    CHECK(g.metric_type() == MetricType::Gauge);
     CHECK(g.labels_name().empty());
     g.inc();
     CHECK(g.atomic_value() == 1);
@@ -167,7 +167,7 @@ TEST_CASE("test guage") {
     std::string str;
     async_simple::coro::syncAwait(g.serialize_async(str));
     std::cout << str;
-    CHECK(str.find("# TYPE get_count guage") != std::string::npos);
+    CHECK(str.find("# TYPE get_count gauge") != std::string::npos);
     CHECK(str.find("get_count{method=\"GET\",code=\"200\",url=\"/\"} 3") !=
           std::string::npos);
 

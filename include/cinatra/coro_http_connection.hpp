@@ -48,10 +48,14 @@ struct server_metric {
       std::make_shared<gauge_t>("server_fd_counter", "fd counter");
   std::shared_ptr<histogram_t> req_latency_his = std::make_shared<histogram_t>(
       "server_req_latency", "req latency",
-      std::vector<double>{1, 3, 5, 7, 10, 15, 20, 30, 50});
+      std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
   std::shared_ptr<histogram_t> read_latency_his = std::make_shared<histogram_t>(
       "server_read_latency", "read latency",
-      std::vector<double>{1, 3, 5, 7, 10, 15, 20, 30, 50});
+      std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
+  std::shared_ptr<counter_t> total_recv_bytes = std::make_shared<counter_t>(
+      "server_total_recv_bytes", "total recv bytes");
+  std::shared_ptr<counter_t> total_send_bytes = std::make_shared<counter_t>(
+      "server_total_send_bytes", "total send bytes");
 };
 
 class coro_http_connection
@@ -164,6 +168,7 @@ class coro_http_connection
       if (type != content_type::chunked && type != content_type::multipart) {
         size_t body_len = parser_.body_len();
         if (body_len == 0) {
+          metrics_->total_recv_bytes->inc(head_len);
           if (parser_.method() == "GET"sv) {
             if (request_.is_upgrade()) {
 #ifdef CINATRA_ENABLE_GZIP
@@ -186,7 +191,7 @@ class coro_http_connection
             else {
               auto mid = std::chrono::high_resolution_clock::now();
               double count =
-                  std::chrono::duration_cast<std::chrono::milliseconds>(mid -
+                  std::chrono::duration_cast<std::chrono::microseconds>(mid -
                                                                         start)
                       .count();
               metrics_->read_latency_his->observe(count);
@@ -200,6 +205,7 @@ class coro_http_connection
             memcpy(body_.data(), data_ptr, body_len);
             head_buf_.consume(head_buf_.size());
           }
+          metrics_->total_recv_bytes->inc(head_len + body_len);
         }
         else {
           size_t part_size = head_buf_.size();
@@ -219,9 +225,10 @@ class coro_http_connection
             break;
           }
           else {
+            metrics_->total_recv_bytes->inc(head_len + body_len);
             auto mid = std::chrono::high_resolution_clock::now();
             double count =
-                std::chrono::duration_cast<std::chrono::milliseconds>(mid -
+                std::chrono::duration_cast<std::chrono::microseconds>(mid -
                                                                       start)
                     .count();
             metrics_->read_latency_his->observe(count);
@@ -334,12 +341,6 @@ class coro_http_connection
         }
       }
 
-      auto mid = std::chrono::high_resolution_clock::now();
-      double count =
-          std::chrono::duration_cast<std::chrono::milliseconds>(mid - start)
-              .count();
-      metrics_->req_latency_his->observe(count);
-
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
           if (type == content_type::multipart) {
@@ -416,6 +417,12 @@ class coro_http_connection
         }
       }
 
+      auto mid = std::chrono::high_resolution_clock::now();
+      double count =
+          std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
+              .count();
+      metrics_->req_latency_his->observe(count);
+
       response_.clear();
       request_.clear();
       buffers_.clear();
@@ -438,12 +445,18 @@ class coro_http_connection
       if (need_to_bufffer) {
         response_.to_buffers(buffers_, chunk_size_str_);
       }
+      int64_t send_size = 0;
+      for (auto &buf : buffers_) {
+        send_size += buf.size();
+      }
+      metrics_->total_send_bytes->inc(send_size);
       std::tie(ec, size) = co_await async_write(buffers_);
     }
     else {
       if (need_to_bufffer) {
         response_.build_resp_str(resp_str_);
       }
+      metrics_->total_send_bytes->inc(resp_str_.size());
       std::tie(ec, size) = co_await async_write(asio::buffer(resp_str_));
     }
 

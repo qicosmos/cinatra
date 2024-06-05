@@ -90,14 +90,24 @@ class counter_t : public metric_t {
       return;
     }
 
-    serialize_head(str);
-
     if (labels_name_.empty()) {
+      if (default_lable_value_ == 0) {
+        return;
+      }
+      serialize_head(str);
       serialize_default_label(str);
       return;
     }
 
-    serialize_map(atomic_value_map_, str);
+    serialize_head(str);
+    std::string s;
+    serialize_map(atomic_value_map_, s);
+    if (s.empty()) {
+      str.clear();
+    }
+    else {
+      str.append(s);
+    }
   }
 
   async_simple::coro::Lazy<void> serialize_async(std::string &str) override {
@@ -117,15 +127,7 @@ class counter_t : public metric_t {
         excutor_);
   }
 
-  void inc() {
-#ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_lable_value_, double(1));
-#else
-    default_lable_value_ += 1;
-#endif
-  }
-
-  void inc(double val) {
+  void inc(double val = 1) {
     if (val < 0) {
       throw std::invalid_argument("the value is less than zero");
     }
@@ -224,6 +226,9 @@ class counter_t : public metric_t {
   template <typename T>
   void serialize_map(T &value_map, std::string &str) {
     for (auto &[labels_value, value] : value_map) {
+      if (value == 0) {
+        continue;
+      }
       str.append(name_);
       str.append("{");
       build_string(str, labels_name_, labels_value);

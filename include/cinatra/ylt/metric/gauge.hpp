@@ -8,18 +8,18 @@ class gauge_t : public counter_t {
  public:
   gauge_t(std::string name, std::string help)
       : counter_t(std::move(name), std::move(help)) {
-    set_metric_type(MetricType::Guage);
+    set_metric_type(MetricType::Gauge);
   }
   gauge_t(std::string name, std::string help,
           std::vector<std::string> labels_name)
       : counter_t(std::move(name), std::move(help), std::move(labels_name)) {
-    set_metric_type(MetricType::Guage);
+    set_metric_type(MetricType::Gauge);
   }
 
   gauge_t(std::string name, std::string help,
           std::map<std::string, std::string> labels)
       : counter_t(std::move(name), std::move(help), std::move(labels)) {
-    set_metric_type(MetricType::Guage);
+    set_metric_type(MetricType::Gauge);
   }
 
   void dec() {

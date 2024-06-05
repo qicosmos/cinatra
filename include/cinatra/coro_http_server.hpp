@@ -285,6 +285,10 @@ class coro_http_server {
         std::forward<Aspects>(aspects)...);
   }
 
+  void set_metrics(server_metric metrics) { metrics_ = std::move(metrics); }
+
+  server_metric &get_metrics() { return metrics_; }
+
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
     for (const auto &file :
@@ -884,6 +888,8 @@ class coro_http_server {
     default_metric_manger::register_metric_static(metrics_.fd_counter);
     default_metric_manger::register_metric_static(metrics_.req_latency_his);
     default_metric_manger::register_metric_static(metrics_.read_latency_his);
+    default_metric_manger::register_metric_static(metrics_.total_send_bytes);
+    default_metric_manger::register_metric_static(metrics_.total_recv_bytes);
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
