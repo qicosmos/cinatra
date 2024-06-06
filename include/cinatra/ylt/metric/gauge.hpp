@@ -22,15 +22,7 @@ class gauge_t : public counter_t {
     set_metric_type(MetricType::Gauge);
   }
 
-  void dec() {
-#ifdef __APPLE__
-    mac_os_atomic_fetch_sub(&default_lable_value_, double(1));
-#else
-    default_lable_value_ -= 1;
-#endif
-  }
-
-  void dec(double value) {
+  void dec(double value = 1) {
 #ifdef __APPLE__
     mac_os_atomic_fetch_sub(&default_lable_value_, value);
 #else
