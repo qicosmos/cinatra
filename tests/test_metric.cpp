@@ -19,11 +19,11 @@ TEST_CASE("test no lable") {
     g.inc();
 
     std::string str;
-    g.serialize_atomic(str);
+    g.serialize(str);
     CHECK(str.find("test_gauge 2") != std::string::npos);
 
     g.dec();
-    CHECK(g.atomic_value() == 1);
+    CHECK(g.value() == 1);
     CHECK_THROWS_AS(g.dec({}, 1), std::invalid_argument);
     CHECK_THROWS_AS(g.inc({}, 1), std::invalid_argument);
     CHECK_THROWS_AS(g.update({}, 1), std::invalid_argument);
@@ -32,7 +32,7 @@ TEST_CASE("test no lable") {
     c.inc();
     c.inc();
     std::string str1;
-    c.serialize_atomic(str1);
+    c.serialize(str1);
     CHECK(str1.find("test_counter 2") != std::string::npos);
   }
   {
@@ -40,22 +40,22 @@ TEST_CASE("test no lable") {
     CHECK(c.metric_type() == MetricType::Counter);
     CHECK(c.labels_name().empty());
     c.inc();
-    CHECK(c.atomic_value() == 1);
+    CHECK(c.value() == 1);
     c.inc();
-    CHECK(c.atomic_value() == 2);
+    CHECK(c.value() == 2);
     c.inc(0);
 
-    CHECK(c.atomic_value() == 2);
+    CHECK(c.value() == 2);
 
     CHECK_THROWS_AS(c.inc(-2), std::invalid_argument);
     CHECK_THROWS_AS(c.inc({}, 1), std::invalid_argument);
     CHECK_THROWS_AS(c.update({}, 1), std::invalid_argument);
 
     c.update(10);
-    CHECK(c.atomic_value() == 10);
+    CHECK(c.value() == 10);
 
     c.update(0);
-    CHECK(c.atomic_value() == 0);
+    CHECK(c.value() == 0);
   }
 }
 
@@ -66,29 +66,29 @@ TEST_CASE("test with atomic") {
   std::vector<std::string> labels_value{"GET", "/"};
   c.inc(labels_value);
   c.inc(labels_value, 2);
-  CHECK(c.atomic_value(labels_value) == 3);
+  CHECK(c.value(labels_value) == 3);
   CHECK_THROWS_AS(c.inc({"GET", "/test"}), std::invalid_argument);
   CHECK_THROWS_AS(c.inc({"POST", "/"}), std::invalid_argument);
   c.update(labels_value, 10);
-  CHECK(c.atomic_value(labels_value) == 10);
+  CHECK(c.value(labels_value) == 10);
 
   gauge_t g(
       "get_qps", "get qps",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   g.inc(labels_value);
   g.inc(labels_value, 2);
-  CHECK(g.atomic_value(labels_value) == 3);
+  CHECK(g.value(labels_value) == 3);
   CHECK_THROWS_AS(g.inc({"GET", "/test"}), std::invalid_argument);
   CHECK_THROWS_AS(g.inc({"POST", "/"}), std::invalid_argument);
   g.dec(labels_value);
   g.dec(labels_value, 1);
-  CHECK(g.atomic_value(labels_value) == 1);
+  CHECK(g.value(labels_value) == 1);
 
   std::string str;
-  c.serialize_atomic(str);
+  c.serialize(str);
   std::cout << str;
   std::string str1;
-  g.serialize_atomic(str1);
+  g.serialize(str1);
   std::cout << str1;
   CHECK(str.find("} 10") != std::string::npos);
   CHECK(str1.find("} 1") != std::string::npos);
@@ -110,16 +110,14 @@ TEST_CASE("test counter with dynamic labels value") {
                 std::vector<std::string>{"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    auto values = async_simple::coro::syncAwait(c.async_value_map());
+    auto values = c.value_map();
     CHECK(values[{"GET", "200"}] == 1);
     c.inc({"GET", "200"}, 2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = async_simple::coro::syncAwait(c.async_value_map());
+    values = c.value_map();
     CHECK(values[{"GET", "200"}] == 3);
 
     std::string str;
-    async_simple::coro::syncAwait(c.serialize_async(str));
+    c.serialize(str);
     std::cout << str;
     CHECK(str.find("# TYPE get_count counter") != std::string::npos);
     CHECK(str.find("get_count{method=\"GET\",code=\"200\"} 3") !=
@@ -129,7 +127,7 @@ TEST_CASE("test counter with dynamic labels value") {
 
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = async_simple::coro::syncAwait(c.async_value_map());
+    values = c.value_map();
     CHECK(values[{"GET", "200"}] == 20);
   }
 }
@@ -140,15 +138,15 @@ TEST_CASE("test gauge") {
     CHECK(g.metric_type() == MetricType::Gauge);
     CHECK(g.labels_name().empty());
     g.inc();
-    CHECK(g.atomic_value() == 1);
+    CHECK(g.value() == 1);
     g.inc();
-    CHECK(g.atomic_value() == 2);
+    CHECK(g.value() == 2);
     g.inc(0);
 
     g.dec();
-    CHECK(g.atomic_value() == 1);
+    CHECK(g.value() == 1);
     g.dec();
-    CHECK(g.atomic_value() == 0);
+    CHECK(g.value() == 0);
   }
 
   {
@@ -156,16 +154,14 @@ TEST_CASE("test gauge") {
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    auto values = async_simple::coro::syncAwait(g.async_value_map());
+    auto values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 1);
     g.inc({"GET", "200", "/"}, 2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = async_simple::coro::syncAwait(g.async_value_map());
+    values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 3);
 
     std::string str;
-    async_simple::coro::syncAwait(g.serialize_async(str));
+    g.serialize(str);
     std::cout << str;
     CHECK(str.find("# TYPE get_count gauge") != std::string::npos);
     CHECK(str.find("get_count{method=\"GET\",code=\"200\",url=\"/\"} 3") !=
@@ -174,12 +170,10 @@ TEST_CASE("test gauge") {
     CHECK_THROWS_AS(g.dec({"GET", "200"}, 1), std::invalid_argument);
 
     g.dec({"GET", "200", "/"}, 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = async_simple::coro::syncAwait(g.async_value_map());
+    values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 2);
     g.dec({"GET", "200", "/"}, 2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = async_simple::coro::syncAwait(g.async_value_map());
+    values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 0);
   }
 }
@@ -188,17 +182,17 @@ TEST_CASE("test histogram") {
   histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
   h.observe(23);
   auto counts = h.get_bucket_counts();
-  CHECK(counts[3]->atomic_value() == 1);
+  CHECK(counts[3]->value() == 1);
   h.observe(42);
-  CHECK(counts[3]->atomic_value() == 2);
+  CHECK(counts[3]->value() == 2);
   h.observe(60);
-  CHECK(counts[4]->atomic_value() == 1);
+  CHECK(counts[4]->value() == 1);
   h.observe(120);
-  CHECK(counts[5]->atomic_value() == 1);
+  CHECK(counts[5]->value() == 1);
   h.observe(1);
-  CHECK(counts[0]->atomic_value() == 1);
+  CHECK(counts[0]->value() == 1);
   std::string str;
-  h.serialize_atomic(str);
+  h.serialize(str);
   std::cout << str;
   CHECK(str.find("test_count") != std::string::npos);
   CHECK(str.find("test_sum") != std::string::npos);
@@ -246,8 +240,8 @@ TEST_CASE("test register metric") {
   g->inc();
 
   auto map = default_metric_manger::metric_map_static();
-  CHECK(map["get_count"]->atomic_value() == 1);
-  CHECK(map["get_guage_count"]->atomic_value() == 1);
+  CHECK(map["get_count"]->as<counter_t>()->value() == 1);
+  CHECK(map["get_guage_count"]->as<gauge_t>()->value() == 1);
 
   auto s =
       async_simple::coro::syncAwait(default_metric_manger::serialize_static());
@@ -256,10 +250,10 @@ TEST_CASE("test register metric") {
   CHECK(s.find("get_guage_count 1") != std::string::npos);
 
   auto m = default_metric_manger::get_metric_static("get_count");
-  CHECK(m->atomic_value() == 1);
+  CHECK(m->as<counter_t>()->value() == 1);
 
   auto m1 = default_metric_manger::get_metric_static("get_guage_count");
-  CHECK(m1->atomic_value() == 1);
+  CHECK(m1->as<gauge_t>()->value() == 1);
 
   {
     // because the first regiter_metric is set no lock, so visit

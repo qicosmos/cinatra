@@ -52,7 +52,8 @@ class gauge_t : public counter_t {
       set_value<true>(atomic_value_map_[labels_value], value, op_type_t::DEC);
     }
     else {
-      block_->sample_queue_.enqueue({op_type_t::DEC, labels_value, value});
+      std::lock_guard lock(mtx_);
+      set_value<false>(value_map_[labels_value], value, op_type_t::DEC);
     }
   }
 };

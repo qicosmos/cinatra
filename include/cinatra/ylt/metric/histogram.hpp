@@ -36,7 +36,7 @@ class histogram_t : public metric_t {
 
   auto get_bucket_counts() { return bucket_counts_; }
 
-  void serialize_atomic(std::string& str) {
+  void serialize(std::string& str) override {
     serialize_head(str);
     double count = 0;
     auto bucket_counts = get_bucket_counts();
@@ -52,14 +52,14 @@ class histogram_t : public metric_t {
             .append("\"} ");
       }
 
-      count += counter->atomic_value();
+      count += counter->value();
       str.append(std::to_string(count));
       str.append("\n");
     }
 
     str.append(name_)
         .append("_sum ")
-        .append(std::to_string(sum_->atomic_value()))
+        .append(std::to_string(sum_->value()))
         .append("\n");
 
     str.append(name_)

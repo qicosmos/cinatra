@@ -57,25 +57,19 @@ class metric_t {
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
 
-  virtual async_simple::coro::Lazy<std::map<
-      std::vector<std::string>, double, std::less<std::vector<std::string>>>>
-  async_value_map() {
-    co_return std::map<std::vector<std::string>, double,
-                       std::less<std::vector<std::string>>>{};
-  }
+  virtual void serialize(std::string& str) {}
 
-  virtual double atomic_value() { return {}; }
-  virtual double atomic_value(const std::vector<std::string>& labels_value) {
-    return 0;
-  }
-
-  virtual void serialize_atomic(std::string& str) {}
-
+  // only for summary
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
     co_return;
   }
 
-  bool use_atomic() const { return use_atomic_; }
+  bool is_atomic() const { return use_atomic_; }
+
+  template <typename T>
+  T* as() {
+    return dynamic_cast<T*>(this);
+  }
 
  protected:
   void set_metric_type(MetricType type) { type_ = type; }
@@ -263,11 +257,11 @@ struct metric_manager_t {
     std::string str;
     auto metrics = collect<need_lock>();
     for (auto& m : metrics) {
-      if (m->use_atomic()) {
-        m->serialize_atomic(str);
+      if (m->metric_type() == MetricType::Summary) {
+        co_await m->serialize_async(str);
       }
       else {
-        co_await m->serialize_async(str);
+        m->serialize(str);
       }
     }
     co_return str;
