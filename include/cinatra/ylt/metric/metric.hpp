@@ -11,7 +11,7 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 
-namespace cinatra {
+namespace ylt {
 enum class MetricType {
   Counter,
   Gauge,
@@ -276,4 +276,4 @@ struct metric_manager_t {
 };
 
 using default_metric_manger = metric_manager_t<0>;
-}  // namespace cinatra
+}  // namespace ylt

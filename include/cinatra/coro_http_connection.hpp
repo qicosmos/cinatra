@@ -40,22 +40,26 @@ struct websocket_result {
 };
 
 struct server_metric {
-  std::shared_ptr<counter_t> total_counter =
-      std::make_shared<counter_t>("server_total_req", "total req count");
-  std::shared_ptr<counter_t> failed_counter =
-      std::make_shared<counter_t>("server_failed_req", "failed req count");
-  std::shared_ptr<gauge_t> fd_counter =
-      std::make_shared<gauge_t>("server_fd_counter", "fd counter");
-  std::shared_ptr<histogram_t> req_latency_his = std::make_shared<histogram_t>(
-      "server_req_latency", "req latency",
-      std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-  std::shared_ptr<histogram_t> read_latency_his = std::make_shared<histogram_t>(
-      "server_read_latency", "read latency",
-      std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
-  std::shared_ptr<counter_t> total_recv_bytes = std::make_shared<counter_t>(
-      "server_total_recv_bytes", "total recv bytes");
-  std::shared_ptr<counter_t> total_send_bytes = std::make_shared<counter_t>(
-      "server_total_send_bytes", "total send bytes");
+  std::shared_ptr<ylt::counter_t> total_counter =
+      std::make_shared<ylt::counter_t>("server_total_req", "total req count");
+  std::shared_ptr<ylt::counter_t> failed_counter =
+      std::make_shared<ylt::counter_t>("server_failed_req", "failed req count");
+  std::shared_ptr<ylt::gauge_t> fd_counter =
+      std::make_shared<ylt::gauge_t>("server_fd_counter", "fd counter");
+  std::shared_ptr<ylt::histogram_t> req_latency_his =
+      std::make_shared<ylt::histogram_t>(
+          "server_req_latency", "req latency",
+          std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
+  std::shared_ptr<ylt::histogram_t> read_latency_his =
+      std::make_shared<ylt::histogram_t>(
+          "server_read_latency", "read latency",
+          std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
+  std::shared_ptr<ylt::counter_t> total_recv_bytes =
+      std::make_shared<ylt::counter_t>("server_total_recv_bytes",
+                                       "total recv bytes");
+  std::shared_ptr<ylt::counter_t> total_send_bytes =
+      std::make_shared<ylt::counter_t>("server_total_send_bytes",
+                                       "total send bytes");
 };
 
 class coro_http_connection

@@ -10,7 +10,7 @@
 #include "cinatra/ylt/metric/histogram.hpp"
 #include "cinatra/ylt/metric/summary.hpp"
 #include "doctest/doctest.h"
-using namespace cinatra;
+using namespace ylt;
 
 TEST_CASE("test no lable") {
   {

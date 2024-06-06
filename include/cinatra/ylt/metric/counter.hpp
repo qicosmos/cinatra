@@ -4,7 +4,7 @@
 
 #include "metric.hpp"
 
-namespace cinatra {
+namespace ylt {
 enum class op_type_t { INC, DEC, SET };
 struct counter_sample {
   op_type_t op_type;
@@ -253,4 +253,4 @@ class counter_t : public metric_t {
            std::less<std::vector<std::string>>>
       value_map_;
 };
-}  // namespace cinatra
+}  // namespace ylt

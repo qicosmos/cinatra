@@ -12,6 +12,7 @@
 #include "cinatra/ylt/metric/summary.hpp"
 
 using namespace cinatra;
+using namespace ylt;
 using namespace std::chrono_literals;
 
 void create_file(std::string filename, size_t file_size = 64) {

@@ -8,7 +8,7 @@
 #include "counter.hpp"
 #include "metric.hpp"
 
-namespace cinatra {
+namespace ylt {
 class histogram_t : public metric_t {
  public:
   histogram_t(std::string name, std::string help, std::vector<double> buckets)
@@ -80,4 +80,4 @@ class histogram_t : public metric_t {
   std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
-}  // namespace cinatra
+}  // namespace ylt

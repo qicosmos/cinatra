@@ -3,7 +3,7 @@
 
 #include "counter.hpp"
 
-namespace cinatra {
+namespace ylt {
 class gauge_t : public counter_t {
  public:
   gauge_t(std::string name, std::string help)
@@ -49,4 +49,4 @@ class gauge_t : public counter_t {
     }
   }
 };
-}  // namespace cinatra
+}  // namespace ylt

@@ -186,7 +186,7 @@ class coro_http_server {
     set_http_handler<http_method::GET>(
         url_path, [](coro_http_request &req, coro_http_response &res) {
           std::string str = async_simple::coro::syncAwait(
-              default_metric_manger::serialize_static());
+              ylt::default_metric_manger::serialize_static());
           res.set_status_and_content(status_type::ok, std::move(str));
         });
   }
@@ -883,13 +883,17 @@ class coro_http_server {
                                     // server destruct before easylog.
 #endif
     // register metrics
-    default_metric_manger::register_metric_static(metrics_.total_counter);
-    default_metric_manger::register_metric_static(metrics_.failed_counter);
-    default_metric_manger::register_metric_static(metrics_.fd_counter);
-    default_metric_manger::register_metric_static(metrics_.req_latency_his);
-    default_metric_manger::register_metric_static(metrics_.read_latency_his);
-    default_metric_manger::register_metric_static(metrics_.total_send_bytes);
-    default_metric_manger::register_metric_static(metrics_.total_recv_bytes);
+    ylt::default_metric_manger::register_metric_static(metrics_.total_counter);
+    ylt::default_metric_manger::register_metric_static(metrics_.failed_counter);
+    ylt::default_metric_manger::register_metric_static(metrics_.fd_counter);
+    ylt::default_metric_manger::register_metric_static(
+        metrics_.req_latency_his);
+    ylt::default_metric_manger::register_metric_static(
+        metrics_.read_latency_his);
+    ylt::default_metric_manger::register_metric_static(
+        metrics_.total_send_bytes);
+    ylt::default_metric_manger::register_metric_static(
+        metrics_.total_recv_bytes);
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 

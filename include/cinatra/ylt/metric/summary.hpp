@@ -6,7 +6,7 @@
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/util/concurrentqueue.h"
 
-namespace cinatra {
+namespace ylt {
 class summary_t : public metric_t {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
@@ -124,4 +124,4 @@ class summary_t : public metric_t {
   std::shared_ptr<block_t> block_;
   coro_io::ExecutorWrapper<> *excutor_ = nullptr;
 };
-}  // namespace cinatra
+}  // namespace ylt
