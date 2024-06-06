@@ -520,7 +520,7 @@ void metrics_example() {
   std::thread thd([&] {
     while (true) {
       std::this_thread::sleep_for(1s);
-      auto value = get_req_counter->atomic_value({"/get"});
+      auto value = get_req_counter->value({"/get"});
       get_req_qps->update(value - last);
       last = value;
     }

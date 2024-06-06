@@ -5,7 +5,8 @@ set(CINATRA_EXAMPLE
 	main.cpp
 	)
 
-include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
+include_directories(../include)
+include_directories(../include/cinatra)
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
