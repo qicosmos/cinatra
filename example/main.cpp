@@ -448,11 +448,11 @@ void use_metric() {
       summary_t::Quantiles{
           {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
 
-  default_metric_manger::register_metric_dynamic(c);
-  default_metric_manger::register_metric_dynamic(total);
-  default_metric_manger::register_metric_dynamic(failed);
-  default_metric_manger::register_metric_dynamic(h);
-  default_metric_manger::register_metric_dynamic(summary);
+  default_metric_manager::register_metric_dynamic(c);
+  default_metric_manager::register_metric_dynamic(total);
+  default_metric_manager::register_metric_dynamic(failed);
+  default_metric_manager::register_metric_dynamic(h);
+  default_metric_manager::register_metric_dynamic(summary);
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -514,7 +514,7 @@ void metrics_example() {
       "get_req_count", "get req count",
       std::map<std::string, std::string>{{"url", "/get"}});
   auto get_req_qps = std::make_shared<gauge_t>("get_req_qps", "get req qps");
-  // default_metric_manger::register_metric_static(get_req_counter,
+  // default_metric_manager::register_metric_static(get_req_counter,
   // get_req_qps);
   int64_t last = 0;
   std::thread thd([&] {
@@ -573,7 +573,7 @@ async_simple::coro::Lazy<void> use_pool() {
   server.use_metrics();
   server.async_start();
 
-  auto map = default_metric_manger::metric_map_static();
+  auto map = default_metric_manager::metric_map_static();
   for (auto &[k, m] : map) {
     std::cout << k << ", ";
     std::cout << m->help() << "\n";
