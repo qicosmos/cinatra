@@ -7,9 +7,7 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
-#include "cinatra/ylt/metric/gauge.hpp"
-#include "cinatra/ylt/metric/histogram.hpp"
-#include "cinatra/ylt/metric/summary.hpp"
+#include "metric_conf.hpp"
 
 using namespace cinatra;
 using namespace ylt;
@@ -374,7 +372,7 @@ async_simple::coro::Lazy<void> basic_usage() {
         response.set_status_and_content(status_type::ok, "ok");
       });
 
-  server.set_metric_handler();
+  server.use_metrics();
 
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
@@ -431,6 +429,7 @@ async_simple::coro::Lazy<void> basic_usage() {
 }
 
 void use_metric() {
+  using namespace ylt;
   auto c =
       std::make_shared<counter_t>("request_count", "request count",
                                   std::vector<std::string>{"method", "url"});
@@ -538,7 +537,7 @@ void metrics_example() {
       "/", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
-  server.set_metric_handler();
+  server.use_metrics();
   server.sync_start();
 }
 
@@ -548,7 +547,7 @@ async_simple::coro::Lazy<void> use_channel() {
       "/", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
-  server.set_metric_handler();
+  server.use_metrics();
   server.async_start();
   std::this_thread::sleep_for(100ms);
 
@@ -571,7 +570,7 @@ async_simple::coro::Lazy<void> use_pool() {
       "/", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
-  server.set_metric_handler();
+  server.use_metrics();
   server.async_start();
 
   auto map = default_metric_manger::metric_map_static();

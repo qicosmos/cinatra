@@ -182,7 +182,8 @@ class coro_http_server {
     }
   }
 
-  void set_metric_handler(std::string url_path = "/metrics") {
+  void use_metrics(std::string url_path = "/metrics") {
+    init_metrics();
     set_http_handler<http_method::GET>(
         url_path, [](coro_http_request &req, coro_http_response &res) {
           std::string str = async_simple::coro::syncAwait(
@@ -284,10 +285,6 @@ class coro_http_server {
         },
         std::forward<Aspects>(aspects)...);
   }
-
-  void set_metrics(server_metric metrics) { metrics_ = std::move(metrics); }
-
-  server_metric &get_metrics() { return metrics_; }
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
@@ -665,7 +662,7 @@ class coro_http_server {
       uint64_t conn_id = ++conn_id_;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
-          executor, std::move(socket), router_, &metrics_);
+          executor, std::move(socket), router_);
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -882,18 +879,7 @@ class coro_http_server {
     easylog::logger<>::instance();  // init easylog singleton to make sure
                                     // server destruct before easylog.
 #endif
-    // register metrics
-    ylt::default_metric_manger::register_metric_static(metrics_.total_counter);
-    ylt::default_metric_manger::register_metric_static(metrics_.failed_counter);
-    ylt::default_metric_manger::register_metric_static(metrics_.fd_counter);
-    ylt::default_metric_manger::register_metric_static(
-        metrics_.req_latency_his);
-    ylt::default_metric_manger::register_metric_static(
-        metrics_.read_latency_his);
-    ylt::default_metric_manger::register_metric_static(
-        metrics_.total_send_bytes);
-    ylt::default_metric_manger::register_metric_static(
-        metrics_.total_recv_bytes);
+
     if (size_t pos = address.find(':'); pos != std::string::npos) {
       auto port_sv = std::string_view(address).substr(pos + 1);
 
@@ -910,6 +896,29 @@ class coro_http_server {
     }
 
     address_ = std::move(address);
+  }
+
+ private:
+  void init_metrics() {
+    using namespace ylt;
+
+    cinatra_metric_conf::enable_metric = true;
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_req, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_failed_req, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_recv_bytes, "");
+    default_metric_manger::create_metric_static<counter_t>(
+        cinatra_metric_conf::server_total_send_bytes, "");
+    default_metric_manger::create_metric_static<gauge_t>(
+        cinatra_metric_conf::server_total_fd, "");
+    default_metric_manger::create_metric_static<histogram_t>(
+        cinatra_metric_conf::server_req_latency, "",
+        std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
+    default_metric_manger::create_metric_static<histogram_t>(
+        cinatra_metric_conf::server_read_latency, "",
+        std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
   }
 
  private:
@@ -953,7 +962,6 @@ class coro_http_server {
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;
-  server_metric metrics_{};
 };
 
 using http_server = coro_http_server;

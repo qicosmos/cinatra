@@ -28,6 +28,7 @@
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
+#include "metric_conf.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 
@@ -39,48 +40,24 @@ struct websocket_result {
   bool eof;
 };
 
-struct server_metric {
-  std::shared_ptr<ylt::counter_t> total_counter =
-      std::make_shared<ylt::counter_t>("server_total_req", "total req count");
-  std::shared_ptr<ylt::counter_t> failed_counter =
-      std::make_shared<ylt::counter_t>("server_failed_req", "failed req count");
-  std::shared_ptr<ylt::gauge_t> fd_counter =
-      std::make_shared<ylt::gauge_t>("server_fd_counter", "fd counter");
-  std::shared_ptr<ylt::histogram_t> req_latency_his =
-      std::make_shared<ylt::histogram_t>(
-          "server_req_latency", "req latency",
-          std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-  std::shared_ptr<ylt::histogram_t> read_latency_his =
-      std::make_shared<ylt::histogram_t>(
-          "server_read_latency", "read latency",
-          std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
-  std::shared_ptr<ylt::counter_t> total_recv_bytes =
-      std::make_shared<ylt::counter_t>("server_total_recv_bytes",
-                                       "total recv bytes");
-  std::shared_ptr<ylt::counter_t> total_send_bytes =
-      std::make_shared<ylt::counter_t>("server_total_send_bytes",
-                                       "total send bytes");
-};
-
 class coro_http_connection
     : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
-                       coro_http_router &router, server_metric *metrics)
+                       coro_http_router &router)
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
         request_(parser_, this),
-        response_(this),
-        metrics_(metrics) {
+        response_(this) {
     buffers_.reserve(3);
 
-    metrics_->fd_counter->inc();
+    cinatra_metric_conf::server_total_fd_inc();
   }
 
   ~coro_http_connection() {
-    metrics_->fd_counter->dec();
+    cinatra_metric_conf::server_total_fd_dec();
     close();
   }
 
@@ -127,6 +104,8 @@ class coro_http_connection
 #ifdef CINATRA_ENABLE_SSL
     bool has_shake = false;
 #endif
+    std::chrono::system_clock::time_point start{};
+    std::chrono::system_clock::time_point mid{};
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -147,18 +126,20 @@ class coro_http_connection
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
 
-        metrics_->failed_counter->inc();
+        cinatra_metric_conf::server_failed_req_inc();
         close();
         break;
       }
-      auto start = std::chrono::high_resolution_clock::now();
 
-      metrics_->total_counter->inc();
+      if (cinatra_metric_conf::enable_metric) {
+        start = std::chrono::high_resolution_clock::now();
+        cinatra_metric_conf::server_total_req_inc();
+      }
 
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       int head_len = parser_.parse_request(data_ptr, size, 0);
       if (head_len <= 0) {
-        metrics_->failed_counter->inc();
+        cinatra_metric_conf::server_failed_req_inc();
         CINATRA_LOG_ERROR << "parse http header error";
         close();
         break;
@@ -172,7 +153,9 @@ class coro_http_connection
       if (type != content_type::chunked && type != content_type::multipart) {
         size_t body_len = parser_.body_len();
         if (body_len == 0) {
-          metrics_->total_recv_bytes->inc(head_len);
+          if (cinatra_metric_conf::enable_metric) {
+            cinatra_metric_conf::server_total_recv_bytes_inc(head_len);
+          }
           if (parser_.method() == "GET"sv) {
             if (request_.is_upgrade()) {
 #ifdef CINATRA_ENABLE_GZIP
@@ -193,12 +176,14 @@ class coro_http_connection
               response_.set_delay(true);
             }
             else {
-              auto mid = std::chrono::high_resolution_clock::now();
-              double count =
-                  std::chrono::duration_cast<std::chrono::microseconds>(mid -
-                                                                        start)
-                      .count();
-              metrics_->read_latency_his->observe(count);
+              if (cinatra_metric_conf::enable_metric) {
+                mid = std::chrono::high_resolution_clock::now();
+                double count =
+                    std::chrono::duration_cast<std::chrono::microseconds>(mid -
+                                                                          start)
+                        .count();
+                cinatra_metric_conf::server_read_latency_observe(count);
+              }
             }
           }
         }
@@ -209,7 +194,7 @@ class coro_http_connection
             memcpy(body_.data(), data_ptr, body_len);
             head_buf_.consume(head_buf_.size());
           }
-          metrics_->total_recv_bytes->inc(head_len + body_len);
+          cinatra_metric_conf::server_total_recv_bytes_inc(head_len + body_len);
         }
         else {
           size_t part_size = head_buf_.size();
@@ -224,18 +209,21 @@ class coro_http_connection
               size_to_read);
           if (ec) {
             CINATRA_LOG_ERROR << "async_read error: " << ec.message();
-            metrics_->failed_counter->inc();
+            cinatra_metric_conf::server_failed_req_inc();
             close();
             break;
           }
           else {
-            metrics_->total_recv_bytes->inc(head_len + body_len);
-            auto mid = std::chrono::high_resolution_clock::now();
-            double count =
-                std::chrono::duration_cast<std::chrono::microseconds>(mid -
-                                                                      start)
-                    .count();
-            metrics_->read_latency_his->observe(count);
+            if (cinatra_metric_conf::enable_metric) {
+              cinatra_metric_conf::server_total_recv_bytes_inc(head_len +
+                                                               body_len);
+              mid = std::chrono::high_resolution_clock::now();
+              double count =
+                  std::chrono::duration_cast<std::chrono::microseconds>(mid -
+                                                                        start)
+                      .count();
+              cinatra_metric_conf::server_read_latency_observe(count);
+            }
           }
         }
       }
@@ -421,11 +409,13 @@ class coro_http_connection
         }
       }
 
-      auto mid = std::chrono::high_resolution_clock::now();
-      double count =
-          std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
-              .count();
-      metrics_->req_latency_his->observe(count);
+      if (cinatra_metric_conf::enable_metric) {
+        mid = std::chrono::high_resolution_clock::now();
+        double count =
+            std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
+                .count();
+        cinatra_metric_conf::server_req_latency_observe(count);
+      }
 
       response_.clear();
       request_.clear();
@@ -441,7 +431,8 @@ class coro_http_connection
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
     if (response_.status() >= status_type::bad_request) {
-      metrics_->failed_counter->inc();
+      if (cinatra_metric_conf::enable_metric)
+        cinatra_metric_conf::server_failed_req_inc();
     }
     std::error_code ec;
     size_t size;
@@ -453,14 +444,18 @@ class coro_http_connection
       for (auto &buf : buffers_) {
         send_size += buf.size();
       }
-      metrics_->total_send_bytes->inc(send_size);
+      if (cinatra_metric_conf::enable_metric) {
+        cinatra_metric_conf::server_total_send_bytes_inc(send_size);
+      }
       std::tie(ec, size) = co_await async_write(buffers_);
     }
     else {
       if (need_to_bufffer) {
         response_.build_resp_str(resp_str_);
       }
-      metrics_->total_send_bytes->inc(resp_str_.size());
+      if (cinatra_metric_conf::enable_metric) {
+        cinatra_metric_conf::server_total_send_bytes_inc(resp_str_.size());
+      }
       std::tie(ec, size) = co_await async_write(asio::buffer(resp_str_));
     }
 
@@ -995,7 +990,5 @@ class coro_http_connection
       default_handler_ = nullptr;
   std::string chunk_size_str_;
   std::string remote_addr_;
-
-  server_metric *metrics_ = nullptr;
 };
 }  // namespace cinatra
