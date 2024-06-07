@@ -1,10 +1,11 @@
 #pragma once
 #include <array>
+#include <cmath>
 #include <vector>
 
 // https://github.com/jupp0r/prometheus-cpp/blob/master/core/include/prometheus/detail/ckms_quantiles.h
 
-namespace cinatra {
+namespace ylt {
 class CKMSQuantiles {
  public:
   struct Quantile {
@@ -171,4 +172,4 @@ class CKMSQuantiles {
   std::array<double, 500> buffer_;
   std::size_t buffer_count_;
 };
-}  // namespace cinatra
+}  // namespace ylt

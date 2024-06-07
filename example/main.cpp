@@ -7,11 +7,10 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
-#include "cinatra/ylt/metric/gauge.hpp"
-#include "cinatra/ylt/metric/histogram.hpp"
-#include "cinatra/ylt/metric/summary.hpp"
+#include "metric_conf.hpp"
 
 using namespace cinatra;
+using namespace ylt;
 using namespace std::chrono_literals;
 
 void create_file(std::string filename, size_t file_size = 64) {
@@ -373,6 +372,8 @@ async_simple::coro::Lazy<void> basic_usage() {
         response.set_status_and_content(status_type::ok, "ok");
       });
 
+  server.use_metrics();
+
   person_t person{};
   server.set_http_handler<GET>("/person", &person_t::foo, person);
 
@@ -420,17 +421,21 @@ async_simple::coro::Lazy<void> basic_usage() {
   // make sure you have install openssl and enable CINATRA_ENABLE_SSL
 #ifdef CINATRA_ENABLE_SSL
   coro_http_client client2{};
-  result = co_await client2.async_get("https://baidu.com");
-  assert(result.status == 200);
+
+  result = client2.post("https://baidu.com", "test", req_content_type::string);
+  std::cout << result.resp_body << "\n";
+  result.net_err.value() assert(result.status == 200);
 #endif
 }
 
 void use_metric() {
-  auto c = std::make_shared<counter_t>("request_count", "request count",
-                                       std::vector{"method", "url"});
-  auto failed = std::make_shared<gauge_t>("not_found_request_count",
-                                          "not found request count",
-                                          std::vector{"method", "code", "url"});
+  using namespace ylt;
+  auto c =
+      std::make_shared<counter_t>("request_count", "request count",
+                                  std::vector<std::string>{"method", "url"});
+  auto failed = std::make_shared<gauge_t>(
+      "not_found_request_count", "not found request count",
+      std::vector<std::string>{"method", "code", "url"});
   auto total =
       std::make_shared<counter_t>("total_request_count", "total request count");
 
@@ -443,11 +448,11 @@ void use_metric() {
       summary_t::Quantiles{
           {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
 
-  metric_t::regiter_metric(c);
-  metric_t::regiter_metric(total);
-  metric_t::regiter_metric(failed);
-  metric_t::regiter_metric(h);
-  metric_t::regiter_metric(summary);
+  default_metric_manger::register_metric_dynamic(c);
+  default_metric_manger::register_metric_dynamic(total);
+  default_metric_manger::register_metric_dynamic(failed);
+  default_metric_manger::register_metric_dynamic(h);
+  default_metric_manger::register_metric_dynamic(summary);
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -499,13 +504,112 @@ void use_metric() {
   server.set_http_handler<GET, POST>(
       "/metrics", [](coro_http_request &req, coro_http_response &resp) {
         resp.need_date_head(false);
-        resp.set_status_and_content(status_type::ok, metric_t::serialize());
+        resp.set_status_and_content(status_type::ok, "");
       });
   server.sync_start();
 }
 
+void metrics_example() {
+  auto get_req_counter = std::make_shared<counter_t>(
+      "get_req_count", "get req count",
+      std::map<std::string, std::string>{{"url", "/get"}});
+  auto get_req_qps = std::make_shared<gauge_t>("get_req_qps", "get req qps");
+  // default_metric_manger::register_metric_static(get_req_counter,
+  // get_req_qps);
+  int64_t last = 0;
+  std::thread thd([&] {
+    while (true) {
+      std::this_thread::sleep_for(1s);
+      auto value = get_req_counter->value({"/get"});
+      get_req_qps->update(value - last);
+      last = value;
+    }
+  });
+  thd.detach();
+
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/get", [&](coro_http_request &req, coro_http_response &resp) {
+        // get_req_counter->inc({"/get"});
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.use_metrics();
+  server.sync_start();
+}
+
+async_simple::coro::Lazy<void> use_channel() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.use_metrics();
+  server.async_start();
+  std::this_thread::sleep_for(100ms);
+
+  auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
+      coro_io::channel<coro_http_client>::create(
+          {"127.0.0.1:9001"}, {.lba = coro_io::load_blance_algorithm::random}));
+  std::string url = "http://127.0.0.1:9001/";
+  co_await channel->send_request(
+      [&url](coro_http_client &client,
+             std::string_view host) -> async_simple::coro::Lazy<void> {
+        auto data = co_await client.async_get(url);
+        std::cout << data.net_err.message() << "\n";
+        std::cout << data.resp_body << "\n";
+      });
+}
+
+async_simple::coro::Lazy<void> use_pool() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.use_metrics();
+  server.async_start();
+
+  auto map = default_metric_manger::metric_map_static();
+  for (auto &[k, m] : map) {
+    std::cout << k << ", ";
+    std::cout << m->help() << "\n";
+  }
+
+  std::string url = "http://127.0.0.1:9001/";
+
+  auto pool = coro_io::client_pool<coro_http_client>::create(
+      url, {std::thread::hardware_concurrency() * 2});
+
+  std::atomic<size_t> count = 0;
+  for (size_t i = 0; i < 10000; i++) {
+    pool->send_request(
+            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+              auto data = co_await client.async_get(url);
+              std::cout << data.resp_body << "\n";
+            })
+        .start([&](auto &&) {
+          count++;
+        });
+  }
+
+  while (count != 10000) {
+    std::this_thread::sleep_for(5ms);
+  }
+
+  int size = pool->free_client_count();
+  printf("current client count: %d, \n", size);
+  co_return;
+}
+
 int main() {
   // use_metric();
+  // metrics_example();
+  async_simple::coro::syncAwait(use_channel());
+  async_simple::coro::syncAwait(use_pool());
   async_simple::coro::syncAwait(basic_usage());
   async_simple::coro::syncAwait(use_aspects());
   async_simple::coro::syncAwait(static_file_server());

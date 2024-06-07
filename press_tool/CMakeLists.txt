@@ -7,6 +7,9 @@ set(cinatra_press_tool
 	main.cpp
 	)
 
+include_directories(../include)
+include_directories(../include/cinatra)
+
 add_definitions(-DBENCHMARK_TEST)
 add_executable(${project_name} ${cinatra_press_tool})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
