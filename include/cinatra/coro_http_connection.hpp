@@ -11,10 +11,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "cinatra/response_cv.hpp"
-#include "cinatra/ylt/metric/counter.hpp"
-#include "cinatra/ylt/metric/gauge.hpp"
-#include "cinatra/ylt/metric/histogram.hpp"
-#include "cinatra/ylt/metric/metric.hpp"
 #include "cookie.hpp"
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
@@ -25,6 +21,10 @@
 #include "sha1.hpp"
 #include "string_resize.hpp"
 #include "websocket.hpp"
+#include "ylt/metric/counter.hpp"
+#include "ylt/metric/gauge.hpp"
+#include "ylt/metric/histogram.hpp"
+#include "ylt/metric/metric.hpp"
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif

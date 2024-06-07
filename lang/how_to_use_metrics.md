@@ -205,7 +205,7 @@ CHECK(m1->as<gauge_t>()->value() == 1);
 ```
 注意：一旦注册时使用了static或者dynamic，那么后面调用default_metric_manger时则应该使用相同后缀的接口，比如注册时使用了get_metric_static，那么后面调用根据名称获取指标对象的方法必须是get_metric_static，否则会抛异常。同样，如果注册使用register_metric_dynamic，则后面应该get_metric_dynamic，否则会抛异常。
 
-指标管理器的静态api
+指标管理器的api
 ```cpp
 template <size_t ID = 0>
 struct metric_manager_t {
@@ -348,3 +348,26 @@ async_simple::coro::Lazy<void> serialize_async(std::string &str);
   CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
 ```
 summary 百分位的计算相比其它指标是最耗时的，应该避免在关键路径上使用它以免对性能造成影响。
+
+# cinatra http server中启用内置的metric指标
+
+http server 内置的指标：
+```cpp
+server_total_req: server总的请求数；
+server_failed_req：server总的失败请求数；
+server_total_fd：server使用的总的句柄数；
+server_total_recv_bytes：server总共收到的字节数；
+server_total_send_bytes：server总共发送的字节数；
+server_req_latency：http 请求的延迟，从收到请求到发送响应的时间间隔
+server_read_latency：http 读请求的延迟，读到完整的http数据的时间间隔
+```
+
+```cpp
+coro_http_server server(1, 9001);
+server.use_metrics("/metrics");//这个url默认就是/metrics，可以不填
+```
+在浏览器中输入`http://127.0.0.1:9001/metrics` 即可看到所有的指标。
+
+查看当前server的client pool中有多少client，调用`pool.free_client_count()`
+
+查看当前server内部线程池中有多少线程，调用`coro_io::get_total_thread_num()`

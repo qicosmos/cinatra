@@ -20,10 +20,6 @@ enum class MetricType {
   Nil,
 };
 
-struct sample_t {
-  double value;
-};
-
 class metric_t {
  public:
   metric_t() = default;
