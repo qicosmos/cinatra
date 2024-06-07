@@ -132,7 +132,7 @@ class coro_http_connection
       }
 
       if (cinatra_metric_conf::enable_metric) {
-        start = std::chrono::high_resolution_clock::now();
+        start = std::chrono::system_clock::now();
         cinatra_metric_conf::server_total_req_inc();
       }
 
@@ -177,7 +177,7 @@ class coro_http_connection
             }
             else {
               if (cinatra_metric_conf::enable_metric) {
-                mid = std::chrono::high_resolution_clock::now();
+                mid = std::chrono::system_clock::now();
                 double count =
                     std::chrono::duration_cast<std::chrono::microseconds>(mid -
                                                                           start)
@@ -217,7 +217,7 @@ class coro_http_connection
             if (cinatra_metric_conf::enable_metric) {
               cinatra_metric_conf::server_total_recv_bytes_inc(head_len +
                                                                body_len);
-              mid = std::chrono::high_resolution_clock::now();
+              mid = std::chrono::system_clock::now();
               double count =
                   std::chrono::duration_cast<std::chrono::microseconds>(mid -
                                                                         start)
@@ -410,7 +410,7 @@ class coro_http_connection
       }
 
       if (cinatra_metric_conf::enable_metric) {
-        mid = std::chrono::high_resolution_clock::now();
+        mid = std::chrono::system_clock::now();
         double count =
             std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
                 .count();
