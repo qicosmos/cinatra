@@ -145,6 +145,25 @@ class coro_http_request {
 
   bool is_req_ranges() { return parser_.is_req_ranges(); }
 
+  std::string get_accept_encoding() {
+    return std::string(get_header_value("Accept-Encoding"));
+  }
+
+  content_encoding get_encoding_type() {
+    auto encoding_type = get_header_value("Content-Encoding");
+    if (!encoding_type.empty()) {
+      if (encoding_type.find("gzip") != std::string_view::npos)
+        return content_encoding::gzip;
+      else if (encoding_type.find("deflate") != std::string_view::npos)
+        return content_encoding::deflate;
+      else
+        return content_encoding::none;
+    }
+    else {
+      return content_encoding::none;
+    }
+  }
+
   content_type get_content_type() {
     if (is_chunked())
       return content_type::chunked;
