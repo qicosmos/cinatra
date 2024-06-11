@@ -9,6 +9,22 @@
 #include "metric.hpp"
 
 namespace ylt {
+#ifdef CINATRA_ENABLE_METRIC_JSON
+struct json_histogram_metric_t {
+  std::map<double, int64_t> quantiles;
+  int64_t count;
+  double sum;
+};
+REFLECTION(json_histogram_metric_t, quantiles, count, sum);
+struct json_histogram_t {
+  std::string name;
+  std::string help;
+  std::string type;
+  json_histogram_metric_t metric;
+};
+REFLECTION(json_histogram_t, name, help, type, metric);
+#endif
+
 class histogram_t : public metric_t {
  public:
   histogram_t(std::string name, std::string help, std::vector<double> buckets)
@@ -67,6 +83,33 @@ class histogram_t : public metric_t {
         .append(std::to_string(count))
         .append("\n");
   }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  void serialize_to_json(std::string& str) override {
+    json_histogram_t hist{name_, help_, std::string(metric_name())};
+
+    double count = 0;
+    auto bucket_counts = get_bucket_counts();
+    for (size_t i = 0; i < bucket_counts.size(); i++) {
+      auto counter = bucket_counts[i];
+
+      count += counter->value();
+
+      if (i == bucket_boundaries_.size()) {
+        hist.metric.quantiles.emplace(std::numeric_limits<int>::max(),
+                                      (int64_t)count);
+      }
+      else {
+        hist.metric.quantiles.emplace(bucket_boundaries_[i],
+                                      (int64_t)counter->value());
+      }
+    }
+    hist.metric.count = (int64_t)count;
+    hist.metric.sum = sum_->value();
+
+    iguana::to_json(hist, str);
+  }
+#endif
 
  private:
   template <class ForwardIterator>

@@ -7,6 +7,22 @@
 #include "ylt/util/concurrentqueue.h"
 
 namespace ylt {
+#ifdef CINATRA_ENABLE_METRIC_JSON
+struct json_summary_metric_t {
+  std::map<double, double> quantiles;
+  int64_t count;
+  double sum;
+};
+REFLECTION(json_summary_metric_t, quantiles, count, sum);
+struct json_summary_t {
+  std::string name;
+  std::string help;
+  std::string type;
+  json_summary_metric_t metric;
+};
+REFLECTION(json_summary_t, name, help, type, metric);
+#endif
+
 class summary_t : public metric_t {
  public:
   using Quantiles = std::vector<CKMSQuantiles::Quantile>;
@@ -103,6 +119,28 @@ class summary_t : public metric_t {
         .append("\n");
   }
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  async_simple::coro::Lazy<void> serialize_to_json_async(
+      std::string &str) override {
+    if (quantiles_.empty()) {
+      co_return;
+    }
+
+    json_summary_t summary{name_, help_, std::string(metric_name())};
+    double sum = 0;
+    uint64_t count = 0;
+    auto rates = co_await get_rates(sum, count);
+
+    for (size_t i = 0; i < quantiles_.size(); i++) {
+      summary.metric.quantiles.emplace(quantiles_[i].quantile, rates[i]);
+    }
+
+    summary.metric.sum = sum;
+    summary.metric.count = count;
+
+    iguana::to_json(summary, str);
+  }
+#endif
  private:
   async_simple::coro::Lazy<void> start_timer(std::shared_ptr<block_t> block) {
     double sample;

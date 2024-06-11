@@ -143,6 +143,13 @@ TEST_CASE("test gauge") {
     CHECK(g.value() == 2);
     g.inc(0);
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    g.serialize_to_json(str_json);
+    std::cout << str_json << "\n";
+    CHECK(str_json.find("\"value\":2") != std::string::npos);
+#endif
+
     g.dec();
     CHECK(g.value() == 1);
     g.dec();
@@ -159,6 +166,15 @@ TEST_CASE("test gauge") {
     g.inc({"GET", "200", "/"}, 2);
     values = g.value_map();
     CHECK(values[{"GET", "200", "/"}] == 3);
+
+    g.inc({"POST", "200", "/"}, 4);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string str_json;
+    g.serialize_to_json(str_json);
+    std::cout << str_json << "\n";
+    CHECK(str_json.find("\"code\":\"200\"") != std::string::npos);
+#endif
 
     std::string str;
     g.serialize(str);
@@ -179,7 +195,7 @@ TEST_CASE("test gauge") {
 }
 
 TEST_CASE("test histogram") {
-  histogram_t h("test", "help", {5.0, 10.0, 20.0, 50.0, 100.0});
+  histogram_t h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0});
   h.observe(23);
   auto counts = h.get_bucket_counts();
   CHECK(counts[3]->value() == 1);
@@ -193,11 +209,18 @@ TEST_CASE("test histogram") {
   CHECK(counts[0]->value() == 1);
   std::string str;
   h.serialize(str);
-  std::cout << str;
+  std::cout << str << "\n";
   CHECK(str.find("test_count") != std::string::npos);
   CHECK(str.find("test_sum") != std::string::npos);
-  CHECK(str.find("test_bucket{le=\"5") != std::string::npos);
+  CHECK(str.find("test_bucket{le=\"5.23") != std::string::npos);
   CHECK(str.find("test_bucket{le=\"+Inf\"}") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"5.23\":1") != std::string::npos);
+#endif
 }
 
 TEST_CASE("test summary") {
@@ -221,6 +244,13 @@ TEST_CASE("test summary") {
   CHECK(str.find("test_summary_count") != std::string::npos);
   CHECK(str.find("test_summary_sum") != std::string::npos);
   CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string str_json;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(str_json));
+  std::cout << str_json << "\n";
+  CHECK(str_json.find("\"0.9\":") != std::string::npos);
+#endif
 }
 
 TEST_CASE("test register metric") {

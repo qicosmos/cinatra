@@ -11,6 +11,18 @@
 #include "async_simple/coro/Lazy.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
+namespace iguana {
+
+template <typename T>
+inline char* to_chars_float(T value, char* buffer) {
+  return buffer + snprintf(buffer, 65, "%g", value);
+}
+
+}  // namespace iguana
+
+#include <iguana/json_writer.hpp>
+#endif
 namespace ylt {
 enum class MetricType {
   Counter,
@@ -57,10 +69,20 @@ class metric_t {
 
   virtual void serialize(std::string& str) {}
 
+  virtual void serialize_to_json(std::string& str) {}
+
   // only for summary
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
     co_return;
   }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  // only for summary
+  virtual async_simple::coro::Lazy<void> serialize_to_json_async(
+      std::string& out) {
+    co_return;
+  }
+#endif
 
   bool is_atomic() const { return use_atomic_; }
 

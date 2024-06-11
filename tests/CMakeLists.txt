@@ -47,6 +47,7 @@ endif()
 ## manual import
 include_directories(${cinatra_SOURCE_DIR}/include)
 include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
+include_directories(${cinatra_SOURCE_DIR}/iguana)
 
 add_executable(test_corofile
         test_corofile.cpp
