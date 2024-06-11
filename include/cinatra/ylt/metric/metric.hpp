@@ -69,7 +69,9 @@ class metric_t {
 
   virtual void serialize(std::string& str) {}
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
   virtual void serialize_to_json(std::string& str) {}
+#endif
 
   // only for summary
   virtual async_simple::coro::Lazy<void> serialize_async(std::string& out) {
@@ -153,19 +155,27 @@ struct metric_manager_t {
                                                   const std::string& help,
                                                   Args&&... args) {
     auto m = std::make_shared<T>(name, help, std::forward<Args>(args)...);
-    bool r = register_metric_static(m);
+    bool r = register_metric_dynamic(m);
     if (!r) {
       return nullptr;
     }
     return m;
   }
 
+  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
+    return register_metric_impl<false>(metric);
+  }
+
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric) {
     return register_metric_impl<true>(metric);
   }
 
-  static bool register_metric_static(std::shared_ptr<metric_t> metric) {
-    return register_metric_impl<false>(metric);
+  static bool remove_metric_static(const std::string& name) {
+    return remove_metric_impl<false>(name);
+  }
+
+  static bool remove_metric_dynamic(const std::string& name) {
+    return remove_metric_impl<true>(name);
   }
 
   template <typename... Metrics>
@@ -262,6 +272,12 @@ struct metric_manager_t {
       CINATRA_LOG_ERROR << "duplicate registered metric name: " << name;
     }
     return r;
+  }
+
+  template <bool need_lock>
+  static size_t remove_metric_impl(const std::string& name) {
+    auto lock = get_lock<need_lock>();
+    return metric_map_.erase(name);
   }
 
   template <bool need_lock>

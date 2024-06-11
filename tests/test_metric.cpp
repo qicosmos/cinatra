@@ -309,6 +309,40 @@ TEST_CASE("test register metric") {
   }
 }
 
+TEST_CASE("test remove metric") {
+  using metric_mgr = metric_manager_t<1>;
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
+  metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
+
+  size_t count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 2);
+
+  metric_mgr::remove_metric_dynamic("test_counter");
+  count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 1);
+
+  metric_mgr::remove_metric_dynamic("test_counter2");
+  count = metric_mgr::metric_count_dynamic();
+  CHECK(count == 0);
+
+  CHECK_THROWS_AS(
+      metric_mgr::create_metric_static<counter_t>("test_static_counter", ""),
+      std::invalid_argument);
+
+  using metric_mgr2 = metric_manager_t<2>;
+  metric_mgr2::create_metric_static<counter_t>("test_static_counter", "");
+  metric_mgr2::create_metric_static<counter_t>("test_static_counter2", "");
+  CHECK_THROWS_AS(metric_mgr2::metric_count_dynamic(), std::invalid_argument);
+  count = metric_mgr2::metric_count_static();
+  CHECK(count == 2);
+  CHECK_THROWS_AS(metric_mgr2::remove_metric_dynamic("test_static_counter"),
+                  std::invalid_argument);
+
+  metric_mgr2::remove_metric_static("test_static_counter");
+  count = metric_mgr2::metric_count_static();
+  CHECK(count == 1);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
