@@ -53,7 +53,7 @@ class coro_http_response {
   void set_status_and_content(
       status_type status, std::string content = "",
       content_encoding encoding = content_encoding::none,
-      std::string client_encoding_type = "") {
+      std::string_view client_encoding_type = "") {
     set_status_and_content_view(status, std::move(content), encoding, false,
                                 client_encoding_type);
   }

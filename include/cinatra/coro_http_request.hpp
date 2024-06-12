@@ -145,8 +145,8 @@ class coro_http_request {
 
   bool is_req_ranges() { return parser_.is_req_ranges(); }
 
-  std::string get_accept_encoding() {
-    return std::string(get_header_value("Accept-Encoding"));
+  std::string_view get_accept_encoding() {
+    return get_header_value("Accept-Encoding");
   }
 
   content_encoding get_encoding_type() {
