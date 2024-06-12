@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <regex>
 #include <stdexcept>
 #include <string>
@@ -232,8 +233,29 @@ struct metric_manager_t {
     return m->template as<T>();
   }
 
+  static async_simple::coro::Lazy<std::string> serialize(
+      const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    std::string str;
+    for (auto& m : metrics) {
+      if (m->metric_type() == MetricType::Summary) {
+        co_await m->serialize_async(str);
+      }
+      else {
+        m->serialize(str);
+      }
+    }
+
+    co_return std::move(str);
+  }
+
   static async_simple::coro::Lazy<std::string> serialize_static() {
-    return serialize_impl<false>();
+    std::string str = co_await serialize(collect<false>());
+    co_return std::move(str);
+  }
+
+  static async_simple::coro::Lazy<std::string> serialize_dynamic() {
+    std::string str = co_await serialize(collect<true>());
+    co_return std::move(str);
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -269,10 +291,6 @@ struct metric_manager_t {
     co_return std::move(str);
   }
 #endif
-
-  static async_simple::coro::Lazy<std::string> serialize_dynamic() {
-    return serialize_impl<true>();
-  }
 
   static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
       const metric_filter_options& options) {
@@ -376,21 +394,6 @@ struct metric_manager_t {
       }
     }
     return metrics;
-  }
-
-  template <bool need_lock = true>
-  static async_simple::coro::Lazy<std::string> serialize_impl() {
-    std::string str;
-    auto metrics = collect<need_lock>();
-    for (auto& m : metrics) {
-      if (m->metric_type() == MetricType::Summary) {
-        co_await m->serialize_async(str);
-      }
-      else {
-        m->serialize(str);
-      }
-    }
-    co_return str;
   }
 
   static void filter_by_label_name(

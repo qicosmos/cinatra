@@ -373,8 +373,7 @@ TEST_CASE("test filter metrics static") {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.size() == 2);
 
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_static_counter") != std::string::npos);
     std::cout << s << "\n";
   }
@@ -383,8 +382,7 @@ TEST_CASE("test filter metrics static") {
   {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_static_counter2") != std::string::npos);
     std::cout << s << "\n";
   }
@@ -393,8 +391,7 @@ TEST_CASE("test filter metrics static") {
   {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.empty());
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.empty());
   }
 
@@ -403,8 +400,7 @@ TEST_CASE("test filter metrics static") {
   {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.empty());
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.empty());
   }
 
@@ -421,8 +417,7 @@ TEST_CASE("test filter metrics static") {
   {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_static_counter") != std::string::npos);
     CHECK(s.find("test_static_counter2") == std::string::npos);
   }
@@ -433,8 +428,7 @@ TEST_CASE("test filter metrics static") {
   {
     auto metrics = metric_mgr::filter_metrics_static(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_static_counter") != std::string::npos);
     CHECK(s.find("method") != std::string::npos);
     CHECK(s.find("test_static_counter2") == std::string::npos);
@@ -459,8 +453,7 @@ TEST_CASE("test filter metrics dynamic") {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.size() == 2);
 
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
     std::cout << s << "\n";
   }
@@ -469,8 +462,7 @@ TEST_CASE("test filter metrics dynamic") {
   {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_dynamic_counter2") != std::string::npos);
     std::cout << s << "\n";
   }
@@ -479,8 +471,7 @@ TEST_CASE("test filter metrics dynamic") {
   {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.empty());
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.empty());
   }
 
@@ -489,8 +480,7 @@ TEST_CASE("test filter metrics dynamic") {
   {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.empty());
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.empty());
   }
 
@@ -507,8 +497,7 @@ TEST_CASE("test filter metrics dynamic") {
   {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
     CHECK(s.find("test_dynamic_counter2") == std::string::npos);
   }
@@ -519,8 +508,7 @@ TEST_CASE("test filter metrics dynamic") {
   {
     auto metrics = metric_mgr::filter_metrics_dynamic(options);
     CHECK(metrics.size() == 1);
-    auto s =
-        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    auto s = async_simple::coro::syncAwait(metric_mgr::serialize(metrics));
     CHECK(s.find("test_dynamic_counter") != std::string::npos);
     CHECK(s.find("method") != std::string::npos);
     CHECK(s.find("test_dynamic_counter2") == std::string::npos);

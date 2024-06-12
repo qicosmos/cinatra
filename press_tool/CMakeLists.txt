@@ -9,6 +9,9 @@ set(cinatra_press_tool
 
 include_directories(../include)
 include_directories(../include/cinatra)
+if(ENABLE_METRIC_JSON)
+    include_directories(../iguana)
+endif()
 
 add_definitions(-DBENCHMARK_TEST)
 add_executable(${project_name} ${cinatra_press_tool})

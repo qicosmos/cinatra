@@ -12,6 +12,11 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/include
 		${cinatra_SOURCE_DIR}/include/cinatra
 )
+if(ENABLE_METRIC_JSON)
+	target_include_directories(${project_name} PRIVATE
+	${cinatra_SOURCE_DIR}/iguana
+	)
+endif()
 
 option(SKIP_TIME_TEST "skip time tests" OFF)
 if(SKIP_TIME_TEST) 
