@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -233,30 +234,24 @@ struct metric_manager_t {
     return m->template as<T>();
   }
 
-  static async_simple::coro::Lazy<std::string> serialize(
+  static std::string serialize(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
     std::string str;
     for (auto& m : metrics) {
       if (m->metric_type() == MetricType::Summary) {
-        co_await m->serialize_async(str);
+        async_simple::coro::syncAwait(m->serialize_async(str));
       }
       else {
         m->serialize(str);
       }
     }
 
-    co_return std::move(str);
+    return str;
   }
 
-  static async_simple::coro::Lazy<std::string> serialize_static() {
-    std::string str = co_await serialize(collect<false>());
-    co_return std::move(str);
-  }
+  static std::string serialize_static() { return serialize(collect<false>()); }
 
-  static async_simple::coro::Lazy<std::string> serialize_dynamic() {
-    std::string str = co_await serialize(collect<true>());
-    co_return std::move(str);
-  }
+  static std::string serialize_dynamic() { return serialize(collect<true>()); }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   static async_simple::coro::Lazy<std::string> serialize_to_json_static() {
