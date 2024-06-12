@@ -56,6 +56,83 @@ TEST_CASE("test for gzip") {
   CHECK(decompress_data == "hello world");
   server.stop();
 }
+
+TEST_CASE("test encoding type") {
+  coro_http_server server(1, 9001);
+
+  server.set_http_handler<GET, POST>("/get", [](coro_http_request &req,
+                                                coro_http_response &resp) {
+    auto encoding_type = req.get_encoding_type();
+
+    if (encoding_type ==
+        content_encoding::gzip) {  // only post request have this field
+      std::string decode_str;
+      bool r = gzip_codec::uncompress(req.get_body(), decode_str);
+      CHECK(decode_str == "Hello World");
+    }
+    resp.set_status_and_content(status_type::ok, "ok", content_encoding::gzip,
+                                req.get_accept_encoding());
+    CHECK(resp.content() != "ok");
+  });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok",
+                                    content_encoding::deflate,
+                                    req.get_accept_encoding());
+        CHECK(resp.content() != "ok");
+        co_return;
+      });
+
+  server.set_http_handler<GET>(
+      "/only_gzip",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_status_and_content(status_type::ok, "ok",
+                                    content_encoding::gzip,
+                                    req.get_accept_encoding());
+        // client4 accept-encoding not allow gzip, response content no
+        // compression
+        CHECK(resp.content() == "ok");
+        co_return;
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client1{};
+  client1.add_header("Accept-Encoding", "gzip, deflate");
+  auto result = async_simple::coro::syncAwait(
+      client1.async_get("http://127.0.0.1:9001/get"));
+  CHECK(result.resp_body == "ok");
+
+  coro_http_client client2{};
+  client2.add_header("Accept-Encoding", "gzip, deflate");
+  result = async_simple::coro::syncAwait(
+      client2.async_get("http://127.0.0.1:9001/coro"));
+  CHECK(result.resp_body == "ok");
+
+  coro_http_client client3{};
+  std::unordered_map<std::string, std::string> headers = {
+      {"Content-Encoding", "gzip"},
+  };
+  std::string ziped_str;
+  std::string_view data = "Hello World";
+  gzip_codec::compress(data, ziped_str);
+  result = async_simple::coro::syncAwait(client3.async_post(
+      "http://127.0.0.1:9001/get", ziped_str, req_content_type::none, headers));
+  CHECK(result.resp_body == "ok");
+
+  coro_http_client client4{};
+  client4.add_header("Accept-Encoding", "deflate");
+  result = async_simple::coro::syncAwait(
+      client4.async_get("http://127.0.0.1:9001/only_gzip"));
+  CHECK(result.resp_body == "ok");
+
+  server.stop();
+}
 #endif
 
 #ifdef CINATRA_ENABLE_SSL
