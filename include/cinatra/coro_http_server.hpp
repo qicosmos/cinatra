@@ -186,8 +186,7 @@ class coro_http_server {
     init_metrics();
     set_http_handler<http_method::GET>(
         url_path, [](coro_http_request &req, coro_http_response &res) {
-          std::string str = async_simple::coro::syncAwait(
-              ylt::default_metric_manager::serialize_static());
+          std::string str = ylt::default_metric_manager::serialize_static();
           res.set_status_and_content(status_type::ok, std::move(str));
         });
   }
