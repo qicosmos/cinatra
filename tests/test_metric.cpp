@@ -356,6 +356,178 @@ TEST_CASE("test remove metric and serialize metrics") {
   CHECK(count == 1);
 }
 
+TEST_CASE("test filter metrics static") {
+  using metric_mgr = metric_manager_t<3>;
+  auto c = metric_mgr::create_metric_static<counter_t>(
+      "test_static_counter", "",
+      std::map<std::string, std::string>{{"method", "GET"}});
+  auto c2 = metric_mgr::create_metric_static<counter_t>(
+      "test_static_counter2", "",
+      std::map<std::string, std::string>{{"url", "/"}});
+  c->inc({"GET"});
+  c2->inc({"/"});
+
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 2);
+
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = ".*ur.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_static_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.name_regex = "no_such_name";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.empty());
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.empty());
+  }
+
+  options = {};
+  options.label_regex = "no_such_label";
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.empty());
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.empty());
+  }
+
+  // don't filter
+  options = {};
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 2);
+  }
+
+  // black
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    CHECK(s.find("test_static_counter2") == std::string::npos);
+  }
+
+  options = {};
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_static(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_static_counter") != std::string::npos);
+    CHECK(s.find("method") != std::string::npos);
+    CHECK(s.find("test_static_counter2") == std::string::npos);
+    CHECK(s.find("url") == std::string::npos);
+  }
+}
+
+TEST_CASE("test filter metrics dynamic") {
+  using metric_mgr = metric_manager_t<4>;
+  auto c = metric_mgr::create_metric_dynamic<counter_t>(
+      "test_dynamic_counter", "", std::vector<std::string>{{"method"}});
+  auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
+      "test_dynamic_counter2", "", std::vector<std::string>{{"url"}});
+  c->inc({"GET"});
+  c->inc({"POST"});
+  c2->inc({"/"});
+  c2->inc({"/test"});
+
+  metric_filter_options options;
+  options.name_regex = ".*counter.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.label_regex = ".*ur.*";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_dynamic_counter2") != std::string::npos);
+    std::cout << s << "\n";
+  }
+
+  options.name_regex = "no_such_name";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.empty());
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.empty());
+  }
+
+  options = {};
+  options.label_regex = "no_such_label";
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.empty());
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.empty());
+  }
+
+  // don't filter
+  options = {};
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 2);
+  }
+
+  // black
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    CHECK(s.find("test_dynamic_counter2") == std::string::npos);
+  }
+
+  options = {};
+  options.label_regex = ".*ur.*";
+  options.is_white = false;
+  {
+    auto metrics = metric_mgr::filter_metrics_dynamic(options);
+    CHECK(metrics.size() == 1);
+    auto s =
+        async_simple::coro::syncAwait(metric_mgr::serialize_to_json(metrics));
+    CHECK(s.find("test_dynamic_counter") != std::string::npos);
+    CHECK(s.find("method") != std::string::npos);
+    CHECK(s.find("test_dynamic_counter2") == std::string::npos);
+    CHECK(s.find("url") == std::string::npos);
+  }
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,6 +31,12 @@ enum class MetricType {
   Histogram,
   Summary,
   Nil,
+};
+
+struct metric_filter_options {
+  std::optional<std::regex> name_regex{};
+  std::optional<std::regex> label_regex{};
+  bool is_white = true;
 };
 
 class metric_t {
@@ -244,6 +251,9 @@ struct metric_manager_t {
 
   static async_simple::coro::Lazy<std::string> serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
+    if (metrics.empty()) {
+      co_return "";
+    }
     std::string str;
     str.append("[");
     for (auto& m : metrics) {
@@ -262,6 +272,16 @@ struct metric_manager_t {
 
   static async_simple::coro::Lazy<std::string> serialize_dynamic() {
     return serialize_impl<true>();
+  }
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_static(
+      const metric_filter_options& options) {
+    return filter_metrics<false>(options);
+  }
+
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics_dynamic(
+      const metric_filter_options& options) {
+    return filter_metrics<true>(options);
   }
 
  private:
@@ -371,6 +391,66 @@ struct metric_manager_t {
       }
     }
     co_return str;
+  }
+
+  static void filter_by_label_name(
+      std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
+      std::shared_ptr<metric_t> m, const metric_filter_options& options,
+      std::vector<size_t>& indexs, size_t index) {
+    const auto& labels_name = m->labels_name();
+    for (auto& label_name : labels_name) {
+      if (std::regex_match(label_name, *options.label_regex)) {
+        if (options.is_white) {
+          filtered_metrics.push_back(m);
+        }
+        else {
+          indexs.push_back(index);
+        }
+      }
+    }
+  }
+
+  template <bool need_lock>
+  static std::vector<std::shared_ptr<metric_t>> filter_metrics(
+      const metric_filter_options& options) {
+    auto metrics = collect<need_lock>();
+    if (!options.name_regex && !options.label_regex) {
+      return metrics;
+    }
+
+    std::vector<std::shared_ptr<metric_t>> filtered_metrics;
+    std::vector<size_t> indexs;
+    size_t index = 0;
+    for (auto& m : metrics) {
+      if (options.name_regex && !options.label_regex) {
+        if (std::regex_match(std::string(m->name()), *options.name_regex)) {
+          if (options.is_white) {
+            filtered_metrics.push_back(m);
+          }
+          else {
+            indexs.push_back(index);
+          }
+        }
+      }
+      else if (options.label_regex && !options.name_regex) {
+        filter_by_label_name(filtered_metrics, m, options, indexs, index);
+      }
+      else {
+        if (std::regex_match(std::string(m->name()), *options.name_regex)) {
+          filter_by_label_name(filtered_metrics, m, options, indexs, index);
+        }
+      }
+      index++;
+    }
+
+    if (!options.is_white) {
+      for (size_t i : indexs) {
+        metrics.erase(std::next(metrics.begin(), i));
+      }
+      return metrics;
+    }
+
+    return filtered_metrics;
   }
 
   static inline std::mutex mtx_;
