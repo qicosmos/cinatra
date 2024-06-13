@@ -537,7 +537,7 @@ void metrics_example() {
       "/", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
-  server.use_metrics();
+  server.use_metrics(true, "/metrics");
   server.sync_start();
 }
 

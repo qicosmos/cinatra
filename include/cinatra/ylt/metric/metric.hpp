@@ -338,13 +338,16 @@ struct metric_manager_t {
     std::string str;
     str.append("[");
     for (auto& m : metrics) {
+      size_t start = str.size();
       if (m->metric_type() == MetricType::Summary) {
         async_simple::coro::syncAwait(m->serialize_to_json_async(str));
       }
       else {
         m->serialize_to_json(str);
       }
-      str.append(",");
+
+      if (str.size() > start)
+        str.append(",");
     }
     str.back() = ']';
     return str;
