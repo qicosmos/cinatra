@@ -49,4 +49,4 @@ class TimeWindowQuantiles {
   mutable Clock::time_point last_rotation_;
   const Clock::duration rotation_interval_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

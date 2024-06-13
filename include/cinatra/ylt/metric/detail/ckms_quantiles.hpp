@@ -172,4 +172,4 @@ class CKMSQuantiles {
   std::array<double, 500> buffer_;
   std::size_t buffer_count_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric
