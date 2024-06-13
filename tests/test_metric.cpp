@@ -618,6 +618,58 @@ TEST_CASE("test get counter/gauge by dynamic labels") {
   CHECK(vec.size() == 0);
 }
 
+TEST_CASE("test histogram serialize with dynamic labels") {
+  histogram_t h("test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+                std::vector<std::string>{"method", "url"});
+  h.observe({"GET", "/"}, 23);
+  auto counts = h.get_bucket_counts();
+  CHECK(counts[3]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 42);
+  CHECK(counts[3]->value({"GET", "/"}) == 2);
+  h.observe({"GET", "/"}, 60);
+  CHECK(counts[4]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 120);
+  CHECK(counts[5]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 1);
+  CHECK(counts[0]->value({"GET", "/"}) == 1);
+
+  h.observe({"POST", "/"}, 23);
+  CHECK(counts[3]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 42);
+  CHECK(counts[3]->value({"POST", "/"}) == 2);
+  h.observe({"POST", "/"}, 60);
+  CHECK(counts[4]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 120);
+  CHECK(counts[5]->value({"POST", "/"}) == 1);
+  h.observe({"POST", "/"}, 1);
+  CHECK(counts[0]->value({"POST", "/"}) == 1);
+
+  std::string str;
+  h.serialize(str);
+  std::cout << str;
+}
+
+TEST_CASE("test histogram serialize with static labels") {
+  histogram_t h(
+      "test", "help", {5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  h.observe({"GET", "/"}, 23);
+  auto counts = h.get_bucket_counts();
+  CHECK(counts[3]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 42);
+  CHECK(counts[3]->value({"GET", "/"}) == 2);
+  h.observe({"GET", "/"}, 60);
+  CHECK(counts[4]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 120);
+  CHECK(counts[5]->value({"GET", "/"}) == 1);
+  h.observe({"GET", "/"}, 1);
+  CHECK(counts[0]->value({"GET", "/"}) == 1);
+
+  std::string str;
+  h.serialize(str);
+  std::cout << str;
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
