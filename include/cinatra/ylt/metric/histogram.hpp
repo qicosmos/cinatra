@@ -11,18 +11,19 @@
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_histogram_metric_t {
+  std::map<std::string, std::string> labels;
   std::map<double, int64_t> quantiles;
   int64_t count;
   double sum;
 };
-REFLECTION(json_histogram_metric_t, quantiles, count, sum);
+REFLECTION(json_histogram_metric_t, labels, quantiles, count, sum);
 struct json_histogram_t {
   std::string name;
   std::string help;
   std::string type;
-  json_histogram_metric_t metric;
+  std::vector<json_histogram_metric_t> metrics;
 };
-REFLECTION(json_histogram_t, name, help, type, metric);
+REFLECTION(json_histogram_t, name, help, type, metrics);
 #endif
 
 class histogram_t : public metric_t {
@@ -134,26 +135,34 @@ class histogram_t : public metric_t {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   void serialize_to_json(std::string &str) override {
+    if (!sum_->labels_name().empty()) {
+      serialize_to_json_with_labels(str);
+      return;
+    }
+
     json_histogram_t hist{name_, help_, std::string(metric_name())};
 
     double count = 0;
     auto bucket_counts = get_bucket_counts();
+    json_histogram_metric_t metric{};
     for (size_t i = 0; i < bucket_counts.size(); i++) {
       auto counter = bucket_counts[i];
 
       count += counter->value();
 
       if (i == bucket_boundaries_.size()) {
-        hist.metric.quantiles.emplace(std::numeric_limits<int>::max(),
-                                      (int64_t)count);
+        metric.quantiles.emplace(std::numeric_limits<int>::max(),
+                                 (int64_t)count);
       }
       else {
-        hist.metric.quantiles.emplace(bucket_boundaries_[i],
-                                      (int64_t)counter->value());
+        metric.quantiles.emplace(bucket_boundaries_[i],
+                                 (int64_t)counter->value());
       }
     }
-    hist.metric.count = (int64_t)count;
-    hist.metric.sum = sum_->value();
+    metric.count = (int64_t)count;
+    metric.sum = sum_->value();
+
+    hist.metrics.push_back(std::move(metric));
 
     iguana::to_json(hist, str);
   }
@@ -227,6 +236,47 @@ class histogram_t : public metric_t {
       str.append("\n");
     }
   }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  void serialize_to_json_with_labels(std::string &str) {
+    json_histogram_t hist{name_, help_, std::string(metric_name())};
+    auto bucket_counts = get_bucket_counts();
+
+    auto value_map = sum_->value_map();
+    for (auto &[labels_value, value] : value_map) {
+      if (value == 0) {
+        continue;
+      }
+
+      size_t count = 0;
+      json_histogram_metric_t metric{};
+      for (size_t i = 0; i < bucket_counts.size(); i++) {
+        auto counter = bucket_counts[i];
+
+        count += counter->value(labels_value);
+
+        if (i == bucket_boundaries_.size()) {
+          metric.quantiles.emplace(std::numeric_limits<int>::max(),
+                                   (int64_t)count);
+        }
+        else {
+          metric.quantiles.emplace(bucket_boundaries_[i],
+                                   (int64_t)counter->value(labels_value));
+        }
+      }
+      metric.count = (int64_t)count;
+      metric.sum = sum_->value(labels_value);
+
+      for (size_t i = 0; i < labels_value.size(); i++) {
+        metric.labels[sum_->labels_name()[i]] = labels_value[i];
+      }
+
+      hist.metrics.push_back(std::move(metric));
+    }
+
+    iguana::to_json(hist, str);
+  }
+#endif
 
   std::vector<double> bucket_boundaries_;
   std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly

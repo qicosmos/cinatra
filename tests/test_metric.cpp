@@ -647,6 +647,10 @@ TEST_CASE("test histogram serialize with dynamic labels") {
   std::string str;
   h.serialize(str);
   std::cout << str;
+
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
 }
 
 TEST_CASE("test histogram serialize with static labels") {
@@ -668,6 +672,10 @@ TEST_CASE("test histogram serialize with static labels") {
   std::string str;
   h.serialize(str);
   std::cout << str;
+
+  std::string str_json;
+  h.serialize_to_json(str_json);
+  std::cout << str_json << "\n";
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
