@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <map>
@@ -216,22 +217,87 @@ struct metric_manager_t {
     return metric_keys_impl<true>();
   }
 
+  // static labels: {{"method", "GET"}, {"url", "/"}}
   template <typename T>
-  static T* get_metric_static(const std::string& name) {
+  static std::shared_ptr<T> get_counter_by_labels_static(
+      const std::map<std::string, std::string>& labels) {
+    std::shared_ptr<T> t = nullptr;
+    auto map = metric_map_static();
+    for (auto& [name, m] : map) {
+      auto c = std::dynamic_pointer_cast<T>(m);
+      const auto& static_labels = c->get_static_labels();
+      if (static_labels == labels) {
+        t = c;
+        break;
+      }
+    }
+    return t;
+  }
+
+  // static label: {"method", "GET"}
+  template <typename T>
+  static std::vector<std::shared_ptr<T>> get_counter_by_label_static(
+      const std::pair<std::string, std::string>& label) {
+    std::vector<std::shared_ptr<T>> vec;
+    auto map = metric_map_static();
+    for (auto& [name, m] : map) {
+      auto t = std::dynamic_pointer_cast<T>(m);
+      const auto& static_labels = t->get_static_labels();
+      for (const auto& pair : static_labels) {
+        if (pair.first == label.first && pair.second == label.second) {
+          vec.push_back(t);
+        }
+      }
+    }
+    return vec;
+  }
+
+  // labels: {{"method", "POST"}, {"code", "200"}}
+  template <typename T>
+  static std::vector<std::shared_ptr<T>> get_counter_by_labels_dynamic(
+      const std::map<std::string, std::string>& labels) {
+    std::vector<std::shared_ptr<T>> vec;
+    auto map = metric_map_dynamic();
+    for (auto& [name, m] : map) {
+      auto t = std::dynamic_pointer_cast<T>(m);
+      auto val_map = t->value_map();
+      auto labels_name = t->labels_name();
+
+      for (auto& [k, v] : labels) {
+        if (auto it = std::find(labels_name.begin(), labels_name.end(), k);
+            it != labels_name.end()) {
+          if (auto it = std::find_if(val_map.begin(), val_map.end(),
+                                     [&](auto& pair) {
+                                       auto& key = pair.first;
+                                       return std::find(key.begin(), key.end(),
+                                                        v) != key.end();
+                                     });
+              it != val_map.end()) {
+            vec.push_back(t);
+          }
+        }
+      }
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::shared_ptr<T> get_metric_static(const std::string& name) {
     auto m = get_metric_impl<false>(name);
     if (m == nullptr) {
       return nullptr;
     }
-    return m->template as<T>();
+    return std::dynamic_pointer_cast<T>(m);
   }
 
   template <typename T>
-  static T* get_metric_dynamic(const std::string& name) {
+  static std::shared_ptr<T> get_metric_dynamic(const std::string& name) {
     auto m = get_metric_impl<true>(name);
     if (m == nullptr) {
       return nullptr;
     }
-    return m->template as<T>();
+    return std::dynamic_pointer_cast<T>(m);
   }
 
   static std::string serialize(

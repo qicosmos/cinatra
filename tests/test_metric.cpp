@@ -515,6 +515,110 @@ TEST_CASE("test filter metrics dynamic") {
   }
 }
 
+TEST_CASE("test get counter/gauge by static labels and label") {
+  default_metric_manager::create_metric_static<counter_t>(
+      "http_req_test", "",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  default_metric_manager::create_metric_static<gauge_t>(
+      "http_req_test1", "",
+      std::map<std::string, std::string>{{"method", "POST"}, {"url", "/"}});
+  default_metric_manager::create_metric_static<counter_t>(
+      "http_req_test2", "",
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
+
+  auto c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
+  CHECK(c->name() == "http_req_test2");
+
+  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  CHECK(c->name() == "http_req_test");
+
+  auto vec = default_metric_manager::get_counter_by_label_static<counter_t>(
+      {"method", "GET"});
+  CHECK(vec.size() == 2);
+
+  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
+      {"url", "/"});
+  CHECK(vec.size() == 2);
+
+  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
+      {"url", "/test"});
+  CHECK(vec.size() == 1);
+
+  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
+      {"method", "POST"});
+  CHECK(vec.size() == 1);
+
+  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+      std::map<std::string, std::string>{{"method", "HEAD"}, {"url", "/test"}});
+  CHECK(c == nullptr);
+
+  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+      std::map<std::string, std::string>{{"method", "GET"}});
+  CHECK(c == nullptr);
+
+  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
+      {"url", "/index"});
+  CHECK(vec.empty());
+}
+
+TEST_CASE("test get counter/gauge by dynamic labels") {
+  using metric_mgr = metric_manager_t<10>;
+  auto c = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static", "", std::vector<std::string>{"method", "code"});
+
+  auto c1 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static1", "", std::vector<std::string>{"method", "code"});
+
+  auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static2", "", std::vector<std::string>{"method", "code"});
+
+  auto c3 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static3", "", std::vector<std::string>{"method", "code"});
+
+  c->inc({"POST", "200"});
+  c1->inc({"GET", "200"});
+  c2->inc({"POST", "301"});
+  c3->inc({"POST", "400"});
+
+  auto c4 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static4", "", std::vector<std::string>{"host", "url"});
+
+  auto c5 = metric_mgr::create_metric_dynamic<counter_t>(
+      "http_req_static5", "", std::vector<std::string>{"host", "url"});
+
+  c4->inc({"shanghai", "/"});
+  c5->inc({"shanghai", "/test"});
+
+  auto vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
+      {{"method", "POST"}});
+  CHECK(vec.size() == 3);
+
+  vec =
+      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"method", "GET"}});
+  CHECK(vec.size() == 1);
+
+  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
+      {{"host", "shanghai"}});
+  CHECK(vec.size() == 2);
+
+  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/"}});
+  CHECK(vec.size() == 1);
+
+  vec =
+      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/test"}});
+  CHECK(vec.size() == 1);
+
+  vec =
+      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/none"}});
+  CHECK(vec.size() == 0);
+
+  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
+      {{"method", "HEAD"}});
+  CHECK(vec.size() == 0);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

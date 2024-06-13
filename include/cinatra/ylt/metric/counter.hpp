@@ -33,7 +33,8 @@ class counter_t : public metric_t {
   // static labels value, contains a map with atomic value.
   counter_t(std::string name, std::string help,
             std::map<std::string, std::string> labels)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
+      : metric_t(MetricType::Counter, std::move(name), std::move(help)),
+        static_labels_(labels) {
     for (auto &[k, v] : labels) {
       labels_name_.push_back(k);
       labels_value_.push_back(v);
@@ -62,6 +63,10 @@ class counter_t : public metric_t {
       std::lock_guard lock(mtx_);
       return value_map_[labels_value];
     }
+  }
+
+  const std::map<std::string, std::string> &get_static_labels() {
+    return static_labels_;
   }
 
   std::map<std::vector<std::string>, double,
@@ -293,6 +298,7 @@ class counter_t : public metric_t {
     }
   }
 
+  std::map<std::string, std::string> static_labels_;
   std::map<std::vector<std::string>, std::atomic<double>,
            std::less<std::vector<std::string>>>
       atomic_value_map_;
