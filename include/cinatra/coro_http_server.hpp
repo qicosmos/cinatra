@@ -184,11 +184,11 @@ class coro_http_server {
 
   void use_metrics(std::string url_path = "/metrics") {
     init_metrics();
-    set_http_handler<http_method::GET>(
-        url_path, [](coro_http_request &req, coro_http_response &res) {
-          std::string str = ylt::default_metric_manager::serialize_static();
-          res.set_status_and_content(status_type::ok, std::move(str));
-        });
+    set_http_handler<http_method::GET>(url_path, [](coro_http_request &req,
+                                                    coro_http_response &res) {
+      std::string str = ylt::metric::default_metric_manager::serialize_static();
+      res.set_status_and_content(status_type::ok, std::move(str));
+    });
   }
 
   template <http_method... method, typename... Aspects>
@@ -899,7 +899,7 @@ class coro_http_server {
 
  private:
   void init_metrics() {
-    using namespace ylt;
+    using namespace ylt::metric;
 
     cinatra_metric_conf::enable_metric = true;
     default_metric_manager::create_metric_static<counter_t>(

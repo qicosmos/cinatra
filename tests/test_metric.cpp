@@ -11,6 +11,7 @@
 #include "cinatra/ylt/metric/summary.hpp"
 #include "doctest/doctest.h"
 using namespace ylt;
+using namespace ylt::metric;
 
 TEST_CASE("test no lable") {
   {

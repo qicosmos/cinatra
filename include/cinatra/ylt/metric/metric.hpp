@@ -27,7 +27,7 @@ inline char* to_chars_float(T value, char* buffer) {
 
 #include <iguana/json_writer.hpp>
 #endif
-namespace ylt {
+namespace ylt::metric {
 enum class MetricType {
   Counter,
   Gauge,
@@ -524,4 +524,4 @@ struct metric_manager_t {
 };
 
 using default_metric_manager = metric_manager_t<0>;
-}  // namespace ylt
+}  // namespace ylt::metric

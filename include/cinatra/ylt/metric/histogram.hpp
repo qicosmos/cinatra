@@ -8,7 +8,7 @@
 #include "counter.hpp"
 #include "metric.hpp"
 
-namespace ylt {
+namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_histogram_metric_t {
   std::map<double, int64_t> quantiles;
@@ -123,4 +123,4 @@ class histogram_t : public metric_t {
   std::vector<std::shared_ptr<counter_t>> bucket_counts_;  // readonly
   std::shared_ptr<gauge_t> sum_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

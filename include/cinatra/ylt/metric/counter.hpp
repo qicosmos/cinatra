@@ -4,7 +4,7 @@
 
 #include "metric.hpp"
 
-namespace ylt {
+namespace ylt::metric {
 enum class op_type_t { INC, DEC, SET };
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -309,4 +309,4 @@ class counter_t : public metric_t {
            std::less<std::vector<std::string>>>
       value_map_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

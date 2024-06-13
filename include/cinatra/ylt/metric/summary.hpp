@@ -6,7 +6,7 @@
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/util/concurrentqueue.h"
 
-namespace ylt {
+namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_summary_metric_t {
   std::map<double, double> quantiles;
@@ -174,4 +174,4 @@ class summary_t : public metric_t {
   asio::io_context ctx_;
   std::thread thd_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

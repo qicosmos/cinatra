@@ -5,7 +5,7 @@
 
 // https://github.com/jupp0r/prometheus-cpp/blob/master/core/include/prometheus/detail/ckms_quantiles.h
 
-namespace ylt {
+namespace ylt::metric {
 class CKMSQuantiles {
  public:
   struct Quantile {
