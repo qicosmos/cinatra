@@ -337,11 +337,9 @@ TEST_CASE("test remove metric and serialize metrics") {
   c2->inc();
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  auto s =
-      async_simple::coro::syncAwait(metric_mgr2::serialize_to_json_static());
+  auto s = metric_mgr2::serialize_to_json_static();
   std::cout << s << "\n";
-  auto s1 =
-      async_simple::coro::syncAwait(metric_mgr2::serialize_to_json({c, c2}));
+  auto s1 = metric_mgr2::serialize_to_json({c, c2});
   CHECK(s == s1);
 #endif
   CHECK_THROWS_AS(metric_mgr2::metric_count_dynamic(), std::invalid_argument);

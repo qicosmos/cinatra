@@ -320,28 +320,26 @@ struct metric_manager_t {
   static std::string serialize_dynamic() { return serialize(collect<true>()); }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  static async_simple::coro::Lazy<std::string> serialize_to_json_static() {
+  static std::string serialize_to_json_static() {
     auto metrics = collect<false>();
-    std::string str = co_await serialize_to_json(metrics);
-    co_return std::move(str);
+    return serialize_to_json(metrics);
   }
 
-  static async_simple::coro::Lazy<std::string> serialize_to_json_dynamic() {
+  static std::string serialize_to_json_dynamic() {
     auto metrics = collect<true>();
-    std::string str = co_await serialize_to_json(metrics);
-    co_return std::move(str);
+    return serialize_to_json(metrics);
   }
 
-  static async_simple::coro::Lazy<std::string> serialize_to_json(
+  static std::string serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
     if (metrics.empty()) {
-      co_return "";
+      return "";
     }
     std::string str;
     str.append("[");
     for (auto& m : metrics) {
       if (m->metric_type() == MetricType::Summary) {
-        co_await m->serialize_to_json_async(str);
+        async_simple::coro::syncAwait(m->serialize_to_json_async(str));
       }
       else {
         m->serialize_to_json(str);
@@ -349,7 +347,7 @@ struct metric_manager_t {
       str.append(",");
     }
     str.back() = ']';
-    co_return std::move(str);
+    return str;
   }
 #endif
 
