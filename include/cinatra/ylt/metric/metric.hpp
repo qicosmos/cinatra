@@ -267,10 +267,10 @@ struct metric_manager_t {
         if (auto it = std::find(labels_name.begin(), labels_name.end(), k);
             it != labels_name.end()) {
           if (auto it = std::find_if(val_map.begin(), val_map.end(),
-                                     [&](auto& pair) {
+                                     [label_val = v](auto& pair) {
                                        auto& key = pair.first;
                                        return std::find(key.begin(), key.end(),
-                                                        v) != key.end();
+                                                        label_val) != key.end();
                                      });
               it != val_map.end()) {
             vec.push_back(t);
