@@ -7,6 +7,7 @@ namespace cinatra {
 		chunked,
 		octet_stream,
 		websocket,
+		json,
 		unknown,
 	};
 

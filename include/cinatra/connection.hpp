@@ -376,6 +376,9 @@ namespace cinatra {
 				else if (content_type.find("application/octet-stream") != std::string_view::npos) {
 					return content_type::octet_stream;
 				}
+				else if (content_type.find("application/json") != std::string_view::npos) {
+					return content_type::json;
+				}
 				else {
 					return content_type::string;
 				}
