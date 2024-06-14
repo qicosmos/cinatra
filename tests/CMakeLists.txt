@@ -12,6 +12,11 @@ target_include_directories(${project_name} PRIVATE
         ${cinatra_SOURCE_DIR}/include
 		${cinatra_SOURCE_DIR}/include/cinatra
 )
+if(ENABLE_METRIC_JSON)
+	target_include_directories(${project_name} PRIVATE
+	${cinatra_SOURCE_DIR}/iguana
+	)
+endif()
 
 option(SKIP_TIME_TEST "skip time tests" OFF)
 if(SKIP_TIME_TEST) 
@@ -47,6 +52,7 @@ endif()
 ## manual import
 include_directories(${cinatra_SOURCE_DIR}/include)
 include_directories(${cinatra_SOURCE_DIR}/include/cinatra)
+include_directories(${cinatra_SOURCE_DIR}/iguana)
 
 add_executable(test_corofile
         test_corofile.cpp

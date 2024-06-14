@@ -7,6 +7,9 @@ set(CINATRA_EXAMPLE
 
 include_directories(../include)
 include_directories(../include/cinatra)
+if(ENABLE_METRIC_JSON)
+	include_directories(../iguana)
+endif()
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
