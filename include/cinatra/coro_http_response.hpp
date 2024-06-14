@@ -122,32 +122,31 @@ class coro_http_response {
 #endif
 
 #ifdef CINATRA_ENABLE_BROTLI
-    if (encoding == content_encoding::br)
-      {
-        if (client_encoding_type.empty() ||
-            client_encoding_type.find("br") != std::string_view::npos) {
-          std::string br_str;
-          bool r = br_codec::brotli_compress(content, br_str);
-          if (!r) {
-            set_status_and_content(status_type::internal_server_error,
-                                  "br compress error");
-          }
-          else {
-            add_header("Content-Encoding", "br");
-            set_content(std::move(br_str));
-          }
+    if (encoding == content_encoding::br) {
+      if (client_encoding_type.empty() ||
+          client_encoding_type.find("br") != std::string_view::npos) {
+        std::string br_str;
+        bool r = br_codec::brotli_compress(content, br_str);
+        if (!r) {
+          set_status_and_content(status_type::internal_server_error,
+                                 "br compress error");
         }
         else {
-          if (is_view) {
-            content_view_ = content;
-          }
-          else {
-            content_ = std::move(content);
-          }
+          add_header("Content-Encoding", "br");
+          set_content(std::move(br_str));
         }
-        has_set_content_ = true;
-        return;
       }
+      else {
+        if (is_view) {
+          content_view_ = content;
+        }
+        else {
+          content_ = std::move(content);
+        }
+      }
+      has_set_content_ = true;
+      return;
+    }
 #endif
 
     if (is_view) {

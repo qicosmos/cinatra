@@ -1447,7 +1447,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         else if (parser_.get_header_value("Content-Encoding").find("deflate") !=
                  std::string_view::npos)
           encoding_type_ = content_encoding::deflate;
-        else if (parser_.get_header_value("Content-Encoding").find("br") != std::string_view::npos)
+        else if (parser_.get_header_value("Content-Encoding").find("br") !=
+                 std::string_view::npos)
           encoding_type_ = content_encoding::br;
       }
       else {
@@ -1567,7 +1568,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data.resp_body = unziped_str;
         else
           data.resp_body = reply;
-        
+
         head_buf_.consume(content_len);
         data.eof = (head_buf_.size() == 0);
         co_return;
@@ -1588,17 +1589,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
 
 #ifdef CINATRA_ENABLE_BROTLI
-      if (encoding_type_ == content_encoding::br)
-      {
+      if (encoding_type_ == content_encoding::br) {
         std::string unbr_str;
         bool r = br_codec::brotli_decompress(reply, unbr_str);
         if (r) {
-            data.resp_body = unbr_str;
-            data.br_data = unbr_str;
+          data.resp_body = unbr_str;
+          data.br_data = unbr_str;
         }
         else
           data.resp_body = reply;
-        
+
         head_buf_.consume(content_len);
         data.eof = (head_buf_.size() == 0);
         co_return;
