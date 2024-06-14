@@ -60,7 +60,7 @@ class histogram_t : public metric_t {
   histogram_t(std::string name, std::string help, std::vector<double> buckets,
               std::map<std::string, std::string> labels)
       : bucket_boundaries_(buckets),
-        metric_t(MetricType::Histogram, name, help),
+        metric_t(MetricType::Histogram, name, help, labels),
         sum_(std::make_shared<gauge_t>(name, help, labels)) {
     if (!is_strict_sorted(begin(bucket_boundaries_), end(bucket_boundaries_))) {
       throw std::invalid_argument("Bucket Boundaries must be strictly sorted");

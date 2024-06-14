@@ -682,11 +682,11 @@ TEST_CASE("test histogram serialize with static labels") {
 #endif
 }
 
-TEST_CASE("test summary with labels") {
+TEST_CASE("test summary with dynamic labels") {
   summary_t summary{"test_summary",
                     "summary help",
                     {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-                    {"method", "url"}};
+                    std::vector<std::string>{"method", "url"}};
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
@@ -696,6 +696,40 @@ TEST_CASE("test summary with labels") {
   }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  double sum;
+  uint64_t count;
+  auto rates = async_simple::coro::syncAwait(
+      summary.get_rates({"GET", "/"}, sum, count));
+  std::cout << rates.size() << "\n";
+
+  std::string str;
+  async_simple::coro::syncAwait(summary.serialize_async(str));
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string json_str;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  std::cout << json_str << "\n";
+#endif
+}
+
+TEST_CASE("test summary with static labels") {
+  summary_t summary{
+      "test_summary",
+      "summary help",
+      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe({"GET", "/"}, distr(gen));
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  CHECK_THROWS_AS(summary.observe({"POST", "/"}, 1), std::invalid_argument);
 
   double sum;
   uint64_t count;

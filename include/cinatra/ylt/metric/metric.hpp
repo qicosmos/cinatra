@@ -45,12 +45,23 @@ struct metric_filter_options {
 class metric_t {
  public:
   metric_t() = default;
+  metric_t(MetricType type, std::string name, std::string help)
+      : type_(type), name_(std::move(name)), help_(std::move(help)) {}
   metric_t(MetricType type, std::string name, std::string help,
-           std::vector<std::string> labels_name = {})
-      : type_(type),
-        name_(std::move(name)),
-        help_(std::move(help)),
-        labels_name_(std::move(labels_name)) {}
+           std::vector<std::string> labels_name)
+      : metric_t(type, std::move(name), std::move(help)) {
+    labels_name_ = std::move(labels_name);
+  }
+
+  metric_t(MetricType type, std::string name, std::string help,
+           std::map<std::string, std::string> static_labels)
+      : metric_t(type, std::move(name), std::move(help)) {
+    static_labels_ = std::move(static_labels);
+    for (auto& [k, v] : static_labels_) {
+      labels_name_.push_back(k);
+      labels_value_.push_back(v);
+    }
+  }
   virtual ~metric_t() {}
 
   std::string_view name() { return name_; }
@@ -76,6 +87,10 @@ class metric_t {
   }
 
   const std::vector<std::string>& labels_name() { return labels_name_; }
+
+  const std::map<std::string, std::string>& get_static_labels() {
+    return static_labels_;
+  }
 
   virtual void serialize(std::string& str) {}
 
@@ -148,6 +163,7 @@ class metric_t {
   MetricType type_ = MetricType::Nil;
   std::string name_;
   std::string help_;
+  std::map<std::string, std::string> static_labels_;
   std::vector<std::string> labels_name_;   // read only
   std::vector<std::string> labels_value_;  // read only
   bool use_atomic_ = false;

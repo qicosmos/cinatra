@@ -40,11 +40,10 @@ class summary_t : public metric_t {
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_executor();
-    block_ = std::make_shared<block_t>();
+    init_block(block_);
     block_->quantile_values_ =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
-    start(block_).via(excutor_.get()).start([](auto &&) {
-    });
+    use_atomic_ = true;
   }
 
   summary_t(std::string name, std::string help, Quantiles quantiles,
@@ -57,12 +56,23 @@ class summary_t : public metric_t {
         max_age_(max_age),
         age_buckets_(age_buckets) {
     init_executor();
+    init_block(labels_block_);
+  }
 
-    labels_block_ = std::make_shared<labels_block_t>();
-    start(labels_block_)
-        .via(excutor_.get())
-        .start([b = labels_block_](auto &&) {
-        });
+  summary_t(std::string name, std::string help, Quantiles quantiles,
+            std::map<std::string, std::string> static_labels,
+            std::chrono::milliseconds max_age = std::chrono::seconds{60},
+            int age_buckets = 5)
+      : quantiles_{std::move(quantiles)},
+        metric_t(MetricType::Summary, std::move(name), std::move(help),
+                 std::move(static_labels)),
+        max_age_(max_age),
+        age_buckets_(age_buckets) {
+    init_executor();
+    init_block(labels_block_);
+    labels_block_->label_quantile_values_[labels_value_] =
+        std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
+    use_atomic_ = true;
   }
 
   ~summary_t() {
@@ -108,11 +118,16 @@ class summary_t : public metric_t {
     block_->sample_queue_.enqueue(value);
   }
 
-  void observe(std::vector<std::string> labels_name, double value) {
-    if (labels_name_.empty()) {
+  void observe(std::vector<std::string> labels_value, double value) {
+    if (labels_value.empty()) {
       throw std::invalid_argument("not a label metric");
     }
-    labels_block_->sample_queue_.enqueue({std::move(labels_name), value});
+    if (use_atomic_) {
+      if (labels_value != labels_value_) {
+        throw std::invalid_argument("not equal with static label");
+      }
+    }
+    labels_block_->sample_queue_.enqueue({std::move(labels_value), value});
   }
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(double &sum,
@@ -136,21 +151,27 @@ class summary_t : public metric_t {
   }
 
   async_simple::coro::Lazy<std::vector<double>> get_rates(
-      const std::vector<std::string> &labels_name, double &sum,
+      const std::vector<std::string> &labels_value, double &sum,
       uint64_t &count) {
     std::vector<double> vec;
     if (quantiles_.empty()) {
       co_return std::vector<double>{};
     }
 
+    if (use_atomic_) {
+      if (labels_value != labels_value_) {
+        throw std::invalid_argument("not equal with static label");
+      }
+    }
+
     co_await coro_io::post(
-        [this, &vec, &sum, &count, &labels_name] {
-          auto it = labels_block_->label_quantile_values_.find(labels_name);
+        [this, &vec, &sum, &count, &labels_value] {
+          auto it = labels_block_->label_quantile_values_.find(labels_value);
           if (it == labels_block_->label_quantile_values_.end()) {
             return;
           }
-          sum = labels_block_->label_sum_[labels_name];
-          count = labels_block_->label_count_[labels_name];
+          sum = labels_block_->label_sum_[labels_value];
+          count = labels_block_->label_count_[labels_value];
           for (const auto &quantile : quantiles_) {
             vec.push_back(it->second->get(quantile.quantile));
           }
@@ -248,6 +269,13 @@ class summary_t : public metric_t {
     });
     excutor_ =
         std::make_unique<coro_io::ExecutorWrapper<>>(ctx_.get_executor());
+  }
+
+  template <typename T>
+  void init_block(std::shared_ptr<T> &block) {
+    block = std::make_shared<T>();
+    start(block).via(excutor_.get()).start([](auto &&) {
+    });
   }
 
   async_simple::coro::Lazy<void> start(std::shared_ptr<block_t> block) {
