@@ -640,6 +640,11 @@ TEST_CASE("test get metric by dynamic labels") {
 
   auto str = metric_mgr::serialize(vec);
   std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json_str = metric_mgr::serialize_to_json(vec);
+  std::cout << json_str << "\n";
+#endif
 }
 
 TEST_CASE("test histogram serialize with dynamic labels") {
