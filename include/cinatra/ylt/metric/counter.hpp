@@ -62,7 +62,7 @@ class counter_t : public metric_t {
 
   std::map<std::vector<std::string>, double,
            std::less<std::vector<std::string>>>
-  value_map() {
+  value_map() override {
     std::map<std::vector<std::string>, double,
              std::less<std::vector<std::string>>>
         map;

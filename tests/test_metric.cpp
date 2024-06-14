@@ -514,55 +514,65 @@ TEST_CASE("test filter metrics dynamic") {
   }
 }
 
-TEST_CASE("test get counter/gauge by static labels and label") {
-  default_metric_manager::create_metric_static<counter_t>(
+TEST_CASE("test get metric by static labels and label") {
+  using metric_mgr = metric_manager_t<9>;
+  metric_mgr::create_metric_static<counter_t>(
       "http_req_test", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
-  default_metric_manager::create_metric_static<gauge_t>(
+  metric_mgr::create_metric_static<gauge_t>(
       "http_req_test1", "",
       std::map<std::string, std::string>{{"method", "POST"}, {"url", "/"}});
-  default_metric_manager::create_metric_static<counter_t>(
+  metric_mgr::create_metric_static<counter_t>(
       "http_req_test2", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
 
-  auto c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+  auto c = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/test"}});
   CHECK(c->name() == "http_req_test2");
 
-  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+  c = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   CHECK(c->name() == "http_req_test");
 
-  auto vec = default_metric_manager::get_counter_by_label_static<counter_t>(
-      {"method", "GET"});
-  CHECK(vec.size() == 2);
+  auto h1 = metric_mgr::create_metric_static<histogram_t>(
+      "http_req_static_hist", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
 
-  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
-      {"url", "/"});
-  CHECK(vec.size() == 2);
+  h1->observe({"GET", "/"}, 23);
 
-  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
-      {"url", "/test"});
+  auto s1 = metric_mgr::create_metric_static<summary_t>(
+      "http_req_static_summary", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
+  s1->observe({"GET", "/"}, 23);
+
+  auto vec = metric_mgr::get_metric_by_label_static({"method", "GET"});
+  CHECK(vec.size() == 4);
+
+  vec = metric_mgr::get_metric_by_label_static({"url", "/"});
+  CHECK(vec.size() == 4);
+
+  vec = metric_mgr::get_metric_by_label_static({"url", "/test"});
   CHECK(vec.size() == 1);
 
-  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
-      {"method", "POST"});
+  vec = metric_mgr::get_metric_by_label_static({"method", "POST"});
   CHECK(vec.size() == 1);
 
-  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+  c = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "HEAD"}, {"url", "/test"}});
   CHECK(c == nullptr);
 
-  c = default_metric_manager::get_counter_by_labels_static<counter_t>(
+  c = metric_mgr::get_metric_by_labels_static(
       std::map<std::string, std::string>{{"method", "GET"}});
   CHECK(c == nullptr);
 
-  vec = default_metric_manager::get_counter_by_label_static<counter_t>(
-      {"url", "/index"});
+  vec = metric_mgr::get_metric_by_label_static({"url", "/index"});
   CHECK(vec.empty());
 }
 
-TEST_CASE("test get counter/gauge by dynamic labels") {
+TEST_CASE("test get metric by dynamic labels") {
   using metric_mgr = metric_manager_t<10>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "http_req_static", "", std::vector<std::string>{"method", "code"});
@@ -590,32 +600,46 @@ TEST_CASE("test get counter/gauge by dynamic labels") {
   c4->inc({"shanghai", "/"});
   c5->inc({"shanghai", "/test"});
 
-  auto vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
-      {{"method", "POST"}});
+  auto vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "POST"}});
   CHECK(vec.size() == 3);
 
-  vec =
-      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"method", "GET"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "GET"}});
   CHECK(vec.size() == 1);
 
-  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
-      {{"host", "shanghai"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"host", "shanghai"}});
   CHECK(vec.size() == 2);
 
-  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/"}});
   CHECK(vec.size() == 1);
 
-  vec =
-      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/test"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/test"}});
   CHECK(vec.size() == 1);
 
-  vec =
-      metric_mgr::get_counter_by_labels_dynamic<counter_t>({{"url", "/none"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"url", "/none"}});
   CHECK(vec.size() == 0);
 
-  vec = metric_mgr::get_counter_by_labels_dynamic<counter_t>(
-      {{"method", "HEAD"}});
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "HEAD"}});
   CHECK(vec.size() == 0);
+
+  auto h1 = metric_mgr::create_metric_dynamic<histogram_t>(
+      "http_req_static_hist", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method", "url"});
+
+  h1->observe({"GET", "/"}, 23);
+
+  auto s1 = metric_mgr::create_metric_dynamic<summary_t>(
+      "http_req_static_summary", "help",
+      summary_t::Quantiles{
+          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      std::vector<std::string>{"method", "url"});
+  s1->observe({"GET", "/"}, 23);
+
+  vec = metric_mgr::get_metric_by_labels_dynamic({{"method", "GET"}});
+  CHECK(vec.size() >= 2);
+
+  auto str = metric_mgr::serialize(vec);
+  std::cout << str;
 }
 
 TEST_CASE("test histogram serialize with dynamic labels") {

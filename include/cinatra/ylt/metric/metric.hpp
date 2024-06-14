@@ -92,6 +92,12 @@ class metric_t {
     return static_labels_;
   }
 
+  virtual std::map<std::vector<std::string>, double,
+                   std::less<std::vector<std::string>>>
+  value_map() {
+    return {};
+  }
+
   virtual void serialize(std::string& str) {}
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -247,16 +253,14 @@ struct metric_manager_t {
   }
 
   // static labels: {{"method", "GET"}, {"url", "/"}}
-  template <typename T>
-  static std::shared_ptr<T> get_counter_by_labels_static(
+  static std::shared_ptr<metric_t> get_metric_by_labels_static(
       const std::map<std::string, std::string>& labels) {
-    std::shared_ptr<T> t = nullptr;
+    std::shared_ptr<metric_t> t = nullptr;
     auto map = metric_map_static();
     for (auto& [name, m] : map) {
-      auto c = std::dynamic_pointer_cast<T>(m);
-      const auto& static_labels = c->get_static_labels();
+      const auto& static_labels = m->get_static_labels();
       if (static_labels == labels) {
-        t = c;
+        t = m;
         break;
       }
     }
@@ -264,13 +268,11 @@ struct metric_manager_t {
   }
 
   // static label: {"method", "GET"}
-  template <typename T>
-  static std::vector<std::shared_ptr<T>> get_counter_by_label_static(
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_label_static(
       const std::pair<std::string, std::string>& label) {
-    std::vector<std::shared_ptr<T>> vec;
+    std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_static();
-    for (auto& [name, m] : map) {
-      auto t = std::dynamic_pointer_cast<T>(m);
+    for (auto& [name, t] : map) {
       const auto& static_labels = t->get_static_labels();
       for (const auto& pair : static_labels) {
         if (pair.first == label.first && pair.second == label.second) {
@@ -282,13 +284,11 @@ struct metric_manager_t {
   }
 
   // labels: {{"method", "POST"}, {"code", "200"}}
-  template <typename T>
-  static std::vector<std::shared_ptr<T>> get_counter_by_labels_dynamic(
+  static std::vector<std::shared_ptr<metric_t>> get_metric_by_labels_dynamic(
       const std::map<std::string, std::string>& labels) {
-    std::vector<std::shared_ptr<T>> vec;
+    std::vector<std::shared_ptr<metric_t>> vec;
     auto map = metric_map_dynamic();
-    for (auto& [name, m] : map) {
-      auto t = std::dynamic_pointer_cast<T>(m);
+    for (auto& [name, t] : map) {
       auto val_map = t->value_map();
       auto labels_name = t->labels_name();
 

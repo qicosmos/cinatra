@@ -72,6 +72,8 @@ class summary_t : public metric_t {
     init_block(labels_block_);
     labels_block_->label_quantile_values_[labels_value_] =
         std::make_shared<TimeWindowQuantiles>(quantiles_, max_age, age_buckets);
+    labels_block_->label_count_.emplace(labels_value_, 0);
+    labels_block_->label_sum_.emplace(labels_value_, 0);
     use_atomic_ = true;
   }
 
@@ -179,6 +181,17 @@ class summary_t : public metric_t {
         excutor_.get());
 
     co_return vec;
+  }
+
+  std::map<std::vector<std::string>, double,
+           std::less<std::vector<std::string>>>
+  value_map() override {
+    auto ret = async_simple::coro::syncAwait(coro_io::post(
+        [this] {
+          return labels_block_->label_sum_;
+        },
+        excutor_.get()));
+    return ret.value();
   }
 
   async_simple::coro::Lazy<double> get_sum() {
