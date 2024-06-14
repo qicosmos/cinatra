@@ -648,9 +648,11 @@ TEST_CASE("test histogram serialize with dynamic labels") {
   h.serialize(str);
   std::cout << str;
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
   std::string str_json;
   h.serialize_to_json(str_json);
   std::cout << str_json << "\n";
+#endif
 }
 
 TEST_CASE("test histogram serialize with static labels") {
@@ -673,9 +675,43 @@ TEST_CASE("test histogram serialize with static labels") {
   h.serialize(str);
   std::cout << str;
 
+#ifdef CINATRA_ENABLE_METRIC_JSON
   std::string str_json;
   h.serialize_to_json(str_json);
   std::cout << str_json << "\n";
+#endif
+}
+
+TEST_CASE("test summary with labels") {
+  summary_t summary{"test_summary",
+                    "summary help",
+                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+                    {"method", "url"}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distr(1, 100);
+  for (int i = 0; i < 50; i++) {
+    summary.observe({"GET", "/"}, distr(gen));
+    summary.observe({"POST", "/test"}, distr(gen));
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  double sum;
+  uint64_t count;
+  auto rates = async_simple::coro::syncAwait(
+      summary.get_rates({"GET", "/"}, sum, count));
+  std::cout << rates.size() << "\n";
+
+  std::string str;
+  async_simple::coro::syncAwait(summary.serialize_async(str));
+  std::cout << str;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  std::string json_str;
+  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  std::cout << json_str << "\n";
+#endif
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

@@ -114,6 +114,19 @@ class metric_t {
         .append("\n");
   }
 
+  void build_label_string(std::string& str,
+                          const std::vector<std::string>& label_name,
+                          const std::vector<std::string>& label_value) {
+    for (size_t i = 0; i < label_name.size(); i++) {
+      str.append(label_name[i])
+          .append("=\"")
+          .append(label_value[i])
+          .append("\"")
+          .append(",");
+    }
+    str.pop_back();
+  }
+
 #ifdef __APPLE__
   double mac_os_atomic_fetch_add(std::atomic<double>* obj, double arg) {
     double v;

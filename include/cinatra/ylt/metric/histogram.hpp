@@ -86,6 +86,10 @@ class histogram_t : public metric_t {
   }
 
   void observe(const std::vector<std::string> &labels_value, double value) {
+    if (sum_->labels_name().empty()) {
+      throw std::invalid_argument("not a label metric");
+    }
+
     const auto bucket_index = static_cast<std::size_t>(
         std::distance(bucket_boundaries_.begin(),
                       std::lower_bound(bucket_boundaries_.begin(),
@@ -176,14 +180,6 @@ class histogram_t : public metric_t {
                                   ForwardIterator>::value_type>()) == last;
   }
 
-  void build_string(std::string &str, const std::vector<std::string> &v1,
-                    const std::vector<std::string> &v2) {
-    for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
-    }
-    str.pop_back();
-  }
-
   void serialize_with_labels(std::string &str) {
     serialize_head(str);
 
@@ -199,7 +195,7 @@ class histogram_t : public metric_t {
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         str.append(name_).append("_bucket{");
-        build_string(str, sum_->labels_name(), labels_value);
+        build_label_string(str, sum_->labels_name(), labels_value);
         str.append(",");
 
         if (i == bucket_boundaries_.size()) {
@@ -218,7 +214,7 @@ class histogram_t : public metric_t {
 
       str.append(name_);
       str.append("_sum{");
-      build_string(str, sum_->labels_name(), labels_value);
+      build_label_string(str, sum_->labels_name(), labels_value);
       str.append("} ");
 
       if (type_ == MetricType::Counter) {
@@ -230,7 +226,7 @@ class histogram_t : public metric_t {
       str.append("\n");
 
       str.append(name_).append("_count{");
-      build_string(str, sum_->labels_name(), labels_value);
+      build_label_string(str, sum_->labels_name(), labels_value);
       str.append("} ");
       str.append(std::to_string(count));
       str.append("\n");
