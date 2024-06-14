@@ -24,6 +24,9 @@
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
+#ifdef CINATRA_ENABLE_BROTLI
+#include "brzip.hpp"
+#endif
 #include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
@@ -99,6 +102,7 @@ struct resp_data {
   int status = 0;
   bool eof = false;
   std::string_view resp_body;
+  std::string br_data;
   std::span<http_header> resp_headers;
 #ifdef BENCHMARK_TEST
   uint64_t total = 0;
@@ -1436,7 +1440,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (is_redirect)
         redirect_uri_ = parser_.get_header_value("Location");
 
-#ifdef CINATRA_ENABLE_GZIP
       if (!parser_.get_header_value("Content-Encoding").empty()) {
         if (parser_.get_header_value("Content-Encoding").find("gzip") !=
             std::string_view::npos)
@@ -1444,11 +1447,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         else if (parser_.get_header_value("Content-Encoding").find("deflate") !=
                  std::string_view::npos)
           encoding_type_ = content_encoding::deflate;
+        else if (parser_.get_header_value("Content-Encoding").find("br") != std::string_view::npos)
+          encoding_type_ = content_encoding::br;
       }
       else {
         encoding_type_ = content_encoding::none;
       }
-#endif
 
       size_t content_len = (size_t)parser_.body_len();
 #ifdef BENCHMARK_TEST
@@ -1563,18 +1567,45 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data.resp_body = unziped_str;
         else
           data.resp_body = reply;
+        
+        head_buf_.consume(content_len);
+        data.eof = (head_buf_.size() == 0);
+        co_return;
       }
-      else if (encoding_type_ == content_encoding::deflate) {
+
+      if (encoding_type_ == content_encoding::deflate) {
         std::string inflate_str;
         bool r = gzip_codec::inflate(reply, inflate_str);
         if (r)
           data.resp_body = inflate_str;
         else
           data.resp_body = reply;
+
+        head_buf_.consume(content_len);
+        data.eof = (head_buf_.size() == 0);
+        co_return;
       }
-      else
 #endif
-        data.resp_body = reply;
+
+#ifdef CINATRA_ENABLE_BROTLI
+      if (encoding_type_ == content_encoding::br)
+      {
+        std::string unbr_str;
+        bool r = br_codec::brotli_decompress(reply, unbr_str);
+        if (r) {
+            data.resp_body = unbr_str;
+            data.br_data = unbr_str;
+        }
+        else
+          data.resp_body = reply;
+        
+        head_buf_.consume(content_len);
+        data.eof = (head_buf_.size() == 0);
+        co_return;
+      }
+#endif
+
+      data.resp_body = reply;
 
       head_buf_.consume(content_len);
     }
@@ -2099,8 +2130,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_ws_deflate_ = false;
   bool is_server_support_ws_deflate_ = false;
   std::string inflate_str_;
-  content_encoding encoding_type_ = content_encoding::none;
 #endif
+  content_encoding encoding_type_ = content_encoding::none;
 
 #ifdef BENCHMARK_TEST
   bool stop_bench_ = false;

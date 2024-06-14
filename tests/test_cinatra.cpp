@@ -50,10 +50,7 @@ TEST_CASE("test for gzip") {
   auto result = async_simple::coro::syncAwait(client.async_get(uri));
   auto content = get_header_value(result.resp_headers, "Content-Encoding");
   CHECK(get_header_value(result.resp_headers, "Content-Encoding") == "gzip");
-  std::string decompress_data;
-  bool ret = gzip_codec::uncompress(result.resp_body, decompress_data);
-  CHECK(ret == true);
-  CHECK(decompress_data == "hello world");
+  CHECK(result.resp_body == "hello world");
   server.stop();
 }
 
@@ -131,6 +128,41 @@ TEST_CASE("test encoding type") {
       client4.async_get("http://127.0.0.1:9001/only_gzip"));
   CHECK(result.resp_body == "ok");
 
+  server.stop();
+}
+#endif
+
+#ifdef CINATRA_ENABLE_BROTLI
+TEST_CASE("test brotli type") {
+  coro_http_server server(1, 9001);
+
+  server.set_http_handler<GET, POST>(
+      "/get", [](coro_http_request &req, coro_http_response &resp) {
+        auto encoding_type = req.get_encoding_type();
+
+        if (encoding_type == content_encoding::br) {
+          std::string decode_str;
+          bool r = br_codec::brotli_decompress(req.get_body(), decode_str);
+          CHECK(decode_str == "Hello World");
+        }
+        resp.set_status_and_content(status_type::ok, "ok", content_encoding::br,
+                                    req.get_accept_encoding());
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  coro_http_client client{};
+  std::unordered_map<std::string, std::string> headers = {
+      {"Content-Encoding", "br"},
+  };
+  std::string ziped_str;
+  std::string_view data = "Hello World";
+  bool r = br_codec::brotli_compress(data, ziped_str);
+
+  auto result = async_simple::coro::syncAwait(client.async_post(
+      "http://127.0.0.1:9001/get", ziped_str, req_content_type::none, headers));
+  CHECK(result.br_data == "ok");
   server.stop();
 }
 #endif

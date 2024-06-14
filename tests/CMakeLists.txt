@@ -25,6 +25,11 @@ if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
 
+if (ENABLE_BROTLI)
+	include_directories(${BROTLI_INCLUDE_DIRS})
+	target_link_libraries(${project_name} ${BROTLI_LIBRARIES})
+endif()
+
 # test_coro_file
 option(ENABLE_FILE_IO_URING "enable io_uring" OFF)
 if(ENABLE_FILE_IO_URING)
