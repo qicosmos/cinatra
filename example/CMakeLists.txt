@@ -32,7 +32,7 @@ endif()
 if (ENABLE_BROTLI)
 	include_directories(${BROTLI_INCLUDE_DIRS})
 	target_link_libraries(${project_name} ${BROTLI_LIBRARIES})
-	#target_link_libraries(benchmark PRIVATE ${BROTLI_LIBRARIES})
+	target_link_libraries(benchmark PRIVATE ${BROTLI_LIBRARIES})
 endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")
