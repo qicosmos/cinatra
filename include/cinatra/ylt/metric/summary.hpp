@@ -3,8 +3,11 @@
 
 #include "detail/time_window_quantiles.hpp"
 #include "metric.hpp"
-#include "ylt/coro_io/coro_io.hpp"
+#if __has_include("ylt/util/concurrentqueue.h")
 #include "ylt/util/concurrentqueue.h"
+#else
+#include "cinatra/ylt/util/concurrentqueue.h"
+#endif
 
 namespace ylt::metric {
 #ifdef CINATRA_ENABLE_METRIC_JSON

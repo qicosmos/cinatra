@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
-#include "metric_conf.hpp"
+#include "cinatra/metric_conf.hpp"
 
 using namespace cinatra;
 using namespace ylt::metric;
