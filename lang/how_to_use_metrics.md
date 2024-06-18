@@ -233,14 +233,6 @@ struct metric_manager_t {
   static bool register_metric_static(std::shared_ptr<metric_t> metric);
   static bool register_metric_dynamic(std::shared_ptr<metric_t> metric);
 
-  // 启用metric 定时清理功能，在使用metric之前设置
-  // max_age：设置metric的过期时间，过期之后metric会被清理
-  // check_duration：设置定期监测metric过期的时间间隔
-  // 超时检测时间为std::min(max_age, std::chrono::minutes(5))
-  static void set_metric_max_age(std::chrono::steady_clock::duration max_age,
-                                 std::chrono::steady_clock::duration
-                                     check_duration = std::chrono::minutes(5));
-
   // 根据metric名称删除metric
   static bool remove_metric_static(const std::string& name);  
   static bool remove_metric_dynamic(const std::string& name);
