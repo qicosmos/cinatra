@@ -47,6 +47,25 @@ struct metric_filter_options {
   bool is_white = true;
 };
 
+struct vector_hash {
+  size_t operator()(const std::vector<std::string>& vec) const {
+    unsigned int seed = 131;
+    unsigned int hash = 0;
+
+    for (const auto& str : vec) {
+      for (auto ch : str) {
+        hash = hash * seed + ch;
+      }
+    }
+
+    return (hash & 0x7FFFFFFF);
+  }
+};
+
+template <typename T>
+using metric_hash_map =
+    std::unordered_map<std::vector<std::string>, T, vector_hash>;
+
 class metric_t {
  public:
   metric_t() = default;
@@ -102,11 +121,7 @@ class metric_t {
     return static_labels_;
   }
 
-  virtual std::map<std::vector<std::string>, double,
-                   std::less<std::vector<std::string>>>
-  value_map() {
-    return {};
-  }
+  virtual metric_hash_map<double> value_map() { return {}; }
 
   virtual void serialize(std::string& str) {}
 

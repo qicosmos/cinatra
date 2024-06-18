@@ -98,16 +98,10 @@ class summary_t : public metric_t {
   struct labels_block_t {
     std::atomic<bool> stop_ = false;
     moodycamel::ConcurrentQueue<summary_label_sample> sample_queue_;
-
-    std::map<std::vector<std::string>, std::shared_ptr<TimeWindowQuantiles>,
-             std::less<std::vector<std::string>>>
+    metric_hash_map<std::shared_ptr<TimeWindowQuantiles>>
         label_quantile_values_;
-    std::map<std::vector<std::string>, std::uint64_t,
-             std::less<std::vector<std::string>>>
-        label_count_;
-    std::map<std::vector<std::string>, double,
-             std::less<std::vector<std::string>>>
-        label_sum_;
+    metric_hash_map<uint64_t> label_count_;
+    metric_hash_map<double> label_sum_;
   };
 
   void observe(double value) {
@@ -198,9 +192,7 @@ class summary_t : public metric_t {
     co_return vec;
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() override {
+  metric_hash_map<double> value_map() override {
     auto ret = async_simple::coro::syncAwait(coro_io::post(
         [this] {
           return labels_block_->label_sum_;

@@ -109,8 +109,7 @@ void inc(const std::vector<std::string> &labels_value, double value = 1);
 void serialize(std::string &str);
 
 // 返回带标签的指标内部的计数map，map的key是标签的值，值是对应计数，如：{{{"GET", "/"}, 100}, {{"POST", "/test"}, 20}}
-std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
+std::unordered_map<std::vector<std::string>, double, vector_hash>
   value_map();
 ```
 
