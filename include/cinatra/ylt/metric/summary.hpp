@@ -108,8 +108,9 @@ class summary_t : public metric_t {
     if (!labels_name_.empty()) {
       throw std::invalid_argument("not a default label metric");
     }
-    while (block_->sample_queue_.size_approx() >= 20000000) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
     }
     block_->sample_queue_.enqueue(value);
 
@@ -129,8 +130,9 @@ class summary_t : public metric_t {
         throw std::invalid_argument("not equal with static label");
       }
     }
-    while (labels_block_->sample_queue_.size_approx() >= 20000000) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (labels_block_->sample_queue_.size_approx() >= 20000000) {
+      // TODO: record failed count.
+      return;
     }
     labels_block_->sample_queue_.enqueue({std::move(labels_value), value});
 
