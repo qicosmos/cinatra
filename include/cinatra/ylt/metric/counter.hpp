@@ -82,21 +82,13 @@ class counter_t : public metric_t {
       return;
     }
 
-    serialize_head(str);
-    std::string s;
-    if (use_atomic_) {
-      serialize_map(atomic_value_map_, s);
-    }
-    else {
-      serialize_map(value_map_, s);
+    auto map = value_map();
+    if (map.empty()) {
+      return;
     }
 
-    if (s.empty()) {
-      str.clear();
-    }
-    else {
-      str.append(s);
-    }
+    serialize_head(str);
+    serialize_map(map, str);
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -113,13 +105,9 @@ class counter_t : public metric_t {
       return;
     }
 
+    auto map = value_map();
     json_counter_t counter{name_, help_, std::string(metric_name())};
-    if (use_atomic_) {
-      to_json(counter, atomic_value_map_, str);
-    }
-    else {
-      to_json(counter, value_map_, str);
-    }
+    to_json(counter, map, str);
   }
 
   template <typename T>

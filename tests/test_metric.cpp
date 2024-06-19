@@ -777,6 +777,48 @@ TEST_CASE("test summary with static labels") {
 #endif
 }
 
+TEST_CASE("test serialize with multiple threads") {
+  auto c = std::make_shared<counter_t>(std::string("get_count"),
+                                       std::string("get counter"),
+                                       std::vector<std::string>{"method"});
+  auto g = std::make_shared<gauge_t>(std::string("get_count1"),
+                                     std::string("get counter"),
+                                     std::vector<std::string>{"method"});
+
+  auto h1 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method"});
+
+  auto c1 = std::make_shared<counter_t>(std::string("get_count3"),
+                                        std::string("get counter"),
+                                        std::vector<std::string>{"method"});
+
+  using test_metric_manager = metric_manager_t<20>;
+
+  test_metric_manager::register_metric_dynamic(c, g, h1, c1);
+
+  c->inc({"POST"}, 1);
+  g->inc({"GET"}, 1);
+  h1->observe({"HEAD"}, 1);
+
+  auto s = test_metric_manager::serialize_dynamic();
+  std::cout << s;
+  CHECK(!s.empty());
+  CHECK(s.find("get_count") != std::string::npos);
+  CHECK(s.find("get_count1") != std::string::npos);
+  CHECK(s.find("get_count2") != std::string::npos);
+  CHECK(s.find("get_count3") == std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json = test_metric_manager::serialize_to_json_dynamic();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+  CHECK(json.find("get_count") != std::string::npos);
+  CHECK(json.find("get_count1") != std::string::npos);
+  CHECK(json.find("get_count2") != std::string::npos);
+#endif
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
