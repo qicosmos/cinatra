@@ -162,7 +162,7 @@ TEST_CASE("test brotli type") {
 
   auto result = async_simple::coro::syncAwait(client.async_post(
       "http://127.0.0.1:9001/get", ziped_str, req_content_type::none, headers));
-  CHECK(result.br_data == "ok");
+  CHECK(result.resp_body == "ok");
   server.stop();
 }
 #endif

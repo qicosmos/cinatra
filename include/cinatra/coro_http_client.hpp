@@ -1590,12 +1590,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef CINATRA_ENABLE_BROTLI
       if (encoding_type_ == content_encoding::br) {
-        std::string unbr_str;
-        bool r = br_codec::brotli_decompress(reply, unbr_str);
-        if (r) {
-          data.resp_body = unbr_str;
-          data.br_data = unbr_str;
-        }
+        bool r = br_codec::brotli_decompress(reply, unbr_str_);
+        if (r)
+          data.resp_body = unbr_str_;
         else
           data.resp_body = reply;
 
@@ -2132,6 +2129,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string inflate_str_;
 #endif
   content_encoding encoding_type_ = content_encoding::none;
+
+#ifdef CINATRA_ENABLE_BROTLI
+  std::string unbr_str_;
+#endif
 
 #ifdef BENCHMARK_TEST
   bool stop_bench_ = false;
