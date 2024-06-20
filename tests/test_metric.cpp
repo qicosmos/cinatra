@@ -777,6 +777,107 @@ TEST_CASE("test summary with static labels") {
 #endif
 }
 
+TEST_CASE("test serialize with emptry metrics") {
+  std::string s1;
+
+  auto h1 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::vector<std::string>{"method"});
+  h1->serialize(s1);
+  CHECK(s1.empty());
+  h1->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  auto h2 = std::make_shared<histogram_t>(
+      "get_count2", "help",
+      std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0});
+  h2->serialize(s1);
+  CHECK(s1.empty());
+  h2->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  auto h3 = std::make_shared<histogram_t>(
+      "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
+      std::map<std::string, std::string>{{"method", "/"}});
+  h3->serialize(s1);
+  CHECK(s1.empty());
+  h3->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  auto c1 = std::make_shared<counter_t>(std::string("get_count"),
+                                        std::string("get counter"));
+  c1->serialize(s1);
+  CHECK(s1.empty());
+  c1->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  auto c2 = std::make_shared<counter_t>(
+      std::string("get_count"), std::string("get counter"),
+      std::map<std::string, std::string>{{"method", "GET"}});
+  c2->serialize(s1);
+  CHECK(s1.empty());
+  c2->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  auto c3 = std::make_shared<counter_t>(std::string("get_count"),
+                                        std::string("get counter"),
+                                        std::vector<std::string>{"method"});
+  c3->serialize(s1);
+  CHECK(s1.empty());
+  c3->serialize_to_json(s1);
+  CHECK(s1.empty());
+
+  {
+    std::string str;
+    h1->observe({"POST"}, 1);
+    h1->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+    h1->serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
+  {
+    std::string str;
+    h2->observe(1);
+    h2->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+    h1->serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
+  {
+    std::string str;
+    c1->inc();
+    c1->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+    c1->serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
+  {
+    std::string str;
+    c2->inc({"GET"});
+    c2->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+    c2->serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+
+  {
+    std::string str;
+    c3->inc({"GET"});
+    c3->serialize(str);
+    CHECK(!str.empty());
+    str.clear();
+    c3->serialize_to_json(str);
+    CHECK(!str.empty());
+  }
+}
+
 TEST_CASE("test serialize with multiple threads") {
   auto c = std::make_shared<counter_t>(std::string("get_count"),
                                        std::string("get counter"),

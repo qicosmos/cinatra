@@ -87,8 +87,12 @@ class counter_t : public metric_t {
       return;
     }
 
-    serialize_head(str);
-    serialize_map(map, str);
+    std::string value_str;
+    serialize_map(map, value_str);
+    if (!value_str.empty()) {
+      serialize_head(str);
+      str.append(value_str);
+    }
   }
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -113,6 +117,9 @@ class counter_t : public metric_t {
   template <typename T>
   void to_json(json_counter_t &counter, T &map, std::string &str) {
     for (auto &[k, v] : map) {
+      if (v == 0) {
+        continue;
+      }
       json_counter_metric_t metric;
       size_t index = 0;
       for (auto &label_value : k) {
@@ -121,7 +128,9 @@ class counter_t : public metric_t {
       metric.value = (int64_t)v;
       counter.metrics.push_back(std::move(metric));
     }
-    iguana::to_json(counter, str);
+    if (!counter.metrics.empty()) {
+      iguana::to_json(counter, str);
+    }
   }
 #endif
 
