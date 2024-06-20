@@ -309,9 +309,11 @@ TEST_CASE("test register metric") {
   }
 }
 
+template <size_t id>
+struct test_id_t {};
+
 TEST_CASE("test remove metric and serialize metrics") {
-  using metric_mgr = metric_manager_t<1>;
-  std::cout << sizeof(metric_mgr) << "\n";
+  using metric_mgr = metric_manager_t<test_id_t<1>>;
   metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
   metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
 
@@ -330,7 +332,7 @@ TEST_CASE("test remove metric and serialize metrics") {
       metric_mgr::create_metric_static<counter_t>("test_static_counter", ""),
       std::invalid_argument);
 
-  using metric_mgr2 = metric_manager_t<2>;
+  using metric_mgr2 = metric_manager_t<test_id_t<2>>;
   auto c =
       metric_mgr2::create_metric_static<counter_t>("test_static_counter", "");
   auto c2 =
@@ -356,7 +358,7 @@ TEST_CASE("test remove metric and serialize metrics") {
 }
 
 TEST_CASE("test filter metrics static") {
-  using metric_mgr = metric_manager_t<3>;
+  using metric_mgr = metric_manager_t<test_id_t<3>>;
   auto c = metric_mgr::create_metric_static<counter_t>(
       "test_static_counter", "",
       std::map<std::string, std::string>{{"method", "GET"}});
@@ -436,7 +438,7 @@ TEST_CASE("test filter metrics static") {
 }
 
 TEST_CASE("test filter metrics dynamic") {
-  using metric_mgr = metric_manager_t<4>;
+  using metric_mgr = metric_manager_t<test_id_t<4>>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "test_dynamic_counter", "", std::vector<std::string>{{"method"}});
   auto c2 = metric_mgr::create_metric_dynamic<counter_t>(
@@ -516,7 +518,7 @@ TEST_CASE("test filter metrics dynamic") {
 }
 
 TEST_CASE("test get metric by static labels and label") {
-  using metric_mgr = metric_manager_t<9>;
+  using metric_mgr = metric_manager_t<test_id_t<9>>;
   metric_mgr::create_metric_static<counter_t>(
       "http_req_test", "",
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
@@ -574,7 +576,7 @@ TEST_CASE("test get metric by static labels and label") {
 }
 
 TEST_CASE("test get metric by dynamic labels") {
-  using metric_mgr = metric_manager_t<10>;
+  using metric_mgr = metric_manager_t<test_id_t<9>>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "http_req_static", "", std::vector<std::string>{"method", "code"});
 
@@ -917,7 +919,7 @@ TEST_CASE("test serialize with multiple threads") {
                                         std::string("get counter"),
                                         std::vector<std::string>{"method"});
 
-  using test_metric_manager = metric_manager_t<20>;
+  using test_metric_manager = metric_manager_t<test_id_t<20>>;
 
   test_metric_manager::register_metric_dynamic(c, g, h1, c1);
 

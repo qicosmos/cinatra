@@ -201,7 +201,7 @@ class metric_t {
   std::chrono::system_clock::time_point metric_created_time_{};
 };
 
-template <size_t ID = 0>
+template <typename Tag>
 struct metric_manager_t {
   struct null_mutex_t {
     void lock() {}
@@ -580,5 +580,12 @@ struct metric_manager_t {
   static inline std::once_flag flag_;
 };
 
-using default_metric_manager = metric_manager_t<0>;
+struct ylt_default_metric_tag_t {};
+using default_metric_manager = metric_manager_t<ylt_default_metric_tag_t>;
+
+template <typename... Args>
+constexpr inline auto get_root_manager() {
+  static_assert(sizeof...(Args) > 0, "must fill metric manager");
+  return std::tuple<Args...>{};
+}
 }  // namespace ylt::metric
