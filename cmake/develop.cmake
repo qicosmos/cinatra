@@ -53,6 +53,12 @@ if(ENABLE_SANITIZER AND NOT MSVC)
     endif()
 endif()
 
+option(ENABLE_METRIC_JSON "Enable serialize metric to json" OFF)
+if(ENABLE_METRIC_JSON)
+    add_definitions(-DCINATRA_ENABLE_METRIC_JSON)
+    message(STATUS "Enable serialize metric to json")
+endif()
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 
 SET(ENABLE_GZIP OFF)

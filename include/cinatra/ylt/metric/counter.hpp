@@ -4,13 +4,23 @@
 
 #include "metric.hpp"
 
-namespace ylt {
+namespace ylt::metric {
 enum class op_type_t { INC, DEC, SET };
-struct counter_sample {
-  op_type_t op_type;
-  std::vector<std::string> labels_value;
-  double value;
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+struct json_counter_metric_t {
+  std::unordered_multimap<std::string, std::string> labels;
+  int64_t value;
 };
+REFLECTION(json_counter_metric_t, labels, value);
+struct json_counter_t {
+  std::string name;
+  std::string help;
+  std::string type;
+  std::vector<json_counter_metric_t> metrics;
+};
+REFLECTION(json_counter_t, name, help, type, metrics);
+#endif
 
 class counter_t : public metric_t {
  public:
@@ -23,12 +33,8 @@ class counter_t : public metric_t {
   // static labels value, contains a map with atomic value.
   counter_t(std::string name, std::string help,
             std::map<std::string, std::string> labels)
-      : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
-    for (auto &[k, v] : labels) {
-      labels_name_.push_back(k);
-      labels_value_.push_back(v);
-    }
-
+      : metric_t(MetricType::Counter, std::move(name), std::move(help),
+                 std::move(labels)) {
     atomic_value_map_.emplace(labels_value_, 0);
     use_atomic_ = true;
   }
@@ -54,12 +60,8 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-  value_map() {
-    std::map<std::vector<std::string>, double,
-             std::less<std::vector<std::string>>>
-        map;
+  metric_hash_map<double> value_map() override {
+    metric_hash_map<double> map;
     if (use_atomic_) {
       map = {atomic_value_map_.begin(), atomic_value_map_.end()};
     }
@@ -96,6 +98,44 @@ class counter_t : public metric_t {
       str.append(s);
     }
   }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  void serialize_to_json(std::string &str) override {
+    std::string s;
+    if (labels_name_.empty()) {
+      if (default_lable_value_ == 0) {
+        return;
+      }
+      json_counter_t counter{name_, help_, std::string(metric_name())};
+      int64_t value = default_lable_value_;
+      counter.metrics.push_back({{}, value});
+      iguana::to_json(counter, str);
+      return;
+    }
+
+    json_counter_t counter{name_, help_, std::string(metric_name())};
+    if (use_atomic_) {
+      to_json(counter, atomic_value_map_, str);
+    }
+    else {
+      to_json(counter, value_map_, str);
+    }
+  }
+
+  template <typename T>
+  void to_json(json_counter_t &counter, T &map, std::string &str) {
+    for (auto &[k, v] : map) {
+      json_counter_metric_t metric;
+      size_t index = 0;
+      for (auto &label_value : k) {
+        metric.labels.emplace(labels_name_[index++], label_value);
+      }
+      metric.value = (int64_t)v;
+      counter.metrics.push_back(std::move(metric));
+    }
+    iguana::to_json(counter, str);
+  }
+#endif
 
   void inc(double val = 1) {
     if (val < 0) {
@@ -148,9 +188,7 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, std::atomic<double>,
-           std::less<std::vector<std::string>>>
-      &atomic_value_map() {
+  metric_hash_map<std::atomic<double>> &atomic_value_map() {
     return atomic_value_map_;
   }
 
@@ -223,7 +261,12 @@ class counter_t : public metric_t {
           label_val += value;
         }
 #else
-        label_val += value;
+        if constexpr (is_atomic) {
+          label_val.fetch_add(value, std::memory_order_relaxed);
+        }
+        else {
+          label_val += value;
+        }
 #endif
       } break;
       case op_type_t::DEC:
@@ -234,9 +277,13 @@ class counter_t : public metric_t {
         else {
           label_val -= value;
         }
-
 #else
-        label_val -= value;
+        if constexpr (is_atomic) {
+          label_val.fetch_sub(value, std::memory_order_relaxed);
+        }
+        else {
+          label_val -= value;
+        }
 #endif
         break;
       case op_type_t::SET:
@@ -245,14 +292,10 @@ class counter_t : public metric_t {
     }
   }
 
-  std::map<std::vector<std::string>, std::atomic<double>,
-           std::less<std::vector<std::string>>>
-      atomic_value_map_;
+  metric_hash_map<std::atomic<double>> atomic_value_map_;
   std::atomic<double> default_lable_value_ = 0;
 
   std::mutex mtx_;
-  std::map<std::vector<std::string>, double,
-           std::less<std::vector<std::string>>>
-      value_map_;
+  metric_hash_map<double> value_map_;
 };
-}  // namespace ylt
+}  // namespace ylt::metric

@@ -7,10 +7,10 @@
 #include <vector>
 
 #include "../include/cinatra.hpp"
-#include "metric_conf.hpp"
+#include "cinatra/metric_conf.hpp"
 
 using namespace cinatra;
-using namespace ylt;
+using namespace ylt::metric;
 using namespace std::chrono_literals;
 
 void create_file(std::string filename, size_t file_size = 64) {
@@ -429,7 +429,7 @@ async_simple::coro::Lazy<void> basic_usage() {
 }
 
 void use_metric() {
-  using namespace ylt;
+  using namespace ylt::metric;
   auto c =
       std::make_shared<counter_t>("request_count", "request count",
                                   std::vector<std::string>{"method", "url"});
@@ -537,7 +537,7 @@ void metrics_example() {
       "/", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
-  server.use_metrics();
+  server.use_metrics(true, "/metrics");
   server.sync_start();
 }
 
