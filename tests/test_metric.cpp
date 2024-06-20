@@ -311,6 +311,7 @@ TEST_CASE("test register metric") {
 
 TEST_CASE("test remove metric and serialize metrics") {
   using metric_mgr = metric_manager_t<1>;
+  std::cout << sizeof(metric_mgr) << "\n";
   metric_mgr::create_metric_dynamic<counter_t>("test_counter", "");
   metric_mgr::create_metric_dynamic<counter_t>("test_counter2", "");
 
@@ -785,47 +786,59 @@ TEST_CASE("test serialize with emptry metrics") {
       std::vector<std::string>{"method"});
   h1->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   h1->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   auto h2 = std::make_shared<histogram_t>(
       "get_count2", "help",
       std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0});
   h2->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   h2->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   auto h3 = std::make_shared<histogram_t>(
       "get_count2", "help", std::vector<double>{5.23, 10.54, 20.0, 50.0, 100.0},
       std::map<std::string, std::string>{{"method", "/"}});
   h3->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   h3->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   auto c1 = std::make_shared<counter_t>(std::string("get_count"),
                                         std::string("get counter"));
   c1->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   c1->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   auto c2 = std::make_shared<counter_t>(
       std::string("get_count"), std::string("get counter"),
       std::map<std::string, std::string>{{"method", "GET"}});
   c2->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   c2->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   auto c3 = std::make_shared<counter_t>(std::string("get_count"),
                                         std::string("get counter"),
                                         std::vector<std::string>{"method"});
   c3->serialize(s1);
   CHECK(s1.empty());
+#ifdef CINATRA_ENABLE_METRIC_JSON
   c3->serialize_to_json(s1);
   CHECK(s1.empty());
+#endif
 
   {
     std::string str;
@@ -833,8 +846,10 @@ TEST_CASE("test serialize with emptry metrics") {
     h1->serialize(str);
     CHECK(!str.empty());
     str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
     h1->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
   }
 
   {
@@ -843,8 +858,10 @@ TEST_CASE("test serialize with emptry metrics") {
     h2->serialize(str);
     CHECK(!str.empty());
     str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
     h1->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
   }
 
   {
@@ -853,8 +870,10 @@ TEST_CASE("test serialize with emptry metrics") {
     c1->serialize(str);
     CHECK(!str.empty());
     str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
     c1->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
   }
 
   {
@@ -863,8 +882,10 @@ TEST_CASE("test serialize with emptry metrics") {
     c2->serialize(str);
     CHECK(!str.empty());
     str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
     c2->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
   }
 
   {
@@ -873,8 +894,10 @@ TEST_CASE("test serialize with emptry metrics") {
     c3->serialize(str);
     CHECK(!str.empty());
     str.clear();
+#ifdef CINATRA_ENABLE_METRIC_JSON
     c3->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
   }
 }
 
