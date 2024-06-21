@@ -71,7 +71,7 @@ async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
   co_await file.async_open(filename, coro_io::flags::read_only);
 
   std::string buf;
-  detail::resize(buf, 100);
+  cinatra::detail::resize(buf, 100);
 
   auto fn = [&file, &buf]() -> async_simple::coro::Lazy<read_result> {
     auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
