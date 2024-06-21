@@ -10,11 +10,19 @@
 #include <memory>
 #include <system_error>
 
+#if __has_include("ylt/coro_io/coro_io.hpp")
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/metric/counter.hpp"
+#include "ylt/metric/gauge.hpp"
+#include "ylt/metric/metric.hpp"
+#else
 #include "cinatra/ylt/coro_io/coro_io.hpp"
 #include "cinatra/ylt/coro_io/io_context_pool.hpp"
 #include "cinatra/ylt/metric/counter.hpp"
 #include "cinatra/ylt/metric/gauge.hpp"
 #include "cinatra/ylt/metric/metric.hpp"
+#endif
 
 // reference: brpc/src/bvar/default_variables.cpp
 
