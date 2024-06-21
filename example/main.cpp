@@ -607,7 +607,7 @@ async_simple::coro::Lazy<void> use_pool() {
 
 int main() {
   // use_metric();
-  metrics_example();
+  // metrics_example();
   async_simple::coro::syncAwait(use_channel());
   async_simple::coro::syncAwait(use_pool());
   async_simple::coro::syncAwait(basic_usage());

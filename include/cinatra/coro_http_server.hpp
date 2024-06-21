@@ -932,7 +932,9 @@ class coro_http_server {
     default_metric_manager::create_metric_static<histogram_t>(
         cinatra_metric_conf::server_read_latency, "",
         std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
+#if defined(__GNUC__)
     ylt::metric::start_system_metric();
+#endif
   }
 
  private:
