@@ -278,6 +278,15 @@ struct metric_manager_t {
     return r;
   }
 
+  static auto get_metrics() {
+    if (need_lock_) {
+      return collect<true>();
+    }
+    else {
+      return collect<false>();
+    }
+  }
+
   static auto metric_map_static() { return metric_map_impl<false>(); }
   static auto metric_map_dynamic() { return metric_map_impl<true>(); }
 
@@ -603,4 +612,32 @@ constexpr inline auto get_root_manager() {
   static_assert(sizeof...(Args) > 0, "must fill metric manager");
   return std::tuple<Args...>{};
 }
+
+template <typename... Args>
+struct metric_collector_t {
+  static std::string serialize() {
+    auto vec = get_all_metrics();
+    return default_metric_manager::serialize(vec);
+  }
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  static std::string serialize_to_json() {
+    auto vec = get_all_metrics();
+    return default_metric_manager::serialize_to_json(vec);
+  }
+#endif
+
+  static std::vector<std::shared_ptr<metric_t>> get_all_metrics() {
+    std::vector<std::shared_ptr<metric_t>> vec;
+    (append_vector<Args>(vec), ...);
+    return vec;
+  }
+
+ private:
+  template <typename T>
+  static void append_vector(std::vector<std::shared_ptr<metric_t>>& vec) {
+    auto v = T::get_metrics();
+    vec.insert(vec.end(), v.begin(), v.end());
+  }
+};
 }  // namespace ylt::metric

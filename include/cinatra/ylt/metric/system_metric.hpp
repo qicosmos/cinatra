@@ -37,7 +37,7 @@ inline int64_t timeval_to_microseconds(const timeval &tv) {
 
 inline void stat_cpu() {
   static auto process_cpu_usage =
-      system_metric_manager::get_metric_static<counter_t>(
+      system_metric_manager::get_metric_static<gauge_t>(
           "ylt_process_cpu_usage");
   static auto process_cpu_usage_system =
       system_metric_manager::get_metric_static<gauge_t>(

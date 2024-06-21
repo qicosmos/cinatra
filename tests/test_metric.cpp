@@ -954,6 +954,29 @@ TEST_CASE("test system metric") {
   auto s = system_metric_manager::serialize_static();
   std::cout << s;
   CHECK(!s.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  auto json = system_metric_manager::serialize_to_json_static();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+#endif
+
+  using metric_manager = metric_manager_t<test_id_t<21>>;
+  auto c = metric_manager::create_metric_dynamic<counter_t>("test_qps", "");
+  c->inc(42);
+  using root = metric_collector_t<metric_manager, default_metric_manager,
+                                  system_metric_manager>;
+  s.clear();
+  s = root::serialize();
+  std::cout << s;
+  CHECK(!s.empty());
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+  json.clear();
+  json = root::serialize_to_json();
+  std::cout << json << "\n";
+  CHECK(!json.empty());
+#endif
 }
 #endif
 
