@@ -9,6 +9,7 @@
 #include "cinatra/ylt/metric/counter.hpp"
 #include "cinatra/ylt/metric/histogram.hpp"
 #include "cinatra/ylt/metric/summary.hpp"
+#include "cinatra/ylt/metric/system_metric.hpp"
 #include "doctest/doctest.h"
 using namespace ylt;
 using namespace ylt::metric;
@@ -576,7 +577,7 @@ TEST_CASE("test get metric by static labels and label") {
 }
 
 TEST_CASE("test get metric by dynamic labels") {
-  using metric_mgr = metric_manager_t<test_id_t<9>>;
+  using metric_mgr = metric_manager_t<test_id_t<10>>;
   auto c = metric_mgr::create_metric_dynamic<counter_t>(
       "http_req_static", "", std::vector<std::string>{"method", "code"});
 
@@ -944,6 +945,17 @@ TEST_CASE("test serialize with multiple threads") {
   CHECK(json.find("get_count2") != std::string::npos);
 #endif
 }
+
+#if defined(__GNUC__)
+TEST_CASE("test system metric") {
+  start_system_metric();
+  detail::ylt_stat();
+
+  auto s = system_metric_manager::serialize_static();
+  std::cout << s;
+  CHECK(!s.empty());
+}
+#endif
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }

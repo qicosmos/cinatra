@@ -28,6 +28,7 @@ class counter_t : public metric_t {
   counter_t(std::string name, std::string help)
       : metric_t(MetricType::Counter, std::move(name), std::move(help)) {
     use_atomic_ = true;
+    g_user_metric_count++;
   }
 
   // static labels value, contains a map with atomic value.
@@ -36,6 +37,7 @@ class counter_t : public metric_t {
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
                  std::move(labels)) {
     atomic_value_map_.emplace(labels_value_, 0);
+    g_user_metric_count++;
     use_atomic_ = true;
   }
 
@@ -43,9 +45,11 @@ class counter_t : public metric_t {
   counter_t(std::string name, std::string help,
             std::vector<std::string> labels_name)
       : metric_t(MetricType::Counter, std::move(name), std::move(help),
-                 std::move(labels_name)) {}
+                 std::move(labels_name)) {
+    g_user_metric_count++;
+  }
 
-  virtual ~counter_t() {}
+  virtual ~counter_t() { g_user_metric_count--; }
 
   double value() { return default_lable_value_; }
 
@@ -161,7 +165,18 @@ class counter_t : public metric_t {
     }
     else {
       std::lock_guard lock(mtx_);
+      stat_metric(labels_value);
       set_value<false>(value_map_[labels_value], value, op_type_t::INC);
+    }
+  }
+
+  void stat_metric(const std::vector<std::string> &labels_value) {
+    if (!value_map_.contains(labels_value)) {
+      for (auto &key : labels_value) {
+        g_user_metric_memory->inc(key.size());
+      }
+      g_user_metric_memory->inc(8);
+      g_user_metric_labels->inc();
     }
   }
 
