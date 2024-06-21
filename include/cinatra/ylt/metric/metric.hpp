@@ -608,12 +608,6 @@ struct ylt_default_metric_tag_t {};
 using default_metric_manager = metric_manager_t<ylt_default_metric_tag_t>;
 
 template <typename... Args>
-constexpr inline auto get_root_manager() {
-  static_assert(sizeof...(Args) > 0, "must fill metric manager");
-  return std::tuple<Args...>{};
-}
-
-template <typename... Args>
 struct metric_collector_t {
   static std::string serialize() {
     auto vec = get_all_metrics();
