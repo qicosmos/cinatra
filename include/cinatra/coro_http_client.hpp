@@ -1835,7 +1835,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     resp_data data{};
 
     head_buf_.consume(head_buf_.size());
-    size_t header_size = 0;
     std::shared_ptr sock = socket_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
@@ -1858,33 +1857,32 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
-      if (header_size == 0)
-        header_size += ws.left_header_len();
-
       const char *data_ptr = asio::buffer_cast<const char *>(read_buf.data());
-      auto ret = ws.parse_header(data_ptr, header_size, false);
-      if (ret == -2) {
-        header_size += ws.left_header_len();
+      auto ret = ws.parse_header(data_ptr, read_buf.size(), false);
+      if (ret == ws_header_status::incomplete) {
         continue;
       }
+      else if (ret == ws_header_status::error) {
+        data.net_err = std::make_error_code(std::errc::protocol_error);
+        data.status = 404;
+        close_socket(*sock);
+        co_return data;
+      }
 
-      ws.reset_len_bytes();
       frame_header *header = (frame_header *)data_ptr;
       bool is_close_frame = header->opcode == opcode::close;
 
-      read_buf.consume(header_size);
+      read_buf.consume(read_buf.size());
 
       size_t payload_len = ws.payload_length();
-      if (payload_len > read_buf.size()) {
-        size_t size_to_read = payload_len - read_buf.size();
-        if (auto [ec, size] = co_await async_read_ws(
-                sock, read_buf, size_to_read, has_init_ssl);
-            ec) {
-          data.net_err = ec;
-          data.status = 404;
-          close_socket(*sock);
-          co_return data;
-        }
+
+      if (auto [ec, size] =
+              co_await async_read_ws(sock, read_buf, payload_len, has_init_ssl);
+          ec) {
+        data.net_err = ec;
+        data.status = 404;
+        close_socket(*sock);
+        co_return data;
       }
 
       data_ptr = asio::buffer_cast<const char *>(read_buf.data());
@@ -1918,7 +1916,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 #endif
       read_buf.consume(read_buf.size());
-      header_size = 2;
 
       if (is_close_frame) {
         std::string reason = "close";
