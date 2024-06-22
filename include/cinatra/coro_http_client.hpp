@@ -1835,7 +1835,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     resp_data data{};
 
     head_buf_.consume(head_buf_.size());
-    size_t header_size = 2;
+    size_t header_size = 0;
     std::shared_ptr sock = socket_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
@@ -1844,8 +1844,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
     websocket ws{};
     while (true) {
-      if (auto [ec, _] =
-              co_await async_read_ws(sock, read_buf, header_size, has_init_ssl);
+      if (auto [ec, _] = co_await async_read_ws(
+              sock, read_buf, ws.left_header_len(), has_init_ssl);
           ec) {
         data.net_err = ec;
         data.status = 404;
@@ -1858,12 +1858,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
+      if (header_size == 0)
+        header_size += ws.left_header_len();
+
       const char *data_ptr = asio::buffer_cast<const char *>(read_buf.data());
       auto ret = ws.parse_header(data_ptr, header_size, false);
       if (ret == -2) {
         header_size += ws.left_header_len();
         continue;
       }
+
+      ws.reset_len_bytes();
       frame_header *header = (frame_header *)data_ptr;
       bool is_close_frame = header->opcode == opcode::close;
 
