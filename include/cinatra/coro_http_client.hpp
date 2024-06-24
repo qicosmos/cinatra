@@ -102,7 +102,6 @@ struct resp_data {
   int status = 0;
   bool eof = false;
   std::string_view resp_body;
-  std::string br_data;
   std::span<http_header> resp_headers;
 #ifdef BENCHMARK_TEST
   uint64_t total = 0;
