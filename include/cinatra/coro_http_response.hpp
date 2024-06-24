@@ -15,6 +15,9 @@
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
+#ifdef CINATRA_ENABLE_BROTLI
+#include "brzip.hpp"
+#endif
 #include "picohttpparser.h"
 #include "response_cv.hpp"
 #include "time_util.hpp"
@@ -69,7 +72,7 @@ class coro_http_response {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("gzip") != std::string_view::npos) {
         std::string encode_str;
-        bool r = gzip_codec::compress(content, encode_str, true);
+        bool r = gzip_codec::compress(content, encode_str);
         if (!r) {
           set_status_and_content(status_type::internal_server_error,
                                  "gzip compress error");
@@ -87,8 +90,11 @@ class coro_http_response {
           content_ = std::move(content);
         }
       }
+      has_set_content_ = true;
+      return;
     }
-    else if (encoding == content_encoding::deflate) {
+
+    if (encoding == content_encoding::deflate) {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("deflate") != std::string_view::npos) {
         std::string deflate_str;
@@ -110,16 +116,44 @@ class coro_http_response {
           content_ = std::move(content);
         }
       }
+      has_set_content_ = true;
+      return;
     }
-    else
 #endif
-    {
-      if (is_view) {
-        content_view_ = content;
+
+#ifdef CINATRA_ENABLE_BROTLI
+    if (encoding == content_encoding::br) {
+      if (client_encoding_type.empty() ||
+          client_encoding_type.find("br") != std::string_view::npos) {
+        std::string br_str;
+        bool r = br_codec::brotli_compress(content, br_str);
+        if (!r) {
+          set_status_and_content(status_type::internal_server_error,
+                                 "br compress error");
+        }
+        else {
+          add_header("Content-Encoding", "br");
+          set_content(std::move(br_str));
+        }
       }
       else {
-        content_ = std::move(content);
+        if (is_view) {
+          content_view_ = content;
+        }
+        else {
+          content_ = std::move(content);
+        }
       }
+      has_set_content_ = true;
+      return;
+    }
+#endif
+
+    if (is_view) {
+      content_view_ = content;
+    }
+    else {
+      content_ = std::move(content);
     }
     has_set_content_ = true;
   }

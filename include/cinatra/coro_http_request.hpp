@@ -156,6 +156,8 @@ class coro_http_request {
         return content_encoding::gzip;
       else if (encoding_type.find("deflate") != std::string_view::npos)
         return content_encoding::deflate;
+      else if (encoding_type.find("br") != std::string_view::npos)
+        return content_encoding::br;
       else
         return content_encoding::none;
     }
