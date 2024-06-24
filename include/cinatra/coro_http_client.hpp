@@ -1568,41 +1568,35 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           data.resp_body = unziped_str;
         else
           data.resp_body = reply;
-
-        head_buf_.consume(content_len);
-        data.eof = (head_buf_.size() == 0);
-        co_return;
       }
-
-      if (encoding_type_ == content_encoding::deflate) {
+      else if (encoding_type_ == content_encoding::deflate) {
         std::string inflate_str;
         bool r = gzip_codec::inflate(reply, inflate_str);
         if (r)
           data.resp_body = inflate_str;
         else
           data.resp_body = reply;
-
-        head_buf_.consume(content_len);
-        data.eof = (head_buf_.size() == 0);
-        co_return;
       }
 #endif
-
+#if defined(CINATRA_ENABLE_BROTLI) && defined(CINATRA_ENABLE_GZIP)
+      else if (encoding_type_ == content_encoding::br)
+#endif
+#if defined(CINATRA_ENABLE_BROTLI) && !defined(CINATRA_ENABLE_GZIP)
+        if (encoding_type_ == content_encoding::br)
+#endif
 #ifdef CINATRA_ENABLE_BROTLI
-      if (encoding_type_ == content_encoding::br) {
-        bool r = br_codec::brotli_decompress(reply, unbr_str_);
-        if (r)
-          data.resp_body = unbr_str_;
-        else
-          data.resp_body = reply;
-
-        head_buf_.consume(content_len);
-        data.eof = (head_buf_.size() == 0);
-        co_return;
-      }
+        {
+          bool r = br_codec::brotli_decompress(reply, unbr_str_);
+          if (r)
+            data.resp_body = unbr_str_;
+          else
+            data.resp_body = reply;
+        }
 #endif
-
-      data.resp_body = reply;
+#if defined(CINATRA_ENABLE_BROTLI) || defined(CINATRA_ENABLE_GZIP)
+        else
+#endif
+          data.resp_body = reply;
 
       head_buf_.consume(content_len);
     }
