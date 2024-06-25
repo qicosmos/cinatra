@@ -992,6 +992,7 @@ TEST_CASE("test metric capacity") {
   auto c2 =
       test_metric_manager::create_metric_dynamic<counter_t>("counter2", "");
   CHECK(c2 == nullptr);
+  set_metric_capacity(100000000);
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
