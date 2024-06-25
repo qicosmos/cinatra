@@ -980,6 +980,20 @@ TEST_CASE("test system metric") {
 }
 #endif
 
+TEST_CASE("test metric capacity") {
+  std::cout << g_user_metric_count << "\n";
+  using test_metric_manager = metric_manager_t<test_id_t<21>>;
+  set_metric_capacity(g_user_metric_count + 2);
+  auto c = test_metric_manager::create_metric_dynamic<counter_t>("counter", "");
+  CHECK(c != nullptr);
+  auto c1 =
+      test_metric_manager::create_metric_dynamic<counter_t>("counter1", "");
+  CHECK(c1 != nullptr);
+  auto c2 =
+      test_metric_manager::create_metric_dynamic<counter_t>("counter2", "");
+  CHECK(c2 == nullptr);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP

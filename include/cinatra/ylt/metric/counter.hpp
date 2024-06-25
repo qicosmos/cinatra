@@ -51,7 +51,7 @@ class counter_t : public metric_t {
 
   virtual ~counter_t() { g_user_metric_count--; }
 
-  double value() { return default_lable_value_; }
+  double value() { return default_label_value_; }
 
   double value(const std::vector<std::string> &labels_value) {
     if (use_atomic_) {
@@ -78,7 +78,7 @@ class counter_t : public metric_t {
 
   void serialize(std::string &str) override {
     if (labels_name_.empty()) {
-      if (default_lable_value_ == 0) {
+      if (default_label_value_ == 0) {
         return;
       }
       serialize_head(str);
@@ -103,11 +103,11 @@ class counter_t : public metric_t {
   void serialize_to_json(std::string &str) override {
     std::string s;
     if (labels_name_.empty()) {
-      if (default_lable_value_ == 0) {
+      if (default_label_value_ == 0) {
         return;
       }
       json_counter_t counter{name_, help_, std::string(metric_name())};
-      int64_t value = default_lable_value_;
+      int64_t value = default_label_value_;
       counter.metrics.push_back({{}, value});
       iguana::to_json(counter, str);
       return;
@@ -144,9 +144,9 @@ class counter_t : public metric_t {
     }
 
 #ifdef __APPLE__
-    mac_os_atomic_fetch_add(&default_lable_value_, val);
+    mac_os_atomic_fetch_add(&default_label_value_, val);
 #else
-    default_lable_value_ += val;
+    default_label_value_ += val;
 #endif
   }
 
@@ -180,7 +180,7 @@ class counter_t : public metric_t {
     }
   }
 
-  void update(double value) { default_lable_value_ = value; }
+  void update(double value) { default_label_value_ = value; }
 
   void update(const std::vector<std::string> &labels_value, double value) {
     if (labels_value.empty() || labels_name_.size() != labels_value.size()) {
@@ -212,10 +212,10 @@ class counter_t : public metric_t {
     }
 
     if (type_ == MetricType::Counter) {
-      str.append(std::to_string((int64_t)default_lable_value_));
+      str.append(std::to_string((int64_t)default_label_value_));
     }
     else {
-      str.append(std::to_string(default_lable_value_));
+      str.append(std::to_string(default_label_value_));
     }
 
     str.append("\n");
@@ -305,7 +305,7 @@ class counter_t : public metric_t {
   }
 
   metric_hash_map<std::atomic<double>> atomic_value_map_;
-  std::atomic<double> default_lable_value_ = 0;
+  std::atomic<double> default_label_value_ = 0;
 
   std::mutex mtx_;
   metric_hash_map<double> value_map_;

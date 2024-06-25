@@ -216,6 +216,12 @@ inline auto g_summary_failed_count =
     std::make_shared<counter_t>("ylt_summary_failed_count", "");
 inline std::atomic<int64_t> g_user_metric_count = 0;
 
+inline std::atomic<int64_t> ylt_metric_capacity = 100000000;
+
+inline void set_metric_capacity(int64_t max_count) {
+  ylt_metric_capacity = max_count;
+}
+
 template <typename Tag>
 struct metric_manager_t {
   struct null_mutex_t {
@@ -476,6 +482,11 @@ struct metric_manager_t {
 
     std::string name(metric->name());
     auto lock = get_lock<need_lock>();
+    if (g_user_metric_count > ylt_metric_capacity) {
+      CINATRA_LOG_ERROR << "metric count at capacity size: "
+                        << g_user_metric_count;
+      return false;
+    }
     bool r = metric_map_.emplace(name, std::move(metric)).second;
     if (!r) {
       CINATRA_LOG_ERROR << "duplicate registered metric name: " << name;
