@@ -9,6 +9,7 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -606,7 +607,8 @@ struct metric_manager_t {
   }
 
   static inline std::mutex mtx_;
-  static inline std::map<std::string, std::shared_ptr<metric_t>> metric_map_;
+  static inline std::unordered_map<std::string, std::shared_ptr<metric_t>>
+      metric_map_;
 
   static inline null_mutex_t null_mtx_;
   static inline std::atomic_bool need_lock_ = true;
