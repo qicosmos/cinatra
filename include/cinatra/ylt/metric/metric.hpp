@@ -269,10 +269,56 @@ struct metric_manager_t {
     return remove_metric_impl<true>(name);
   }
 
+  static bool remove_metric_dynamic(std::shared_ptr<metric_t> metric) {
+    return remove_metric_impl<true>(std::string(metric->name()));
+  }
+
+  static void remove_metric_dynamic(const std::vector<std::string>& names) {
+    if (names.empty()) {
+      return;
+    }
+    auto lock = get_lock<true>();
+    for (auto& name : names) {
+      metric_map_.erase(name);
+    }
+  }
+
+  static void remove_metric_dynamic(
+      std::vector<std::shared_ptr<metric_t>> metrics) {
+    if (metrics.empty()) {
+      return;
+    }
+    auto lock = get_lock<true>();
+    for (auto& metric : metrics) {
+      metric_map_.erase(std::string(metric->name()));
+    }
+  }
+
   template <typename... Metrics>
   static bool register_metric_dynamic(Metrics... metrics) {
     bool r = true;
     ((void)(r && (r = register_metric_impl<true>(metrics), true)), ...);
+    return r;
+  }
+
+  static bool register_metric_dynamic(
+      std::vector<std::shared_ptr<metric_t>> metrics) {
+    bool r = true;
+    std::vector<std::shared_ptr<metric_t>> vec;
+    for (auto& metric : metrics) {
+      r = register_metric_impl<true>(metric);
+      if (!r) {
+        r = false;
+        break;
+      }
+
+      vec.push_back(metric);
+    }
+
+    if (!r) {
+      remove_metric_dynamic(vec);
+    }
+
     return r;
   }
 

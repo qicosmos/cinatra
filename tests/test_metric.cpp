@@ -1005,6 +1005,48 @@ TEST_CASE("test metric capacity") {
   std::cout << (int64_t)process_memory_virtual->value() << "\n";
 }
 
+TEST_CASE("test remove dynamic metric") {
+  using test_metric_manager = metric_manager_t<test_id_t<22>>;
+  auto c = test_metric_manager::create_metric_dynamic<counter_t>("counter", "");
+  CHECK(c != nullptr);
+  auto c1 =
+      test_metric_manager::create_metric_dynamic<counter_t>("counter1", "");
+  CHECK(c1 != nullptr);
+  auto c2 =
+      test_metric_manager::create_metric_dynamic<counter_t>("counter2", "");
+  CHECK(c2 != nullptr);
+
+  test_metric_manager::remove_metric_dynamic(c);
+  CHECK(test_metric_manager::metric_count_dynamic() == 2);
+  test_metric_manager::remove_metric_dynamic(c1);
+  CHECK(test_metric_manager::metric_count_dynamic() == 1);
+  test_metric_manager::remove_metric_dynamic(c2);
+  CHECK(test_metric_manager::metric_count_dynamic() == 0);
+
+  test_metric_manager::register_metric_dynamic(c, c1, c2);
+  CHECK(test_metric_manager::metric_count_dynamic() == 3);
+  test_metric_manager::remove_metric_dynamic("counter");
+  CHECK(test_metric_manager::metric_count_dynamic() == 2);
+  test_metric_manager::remove_metric_dynamic(
+      std::vector<std::string>{"counter1", "counter2"});
+  CHECK(test_metric_manager::metric_count_dynamic() == 0);
+
+  test_metric_manager::register_metric_dynamic(
+      std::vector<std::shared_ptr<metric_t>>{c, c1, c2});
+  CHECK(test_metric_manager::metric_count_dynamic() == 3);
+  test_metric_manager::remove_metric_dynamic({c1, c2});
+  CHECK(test_metric_manager::metric_count_dynamic() == 1);
+  auto r = test_metric_manager::register_metric_dynamic(
+      std::vector<std::shared_ptr<metric_t>>{c, c1});
+  CHECK(!r);
+  CHECK(test_metric_manager::metric_count_dynamic() == 1);
+
+  r = test_metric_manager::register_metric_dynamic(
+      std::vector<std::shared_ptr<metric_t>>{c1, c});
+  CHECK(!r);
+  CHECK(test_metric_manager::metric_count_dynamic() == 1);
+}
+
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)
 int main(int argc, char** argv) { return doctest::Context(argc, argv).run(); }
 DOCTEST_MSVC_SUPPRESS_WARNING_POP
