@@ -992,7 +992,17 @@ TEST_CASE("test metric capacity") {
   auto c2 =
       test_metric_manager::create_metric_dynamic<counter_t>("counter2", "");
   CHECK(c2 == nullptr);
-  set_metric_capacity(100000000);
+  set_metric_capacity(10000000);
+
+  auto process_memory_resident =
+      system_metric_manager::get_metric_static<gauge_t>(
+          "ylt_process_memory_resident");
+  std::cout << (int64_t)process_memory_resident->value() << "\n";
+
+  auto process_memory_virtual =
+      system_metric_manager::get_metric_static<gauge_t>(
+          "ylt_process_memory_virtual");
+  std::cout << (int64_t)process_memory_virtual->value() << "\n";
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

@@ -172,10 +172,6 @@ class counter_t : public metric_t {
 
   void stat_metric(const std::vector<std::string> &labels_value) {
     if (!value_map_.contains(labels_value)) {
-      for (auto &key : labels_value) {
-        g_user_metric_memory->inc(key.size());
-      }
-      g_user_metric_memory->inc(8);
       g_user_metric_labels->inc();
     }
   }
