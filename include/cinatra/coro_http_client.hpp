@@ -845,6 +845,97 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   std::string_view get_port() { return port_; }
 
+  async_simple::coro::Lazy<void> send_file_with_copy(std::string source,
+                                                     std::error_code &ec) {
+    std::string file_data;
+    detail::resize(file_data, max_single_part_size_);
+    coro_io::coro_file file{};
+    bool ok = co_await file.async_open(source, coro_io::flags::read_only);
+    if (!ok) {
+      ec = std::make_error_code(std::errc::bad_file_descriptor);
+      co_return;
+    }
+    while (!file.eof()) {
+      auto [rd_ec, rd_size] =
+          co_await file.async_read(file_data.data(), file_data.size());
+      std::vector<asio::const_buffer> bufs;
+      std::string size_str;
+      cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
+                                  file.eof());
+      std::size_t size;
+      if (std::tie(ec, size) = co_await async_write(bufs); ec) {
+        break;
+      }
+    }
+  }
+
+  struct fd_guard {
+    int fd;
+    fd_guard(const char *file_path) : fd(::open(file_path, O_RDONLY)) {}
+    ~fd_guard() {
+      if (fd >= 0) {
+        ::close(fd);
+      }
+    }
+  };
+  async_simple::coro::Lazy<void> send_file_without_copy(
+      const std::filesystem::path &source, std::error_code &ec) {
+    fd_guard guard(source.c_str());
+    if (guard.fd < 0) [[unlikely]] {
+      ec = std::make_error_code(std::errc::bad_file_descriptor);
+      co_return;
+    }
+    off_t now_position = 0,
+          max_position = std::filesystem::file_size(source, ec);
+    if (ec) [[unlikely]] {
+      co_return;
+    }
+    size_t len =
+        std::min<size_t>(max_single_part_size_, max_position - now_position);
+    // send chunked
+    std::array<char, 24> chunked_buffer;
+    std::size_t sz;
+    std::tie(ec, sz) = co_await async_write(
+        asio::buffer(get_chuncked_buffers<true, false>(len, chunked_buffer)));
+    if (ec) [[unlikely]] {
+      co_return;
+    }
+    do {
+      std::size_t actual_len = 0;
+      if (len > 0) [[unlikely]] {
+        std::tie(ec, actual_len) = co_await coro_io::async_sendfile(
+            socket_->impl_, guard.fd, now_position, len);
+      }
+      if (ec) [[unlikely]] {
+        co_return;
+      }
+      if (actual_len != len) [[unlikely]] {
+        socket_->impl_.close();
+        ec = std::make_error_code(
+            std::errc::bad_file_descriptor);  // todo: better error
+        co_return;
+      }
+      now_position += actual_len;
+      if (now_position < max_position) {
+        len = std::min<size_t>(max_single_part_size_,
+                               max_position - now_position);
+        std::tie(ec, sz) = co_await async_write(asio::buffer(
+            get_chuncked_buffers<false, false>(len, chunked_buffer)));
+        if (ec) {
+          co_return;
+        }
+      }
+      else [[unlikely]] {
+        std::tie(ec, sz) = co_await async_write(asio::buffer(
+            get_chuncked_buffers<false, true>(len, chunked_buffer)));
+        if (ec) {
+          co_return;
+        }
+        break;
+      }
+    } while (true);
+  }
+
   template <typename S, typename Source>
   async_simple::coro::Lazy<resp_data> async_upload_chunked(
       S uri, http_method method, Source source,
@@ -917,10 +1008,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return resp_data{ec, 404};
     }
 
-    std::string file_data;
-    detail::resize(file_data, max_single_part_size_);
-
     if constexpr (is_stream_file) {
+      std::string file_data;
+      detail::resize(file_data, max_single_part_size_);
       while (!source->eof()) {
         size_t rd_size =
             source->read(file_data.data(), file_data.size()).gcount();
@@ -935,23 +1025,20 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     else if constexpr (std::is_same_v<Source, std::string> ||
                        std::is_same_v<Source, std::string_view>) {
-      coro_io::coro_file file{};
-      bool ok = co_await file.async_open(source, coro_io::flags::read_only);
-      if (!ok) {
-        co_return resp_data{
-            std::make_error_code(std::errc::bad_file_descriptor), 404};
+#ifdef __linux__
+#ifdef CINATRA_ENABLE_SSL
+      if (!has_init_ssl_) {
+#endif
+        co_await send_file_without_copy(std::filesystem::path{source}, ec);
+#ifdef CINATRA_ENABLE_SSL
       }
-      while (!file.eof()) {
-        auto [rd_ec, rd_size] =
-            co_await file.async_read(file_data.data(), file_data.size());
-        std::vector<asio::const_buffer> bufs;
-        std::string size_str;
-        cinatra::to_chunked_buffers(bufs, size_str, {file_data.data(), rd_size},
-                                    file.eof());
-        if (std::tie(ec, size) = co_await async_write(bufs); ec) {
-          break;
-        }
+      else {
+        co_await send_file_with_copy(source, ec);
       }
+#endif
+#else
+      co_await send_file_with_copy(source, ec);
+#endif
     }
     else {
       while (true) {

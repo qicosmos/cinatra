@@ -1105,8 +1105,10 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           std::string_view filename = req.get_header_value("filename");
 
           CHECK(!filename.empty());
-          std::string fullpath = fs::current_path().append(filename).string();
-          std::ofstream file(fullpath, std::ios::binary);
+
+          std::string oldpath = fs::current_path().append(filename);
+          std::string newpath = fs::current_path().append("server_"+std::string{filename});
+          std::ofstream file(newpath, std::ios::binary);
           CHECK(file.is_open());
 
           while (true) {
@@ -1114,19 +1116,56 @@ TEST_CASE("test coro_http_client chunked upload and download") {
             if (result.ec) {
               co_return;
             }
+
+            //file.write(result.data.data(), result.data.size());
+            
             if (result.eof) {
               break;
             }
-
-            file.write(result.data.data(), result.data.size());
           }
-
-          file.close();
-          std::cout << "upload finished, filename: " << filename << "\n";
+          //file.flush();
+          //file.close();
+          //auto sz=std::filesystem::file_size(oldpath);
+          //CHECK(sz==std::filesystem::file_size(newpath));
           resp.set_status_and_content(status_type::ok, std::string(filename));
         });
 
     server.async_start();
+    {
+      std::string filename = "test_1G.txt";
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename,1024*1024*8);
+      CHECK(r);
+      coro_http_client client{};
+      client.add_header("filename", filename);
+      std::string uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status == 200);
+    }
+
+    {
+      std::string filename = "test_2M.txt";
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename, 2'000'000);
+      CHECK(r);
+
+      coro_http_client client{};
+      client.add_header("filename", filename);
+      std::string uri = "http://127.0.0.1:8090/chunked_upload";
+      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
+      auto result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status == 200);
+    }
+
 
     {
       std::string filename = "test_1024.txt";
