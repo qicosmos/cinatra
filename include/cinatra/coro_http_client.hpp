@@ -111,9 +111,9 @@ struct resp_data {
 template <typename String = std::string>
 struct req_context {
   req_content_type content_type = req_content_type::none;
-  std::string req_str;
-  String content;
-  std::shared_ptr<coro_io::coro_file> stream = nullptr;
+  std::string req_header; /*header string*/
+  String content; /*body*/
+  coro_io::coro_file* resp_body_stream = nullptr; 
 };
 
 struct multipart_t {
@@ -775,9 +775,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                      std::string filename,
                                                      std::string range = "") {
     resp_data data{};
-    auto file = std::make_shared<coro_io::coro_file>();
-    co_await file->async_open(filename, coro_io::flags::create_write);
-    if (!file->is_open()) {
+    coro_io::coro_file file;
+    co_await file.async_open(filename, coro_io::flags::create_write);
+    if (!file.is_open()) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
       data.status = 404;
       co_return data;
@@ -786,12 +786,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     req_context<> ctx{};
     if (range.empty()) {
       add_header("Transfer-Encoding", "chunked");
-      ctx = {req_content_type::none, "", "", std::move(file)};
+      ctx = {req_content_type::none, "", "", &file};
     }
     else {
       std::string req_str = "Range: bytes=";
       req_str.append(range).append(CRCF);
-      ctx = {req_content_type::none, std::move(req_str), {}, std::move(file)};
+      ctx = {req_content_type::none, std::move(req_str), {}, &file};
     }
 
     data = co_await async_request(std::move(uri), http_method::GET,
@@ -1404,10 +1404,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           .append(CRCF);
     }
 
-    if (!ctx.req_str.empty())
-      req_str.append(ctx.req_str);
-
-    size_t content_len = ctx.content.size();
+    if (!ctx.req_header.empty())
+      req_str.append(ctx.req_header);
+    size_t content_len=ctx.content.size();
     bool should_add_len = false;
     if (content_len > 0) {
       should_add_len = true;
@@ -1636,8 +1635,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (is_ranges) {
-        if (ctx.stream) {
-          auto ec = co_await ctx.stream->async_write(data_ptr, content_len);
+        if (ctx.resp_body_stream) {
+          auto ec = co_await ctx.resp_body_stream->async_write(data_ptr, content_len);
           if (ec) {
             data.net_err = ec;
             co_return;
@@ -1722,8 +1721,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       auto part_body = co_await multipart.read_part_body(boundary);
 
-      if (ctx.stream) {
-        ec = co_await ctx.stream->async_write(part_body.data.data(),
+      if (ctx.resp_body_stream) {
+        ec = co_await ctx.resp_body_stream->async_write(part_body.data.data(),
                                               part_body.data.size());
       }
       else {
@@ -1802,8 +1801,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
-      if (ctx.stream) {
-        ec = co_await ctx.stream->async_write(data_ptr, chunk_size);
+      if (ctx.resp_body_stream) {
+        ec = co_await ctx.resp_body_stream->async_write(data_ptr, chunk_size);
       }
       else {
         resp_chunk_str_.append(data_ptr, chunk_size);
