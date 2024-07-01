@@ -25,8 +25,9 @@
 
 #include "../util/type_traits.h"
 #include "io_context_pool.hpp"
-
+#ifdef __linux__
 #include <sys/sendfile.h>
+#endif
 
 namespace coro_io {
 template <typename T>
@@ -516,6 +517,8 @@ inline std::error_code connect(executor_t &executor,
   return error;
 }
 
+#ifdef __linux__
+
 inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_sendfile(asio::ip::tcp::socket& socket, int fd, off_t offset, size_t size) noexcept {
   std::error_code ec;
@@ -557,4 +560,5 @@ async_sendfile(asio::ip::tcp::socket& socket, int fd, off_t offset, size_t size)
   }
   co_return std::pair{ec,size-least_bytes};
 }
+#endif
 }  // namespace coro_io
