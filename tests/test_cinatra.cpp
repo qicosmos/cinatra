@@ -1,6 +1,8 @@
 #include <async_simple/coro/Collect.h>
 
+#include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -10,6 +12,7 @@
 #include <system_error>
 #include <vector>
 
+#include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra.hpp"
 #include "cinatra/coro_http_client.hpp"
@@ -18,7 +21,9 @@
 #include "cinatra/multipart.hpp"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
+#include "cinatra_log_wrapper.hpp"
 #include "doctest/doctest.h"
+#include "ylt/coro_io/coro_file.hpp"
 using namespace std::chrono_literals;
 
 using namespace cinatra;
@@ -1093,6 +1098,161 @@ TEST_CASE("test coro_http_client multipart upload") {
   CHECK(result.status == 200);
 }
 
+TEST_CASE("test coro_http_client upload") {
+  auto test_upload_by_file_path = [](std::string filename,
+                                     std::size_t r_size = SIZE_MAX,
+                                     bool should_failed = false) {
+    coro_http_client client{};
+    client.add_header("filename", filename);
+    if (r_size != SIZE_MAX)
+      client.add_header("filesize", std::to_string(r_size));
+    std::string uri = "http://127.0.0.1:8090/upload";
+    cinatra::resp_data result;
+    if (r_size != SIZE_MAX) {
+      auto lazy = client.async_upload(uri, http_method::PUT, filename, r_size);
+      result = async_simple::coro::syncAwait(lazy);
+    }
+    else {
+      auto lazy = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy);
+    }
+    CHECK(((result.status == 200) ^ should_failed));
+  };
+  auto test_upload_by_stream = [](std::string filename,
+                                  std::size_t r_size = SIZE_MAX,
+                                  bool should_failed = false) {
+    coro_http_client client{};
+    client.add_header("filename", filename);
+    if (r_size != SIZE_MAX)
+      client.add_header("filesize", std::to_string(r_size));
+    std::string uri = "http://127.0.0.1:8090/upload";
+    std::ifstream ifs(filename, std::ios::binary);
+    cinatra::resp_data result;
+    if (r_size != SIZE_MAX) {
+      auto lazy = client.async_upload(uri, http_method::PUT, filename, r_size);
+      result = async_simple::coro::syncAwait(lazy);
+    }
+    else {
+      auto lazy = client.async_upload(uri, http_method::PUT, filename);
+      result = async_simple::coro::syncAwait(lazy);
+    }
+    CHECK(((result.status == 200) ^ should_failed));
+  };
+  auto test_upload_by_coro = [](std::string filename,
+                                std::size_t r_size = SIZE_MAX,
+                                bool should_failed = false) {
+    coro_http_client client{};
+    client.add_header("filename", filename);
+    if (r_size != SIZE_MAX)
+      client.add_header("filesize", std::to_string(r_size));
+    std::string uri = "http://127.0.0.1:8090/upload";
+    coro_io::coro_file file;
+    auto res = async_simple::coro::syncAwait(
+        file.async_open(filename, coro_io::flags::read_only));
+    CHECK(res);
+    std::string buf;
+    buf.resize(1'000'000);
+    auto async_read =
+        [&file, &buf]() -> async_simple::coro::Lazy<cinatra::read_result> {
+      auto [ec, size] = co_await file.async_read(buf.data(), buf.size());
+      co_return read_result{{buf.data(), size}, file.eof(), ec};
+    };
+    cinatra::resp_data result;
+    if (r_size == SIZE_MAX) {
+      auto lazy = client.async_upload(uri, http_method::PUT, async_read);
+      result = async_simple::coro::syncAwait(lazy);
+      CHECK(result.status != 200);
+    }
+    else {
+      auto lazy =
+          client.async_upload(uri, http_method::PUT, async_read, r_size);
+      result = async_simple::coro::syncAwait(lazy);
+      CHECK(((result.status == 200) ^ should_failed));
+    }
+  };
+  coro_http_server server(1, 8090);
+  server.set_http_handler<cinatra::PUT>(
+      "/upload",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        std::string_view filename = req.get_header_value("filename");
+        std::size_t sz;
+        std::string oldpath = fs::current_path().append(filename);
+        std::string newpath =
+            fs::current_path().append("server_" + std::string{filename});
+        std::ofstream file(newpath, std::ios::binary);
+        CHECK(file.is_open());
+        file.write(req.get_body().data(), req.get_body().size());
+        file.flush();
+        file.close();
+        auto filesize = req.get_header_value("filesize");
+        if (!filesize.empty()) {
+          std::from_chars(filesize.begin(), filesize.end(), sz);
+        }
+        else {
+          sz = std::filesystem::file_size(oldpath);
+        }
+        CHECK(!filename.empty());
+        CHECK(sz == std::filesystem::file_size(newpath));
+        resp.set_status_and_content(status_type::ok, std::string(filename));
+        co_return;
+      });
+  server.async_start();
+  std::string filename = "test_upload.txt";
+  // upload without size
+  {
+    auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
+    for (auto size : sizes) {
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename, size);
+      CHECK(r);
+      test_upload_by_file_path(filename);
+      test_upload_by_stream(filename);
+      test_upload_by_coro(filename);
+    }
+  }
+  // upload with size
+  {
+    auto sizes = {std::pair{1024 * 1024, 1'000'000},
+                  std::pair{2'000'000, 1'999'999}, std::pair{200, 1},
+                  std::pair{100, 0}, std::pair{0, 0}};
+    for (auto [size, r_size] : sizes) {
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename, size);
+      CHECK(r);
+      test_upload_by_file_path(filename, r_size);
+      test_upload_by_stream(filename, r_size);
+      test_upload_by_coro(filename, r_size);
+    }
+  }
+  // upload with too large size
+  {
+    auto sizes = {std::pair{1024 * 1024, 1024 * 1024 + 2},
+                  std::pair{2'000'000, 2'000'001}, std::pair{200, 502},
+                  std::pair{0, 1}};
+    for (auto [size, r_size] : sizes) {
+      std::error_code ec{};
+      fs::remove(filename, ec);
+      if (ec) {
+        std::cout << ec << "\n";
+      }
+      bool r = create_file(filename, size);
+      CHECK(r);
+      test_upload_by_file_path(filename, r_size, true);
+      test_upload_by_stream(filename, r_size, true);
+      test_upload_by_coro(filename, r_size, true);
+    }
+  }
+}
+
 TEST_CASE("test coro_http_client chunked upload and download") {
   {
     coro_http_server server(1, 8090);
@@ -1117,22 +1277,23 @@ TEST_CASE("test coro_http_client chunked upload and download") {
               co_return;
             }
 
-            //file.write(result.data.data(), result.data.size());
-            
+            file.write(result.data.data(), result.data.size());
+
             if (result.eof) {
               break;
             }
           }
-          //file.flush();
-          //file.close();
-          //auto sz=std::filesystem::file_size(oldpath);
-          //CHECK(sz==std::filesystem::file_size(newpath));
+          file.flush();
+          file.close();
+          auto sz = std::filesystem::file_size(oldpath);
+          CHECK(sz == std::filesystem::file_size(newpath));
           resp.set_status_and_content(status_type::ok, std::string(filename));
         });
 
     server.async_start();
-    {
-      std::string filename = "test_1G.txt";
+    auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
+    for (auto size : sizes) {
+      std::string filename = "test_chunked_upload.txt";
       std::error_code ec{};
       fs::remove(filename, ec);
       if (ec) {
@@ -1140,55 +1301,6 @@ TEST_CASE("test coro_http_client chunked upload and download") {
       }
       bool r = create_file(filename,1024*1024*8);
       CHECK(r);
-      coro_http_client client{};
-      client.add_header("filename", filename);
-      std::string uri = "http://127.0.0.1:8090/chunked_upload";
-      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-      auto result = async_simple::coro::syncAwait(lazy);
-      CHECK(result.status == 200);
-    }
-
-    {
-      std::string filename = "test_2M.txt";
-      std::error_code ec{};
-      fs::remove(filename, ec);
-      if (ec) {
-        std::cout << ec << "\n";
-      }
-      bool r = create_file(filename, 2'000'000);
-      CHECK(r);
-
-      coro_http_client client{};
-      client.add_header("filename", filename);
-      std::string uri = "http://127.0.0.1:8090/chunked_upload";
-      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-      auto result = async_simple::coro::syncAwait(lazy);
-      CHECK(result.status == 200);
-    }
-
-
-    {
-      std::string filename = "test_1024.txt";
-      std::error_code ec{};
-      fs::remove(filename, ec);
-      if (ec) {
-        std::cout << ec << "\n";
-      }
-      bool r = create_file(filename);
-      CHECK(r);
-
-      coro_http_client client{};
-      client.add_header("filename", filename);
-      std::string uri = "http://127.0.0.1:8090/chunked_upload";
-      auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);
-      auto result = async_simple::coro::syncAwait(lazy);
-      CHECK(result.status == 200);
-    }
-
-    {
-      std::string filename = "test_100.txt";
-      create_file(filename, 100);
-
       coro_http_client client{};
       client.add_header("filename", filename);
       std::string uri = "http://127.0.0.1:8090/chunked_upload";
