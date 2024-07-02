@@ -1186,10 +1186,9 @@ TEST_CASE("test coro_http_client upload") {
         file.write(req.get_body().data(), req.get_body().size());
         file.flush();
         file.close();
-        auto filesize = req.get_header_value("filesize");
+        std::string filesize = std::string{req.get_header_value("filesize")};
         if (!filesize.empty()) {
-          std::from_chars(filesize.data(), filesize.data() + filesize.size(),
-                          sz);
+          sz = stoull(filesize);
         }
         else {
           sz = std::filesystem::file_size(oldpath);
