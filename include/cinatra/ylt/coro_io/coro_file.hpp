@@ -127,7 +127,7 @@ class coro_file {
       : executor_wrapper_(executor) {}
 #endif
 
-  bool is_open() {
+  bool is_open() const {
     if (type_ == read_type::pread) {
       return fd_file_ != nullptr;
     }
@@ -150,7 +150,7 @@ class coro_file {
 #endif
   }
 
-  bool eof() { return eof_; }
+  bool eof() const { return eof_; }
 
   void close() {
     if (stream_file_) {
@@ -161,11 +161,13 @@ class coro_file {
     }
   }
 
-  static size_t file_size(std::string_view filepath) {
-    std::error_code ec;
-    size_t size = std::filesystem::file_size(filepath, ec);
-    return size;
+  size_t file_size(std::error_code ec) const noexcept {
+    return std::filesystem::file_size(file_path_, ec);
   }
+
+  size_t file_size() const { return std::filesystem::file_size(file_path_); }
+
+  std::string_view file_path() const { return file_path_; }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
       size_t offset, char *data, size_t size) {
@@ -372,9 +374,10 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
+    file_path_ = std::move(filepath);
     type_ = type;
     if (type_ == read_type::pread) {
-      co_return open_fd(filepath, open_mode);
+      co_return open_fd(file_path_, open_mode);
     }
 
     if (stream_file_ != nullptr) {
@@ -382,11 +385,12 @@ class coro_file {
     }
 
     auto result = co_await coro_io::post(
-        [this, &filepath, open_mode] {
-          auto fptr = fopen(filepath.data(), str_mode(open_mode).data());
+        [this, open_mode] {
+          auto fptr =
+              fopen(this->file_path_.data(), str_mode(open_mode).data());
           if (fptr == nullptr) {
             std::cout << "line " << __LINE__ << " coro_file open failed "
-                      << filepath << "\n";
+                      << this->file_path_ << "\n";
             return false;
           }
           stream_file_ = std::shared_ptr<FILE>(fptr, [](FILE *ptr) {
@@ -536,6 +540,7 @@ class coro_file {
 #endif
   coro_io::ExecutorWrapper<> executor_wrapper_;
   std::shared_ptr<int> fd_file_;
+  std::string file_path_;
   std::atomic<bool> eof_ = false;
 };
 }  // namespace coro_io
