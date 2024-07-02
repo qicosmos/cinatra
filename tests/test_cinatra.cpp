@@ -1177,7 +1177,7 @@ TEST_CASE("test coro_http_client upload") {
          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         std::string_view filename = req.get_header_value("filename");
         std::size_t sz;
-        std::string oldpath = fs::current_path().append(filename);
+        auto oldpath = fs::current_path().append(filename);
         std::string newpath =
             fs::current_path().append("server_" + std::string{filename});
         std::ofstream file(newpath, std::ios::binary);
