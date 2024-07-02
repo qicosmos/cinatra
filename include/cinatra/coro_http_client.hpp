@@ -848,8 +848,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   std::string_view get_port() { return port_; }
 
-  async_simple::coro::Lazy<void> send_file_with_copy(std::string source,
-                                                     std::error_code &ec) {
+ private:
+  async_simple::coro::Lazy<void> send_file_chunked_with_copy(
+      std::string source, std::error_code &ec) {
     std::string file_data;
     detail::resize(file_data, max_single_part_size_);
     coro_io::coro_file file{};
@@ -872,7 +873,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
   }
 
-  async_simple::coro::Lazy<void> send_file_no_trunk_with_copy(
+  async_simple::coro::Lazy<void> send_file_no_chunked_with_copy(
       std::string source, std::error_code &ec, std::size_t length) {
     if (length <= 0) {
       co_return;
@@ -1004,6 +1005,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return remaining_bytes;
   }
 
+ public:
   template <typename S, typename Source>
   async_simple::coro::Lazy<resp_data> async_upload(
       S uri, http_method method, Source source /* file */,
@@ -1120,11 +1122,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_SSL
       }
       else {
-        co_await send_file_no_trunk_with_copy(source, ec, content_length);
+        co_await send_file_no_chunked_with_copy(source, ec, content_length);
       }
 #endif
 #else
-      co_await send_file_no_trunk_with_copy(source, ec, content_length);
+      co_await send_file_no_chunked_with_copy(source, ec, content_length);
 #endif
     }
     else {
@@ -1264,11 +1266,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef CINATRA_ENABLE_SSL
       }
       else {
-        co_await send_file_with_copy(source, ec);
+        co_await send_file_chunked_with_copy(source, ec);
       }
 #endif
 #else
-      co_await send_file_with_copy(source, ec);
+      co_await send_file_chunked_with_copy(source, ec);
 #endif
     }
     else {
