@@ -3,7 +3,6 @@
 #include <cassert>
 #include <charconv>
 #include <cstddef>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -2454,10 +2453,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool stop_bench_ = false;
   size_t total_len_ = 0;
 #endif
-  template <bool is_chunked>
-  friend async_simple::coro::Lazy<void> send_file_without_copy(
-      coro_http_client *self, const std::filesystem::path &source,
-      std::error_code &ec, ssize_t length);
 };
 
 }  // namespace cinatra
