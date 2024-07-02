@@ -1269,8 +1269,9 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           CHECK(!filename.empty());
 
           auto oldpath = fs::current_path().append(filename);
-          std::string newpath =
-              fs::current_path().append("server_" + std::string{filename}).string();
+          std::string newpath = fs::current_path()
+                                    .append("server_" + std::string{filename})
+                                    .string();
           std::ofstream file(newpath, std::ios::binary);
           CHECK(file.is_open());
 
