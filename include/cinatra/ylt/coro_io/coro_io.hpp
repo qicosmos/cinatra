@@ -520,20 +520,22 @@ inline std::error_code connect(executor_t &executor,
 #ifdef __linux__
 
 inline async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
-async_sendfile(asio::ip::tcp::socket& socket, int fd, off_t offset, size_t size) noexcept {
+async_sendfile(asio::ip::tcp::socket &socket, int fd, off_t offset,
+               size_t size) noexcept {
   std::error_code ec;
   std::size_t least_bytes = size;
-  if (!ec) [[likely]] { 
+  if (!ec) [[likely]] {
     if (!socket.native_non_blocking()) {
       socket.native_non_blocking(true, ec);
       if (ec) {
-        co_return std::pair{ec,0};
+        co_return std::pair{ec, 0};
       }
     }
-    while(true) {
+    while (true) {
       // Try the system call.
       errno = 0;
-      int n = ::sendfile(socket.native_handle(), fd, &offset, std::min(std::size_t{65536},least_bytes));
+      int n = ::sendfile(socket.native_handle(), fd, &offset,
+                         std::min(std::size_t{65536}, least_bytes));
       ec = asio::error_code(n < 0 ? errno : 0,
                             asio::error::get_system_category());
       least_bytes -= ec ? 0 : n;
@@ -542,23 +544,25 @@ async_sendfile(asio::ip::tcp::socket& socket, int fd, off_t offset, size_t size)
       if (ec == asio::error::interrupted) [[unlikely]]
         continue;
       // Check if we need to run the operation again.
-      if (ec == asio::error::would_block || ec == asio::error::try_again) [[unlikely]] { 
+      if (ec == asio::error::would_block || ec == asio::error::try_again)
+          [[unlikely]] {
         callback_awaitor<std::error_code> non_block_awaitor;
         // We have to wait for the socket to become ready again.
-          ec = co_await non_block_awaitor.await_resume([&](auto handler) {
-            socket.async_wait(asio::ip::tcp::socket::wait_write,[handler](const auto& ec){
-              handler.set_value_then_resume(ec);
-            });
-          }); 
+        ec = co_await non_block_awaitor.await_resume([&](auto handler) {
+          socket.async_wait(asio::ip::tcp::socket::wait_write,
+                            [handler](const auto &ec) {
+                              handler.set_value_then_resume(ec);
+                            });
+        });
         continue;
       }
-      if (ec || n == 0 || least_bytes == 0) [[unlikely]] { // End of File
+      if (ec || n == 0 || least_bytes == 0) [[unlikely]] {  // End of File
         break;
       }
       // Loop around to try calling sendfile again.
     }
   }
-  co_return std::pair{ec,size-least_bytes};
+  co_return std::pair{ec, size - least_bytes};
 }
 #endif
 }  // namespace coro_io

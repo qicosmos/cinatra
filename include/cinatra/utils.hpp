@@ -290,8 +290,9 @@ get_cookies_map(std::string_view cookies_str) {
   return cookies;
 };
 
-template<bool is_first_time,bool is_last_time>
-std::string_view get_chuncked_buffers(size_t length,std::array<char, 24>& buffer) {
+template <bool is_first_time, bool is_last_time>
+std::string_view get_chuncked_buffers(size_t length,
+                                      std::array<char, 24> &buffer) {
   if constexpr (is_last_time) {
     return {"\r\n0\r\n\r\n"};
   }
@@ -312,7 +313,5 @@ std::string_view get_chuncked_buffers(size_t length,std::array<char, 24>& buffer
 }
 
 }  // namespace cinatra
-
-
 
 #endif  // CINATRA_UTILS_HPP

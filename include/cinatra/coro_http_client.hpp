@@ -115,8 +115,8 @@ template <typename String = std::string>
 struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_header; /*header string*/
-  String content; /*body*/
-  coro_io::coro_file* resp_body_stream = nullptr; 
+  String content;         /*body*/
+  coro_io::coro_file *resp_body_stream = nullptr;
 };
 
 struct multipart_t {
@@ -1617,7 +1617,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     if (!ctx.req_header.empty())
       req_str.append(ctx.req_header);
-    size_t content_len=ctx.content.size();
+    size_t content_len = ctx.content.size();
     bool should_add_len = false;
     if (content_len > 0) {
       should_add_len = true;
@@ -1847,7 +1847,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       if (is_ranges) {
         if (ctx.resp_body_stream) {
-          auto ec = co_await ctx.resp_body_stream->async_write(data_ptr, content_len);
+          auto ec =
+              co_await ctx.resp_body_stream->async_write(data_ptr, content_len);
           if (ec) {
             data.net_err = ec;
             co_return;
@@ -1934,7 +1935,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       if (ctx.resp_body_stream) {
         ec = co_await ctx.resp_body_stream->async_write(part_body.data.data(),
-                                              part_body.data.size());
+                                                        part_body.data.size());
       }
       else {
         resp_chunk_str_.append(part_body.data.data(), part_body.data.size());

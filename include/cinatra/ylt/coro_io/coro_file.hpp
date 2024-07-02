@@ -160,18 +160,14 @@ class coro_file {
       fd_file_.reset();
     }
   }
-  
+
   size_t file_size(std::error_code ec) const noexcept {
     return std::filesystem::file_size(file_path_, ec);
   }
 
-  size_t file_size() const {
-    return std::filesystem::file_size(file_path_);
-  }
+  size_t file_size() const { return std::filesystem::file_size(file_path_); }
 
-  std::string_view file_path() const {
-    return file_path_;
-  }
+  std::string_view file_path() const { return file_path_; }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_pread(
       size_t offset, char *data, size_t size) {
@@ -378,7 +374,7 @@ class coro_file {
   async_simple::coro::Lazy<bool> async_open(std::string filepath,
                                             int open_mode = flags::read_write,
                                             read_type type = read_type::fread) {
-    file_path_=std::move(filepath);
+    file_path_ = std::move(filepath);
     type_ = type;
     if (type_ == read_type::pread) {
       co_return open_fd(file_path_, open_mode);
@@ -390,7 +386,8 @@ class coro_file {
 
     auto result = co_await coro_io::post(
         [this, open_mode] {
-          auto fptr = fopen(this->file_path_.data(), str_mode(open_mode).data());
+          auto fptr =
+              fopen(this->file_path_.data(), str_mode(open_mode).data());
           if (fptr == nullptr) {
             std::cout << "line " << __LINE__ << " coro_file open failed "
                       << this->file_path_ << "\n";
