@@ -1178,8 +1178,9 @@ TEST_CASE("test coro_http_client upload") {
         std::string_view filename = req.get_header_value("filename");
         uint64_t sz;
         auto oldpath = fs::current_path().append(filename);
-        std::string newpath =
-            fs::current_path().append("server_" + std::string{filename}).string();
+        std::string newpath = fs::current_path()
+                                  .append("server_" + std::string{filename})
+                                  .string();
         std::ofstream file(newpath, std::ios::binary);
         CHECK(file.is_open());
         file.write(req.get_body().data(), req.get_body().size());
@@ -1187,7 +1188,8 @@ TEST_CASE("test coro_http_client upload") {
         file.close();
         auto filesize = req.get_header_value("filesize");
         if (!filesize.empty()) {
-          std::from_chars(filesize.begin(), filesize.end(), sz);
+          std::from_chars(filesize.data(), filesize.data() + filesize.size(),
+                          sz);
         }
         else {
           sz = std::filesystem::file_size(oldpath);
