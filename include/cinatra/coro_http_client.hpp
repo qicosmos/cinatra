@@ -902,7 +902,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       length -= size;
     }
   }
-
+#ifdef __linux__
   struct fd_guard {
     int fd;
     fd_guard(const char *file_path) : fd(::open(file_path, O_RDONLY)) {}
@@ -973,7 +973,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     } while (true);
   }
-
+#endif
   template <typename stream>
   static std::size_t getRemainingBytes(stream &file) {
     auto current_pos = file.tellg();
