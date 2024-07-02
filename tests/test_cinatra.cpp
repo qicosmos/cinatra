@@ -288,6 +288,44 @@ TEST_CASE("test cinatra::string with SSO") {
   CHECK(s == "HelloHi233");
 }
 
+TEST_CASE("test parse query") {
+  {
+    http_parser parser{};
+    parser.parse_query("=");
+    parser.parse_query("&a");
+    parser.parse_query("&b=");
+    parser.parse_query("&c=&d");
+    parser.parse_query("&e=&f=1");
+    parser.parse_query("&g=1&h=1");
+    auto map = parser.queries();
+    CHECK(map["a"].empty());
+    CHECK(map["b"].empty());
+    CHECK(map["c"].empty());
+    CHECK(map["d"].empty());
+    CHECK(map["e"].empty());
+    CHECK(map["f"] == "1");
+    CHECK(map["g"] == "1");
+    CHECK(map["h"] == "1");
+  }
+  {
+    http_parser parser{};
+    parser.parse_query("test");
+    parser.parse_query("test1=");
+    parser.parse_query("test2=&");
+    parser.parse_query("test3&");
+    parser.parse_query("test4&a");
+    parser.parse_query("test5&b=2");
+    parser.parse_query("test6=1&c=2");
+    parser.parse_query("test7=1&d");
+    parser.parse_query("test8=1&e=");
+    parser.parse_query("test9=1&f");
+    parser.parse_query("test10=1&g=10&h&i=3&j");
+    auto map = parser.queries();
+    CHECK(map["test"].empty());
+    CHECK(map.size() == 21);
+  }
+}
+
 TEST_CASE("test cinatra::string without SSO") {
   std::string s(1000, 'A');
   std::string s2(5000, 'B');

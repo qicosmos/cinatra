@@ -291,8 +291,8 @@ get_cookies_map(std::string_view cookies_str) {
 };
 
 template <bool is_first_time, bool is_last_time>
-std::string_view get_chuncked_buffers(size_t length,
-                                      std::array<char, 24> &buffer) {
+inline std::string_view get_chuncked_buffers(size_t length,
+                                             std::array<char, 24> &buffer) {
   if constexpr (is_last_time) {
     return {"\r\n0\r\n\r\n"};
   }
