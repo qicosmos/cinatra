@@ -894,12 +894,18 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         close();
         break;
       }
+      length -= size;
+      if (length > 0 && file.eof()) {
+        // bad request, file may smaller than content-length
+        close();
+        ec = std::make_error_code(std::errc::invalid_argument);
+        break;
+      }
       if (std::tie(ec, size) =
               co_await async_write(asio::buffer(file_data.data(), size));
           ec) {
         break;
       }
-      length -= size;
     }
   }
 #ifdef __linux__
