@@ -162,7 +162,7 @@ inline bool open_native_async_file(File &file, Executor &executor,
 }
 #endif
 
-enum class execution_type { native_async, thread_pool };
+enum class execution_type { none, native_async, thread_pool };
 
 template <execution_type execute_type = execution_type::native_async>
 class seq_coro_file {
@@ -173,6 +173,19 @@ class seq_coro_file {
 
   seq_coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
+
+  seq_coro_file(std::string_view filepath,
+                std::ios::ios_base::openmode open_flags,
+                coro_io::ExecutorWrapper<> *executor =
+                    coro_io::get_global_block_executor())
+      : seq_coro_file(filepath, open_flags, executor->get_asio_executor()) {}
+
+  seq_coro_file(std::string_view filepath,
+                std::ios::ios_base::openmode open_flags,
+                asio::io_context::executor_type executor)
+      : executor_wrapper_(executor) {
+    open(filepath, open_flags);
+  }
 
   bool open(std::string_view filepath,
             std::ios::ios_base::openmode open_flags) {
@@ -278,12 +291,23 @@ class seq_coro_file {
       async_seq_file_.close(ec);
     }
 #endif
-    if (frw_seq_file_) {
+    if (frw_seq_file_.is_open()) {
       frw_seq_file_.close();
     }
   }
 
-  bool is_in_thread_pool() { return frw_seq_file_.is_open(); }
+  execution_type get_execution_type() {
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+    if (frw_seq_file_.is_open()) {
+      return execution_type::native_async;
+    }
+#endif
+    if (frw_seq_file_.is_open()) {
+      return execution_type::thread_pool;
+    }
+
+    return execution_type::none;
+  }
 
  private:
   bool open_stream_file_in_pool(std::string_view filepath,
@@ -314,6 +338,8 @@ class seq_coro_file {
   bool eof_ = false;
 };
 
+using coro_file0 = seq_coro_file<>;
+
 template <execution_type execute_type = execution_type::native_async>
 class random_coro_file {
  public:
@@ -323,6 +349,19 @@ class random_coro_file {
 
   random_coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
+
+  random_coro_file(std::string_view filepath,
+                   std::ios::ios_base::openmode open_flags,
+                   coro_io::ExecutorWrapper<> *executor =
+                       coro_io::get_global_block_executor())
+      : random_coro_file(filepath, open_flags, executor->get_asio_executor()) {}
+
+  random_coro_file(std::string_view filepath,
+                   std::ios::ios_base::openmode open_flags,
+                   asio::io_context::executor_type executor)
+      : executor_wrapper_(executor) {
+    open(filepath, open_flags);
+  }
 
   bool open(std::string_view filepath,
             std::ios::ios_base::openmode open_flags) {
@@ -398,7 +437,18 @@ class random_coro_file {
 
   bool eof() { return eof_; }
 
-  bool is_in_thread_pool() { return prw_random_file_ != nullptr; }
+  execution_type get_execution_type() {
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+    if (async_seq_file_.is_open()) {
+      return execution_type::native_async;
+    }
+#endif
+    if (prw_random_file_ != nullptr) {
+      return execution_type::thread_pool;
+    }
+
+    return execution_type::none;
+  }
 
   void close() {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
@@ -515,6 +565,8 @@ class random_coro_file {
   std::shared_ptr<int> prw_random_file_ = nullptr;  // pread/pwrite random file
   bool eof_ = false;
 };
+
+using random_coro_file0 = random_coro_file<>;
 
 class coro_file {
  public:

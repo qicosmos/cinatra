@@ -72,9 +72,10 @@ void create_files(const std::vector<std::string> &files, size_t file_size) {
 template <coro_io::execution_type execute_type>
 void test_random_read_write(std::string_view filename) {
   create_files({std::string(filename)}, 190);
-  coro_io::random_coro_file<execute_type> file{};
-  file.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+  coro_io::random_coro_file<execute_type> file(
+      filename, std::ios::binary | std::ios::in | std::ios::out);
   CHECK(file.is_open());
+  CHECK(file.get_execution_type() == coro_io::execution_type::thread_pool);
 
   char buf[100];
   auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf, 10));
@@ -110,9 +111,10 @@ void test_random_read_write(std::string_view filename) {
 template <coro_io::execution_type execute_type>
 void test_seq_read_write(std::string_view filename) {
   create_files({std::string(filename)}, 190);
-  coro_io::seq_coro_file<execute_type> file;
-  file.open(filename, std::ios::binary | std::ios::in | std::ios::out);
-  CHECK(file.get_stream_file().is_open());
+  coro_io::seq_coro_file<execute_type> file(
+      filename, std::ios::binary | std::ios::in | std::ios::out);
+  CHECK(file.is_open());
+  CHECK(file.get_execution_type() == coro_io::execution_type::thread_pool);
   char buf[100];
   std::error_code ec;
   size_t size;
