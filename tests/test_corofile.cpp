@@ -69,9 +69,76 @@ void create_files(const std::vector<std::string> &files, size_t file_size) {
   }
 }
 
+template <coro_io::execution_type execute_type>
+void test_random_read_write(std::string_view filename) {
+  create_files({std::string(filename)}, 190);
+  coro_io::random_coro_file<execute_type> file{};
+  file.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+  CHECK(file.is_open());
+
+  char buf[100];
+  auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf, 10));
+  CHECK(std::string_view(buf, pair.second) == "AAAAAAAAAA");
+  CHECK(!file.eof());
+
+  pair = async_simple::coro::syncAwait(file.async_read_at(10, buf, 100));
+  CHECK(!file.eof());
+  CHECK(pair.second == 100);
+
+  pair = async_simple::coro::syncAwait(file.async_read_at(110, buf, 100));
+  CHECK(pair.second == 80);
+
+  // only read size equal 0 is eof.
+  pair = async_simple::coro::syncAwait(file.async_read_at(200, buf, 100));
+  CHECK(file.eof());
+  CHECK(pair.second == 0);
+
+  coro_io::random_coro_file<execute_type> file1;
+  file1.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+  CHECK(file1.is_open());
+  std::string buf1 = "cccccccccc";
+  auto [ec, size] =
+      async_simple::coro::syncAwait(file1.async_write_at(0, buf1));
+  CHECK(!ec);
+
+  std::string buf2 = "dddddddddd";
+  auto [ec2, sz] =
+      async_simple::coro::syncAwait(file1.async_write_at(10, buf2));
+  CHECK(!ec2);
+}
+
+template <coro_io::execution_type execute_type>
+void test_seq_read_write(std::string_view filename) {
+  create_files({std::string(filename)}, 190);
+  coro_io::seq_coro_file<execute_type> file;
+  file.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+  CHECK(file.get_stream_file().is_open());
+  char buf[100];
+  std::error_code ec;
+  size_t size;
+  std::tie(ec, size) = async_simple::coro::syncAwait(file.async_read(buf, 10));
+  CHECK(size == 10);
+
+  std::string str = "test";
+  std::tie(ec, size) = async_simple::coro::syncAwait(file.async_write(str));
+  std::cout << ec.message() << "\n";
+  CHECK(size == 4);
+}
+
+TEST_CASE("test seq and random") {
+  std::string filename = "validate.tmp";
+  {
+    test_random_read_write<coro_io::execution_type::thread_pool>(filename);
+    test_random_read_write<coro_io::execution_type::native_async>(filename);
+  }
+  {
+    test_seq_read_write<coro_io::execution_type::thread_pool>(filename);
+    test_seq_read_write<coro_io::execution_type::native_async>(filename);
+  }
+}
+
 TEST_CASE("validate corofile") {
   std::string filename = "validate.tmp";
-  create_files({filename}, 190);
   {
     coro_io::coro_file file{};
     async_simple::coro::syncAwait(file.async_open(
