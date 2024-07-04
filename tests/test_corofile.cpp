@@ -132,7 +132,6 @@ void test_seq_read_write(std::string_view filename) {
 
   std::string str = "test";
   std::tie(ec, size) = async_simple::coro::syncAwait(file.async_write(str));
-  std::cout << ec.message() << "\n";
   CHECK(size == 4);
 }
 
@@ -240,23 +239,6 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     pair = async_simple::coro::syncAwait(file.async_read_at(10, buf2, 10));
     CHECK(!file.eof());
     CHECK(std::string_view(buf2, pair.second) == "dddddddddd");
-  }
-}
-
-async_simple::coro::Lazy<void> test_basic_read(std::string filename) {
-  coro_file0 file{};
-  file.open(filename, std::ios::in);
-  std::string str;
-  str.resize(200);
-
-  {
-    auto [ec, size] = co_await file.async_read(str.data(), 10);
-    std::cout << size << ", " << file.eof() << "\n";
-  }
-
-  {
-    auto [ec, size] = co_await file.async_read(str.data(), str.size());
-    std::cout << size << ", " << file.eof() << "\n";
   }
 }
 
@@ -469,8 +451,6 @@ TEST_CASE("large_file_read_test") {
   std::string filename = "large_file_read_test.txt";
   std::string fill_with = "large_file_read_test";
   size_t file_size = 100 * MB;
-  // auto str = create_filled_vec0(fill_with);
-  // std::cout << str.data() <<"\n";
   auto block_vec = create_filled_vec(fill_with);
   create_file(filename, file_size, block_vec);
   CHECK(fs::file_size(filename) == file_size);
@@ -490,7 +470,6 @@ TEST_CASE("large_file_read_test") {
 
   while (!file.eof()) {
     char buf[block_size]{};
-    std::cout << buf << "\n";
     std::tie(ec, read_size) =
         async_simple::coro::syncAwait(file.async_read(buf, block_size));
     if (ec) {
