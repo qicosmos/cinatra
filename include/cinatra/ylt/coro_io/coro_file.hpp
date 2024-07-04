@@ -124,11 +124,11 @@ constexpr flags to_flags(std::ios::ios_base::openmode mode) {
     access = flags::truncate;
 
   if ((mode & (std::ios::in | std::ios::out)) != 0)
-    access = flags::read_write;
+    access = (flags)(flags::create_write | flags::read_write);
+  else if ((mode & std::ios::out) != 0)
+    access = flags::create_write;
   else if ((mode & std::ios::in) != 0)
     access = flags::read_only;
-  else if ((mode & std::ios::out) != 0)
-    access = flags::write_only;
 
   return access;
 }
