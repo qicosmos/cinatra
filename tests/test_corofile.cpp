@@ -281,7 +281,7 @@ TEST_CASE("multithread for balance") {
                        int index) mutable -> async_simple::coro::Lazy<void> {
     coro_io::coro_file0 file(coro_io::get_global_block_executor<
                              coro_io::multithread_context_pool>());
-    file.open(filename, std::ios::out);
+    file.open(filename, std::ios::out | std::ios::trunc);
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -368,7 +368,7 @@ TEST_CASE("read write 100 small files") {
           std::string filename,
           int index) mutable -> async_simple::coro::Lazy<void> {
     coro_io::coro_file0 file(pool.get_executor());
-    file.open(filename, std::ios::out);
+    file.open(filename, std::ios::trunc | std::ios::out);
     CHECK(file.is_open());
 
     size_t id = index % write_str_vec.size();
@@ -626,7 +626,7 @@ TEST_CASE("small_file_write_test") {
   std::string file_content_0 = "small_file_write_test_0";
 
   coro_io::coro_file0 file(ioc.get_executor());
-  file.open(filename, std::ios::out);
+  file.open(filename, std::ios::trunc | std::ios::out);
   CHECK(file.is_open());
   async_simple::coro::syncAwait(file.async_write(file_content_0));
 
@@ -690,7 +690,7 @@ TEST_CASE("large_file_write_test") {
   });
 
   coro_io::coro_file0 file(ioc.get_executor());
-  file.open(filename, std::ios::out);
+  file.open(filename, std::ios::trunc | std::ios::out);
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_test");
@@ -736,7 +736,7 @@ TEST_CASE("empty_file_write_test") {
   });
 
   coro_io::coro_file0 file(ioc.get_executor());
-  file.open(filename, std::ios::out);
+  file.open(filename, std::ios::trunc | std::ios::out);
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -767,7 +767,7 @@ TEST_CASE("small_file_write_with_pool_test") {
   });
 
   coro_io::coro_file0 file(pool.get_executor());
-  file.open(filename, std::ios::out);
+  file.open(filename, std::ios::trunc | std::ios::out);
   CHECK(file.is_open());
 
   char buf[512]{};
@@ -838,7 +838,7 @@ TEST_CASE("large_file_write_with_pool_test") {
   });
 
   coro_io::coro_file0 file(pool.get_executor());
-  file.open(filename, std::ios::out);
+  file.open(filename, std::ios::trunc | std::ios::out);
   CHECK(file.is_open());
 
   auto block_vec = create_filled_vec("large_file_write_with_pool_test");

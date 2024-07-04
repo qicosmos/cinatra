@@ -114,22 +114,22 @@ enum class read_mode { seq, random };
 enum class async_mode { native_async, thread_pool };
 
 constexpr flags to_flags(std::ios::ios_base::openmode mode) {
-  flags access = flags::read_write;
+  int access = flags::read_write;
 
   if ((mode & (std::ios::app)) != 0)
     access = flags::append;
 
   if ((mode & (std::ios::trunc)) != 0)
-    access = flags::truncate;
+    access |= flags::truncate;
 
   if ((mode & (std::ios::in | std::ios::out)) != 0)
-    access = read_write;
+    access |= read_write;
   else if ((mode & std::ios::out) != 0)
-    access = flags::create_write;
+    access |= flags::create_write;
   else if ((mode & std::ios::in) != 0)
-    access = flags::read_only;
+    access |= flags::read_only;
 
-  return access;
+  return (flags)access;
 }
 
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
@@ -329,11 +329,12 @@ class basic_seq_coro_file {
       return true;
     }
     auto coro_func = coro_io::post(
-        [this, flags, filepath] {
+        [this, flags, filepath]() mutable {
           frw_seq_file_.open(filepath.data(), flags);
           if (!frw_seq_file_.is_open()) {
             std::cout << "line " << __LINE__ << " coro_file open failed "
                       << filepath << "\n";
+            std::cerr << "Error: " << strerror(errno);
             return false;
           }
           return true;
