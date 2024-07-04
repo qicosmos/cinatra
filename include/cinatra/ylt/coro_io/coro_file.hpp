@@ -146,7 +146,7 @@ inline bool open_native_async_file(File &file, Executor &executor,
     if constexpr (seq) {
       file = std::make_shared<asio::stream_file>(
           executor.get_asio_executor(), std::string(filepath),
-          asio::file_base::flags::read_only);
+          static_cast<asio::file_base::flags>(open_flags));
     }
     else {
       file = std::make_shared<asio::random_access_file>(
