@@ -195,7 +195,7 @@ class seq_coro_file {
     else {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
       return open_native_async_file<true>(async_seq_file_, executor_wrapper_,
-                                          filepath, to_flags(open_flags), true);
+                                          filepath, to_flags(open_flags));
 #else
       return open_stream_file_in_pool(filepath, open_flags);
 #endif
@@ -372,7 +372,7 @@ class random_coro_file {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
       return open_native_async_file<false>(async_random_file_,
                                            executor_wrapper_, filepath,
-                                           to_flags(open_flags), true);
+                                           to_flags(open_flags));
 #else
       return open_fd(filepath, to_flags(open_flags));
 #endif
