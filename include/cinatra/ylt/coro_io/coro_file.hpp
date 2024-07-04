@@ -114,22 +114,26 @@ enum class read_mode { seq, random };
 enum class async_mode { native_async, thread_pool };
 
 constexpr flags to_flags(std::ios::ios_base::openmode mode) {
-  int access = flags::read_write;
+  flags access = flags::read_write;
 
-  if ((mode & (std::ios::app)) != 0)
+  if (mode == std::ios::in)
+    access = flags::read_only;
+  else if (mode == std::ios::out)
+    access = flags::write_only;
+  else if (mode == std::ios::app)
     access = flags::append;
+  else if (mode == std::ios::trunc)
+    access = flags::truncate;
+  else if (mode == (std::ios::in | std::ios::out))
+    access = flags::read_write;
+  else if (mode == (std::ios::trunc | std::ios::out))
+    access = flags::create_write_trunc;
+  if (mode == (std::ios::in | std::ios::out | std::ios::trunc))
+    access = create_read_write_trunc;
+  else if (mode == (std::ios::in | std::ios::out | std::ios::app))
+    access = create_read_write_append;
 
-  if ((mode & (std::ios::trunc)) != 0)
-    access |= flags::truncate;
-
-  if ((mode & (std::ios::in | std::ios::out)) != 0)
-    access |= read_write;
-  else if ((mode & std::ios::out) != 0)
-    access |= flags::create_write;
-  else if ((mode & std::ios::in) != 0)
-    access |= flags::read_only;
-
-  return (flags)access;
+  return access;
 }
 
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
