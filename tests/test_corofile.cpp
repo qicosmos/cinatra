@@ -75,7 +75,13 @@ void test_random_read_write(std::string_view filename) {
   coro_io::random_coro_file<execute_type> file(
       filename, std::ios::binary | std::ios::in | std::ios::out);
   CHECK(file.is_open());
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+  if (execute_type == coro_io::execution_type::native_async) {
+    CHECK(file.get_execution_type() == coro_io::execution_type::native_async);
+  }
+#else
   CHECK(file.get_execution_type() == coro_io::execution_type::thread_pool);
+#endif
 
   char buf[100];
   auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf, 10));
@@ -114,7 +120,13 @@ void test_seq_read_write(std::string_view filename) {
   coro_io::seq_coro_file<execute_type> file(
       filename, std::ios::binary | std::ios::in | std::ios::out);
   CHECK(file.is_open());
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+  if (execute_type == coro_io::execution_type::native_async) {
+    CHECK(file.get_execution_type() == coro_io::execution_type::native_async);
+  }
+#else
   CHECK(file.get_execution_type() == coro_io::execution_type::thread_pool);
+#endif
   char buf[100];
   std::error_code ec;
   size_t size;
