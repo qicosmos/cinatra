@@ -45,6 +45,7 @@ if(ENABLE_FILE_IO_URING)
 endif()
 
 if(WIN32)
+    message(STATUS "windows has file")
 	add_definitions(-DASIO_HAS_FILE)
 	add_definitions(-DASIO_HAS_IOCP)
 endif()
