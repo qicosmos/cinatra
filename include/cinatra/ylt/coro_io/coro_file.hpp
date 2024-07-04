@@ -370,9 +370,9 @@ class random_coro_file {
     }
     else {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
-      return open_native_async_file<false>(
-          async_random_file_, executor_wrapper_.get_asio_executor(), filepath,
-          to_flags(open_flags));
+      return open_native_async_file<false>(async_random_file_,
+                                           executor_wrapper_, filepath,
+                                           to_flags(open_flags));
 #else
       return open_fd(filepath, to_flags(open_flags));
 #endif
