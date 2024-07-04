@@ -166,24 +166,25 @@ inline bool open_native_async_file(File &file, Executor &executor,
 enum class execution_type { none, native_async, thread_pool };
 
 template <execution_type execute_type = execution_type::native_async>
-class seq_coro_file {
+class basic_seq_coro_file {
  public:
-  seq_coro_file(coro_io::ExecutorWrapper<> *executor =
-                    coro_io::get_global_block_executor())
-      : seq_coro_file(executor->get_asio_executor()) {}
+  basic_seq_coro_file(coro_io::ExecutorWrapper<> *executor =
+                          coro_io::get_global_block_executor())
+      : basic_seq_coro_file(executor->get_asio_executor()) {}
 
-  seq_coro_file(asio::io_context::executor_type executor)
+  basic_seq_coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
 
-  seq_coro_file(std::string_view filepath,
-                std::ios::ios_base::openmode open_flags,
-                coro_io::ExecutorWrapper<> *executor =
-                    coro_io::get_global_block_executor())
-      : seq_coro_file(filepath, open_flags, executor->get_asio_executor()) {}
+  basic_seq_coro_file(std::string_view filepath,
+                      std::ios::ios_base::openmode open_flags,
+                      coro_io::ExecutorWrapper<> *executor =
+                          coro_io::get_global_block_executor())
+      : basic_seq_coro_file(filepath, open_flags,
+                            executor->get_asio_executor()) {}
 
-  seq_coro_file(std::string_view filepath,
-                std::ios::ios_base::openmode open_flags,
-                asio::io_context::executor_type executor)
+  basic_seq_coro_file(std::string_view filepath,
+                      std::ios::ios_base::openmode open_flags,
+                      asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {
     open(filepath, open_flags);
   }
@@ -232,22 +233,24 @@ class seq_coro_file {
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_write(
       std::span<char> buf) {
     auto result = co_await coro_io::post(
-        [this, buf] {
+        [this, buf]() -> std::pair<std::error_code, size_t> {
           if constexpr (is_read) {
             if (frw_seq_file_.read(buf.data(), buf.size())) {
-              return std::pair<std::error_code, size_t>(std::error_code{},
-                                                        frw_seq_file_.tellg());
+              return std::make_pair(std::error_code{}, frw_seq_file_.gcount());
             }
           }
           else {
             if (frw_seq_file_.write(buf.data(), buf.size())) {
-              return std::pair<std::error_code, size_t>(std::error_code{},
-                                                        buf.size());
+              return std::make_pair(std::error_code{}, buf.size());
             }
           }
 
-          return std::pair<std::error_code, size_t>(
-              std::make_error_code(std::errc::io_error), 0);
+          if (frw_seq_file_.eof()) {
+            eof_ = true;
+            return std::make_pair(std::error_code{}, frw_seq_file_.gcount());
+          }
+
+          return std::make_pair(std::make_error_code(std::errc::io_error), 0);
         },
         &executor_wrapper_);
 
@@ -349,27 +352,28 @@ class seq_coro_file {
   bool eof_ = false;
 };
 
-using coro_file0 = seq_coro_file<>;
+using coro_file0 = basic_seq_coro_file<>;
 
 template <execution_type execute_type = execution_type::native_async>
-class random_coro_file {
+class basic_random_coro_file {
  public:
-  random_coro_file(coro_io::ExecutorWrapper<> *executor =
-                       coro_io::get_global_block_executor())
-      : random_coro_file(executor->get_asio_executor()) {}
+  basic_random_coro_file(coro_io::ExecutorWrapper<> *executor =
+                             coro_io::get_global_block_executor())
+      : basic_random_coro_file(executor->get_asio_executor()) {}
 
-  random_coro_file(asio::io_context::executor_type executor)
+  basic_random_coro_file(asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {}
 
-  random_coro_file(std::string_view filepath,
-                   std::ios::ios_base::openmode open_flags,
-                   coro_io::ExecutorWrapper<> *executor =
-                       coro_io::get_global_block_executor())
-      : random_coro_file(filepath, open_flags, executor->get_asio_executor()) {}
+  basic_random_coro_file(std::string_view filepath,
+                         std::ios::ios_base::openmode open_flags,
+                         coro_io::ExecutorWrapper<> *executor =
+                             coro_io::get_global_block_executor())
+      : basic_random_coro_file(filepath, open_flags,
+                               executor->get_asio_executor()) {}
 
-  random_coro_file(std::string_view filepath,
-                   std::ios::ios_base::openmode open_flags,
-                   asio::io_context::executor_type executor)
+  basic_random_coro_file(std::string_view filepath,
+                         std::ios::ios_base::openmode open_flags,
+                         asio::io_context::executor_type executor)
       : executor_wrapper_(executor) {
     open(filepath, open_flags);
   }
@@ -621,7 +625,7 @@ class random_coro_file {
   bool eof_ = false;
 };
 
-using random_coro_file0 = random_coro_file<>;
+using random_coro_file = basic_random_coro_file<>;
 
 class coro_file {
  public:
