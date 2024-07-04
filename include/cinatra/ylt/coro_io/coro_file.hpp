@@ -31,6 +31,7 @@
 #include <asio/stream_file.hpp>
 #endif
 #include <async_simple/coro/Lazy.h>
+#include <fcntl.h>
 
 #include <asio/error.hpp>
 #include <cstddef>
@@ -44,9 +45,7 @@
 #include <vector>
 
 #include "coro_io.hpp"
-
 #if defined(ASIO_WINDOWS)
-#include <fcntl.h>
 #include <io.h>
 #endif
 
