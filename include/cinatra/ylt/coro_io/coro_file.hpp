@@ -484,7 +484,7 @@ class basic_random_coro_file {
   }
 
  private:
-  bool open_fd(std::string_view filepath, flags open_flags) {
+  bool open_fd(std::string_view filepath, int open_flags) {
     if (prw_random_file_) {
       return true;
     }
