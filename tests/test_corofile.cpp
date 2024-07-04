@@ -7,10 +7,6 @@
 #include <string_view>
 #include <thread>
 
-#if defined(ASIO_WINDOWS)
-#define ASIO_HAS_FILE 1
-#endif
-
 #include "asio/io_context.hpp"
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/SyncAwait.h"
