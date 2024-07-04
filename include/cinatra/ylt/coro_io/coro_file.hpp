@@ -579,6 +579,40 @@ class random_coro_file {
     co_return std::make_pair(ec, op_size);
   }
 
+#if defined(ASIO_WINDOWS)
+  static int adjust_flags(int open_mode) {
+    switch (open_mode) {
+      case flags::read_only:
+        return _O_RDONLY;
+      case flags::write_only:
+        return _O_WRONLY;
+      case flags::read_write:
+        return _O_RDWR;
+      case flags::append:
+        return _O_APPEND;
+      case flags::create:
+        return _O_CREAT;
+      case flags::exclusive:
+        return _O_EXCL;
+      case flags::truncate:
+        return _O_TRUNC;
+      case flags::create_write:
+        return _O_CREAT | _O_WRONLY;
+      case flags::create_write_trunc:
+        return _O_CREAT | _O_WRONLY | _O_TRUNC;
+      case flags::create_read_write_trunc:
+        return _O_RDWR | _O_CREAT | _O_TRUNC;
+      case flags::create_read_write_append:
+        return _O_RDWR | _O_CREAT | _O_APPEND;
+      case flags::sync_all_on_write:
+      default:
+        return open_mode;
+        break;
+    }
+    return open_mode;
+  }
+#endif
+
   coro_io::ExecutorWrapper<> executor_wrapper_;
 #if defined(ENABLE_FILE_IO_URING)
   std::shared_ptr<asio::random_access_file> async_random_file_;  // random file
