@@ -42,9 +42,10 @@ if(ENABLE_FILE_IO_URING)
     add_definitions(-DENABLE_FILE_IO_URING)
     add_definitions(-DASIO_HAS_FILE)
     add_definitions(-DASIO_HAS_IO_URING)
-	if(WIN32)
-		add_definitions(-DASIO_HAS_WINDOWS_RANDOM_ACCESS_HANDLE)
-	endif()
+endif()
+
+if(WIN32)
+	add_definitions(-DASIO_HAS_WINDOWS_RANDOM_ACCESS_HANDLE)
 endif()
 
 option(USE_PREAD_WRITE "enable pread and pwrite" OFF)
