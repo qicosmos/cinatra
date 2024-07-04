@@ -522,7 +522,7 @@ class random_coro_file {
         return -1;
       }
 
-      co_return bytes_read;
+      return bytes_read;
     };
 #endif
     co_return co_await async_prw(pread, true, offset, data, size);
