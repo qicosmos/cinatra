@@ -26,7 +26,7 @@
 
 #include "async_simple/coro/SyncAwait.h"
 #include "io_context_pool.hpp"
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
 #include <asio/random_access_file.hpp>
 #include <asio/stream_file.hpp>
 #endif
