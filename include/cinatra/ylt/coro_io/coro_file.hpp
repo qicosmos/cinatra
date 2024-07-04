@@ -614,7 +614,7 @@ class random_coro_file {
 #endif
 
   coro_io::ExecutorWrapper<> executor_wrapper_;
-#if defined(ENABLE_FILE_IO_URING)
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
   std::shared_ptr<asio::random_access_file> async_random_file_;  // random file
 #endif
   std::shared_ptr<int> prw_random_file_ = nullptr;  // pread/pwrite random file
