@@ -45,7 +45,7 @@ if(ENABLE_FILE_IO_URING)
 endif()
 
 if(WIN32)
-	add_definitions(-DASIO_HAS_WINDOWS_RANDOM_ACCESS_HANDLE)
+	add_definitions(-DASIO_HAS_IOCP)
 endif()
 
 option(USE_PREAD_WRITE "enable pread and pwrite" OFF)
