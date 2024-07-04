@@ -387,7 +387,7 @@ class random_coro_file {
     else {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
       auto [ec, read_size] = co_await coro_io::async_read_at(
-          offset, async_random_file_, asio::buffer(data, size));
+          offset, async_random_file_, asio::buffer(buf, size));
 
       if (ec == asio::error::eof) {
         eof_ = true;
@@ -428,7 +428,7 @@ class random_coro_file {
 
   bool is_open() {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
-    if (async_seq_file_.is_open()) {
+    if (async_random_file_.is_open()) {
       return true;
     }
 #endif
@@ -439,7 +439,7 @@ class random_coro_file {
 
   execution_type get_execution_type() {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
-    if (async_seq_file_.is_open()) {
+    if (async_random_file_.is_open()) {
       return execution_type::native_async;
     }
 #endif
@@ -453,7 +453,7 @@ class random_coro_file {
   void close() {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
     std::error_code ec;
-    async_seq_file_.close(ec);
+    async_random_file_.close(ec);
 #endif
     prw_random_file_ = nullptr;
   }
