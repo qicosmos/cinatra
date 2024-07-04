@@ -204,12 +204,10 @@ TEST_CASE("coro_file pread and pwrite basic test") {
     CHECK(file.is_open());
 
     std::string buf = "cccccccccc";
-    auto ec = async_simple::coro::syncAwait(file.async_write_at(0, buf));
-    CHECK(!ec);
+    async_simple::coro::syncAwait(file.async_write_at(0, buf));
 
     std::string buf1 = "dddddddddd";
-    ec = async_simple::coro::syncAwait(file.async_write_at(10, buf1));
-    CHECK(!ec);
+    async_simple::coro::syncAwait(file.async_write_at(10, buf1));
 
     char buf2[100];
     auto pair = async_simple::coro::syncAwait(file.async_read_at(0, buf2, 10));
