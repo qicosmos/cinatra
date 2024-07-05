@@ -862,10 +862,10 @@ TEST_CASE("test upload file") {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file> file;
+          std::shared_ptr<coro_io::coro_file0> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file>();
+            file = std::make_shared<coro_io::coro_file0>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
@@ -876,7 +876,7 @@ TEST_CASE("test upload file") {
             }
 
             std::cout << filename << "\n";
-            co_await file->async_open(filename, coro_io::flags::create_write);
+            file->open(filename, std::ios::trunc | std::ios::out);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
                                           "file open failed");
@@ -890,8 +890,7 @@ TEST_CASE("test upload file") {
           }
 
           if (!filename.empty()) {
-            auto ec = co_await file->async_write(part_body.data.data(),
-                                                 part_body.data.size());
+            auto [ec, sz] = co_await file->async_write(part_body.data);
             if (ec) {
               co_return;
             }
@@ -1072,10 +1071,10 @@ TEST_CASE("test coro_http_client multipart upload") {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file> file;
+          std::shared_ptr<coro_io::coro_file0> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file>();
+            file = std::make_shared<coro_io::coro_file0>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
@@ -1086,7 +1085,7 @@ TEST_CASE("test coro_http_client multipart upload") {
             }
 
             std::cout << filename << "\n";
-            co_await file->async_open(filename, coro_io::flags::create_write);
+            file->open(filename, std::ios::trunc | std::ios::out);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
                                           "file open failed");
@@ -1100,8 +1099,7 @@ TEST_CASE("test coro_http_client multipart upload") {
           }
 
           if (!filename.empty()) {
-            auto ec = co_await file->async_write(part_body.data.data(),
-                                                 part_body.data.size());
+            auto [ec, sz] = co_await file->async_write(part_body.data);
             if (ec) {
               co_return;
             }
@@ -1184,10 +1182,9 @@ TEST_CASE("test coro_http_client upload") {
     if (r_size != SIZE_MAX)
       client.add_header("filesize", std::to_string(r_size));
     std::string uri = "http://127.0.0.1:8090/upload";
-    coro_io::coro_file file;
-    auto res = async_simple::coro::syncAwait(
-        file.async_open(filename, coro_io::flags::read_only));
-    CHECK(res);
+    coro_io::coro_file0 file;
+    file.open(filename, std::ios::in);
+    CHECK(file.is_open());
     std::string buf;
     buf.resize(1'000'000);
     auto async_read =

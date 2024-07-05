@@ -695,8 +695,8 @@ async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
   std::string filename = "test.txt";
   create_file(filename, 1010);
 
-  coro_io::coro_file file{};
-  co_await file.async_open(filename, coro_io::flags::read_only);
+  coro_io::coro_file0 file{};
+  file.open(filename, std::ios::in);
 
   std::string buf;
   detail::resize(buf, 100);

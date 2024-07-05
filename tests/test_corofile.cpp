@@ -168,6 +168,9 @@ async_simple::coro::Lazy<void> read_seek(std::string filename) {
     CHECK(pair.second == 5);
     CHECK(file.eof());
   }
+
+  bool ok = file.seek(100, std::ios::beg);
+  CHECK(!ok);
 }
 
 async_simple::coro::Lazy<void> write_seek(std::string filename) {

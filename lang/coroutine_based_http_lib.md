@@ -443,8 +443,8 @@ coro_http_client client{};
   std::string filename = "test.txt";
   create_file(filename, 1010);
 
-  coro_io::coro_file file{};
-  co_await file.async_open(filename, coro_io::flags::read_only);
+  coro_io::coro_file0 file{};
+  file.open(filename, std::ios::in);
 
   std::string buf;
   detail::resize(buf, 100);
@@ -536,10 +536,10 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file> file;
+          std::shared_ptr<coro_io::coro_file0> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file>();
+            file = std::make_shared<coro_io::coro_file0>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
@@ -550,7 +550,7 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
             }
 
             std::cout << filename << "\n";
-            co_await file->async_open(filename, coro_io::flags::create_write);
+            file->open(filename, std::ios::trunc|std::ios::out);
             if (!file->is_open()) {
               resp.set_status_and_content(status_type::internal_server_error,
                                           "file open failed");
@@ -564,8 +564,7 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
           }
 
           if (!filename.empty()) {
-            auto ec = co_await file->async_write(part_body.data.data(),
-                                                 part_body.data.size());
+            auto ec = co_await file->async_write(part_body.data);
             if (ec) {
               co_return;
             }
