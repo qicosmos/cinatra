@@ -115,7 +115,7 @@ struct req_context {
   req_content_type content_type = req_content_type::none;
   std::string req_header; /*header string*/
   String content;         /*body*/
-  coro_io::coro_file0 *resp_body_stream = nullptr;
+  coro_io::coro_file *resp_body_stream = nullptr;
 };
 
 struct multipart_t {
@@ -777,7 +777,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                                      std::string filename,
                                                      std::string range = "") {
     resp_data data{};
-    coro_io::coro_file0 file;
+    coro_io::coro_file file;
     file.open(filename, std::ios::trunc | std::ios::out);
     if (!file.is_open()) {
       data.net_err = std::make_error_code(std::errc::no_such_file_or_directory);
@@ -852,7 +852,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       std::string source, std::error_code &ec) {
     std::string file_data;
     detail::resize(file_data, max_single_part_size_);
-    coro_io::coro_file0 file{};
+    coro_io::coro_file file{};
     file.open(source, std::ios::in);
     if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
@@ -879,7 +879,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     std::string file_data;
     detail::resize(file_data, std::min(max_single_part_size_, length));
-    coro_io::coro_file0 file{};
+    coro_io::coro_file file{};
     file.open(source, std::ios::in);
     if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
@@ -2142,7 +2142,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     if (is_file) {
-      coro_io::coro_file0 file{};
+      coro_io::coro_file file{};
       file.open(part.filename, std::ios::in);
       assert(file.is_open());
       std::string file_data;

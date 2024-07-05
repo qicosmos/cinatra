@@ -862,10 +862,10 @@ TEST_CASE("test upload file") {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file0> file;
+          std::shared_ptr<coro_io::coro_file> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file0>();
+            file = std::make_shared<coro_io::coro_file>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
@@ -1071,10 +1071,10 @@ TEST_CASE("test coro_http_client multipart upload") {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file0> file;
+          std::shared_ptr<coro_io::coro_file> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file0>();
+            file = std::make_shared<coro_io::coro_file>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
@@ -1182,7 +1182,7 @@ TEST_CASE("test coro_http_client upload") {
     if (r_size != SIZE_MAX)
       client.add_header("filesize", std::to_string(r_size));
     std::string uri = "http://127.0.0.1:8090/upload";
-    coro_io::coro_file0 file;
+    coro_io::coro_file file;
     file.open(filename, std::ios::in);
     CHECK(file.is_open());
     std::string buf;

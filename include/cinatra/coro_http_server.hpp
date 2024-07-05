@@ -412,7 +412,7 @@ class coro_http_server {
             std::string content;
             detail::resize(content, chunked_size_);
 
-            coro_io::coro_file0 in_file{};
+            coro_io::coro_file in_file{};
             in_file.open(file_name, std::ios::in);
             if (!in_file.is_open()) {
               resp.set_status_and_content(status_type::not_found,

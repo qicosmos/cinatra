@@ -443,7 +443,7 @@ coro_http_client client{};
   std::string filename = "test.txt";
   create_file(filename, 1010);
 
-  coro_io::coro_file0 file{};
+  coro_io::coro_file file{};
   file.open(filename, std::ios::in);
 
   std::string buf;
@@ -536,10 +536,10 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
           std::cout << part_head.name << "\n";
           std::cout << part_head.filename << "\n";
 
-          std::shared_ptr<coro_io::coro_file0> file;
+          std::shared_ptr<coro_io::coro_file> file;
           std::string filename;
           if (!part_head.filename.empty()) {
-            file = std::make_shared<coro_io::coro_file0>();
+            file = std::make_shared<coro_io::coro_file>();
             filename = std::to_string(
                 std::chrono::system_clock::now().time_since_epoch().count());
 
