@@ -44,6 +44,12 @@ if(ENABLE_FILE_IO_URING)
     add_definitions(-DASIO_HAS_IO_URING)
 endif()
 
+if(WIN32)
+    message(STATUS "windows has file")
+	add_definitions(-DASIO_HAS_FILE)
+	add_definitions(-DASIO_HAS_IOCP)
+endif()
+
 option(USE_PREAD_WRITE "enable pread and pwrite" OFF)
 if(USE_PREAD_WRITE)
 	message(STATUS "use pread and pwrite")
