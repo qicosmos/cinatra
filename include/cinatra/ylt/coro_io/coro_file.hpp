@@ -313,6 +313,33 @@ class basic_seq_coro_file {
     }
   }
 
+  bool seek(size_t offset, std::ios_base::seekdir dir) {
+#if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
+    if (async_seq_file_ && async_seq_file_->is_open()) {
+      int whence = SEEK_SET;
+      if (dir == std::ios_base::cur)
+        whence = SEEK_CUR;
+      else if (dir == std::ios_base::end)
+        whence = SEEK_END;
+
+      std::error_code seek_ec;
+      async_seq_file_->seek(
+          offset, static_cast<asio::file_base::seek_basis>(whence), seek_ec);
+      if (seek_ec) {
+        return false;
+      }
+      return true;
+    }
+#endif
+    if (frw_seq_file_.is_open()) {
+      if (frw_seq_file_.seekg(offset, dir)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   execution_type get_execution_type() {
 #if defined(ENABLE_FILE_IO_URING) || defined(ASIO_WINDOWS)
     if (async_seq_file_ && async_seq_file_->is_open()) {

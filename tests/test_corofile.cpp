@@ -147,6 +147,62 @@ TEST_CASE("test seq and random") {
   }
 }
 
+async_simple::coro::Lazy<void> read_seek(std::string filename) {
+  coro_io::coro_file0 file{};
+  file.open(filename, std::ios::in);
+  CHECK(file.is_open());
+  std::string str;
+  str.resize(200);
+
+  {
+    auto pair = co_await file.async_read(str.data(), 10);
+    CHECK(pair.second == 10);
+    CHECK(!file.eof());
+  }
+  {
+    bool ok = file.seek(10, std::ios::beg);
+    CHECK(ok);
+  }
+  {
+    auto pair = co_await file.async_read(str.data(), str.size());
+    CHECK(pair.second == 5);
+    CHECK(file.eof());
+  }
+}
+
+async_simple::coro::Lazy<void> write_seek(std::string filename) {
+  coro_io::coro_file0 file{};
+  file.open(filename, std::ios::in | std::ios::out | std::ios::trunc);
+  CHECK(file.is_open());
+  std::string str = "hello";
+
+  {
+    co_await file.async_write(str);
+    std::string result;
+    result.resize(10);
+    CHECK(file.seek(0, std::ios::beg));
+    auto [rd_ec, size] = co_await file.async_read(result.data(), 5);
+    std::string_view s(result.data(), size);
+    CHECK(s == "hello");
+  }
+  {
+    bool ok = file.seek(10, std::ios::beg);
+    CHECK(ok);
+    co_await file.async_write(str);
+    CHECK(file.seek(10, std::ios::beg));
+    std::string result;
+    result.resize(10);
+    auto [rd_ec, size] = co_await file.async_read(result.data(), 5);
+    std::string_view s(result.data(), size);
+    CHECK(s == "hello");
+  }
+}
+
+TEST_CASE("coro_file seek read and write") {
+  async_simple::coro::syncAwait(write_seek("seek_file.txt"));
+  async_simple::coro::syncAwait(read_seek("seek_file.txt"));
+}
+
 TEST_CASE("coro_file pread and pwrite basic test") {
   std::string filename = "test.tmp";
   create_files({filename}, 190);
