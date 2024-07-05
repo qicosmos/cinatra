@@ -179,6 +179,7 @@ class basic_seq_coro_file {
 
   bool open(std::string_view filepath,
             std::ios::ios_base::openmode open_flags) {
+    file_path_ = std::string{filepath};
     if constexpr (execute_type == execution_type::thread_pool) {
       return open_stream_file_in_pool(filepath, open_flags);
     }
@@ -338,6 +339,14 @@ class basic_seq_coro_file {
     return execution_type::none;
   }
 
+  size_t file_size(std::error_code ec) const noexcept {
+    return std::filesystem::file_size(file_path_, ec);
+  }
+
+  size_t file_size() const { return std::filesystem::file_size(file_path_); }
+
+  std::string_view file_path() const { return file_path_; }
+
  private:
   bool open_stream_file_in_pool(std::string_view filepath,
                                 std::ios::ios_base::openmode flags) {
@@ -365,6 +374,7 @@ class basic_seq_coro_file {
   std::shared_ptr<asio::stream_file> async_seq_file_;  // seq
 #endif
   std::fstream frw_seq_file_;  // fread/fwrite seq file
+  std::string file_path_;
   bool eof_ = false;
 };
 
@@ -396,6 +406,7 @@ class basic_random_coro_file {
 
   bool open(std::string_view filepath,
             std::ios::ios_base::openmode open_flags) {
+    file_path_ = std::string{filepath};
     if constexpr (execute_type == execution_type::thread_pool) {
       return open_fd(filepath, to_flags(open_flags));
     }
@@ -498,6 +509,14 @@ class basic_random_coro_file {
 #endif
     prw_random_file_ = nullptr;
   }
+
+  size_t file_size(std::error_code ec) const noexcept {
+    return std::filesystem::file_size(file_path_, ec);
+  }
+
+  size_t file_size() const { return std::filesystem::file_size(file_path_); }
+
+  std::string_view file_path() const { return file_path_; }
 
  private:
   bool open_fd(std::string_view filepath, int open_flags) {
@@ -638,6 +657,7 @@ class basic_random_coro_file {
   std::shared_ptr<asio::random_access_file> async_random_file_;  // random file
 #endif
   std::shared_ptr<int> prw_random_file_ = nullptr;  // pread/pwrite random file
+  std::string file_path_;
   bool eof_ = false;
 };
 
