@@ -682,6 +682,10 @@ TEST_CASE("large_file_write_test") {
     async_simple::coro::syncAwait(
         file.async_write({block_vec.data(), (size_t)remain}));
   }
+  auto &stream = file.get_stream_file();
+  if (stream) {
+    stream.flush();
+  }
   CHECK(fs::file_size(filename) == file_size);
   std::ifstream is(filename, std::ios::binary);
   if (!is.is_open()) {
