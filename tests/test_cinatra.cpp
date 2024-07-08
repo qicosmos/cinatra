@@ -655,9 +655,17 @@ TEST_CASE("test default http handler") {
 }
 
 TEST_CASE("test request with out buffer") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok,
+                                    "it is a test string, more than 10 bytes");
+      });
+  server.async_start();
+
   std::string str;
   str.resize(10);
-  std::string url = "http://cn.bing.com";
+  std::string url = "http://127.0.0.1:8090/test";
 
   {
     coro_http_client client;
@@ -666,12 +674,13 @@ TEST_CASE("test request with out buffer") {
     auto result = async_simple::coro::syncAwait(ret);
     std::cout << result.status << "\n";
     std::cout << result.net_err.message() << "\n";
-    CHECK(result.status < 400);
+    std::cout << result.resp_body << "\n";
+    CHECK(result.status == 200);
     CHECK(!client.is_body_in_out_buf());
   }
 
   {
-    detail::resize(str, 102400);
+    detail::resize(str, 1024);
     coro_http_client client;
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
@@ -680,6 +689,7 @@ TEST_CASE("test request with out buffer") {
     CHECK(ok);
     std::string_view sv(str.data(), result.resp_body.size());
     CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
   }
 }
 
