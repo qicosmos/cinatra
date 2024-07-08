@@ -666,8 +666,8 @@ TEST_CASE("test request with out buffer") {
     auto result = async_simple::coro::syncAwait(ret);
     std::cout << result.status << "\n";
     std::cout << result.net_err.message() << "\n";
-    if (result.status == 404)
-      CHECK(result.net_err == std::errc::no_buffer_space);
+    CHECK(result.status < 400);
+    CHECK(!client.is_body_in_out_buf());
   }
 
   {
