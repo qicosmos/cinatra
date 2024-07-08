@@ -680,6 +680,7 @@ TEST_CASE("test request with out buffer") {
     CHECK(ok);
     std::string_view sv(str.data(), result.resp_body.size());
     CHECK(result.resp_body == sv);
+    CHECK(client.is_body_in_out_buf());
   }
 }
 
