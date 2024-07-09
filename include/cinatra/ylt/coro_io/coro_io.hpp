@@ -37,7 +37,11 @@
 #include <deque>
 
 #include "io_context_pool.hpp"
+#if __has_include("ylt/util/type_traits.h")
 #include "ylt/util/type_traits.h"
+#else
+#include "../util/type_traits.h"
+#endif
 #ifdef __linux__
 #include <sys/sendfile.h>
 #endif
