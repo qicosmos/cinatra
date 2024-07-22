@@ -139,7 +139,7 @@ class channel {
   struct RandomLoadBlancer {
     async_simple::coro::Lazy<std::shared_ptr<client_pool_t>> operator()(
         const channel& channel) {
-      static thread_local std::default_random_engine e;
+      static thread_local std::default_random_engine e(std::time(nullptr));
       std::uniform_int_distribution rnd{std::size_t{0},
                                         channel.client_pools_.size() - 1};
       co_return channel.client_pools_[rnd(e)];
@@ -191,6 +191,13 @@ class channel {
     ch.init(hosts, config, weights, client_pools);
     return ch;
   }
+
+  /**
+   * @brief return the channel's hosts size.
+   *
+   * @return std::size_t
+   */
+  std::size_t size() const noexcept { return client_pools_.size(); }
 
  private:
   void init(const std::vector<std::string_view>& hosts,
