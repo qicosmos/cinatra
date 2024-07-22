@@ -252,7 +252,7 @@ async_simple::coro::Lazy<void> test_async_client() {
   // 通过重连复用client1
   r = async_simple::coro::syncAwait(client1.connect("http://cn.bing.com"));
   CHECK(client1.get_host() == "cn.bing.com");
-  CHECK(client1.get_port() == "http");
+  CHECK(client1.get_port() == "80");
   CHECK(r.status == 200);
 ```
 
