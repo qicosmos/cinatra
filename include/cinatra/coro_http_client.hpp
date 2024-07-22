@@ -1546,20 +1546,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (!proxy_host_.empty() && !proxy_port_.empty()) {
       if (!proxy_request_uri_.empty())
         proxy_request_uri_.clear();
-      if (u.get_port() == "http") {
-        proxy_request_uri_ += "http://" + u.get_host() + ":";
-        proxy_request_uri_ += "80";
+      if (u.get_port() == "80") {
+        proxy_request_uri_.append("http://").append(u.get_host()).append(":80");
       }
-      else if (u.get_port() == "https") {
-        proxy_request_uri_ += "https://" + u.get_host() + ":";
-        proxy_request_uri_ += "443";
+      else if (u.get_port() == "443") {
+        proxy_request_uri_.append("https://")
+            .append(u.get_host())
+            .append(":443");
       }
       else {
         // all be http
-        proxy_request_uri_ += "http://" + u.get_host() + ":";
-        proxy_request_uri_ += u.get_port();
+        proxy_request_uri_.append("http://")
+            .append(u.get_host())
+            .append(u.get_port());
       }
-      proxy_request_uri_ += u.get_path();
+      proxy_request_uri_.append(u.get_path());
       u.path = std::string_view(proxy_request_uri_);
     }
   }
@@ -2424,7 +2425,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_follow_redirect_ = false;
   bool enable_timeout_ = false;
   std::chrono::steady_clock::duration conn_timeout_duration_ =
-      std::chrono::seconds(30);
+      std::chrono::seconds(8);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = true;
