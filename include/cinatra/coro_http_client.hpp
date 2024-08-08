@@ -164,6 +164,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       : coro_http_client(executor->get_asio_executor()) {}
 
   bool init_config(const config &conf) {
+    config_ = conf;
     if (conf.conn_timeout_duration.has_value()) {
       set_conn_timeout(*conf.conn_timeout_duration);
     }
@@ -206,6 +207,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   coro_io::ExecutorWrapper<> &get_executor() { return executor_wrapper_; }
+
+  const config &get_config() { return config_; }
 
 #ifdef CINATRA_ENABLE_SSL
   bool init_ssl(int verify_mode, const std::string &base_path,
@@ -875,7 +878,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<void> send_file_no_chunked_with_copy(
-      std::string_view source, std::error_code &ec, std::size_t length) {
+      std::string_view source, std::error_code &ec, std::size_t length,
+      std::size_t offset) {
     if (length <= 0) {
       co_return;
     }
@@ -883,6 +887,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     detail::resize(file_data, std::min(max_single_part_size_, length));
     coro_io::coro_file file{};
     file.open(source, std::ios::in);
+    file.seek(offset, std::ios::cur);
     if (!file.is_open()) {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
@@ -920,15 +925,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   };
   async_simple::coro::Lazy<void> send_file_without_copy(
       const std::filesystem::path &source, std::error_code &ec,
-      std::size_t length) {
+      std::size_t length, std::size_t offset) {
     fd_guard guard(source.c_str());
     if (guard.fd < 0) [[unlikely]] {
       ec = std::make_error_code(std::errc::bad_file_descriptor);
       co_return;
     }
     std::size_t actual_len = 0;
-    std::tie(ec, actual_len) =
-        co_await coro_io::async_sendfile(socket_->impl_, guard.fd, 0, length);
+    std::tie(ec, actual_len) = co_await coro_io::async_sendfile(
+        socket_->impl_, guard.fd, offset, length);
     if (ec) [[unlikely]] {
       co_return;
     }
@@ -1006,7 +1011,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   template <typename S, typename Source>
   async_simple::coro::Lazy<resp_data> async_upload(
       S uri, http_method method, Source source /* file */,
-      int64_t content_length = -1,
+      uint64_t offset = 0 /*file offset*/,
+      int64_t content_length = -1 /*upload size*/,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
     std::error_code ec{};
@@ -1050,6 +1056,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return resp_data{std::make_error_code(std::errc::invalid_argument),
                             404};
       }
+      content_length -= offset;
+      if (content_length < 0) {
+        CINATRA_LOG_ERROR << "the offset is larger than the end of file";
+        co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                            404};
+      }
     }
 
     assert(content_length >= 0);
@@ -1088,6 +1100,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     if constexpr (is_stream_file) {
+      source->seekg(offset, std::ios::cur);
       std::string file_data;
       detail::resize(file_data, std::min<std::size_t>(max_single_part_size_,
                                                       content_length));
@@ -1116,15 +1129,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (!has_init_ssl_) {
 #endif
         co_await send_file_without_copy(std::filesystem::path{source}, ec,
-                                        content_length);
+                                        content_length, offset);
 #ifdef CINATRA_ENABLE_SSL
       }
       else {
-        co_await send_file_no_chunked_with_copy(source, ec, content_length);
+        co_await send_file_no_chunked_with_copy(source, ec, content_length,
+                                                offset);
       }
 #endif
 #else
-      co_await send_file_no_chunked_with_copy(source, ec, content_length);
+      co_await send_file_no_chunked_with_copy(source, ec, content_length,
+                                              offset);
 #endif
     }
     else {
@@ -2432,6 +2447,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string resp_chunk_str_;
   std::span<char> out_buf_;
   bool should_reset_ = false;
+  config config_;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
