@@ -664,15 +664,34 @@ TEST_CASE("test request with out buffer") {
         resp.set_status_and_content(status_type::ok,
                                     "it is a test string, more than 10 bytes");
       });
+  server.set_http_handler<GET>(
+      "/test1", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_format_type(format_type::chunked);
+        resp.set_status_and_content(status_type::ok,
+                                    "it is a test string, more than 10 bytes");
+      });
   server.async_start();
 
   std::string str;
   str.resize(10);
   std::string url = "http://127.0.0.1:8090/test";
+  std::string url1 = "http://127.0.0.1:8090/test";
 
   {
     coro_http_client client;
     auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
+                                    std::span<char>{str.data(), str.size()});
+    auto result = async_simple::coro::syncAwait(ret);
+    std::cout << result.status << "\n";
+    std::cout << result.net_err.message() << "\n";
+    std::cout << result.resp_body << "\n";
+    CHECK(result.status == 200);
+    CHECK(!client.is_body_in_out_buf());
+  }
+
+  {
+    coro_http_client client;
+    auto ret = client.async_request(url1, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
     std::cout << result.status << "\n";
