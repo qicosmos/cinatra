@@ -18,6 +18,7 @@
 
 #include "../../util/concurrentqueue.h"
 namespace coro_io::detail {
+using namespace ylt::detail;
 template <typename client_t>
 class client_queue {
   moodycamel::ConcurrentQueue<client_t> queue_[2];

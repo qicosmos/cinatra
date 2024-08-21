@@ -7,10 +7,10 @@
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
-#include "ylt/coro_io/channel.hpp"
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_io/load_blancer.hpp"
 #include "ylt/metric/system_metric.hpp"
 
 namespace cinatra {
@@ -185,9 +185,9 @@ class coro_http_server {
   void use_metrics(bool enable_json = false,
                    std::string url_path = "/metrics") {
     init_metrics();
-    using root =
-        ylt::metric::metric_collector_t<ylt::metric::default_metric_manager,
-                                        ylt::metric::system_metric_manager>;
+    using root = ylt::metric::metric_collector_t<
+        ylt::metric::default_static_metric_manager,
+        ylt::metric::system_metric_manager>;
     set_http_handler<http_method::GET>(
         url_path,
         [enable_json](coro_http_request &req, coro_http_response &res) {
@@ -216,14 +216,15 @@ class coro_http_server {
       throw std::invalid_argument("not config hosts yet!");
     }
 
-    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
-        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
-                                                   weights));
+    auto load_blancer =
+        std::make_shared<coro_io::load_blancer<coro_http_client>>(
+            coro_io::load_blancer<coro_http_client>::create(
+                hosts, {.lba = type}, weights));
     auto handler =
-        [this, channel, type](
+        [this, load_blancer, type](
             coro_http_request &req,
             coro_http_response &response) -> async_simple::coro::Lazy<void> {
-      co_await channel->send_request(
+      co_await load_blancer->send_request(
           [this, &req, &response](
               coro_http_client &client,
               std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -255,14 +256,15 @@ class coro_http_server {
       throw std::invalid_argument("not config hosts yet!");
     }
 
-    auto channel = std::make_shared<coro_io::channel<coro_http_client>>(
-        coro_io::channel<coro_http_client>::create(hosts, {.lba = type},
-                                                   weights));
+    auto load_blancer =
+        std::make_shared<coro_io::load_blancer<coro_http_client>>(
+            coro_io::load_blancer<coro_http_client>::create(
+                hosts, {.lba = type}, weights));
 
     set_http_handler<cinatra::GET>(
         url_path,
-        [channel](coro_http_request &req,
-                  coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        [load_blancer](coro_http_request &req, coro_http_response &resp)
+            -> async_simple::coro::Lazy<void> {
           websocket_result result{};
           while (true) {
             result = co_await req.get_conn()->read_websocket();
@@ -275,7 +277,7 @@ class coro_http_server {
               break;
             }
 
-            co_await channel->send_request(
+            co_await load_blancer->send_request(
                 [&req, result](
                     coro_http_client &client,
                     std::string_view host) -> async_simple::coro::Lazy<void> {
@@ -928,20 +930,20 @@ class coro_http_server {
     using namespace ylt::metric;
 
     cinatra_metric_conf::enable_metric = true;
-    default_metric_manager::create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_req, "");
-    default_metric_manager::create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_failed_req, "");
-    default_metric_manager::create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_recv_bytes, "");
-    default_metric_manager::create_metric_static<counter_t>(
+    default_static_metric_manager::instance().create_metric_static<counter_t>(
         cinatra_metric_conf::server_total_send_bytes, "");
-    default_metric_manager::create_metric_static<gauge_t>(
+    default_static_metric_manager::instance().create_metric_static<gauge_t>(
         cinatra_metric_conf::server_total_fd, "");
-    default_metric_manager::create_metric_static<histogram_t>(
+    default_static_metric_manager::instance().create_metric_static<histogram_t>(
         cinatra_metric_conf::server_req_latency, "",
         std::vector<double>{30, 40, 50, 60, 70, 80, 90, 100, 150});
-    default_metric_manager::create_metric_static<histogram_t>(
+    default_static_metric_manager::instance().create_metric_static<histogram_t>(
         cinatra_metric_conf::server_read_latency, "",
         std::vector<double>{3, 5, 7, 9, 13, 18, 23, 35, 50});
 #if defined(__GNUC__)
