@@ -884,7 +884,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return;
     }
     std::string file_data;
-    detail::resize(file_data, std::min(max_single_part_size_, length));
+    detail::resize(file_data, (std::min)(max_single_part_size_, length));
     coro_io::coro_file file{};
     file.open(source, std::ios::in);
     file.seek(offset, std::ios::cur);
@@ -895,7 +895,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::size_t size;
     while (length > 0) {
       if (std::tie(ec, size) = co_await file.async_read(
-              file_data.data(), std::min(file_data.size(), length));
+              file_data.data(), (std::min)(file_data.size(), length));
           ec) {
         // bad request, file may smaller than content-length
         break;
@@ -2444,7 +2444,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool enable_follow_redirect_ = false;
   bool enable_timeout_ = false;
   std::chrono::steady_clock::duration conn_timeout_duration_ =
-      std::chrono::seconds(8);
+      std::chrono::seconds(30);
   std::chrono::steady_clock::duration req_timeout_duration_ =
       std::chrono::seconds(60);
   bool enable_tcp_no_delay_ = true;
