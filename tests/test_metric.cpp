@@ -8,6 +8,7 @@
 
 #include "cinatra/ylt/metric/counter.hpp"
 #include "cinatra/ylt/metric/histogram.hpp"
+#include "cinatra/ylt/metric/metric_manager.hpp"
 #include "cinatra/ylt/metric/summary.hpp"
 #include "cinatra/ylt/metric/system_metric.hpp"
 #include "doctest/doctest.h"
