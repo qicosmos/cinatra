@@ -406,7 +406,7 @@ inline void stat_io() {
   ProcIO s{};
 #if defined(__GUNC__)
   auto stream_file =
-      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE *ptr) {
+      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE* ptr) {
         fclose(ptr);
       });
   if (stream_file == nullptr) {
@@ -419,9 +419,6 @@ inline void stat_io() {
              &s.write_bytes, &s.cancelled_write_bytes) != 7) {
     return;
   }
-#endif
-
-#if defined(__APPLE__)
 #endif
 
 #if defined(WIN32)
@@ -567,7 +564,7 @@ inline void process_status() {
   if (read_command_output_through_popen(oss, cmdbuf) != 0) {
     return;
   }
-  const std::string &result = oss.str();
+  const std::string& result = oss.str();
   if (sscanf(result.c_str(),
              "%d %d %d %d"
              "%d %u %ld %ld",
