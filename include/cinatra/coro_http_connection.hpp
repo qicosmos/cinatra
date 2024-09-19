@@ -688,6 +688,7 @@ class coro_http_connection
               close_code::too_big, close_reason.data(), close_reason.size());
           co_await write_websocket(close_msg, opcode::close);
           close();
+          result.ec = std::error_code(asio::error::message_size, asio::error::get_system_category());
           break;
         }
 
