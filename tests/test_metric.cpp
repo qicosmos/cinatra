@@ -91,22 +91,19 @@ TEST_CASE("serialize zero") {
 
   std::map<std::string, std::string> customMap = {};
   auto summary = std::make_shared<summary_t>(
-      "test", "help",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      customMap);
-  async_simple::coro::syncAwait(summary->serialize_async(str));
+      "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
+  summary->serialize(str);
   CHECK(str.empty());
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  summary->serialize_to_json(str);
   CHECK(str.empty());
 #endif
   summary->observe(0);
-  async_simple::coro::syncAwait(summary->serialize_async(str));
+  summary->serialize(str);
   CHECK(!str.empty());
   str.clear();
 #ifdef CINATRA_ENABLE_METRIC_JSON
-  async_simple::coro::syncAwait(summary->serialize_to_json_async(str));
+  summary->serialize_to_json(str);
   CHECK(!str.empty());
   str.clear();
 #endif
@@ -488,10 +485,7 @@ TEST_CASE("test no lable") {
   {
     std::map<std::string, std::string> customMap = {};
     auto summary = std::make_shared<summary_t>(
-        "test", "help",
-        summary_t::Quantiles{
-            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-        customMap);
+        "test", "help", std::vector{0.5, 0.9, 0.95, 0.99}, customMap);
     summary->observe(100);
   }
   auto g_counter = g_pair.second;
@@ -609,11 +603,11 @@ TEST_CASE("test counter with dynamic labels value") {
                         std::array<std::string, 2>{"method", "code"});
     CHECK(c.labels_name() == std::vector<std::string>{"method", "code"});
     c.inc({"GET", "200"}, 1);
-    auto values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 1);
+
+    CHECK(c.value({"GET", "200"}) == 1);
     c.inc({"GET", "200"}, 2);
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 3);
+
+    CHECK(c.value({"GET", "200"}) == 3);
 
     std::string str;
     c.serialize(str);
@@ -624,8 +618,7 @@ TEST_CASE("test counter with dynamic labels value") {
 
     c.update({"GET", "200"}, 20);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    values = c.value_map();
-    CHECK(values[{"GET", "200"}].value() == 20);
+    CHECK(c.value({"GET", "200"}) == 20);
   }
 }
 
@@ -658,11 +651,11 @@ TEST_CASE("test gauge") {
     CHECK(g.labels_name() == std::vector<std::string>{"method", "code", "url"});
     // method, status code, url
     g.inc({"GET", "200", "/"}, 1);
-    auto values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 1);
+
+    CHECK(g.value({"GET", "200", "/"}) == 1);
     g.inc({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 3);
+
+    CHECK(g.value({"GET", "200", "/"}) == 3);
 
     g.inc({"POST", "200", "/"}, 4);
 
@@ -681,11 +674,11 @@ TEST_CASE("test gauge") {
           std::string::npos);
 
     g.dec({"GET", "200", "/"}, 1);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 2);
+
+    CHECK(g.value({"GET", "200", "/"}) == 2);
     g.dec({"GET", "200", "/"}, 2);
-    values = g.value_map();
-    CHECK(values[{"GET", "200", "/"}].value() == 0);
+
+    CHECK(g.value({"GET", "200", "/"}) == 0);
   }
 }
 
@@ -719,9 +712,8 @@ TEST_CASE("test histogram") {
 }
 
 TEST_CASE("test summary") {
-  summary_t summary{"test_summary",
-                    "summary help",
-                    {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}}};
+  summary_t summary{"test_summary", "summary help",
+                    std::vector{0.5, 0.9, 0.95, 0.99}};
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
@@ -731,10 +723,13 @@ TEST_CASE("test summary") {
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
-  CHECK(async_simple::coro::syncAwait(summary.get_count()) == 50);
-  CHECK(async_simple::coro::syncAwait(summary.get_sum()) > 0);
+  double sum;
+  uint64_t cnt;
+  summary.get_rates(sum, cnt);
+  CHECK(cnt == 50);
+  CHECK(sum < 1e99);
   CHECK(str.find("test_summary") != std::string::npos);
   CHECK(str.find("test_summary_count") != std::string::npos);
   CHECK(str.find("test_summary_sum") != std::string::npos);
@@ -742,7 +737,7 @@ TEST_CASE("test summary") {
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string str_json;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(str_json));
+  summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   CHECK(str_json.find("\"0.9\":") != std::string::npos);
 #endif
@@ -1024,9 +1019,7 @@ TEST_CASE("test get metric by static labels and label") {
   auto map =
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}};
   auto [ec1, s1] = metric_mgr::instance().create_metric_static<summary_t>(
-      "http_req_static_summary", "help",
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}});
   s1->observe(23);
 
@@ -1036,9 +1029,7 @@ TEST_CASE("test get metric by static labels and label") {
   {
     using metric_mgr2 = static_metric_manager<test_id_t<19>>;
     auto [ec, s2] = metric_mgr2::instance().create_metric_static<summary_t>(
-        "http_req_static_summary2", "help",
-        summary_t::Quantiles{
-            {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+        "http_req_static_summary2", "help", std::vector{0.5, 0.9, 0.95, 0.99},
         map);
     s2->observe(23);
 
@@ -1117,9 +1108,7 @@ TEST_CASE("test get metric by dynamic labels") {
 
   auto [ec7, s1] =
       metric_mgr::instance().create_metric_dynamic<dynamic_summary_2>(
-          "http_req_static_summary", "help",
-          summary_t::Quantiles{
-              {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+          "http_req_static_summary", "help", std::vector{0.5, 0.9, 0.95, 0.99},
           std::array<std::string, 2>{"method", "url"});
   s1->observe({"GET", "/"}, 23);
 
@@ -1217,11 +1206,10 @@ TEST_CASE("test histogram serialize with static labels") {
 }
 
 TEST_CASE("test summary with dynamic labels") {
-  basic_dynamic_summary<2> summary{
-      "test_summary",
-      "summary help",
-      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
-      {"method", "url"}};
+  basic_dynamic_summary<2> summary{"test_summary",
+                                   "summary help",
+                                   std::vector{0.5, 0.9, 0.95, 0.99},
+                                   {"method", "url"}};
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> distr(1, 100);
@@ -1234,26 +1222,23 @@ TEST_CASE("test summary with dynamic labels") {
 
   double sum;
   uint64_t count;
-  auto rates = async_simple::coro::syncAwait(
-      summary.get_rates({"GET", "/"}, sum, count));
+  auto rates = summary.get_rates({"GET", "/"}, sum, count);
   std::cout << rates.size() << "\n";
 
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
 }
 
 TEST_CASE("test summary with static labels") {
   summary_t summary{
-      "test_summary",
-      "summary help",
-      {{0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}},
+      "test_summary", "summary help", std::vector{0.5, 0.9, 0.95, 0.99},
       std::map<std::string, std::string>{{"method", "GET"}, {"url", "/"}}};
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -1266,19 +1251,19 @@ TEST_CASE("test summary with static labels") {
 
   double sum;
   uint64_t count;
-  auto rates = async_simple::coro::syncAwait(summary.get_rates(sum, count));
+  auto rates = summary.get_rates(sum, count);
   std::cout << rates.size() << "\n";
 
-  auto rates1 = async_simple::coro::syncAwait(summary.get_rates(sum, count));
+  auto rates1 = summary.get_rates(sum, count);
   CHECK(rates == rates1);
 
   std::string str;
-  async_simple::coro::syncAwait(summary.serialize_async(str));
+  summary.serialize(str);
   std::cout << str;
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
   std::string json_str;
-  async_simple::coro::syncAwait(summary.serialize_to_json_async(json_str));
+  summary.serialize_to_json(json_str);
   std::cout << json_str << "\n";
 #endif
 }
@@ -1488,9 +1473,9 @@ TEST_CASE("test system metric") {
 }
 
 TEST_CASE("test metric capacity") {
-  std::cout << g_user_metric_count << "\n";
+  std::cout << ylt::metric::metric_t::g_user_metric_count << "\n";
   using test_metric_manager = dynamic_metric_manager<test_id_t<21>>;
-  set_metric_capacity(g_user_metric_count + 2);
+  set_metric_capacity(ylt::metric::metric_t::g_user_metric_count + 2);
   auto c =
       test_metric_manager::instance().create_metric_dynamic<dynamic_counter_1t>(
           std::string("counter"), "", std::array<std::string, 1>{});
