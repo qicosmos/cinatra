@@ -440,10 +440,9 @@ void use_metric() {
       std::make_shared<histogram_t>(std::string("test"), std::string("help"),
                                     std::vector{5.0, 10.0, 20.0, 50.0, 100.0});
 
-  auto summary = std::make_shared<summary_t>(
-      std::string("test_summary"), std::string("summary help"),
-      summary_t::Quantiles{
-          {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.005}, {0.99, 0.001}});
+  auto summary = std::make_shared<summary_t>(std::string("test_summary"),
+                                             std::string("summary help"),
+                                             std::vector{0.5, 0.9, 0.95, 0.99});
 
   default_static_metric_manager::instance().register_metric(c);
   default_static_metric_manager::instance().register_metric(total);
