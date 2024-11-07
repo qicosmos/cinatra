@@ -49,15 +49,16 @@ jobs:
 
       - name: List files in the repository
         run: |
+          echo "workspace"
           ls ${{ github.workspace }}
-          ls ../
-          ls ../.coverage_llvm_cov
+          echo "workspace/build"
+          ls ${{ github.workspace }}/build
 
       - name: Upload Coverage Results
         uses: actions/upload-artifact@v4.3.6
         with:
           name: llvm-cov
-          path: ../.coverage_llvm_cov
+          path: ${{ github.workspace }}/build/.coverage_llvm_cov
 
       - name: Create Code Coverage Report
         working-directory: ${{github.workspace}}/build/tests
@@ -65,7 +66,7 @@ jobs:
           echo "Code Coverage Report" > tmp.log
           echo "for detail, [goto summary](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/runs/${{github.run_id}}) download Artifacts `llvm-cov`" >> tmp.log
           echo "\`\`\`" >> tmp.log
-          llvm-cov report -object test_cinatra -object test_corofile -object test_time_util -object test_http_parse -instr-profile=test_cinatra.profdata -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-region-summary=false >> tmp.log
+          llvm-cov report -object test_cinatra -object test_corofile -object test_time_util -object test_http_parse -object test_metric -instr-profile=test_cinatra.profdata -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-region-summary=false >> tmp.log
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
