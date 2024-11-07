@@ -48,7 +48,7 @@ jobs:
           echo "Done!"
 
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: llvm-cov
           path: ../.coverage_llvm_cov
