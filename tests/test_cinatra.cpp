@@ -689,6 +689,7 @@ TEST_CASE("test request with out buffer") {
     CHECK(!client.is_body_in_out_buf());
   }
 
+
   {
     coro_http_client client;
     auto ret = client.async_request(url1, http_method::GET, req_context<>{}, {},
