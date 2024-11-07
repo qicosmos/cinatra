@@ -45,6 +45,8 @@ jobs:
           
           llvm-profdata merge -sparse test_cinatra-*.profraw -o test_cinatra.profdata
           llvm-cov show -object test_cinatra -object test_corofile -object test_time_util -object test_http_parse -object test_metric -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-instantiations=false
+          ll ../
+          ll ../.coverage_llvm_cov
           echo "Done!"
 
       - name: Upload Coverage Results
