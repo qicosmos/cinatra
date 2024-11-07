@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - coro_http_server
+      - test_conv1
 
 jobs:
   build:
@@ -32,6 +32,7 @@ jobs:
       - name: Run Coverage
         run: |
           mkdir build && cd build
+          mkdir .coverage_llvm_cov
           CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
           make -j
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
@@ -46,11 +47,17 @@ jobs:
           llvm-cov show -object test_cinatra -object test_corofile -object test_time_util -object test_http_parse -object test_metric -instr-profile=test_cinatra.profdata -format=html -output-dir=../.coverage_llvm_cov -ignore-filename-regex="example|asio|cmdline|async_simple|tests" -show-instantiations=false
           echo "Done!"
 
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+          ls ../
+          ls ../.coverage_llvm_cov
+
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: llvm-cov
-          path: ${{github.workspace}}/build/.coverage_llvm_cov
+          path: ../.coverage_llvm_cov
 
       - name: Create Code Coverage Report
         working-directory: ${{github.workspace}}/build/tests
