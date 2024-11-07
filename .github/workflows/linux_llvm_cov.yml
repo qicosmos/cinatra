@@ -32,7 +32,6 @@ jobs:
       - name: Run Coverage
         run: |
           mkdir build && cd build
-          mkdir .coverage_llvm_cov
           CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
           make -j
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
@@ -53,12 +52,11 @@ jobs:
           echo "workspace/build"
           ls ${{ github.workspace }}/build
 
-
       - name: Upload Coverage Results
         uses: actions/upload-artifact@v4.3.6
         with:
           name: llvm-cov
-          path: ../.coverage_llvm_cov
+          path: ${{ github.workspace }}/build/.coverage_llvm_cov
 
       - name: Create Code Coverage Report
         working-directory: ${{github.workspace}}/build/tests
