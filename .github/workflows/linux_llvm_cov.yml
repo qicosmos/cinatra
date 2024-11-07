@@ -52,8 +52,8 @@ jobs:
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
-          ls ../
-          ls ../.coverage_llvm_cov
+          ls ${{ github.workspace }}/build
+          ls ${{ github.workspace }}/build/.coverage_llvm_cov
 
       - name: Upload Coverage Results
         uses: actions/upload-artifact@v4.3.6
