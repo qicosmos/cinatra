@@ -1013,6 +1013,7 @@ TEST_CASE("test websocket binary data") {
           }
         }
       });
+
   server.set_http_handler<cinatra::GET>(
       "/medium_binary",
       [](coro_http_request &req,
