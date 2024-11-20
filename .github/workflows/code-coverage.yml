@@ -14,7 +14,7 @@ jobs:
         fetch-depth: 2
     
     - name: Configure cmake
-      run:  cmake -B${{github.workspace}}/build -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON -DCMAKE_BUILD_TYPE=Debug
+      run:  cmake -B${{github.workspace}}/build -DCOVERAGE_TEST=ON -DENABLE_SSL=ON -DCINATRA_ENABLE_SSL=ON -DCMAKE_BUILD_TYPE=Debug
 
     - name: Build with ${{ matrix.compiler }}
       run:  cmake --build ${{github.workspace}}/build --config Debug

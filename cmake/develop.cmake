@@ -71,10 +71,6 @@ if (ENABLE_SSL)
 	message(STATUS "Use SSL")
 endif()
 
-if(ENABLE_GZIP)
-	add_definitions(-DCINATRA_ENABLE_GZIP)
-endif()
-
 if(ENABLE_CLIENT_SSL)
 	add_definitions(-DCINATRA_ENABLE_CLIENT_SSL)
 endif()

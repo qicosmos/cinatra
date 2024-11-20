@@ -19,6 +19,11 @@ if(ENABLE_METRIC_JSON)
 	)
 endif()
 
+find_package(ZLIB)
+if (ZLIB_FOUND)
+    add_definitions(-DCINATRA_ENABLE_GZIP)
+endif ()
+
 option(SKIP_TIME_TEST "skip time tests" OFF)
 if(SKIP_TIME_TEST) 
 	message(STATUS "skip time tests")
@@ -27,7 +32,7 @@ endif()
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
-if (ENABLE_GZIP)
+if (ZLIB_FOUND)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
 
