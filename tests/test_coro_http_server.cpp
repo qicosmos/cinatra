@@ -1562,7 +1562,7 @@ TEST_CASE("test reverse proxy websocket") {
       });
   server.async_start();
 
-  coro_http_server proxy_server(1, 9002);
+  coro_http_server proxy_server(1, 9005);
   proxy_server.set_websocket_proxy_handler("/ws_echo",
                                            {"ws://127.0.0.1:9001/ws_echo"});
   proxy_server.async_start();
@@ -1570,7 +1570,7 @@ TEST_CASE("test reverse proxy websocket") {
 
   coro_http_client client{};
   auto r = async_simple::coro::syncAwait(
-      client.connect("ws://127.0.0.1:9002/ws_echo"));
+      client.connect("ws://127.0.0.1:9005/ws_echo"));
   CHECK(!r.net_err);
   for (int i = 0; i < 10; i++) {
     async_simple::coro::syncAwait(client.write_websocket("test websocket"));
