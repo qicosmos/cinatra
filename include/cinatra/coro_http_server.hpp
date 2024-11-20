@@ -351,9 +351,9 @@ class coro_http_server {
     }
 
     if (!file_path.empty()) {
-      static_dir_ = std::filesystem::path(file_path).make_preferred().string();
-      if (auto pos = static_dir_.find("./"); pos != std::string::npos) {
-        static_dir_ = static_dir_.substr(static_dir_.find("./") + 2);
+      constexpr auto sep = std::filesystem::path::preferred_separator;
+      if (auto pos = file_path.find(sep); pos != std::string::npos) {
+        static_dir_ = file_path.substr(pos + 1);
         if (static_dir_.empty()) {
           static_dir_ = fs::absolute(fs::current_path().string()).string();
         }
