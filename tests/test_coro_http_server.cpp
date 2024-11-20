@@ -1181,8 +1181,8 @@ TEST_CASE("test websocket with different message size") {
 TEST_CASE("test ssl server") {
   cinatra::coro_http_server server(1, 9001);
   std::cout << std::filesystem::current_path() << "\n";
-  server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
-                  "test");
+  server.init_ssl("../../include/cinatra/server.crt",
+                  "../../include/cinatra/server.key", "test");
   server.set_http_handler<GET, POST>(
       "/ssl", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ssl");
@@ -1541,6 +1541,11 @@ TEST_CASE("test reverse proxy") {
 }
 
 TEST_CASE("test reverse proxy websocket") {
+  {
+    coro_http_server proxy_server(1, 9005);
+    CHECK_THROWS_AS(proxy_server.set_websocket_proxy_handler("/ws_echo", {}),
+                    std::invalid_argument);
+  }
   coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",

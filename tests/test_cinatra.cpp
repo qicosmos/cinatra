@@ -1484,8 +1484,8 @@ TEST_CASE("test coro_http_client multipart upload") {
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test ssl upload") {
   coro_http_server server(1, 8091);
-  server.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
-                  "test");
+  server.init_ssl("../../include/cinatra/server.crt",
+                  "../../include/cinatra/server.key", "test");
   server.set_http_handler<cinatra::PUT>(
       "/upload",
       [](coro_http_request &req,
@@ -1556,8 +1556,8 @@ TEST_CASE("test ssl upload") {
   }
 
   cinatra::coro_http_server server1(1, 9002);
-  server1.init_ssl("../openssl_files/server.crt", "../openssl_files/server.key",
-                   "test");
+  server1.init_ssl("../../include/cinatra/server.crt",
+                   "../../include/cinatra/server.key", "test");
   server1.set_http_handler<cinatra::GET, cinatra::PUT>(
       "/chunked",
       [](coro_http_request &req,
