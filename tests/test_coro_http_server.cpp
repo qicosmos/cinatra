@@ -1441,7 +1441,7 @@ TEST_CASE("test reverse proxy") {
         std::invalid_argument);
   }
 
-  cinatra::coro_http_server web_one(1, 9001);
+  cinatra::coro_http_server web_one(1, 9004);
 
   web_one.set_http_handler<cinatra::GET, cinatra::POST>(
       "/",
@@ -1480,21 +1480,21 @@ TEST_CASE("test reverse proxy") {
 
   coro_http_server proxy_wrr(2, 8090);
   proxy_wrr.set_http_proxy_handler<GET, POST>(
-      "/", {"http://127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"http://127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::WRR, {10, 5, 5}, log_t{}, check_t{});
 
   coro_http_server proxy_rr(2, 8091);
   proxy_rr.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"},
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"},
       coro_io::load_blance_algorithm::RR, {}, log_t{});
 
   coro_http_server proxy_random(2, 8092);
   proxy_random.set_http_proxy_handler<GET, POST>(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   coro_http_server proxy_all(2, 8093);
   proxy_all.set_http_proxy_handler(
-      "/", {"127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"});
+      "/", {"127.0.0.1:9004", "127.0.0.1:9002", "127.0.0.1:9003"});
 
   proxy_wrr.async_start();
   proxy_rr.async_start();
