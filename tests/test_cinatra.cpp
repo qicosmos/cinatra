@@ -1305,7 +1305,6 @@ TEST_CASE("test upload file") {
   CHECK(result.status == 404);
 
   client.close();
-
   server.stop();
 }
 
