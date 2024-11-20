@@ -1541,6 +1541,11 @@ TEST_CASE("test reverse proxy") {
 }
 
 TEST_CASE("test reverse proxy websocket") {
+  {
+    coro_http_server proxy_server(1, 9005);
+    CHECK_THROWS_AS(proxy_server.set_websocket_proxy_handler("/ws_echo", {}),
+                    std::invalid_argument);
+  }
   coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",
