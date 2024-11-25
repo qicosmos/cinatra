@@ -1564,6 +1564,26 @@ TEST_CASE("test reverse proxy download") {
       "/test", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
+  server.set_http_handler<GET>(
+      "/test_multipart",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " multipart"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
+              !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_multipart();
+      });
   server.async_start();
 
   coro_http_server proxy_rr(2, 8001);
@@ -1578,6 +1598,12 @@ TEST_CASE("test reverse proxy download") {
   result = client.get("http://127.0.0.1:8001/test_chunked");
   CHECK(result.status == 200);
   CHECK(result.resp_body == "hello world ok");
+
+  coro_http_client client1{};
+  result = client1.get("http://127.0.0.1:8001/test_multipart");
+  std::cout << result.net_err.message() << std::endl;
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world multipart");
 }
 
 TEST_CASE("test reverse proxy websocket") {
