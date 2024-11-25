@@ -855,6 +855,43 @@ class coro_http_server {
     co_return true;
   }
 
+  template <class T, class Pred>
+  size_t erase_if(std::span<T> &sp, Pred p) {
+    auto it = std::remove_if(sp.begin(), sp.end(), p);
+    size_t count = sp.end() - it;
+    sp = std::span<T>(sp.begin(), it);
+    return count;
+  }
+
+  int remove_result_headers(resp_data &result, std::string_view value) {
+    bool r = false;
+    return erase_if(result.resp_headers, [&](http_header &header) {
+      if (r) {
+        return false;
+      }
+
+      r = (header.value.find(value) != std::string_view::npos);
+
+      return r;
+    });
+  }
+
+  void handle_response_header(resp_data &result, std::string &length) {
+    int r = remove_result_headers(result, "chunked");
+    if (r == 0) {
+      r = remove_result_headers(result, "multipart/form-data");
+      if (r) {
+        length = std::to_string(result.resp_body.size());
+        for (auto &[key, val] : result.resp_headers) {
+          if (key == "Content-Length") {
+            val = length;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string_view host,
                                        coro_http_request &req,
@@ -880,6 +917,8 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
+    std::string length;
+    handle_response_header(result, length);
     response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
