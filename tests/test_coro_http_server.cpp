@@ -210,7 +210,27 @@ TEST_CASE("test multiple download") {
           co_return;
         }
 
-        std::vector<std::string> vec{"hello", " world", " ok"};
+        std::vector<std::string> vec{"hello", " world", " chunked"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
+              !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_multipart();
+      });
+  server.set_http_handler<GET>(
+      "/multipart",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_multipart(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " multipart"};
 
         for (auto &str : vec) {
           if (ok = co_await resp.get_conn()->write_multipart(str, "text/plain");
@@ -227,7 +247,10 @@ TEST_CASE("test multiple download") {
   coro_http_client client{};
   auto result = client.get("http://127.0.0.1:9001/");
   CHECK(result.status == 200);
-  CHECK(result.resp_body == "hello world ok");
+  CHECK(result.resp_body == "hello world chunked");
+  result = client.get("http://127.0.0.1:9001/multipart");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world multipart");
 }
 
 TEST_CASE("test range download") {
