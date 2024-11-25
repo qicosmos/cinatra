@@ -1515,6 +1515,48 @@ TEST_CASE("test reverse proxy") {
   CHECK(!resp_random.resp_body.empty());
 }
 
+TEST_CASE("test reverse proxy download") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test_chunked",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_format_type(format_type::chunked);
+        bool ok;
+        if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+          co_return;
+        }
+
+        std::vector<std::string> vec{"hello", " world", " ok"};
+
+        for (auto &str : vec) {
+          if (ok = co_await resp.get_conn()->write_chunked(str); !ok) {
+            co_return;
+          }
+        }
+
+        ok = co_await resp.get_conn()->end_chunked();
+      });
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello world");
+      });
+  server.async_start();
+
+  coro_http_server proxy_rr(2, 8001);
+  proxy_rr.set_http_proxy_handler<GET, POST>(
+      "/([^]+)", {"127.0.0.1:9001"}, coro_io::load_blance_algorithm::RR);
+  proxy_rr.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:8001/test");
+  CHECK(result.resp_body == "hello world");
+
+  result = client.get("http://127.0.0.1:8001/test_chunked");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "hello world ok");
+}
+
 TEST_CASE("test reverse proxy websocket") {
   {
     coro_http_server proxy_server(1, 9005);

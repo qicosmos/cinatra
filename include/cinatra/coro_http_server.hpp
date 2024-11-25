@@ -855,6 +855,24 @@ class coro_http_server {
     co_return true;
   }
 
+  void remove_result_headers(resp_data &result) {
+    auto remove_func = [&result](std::string_view value) {
+      bool r = false;
+      std::remove_if(result.resp_headers.begin(), result.resp_headers.end(),
+                     [&](http_header &header) {
+                       if (r) {
+                         return false;
+                       }
+
+                       r = (header.value.find(value) != std::string_view::npos);
+                       return r;
+                     });
+    };
+
+    remove_func("chunked");
+    remove_func("multipart/form-data");
+  }
+
   async_simple::coro::Lazy<void> reply(coro_http_client &client,
                                        std::string_view host,
                                        coro_http_request &req,
@@ -880,6 +898,7 @@ class coro_http_server {
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
 
+    remove_result_headers(result);
     response.add_header_span(result.resp_headers);
 
     response.set_status_and_content_view(
