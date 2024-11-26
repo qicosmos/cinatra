@@ -1,6 +1,7 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 set(project_name test_cinatra)
 add_definitions(-DINJECT_FOR_HTTP_CLIENT_TEST)
+add_definitions(-DINJECT_FOR_HTTP_SEVER_TEST)
 add_executable(${project_name}
 		test_coro_http_server.cpp
         test_cinatra.cpp
