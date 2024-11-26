@@ -1286,6 +1286,13 @@ TEST_CASE("test head put and some other request") {
         std::string result = ec ? "delete failed" : "delete ok";
         resp.set_status_and_content(status_type::ok, result);
       });
+  std::function<void(coro_http_request & req, coro_http_response & resp)> func =
+      nullptr;
+  server.set_http_handler<cinatra::http_method::DEL>("/delete1/:name", func);
+  std::function<async_simple::coro::Lazy<void>(coro_http_request & req,
+                                               coro_http_response & resp)>
+      func1 = nullptr;
+  server.set_http_handler<cinatra::http_method::DEL>("/delete2/:name", func1);
 
   server.async_start();
   std::this_thread::sleep_for(300ms);
@@ -1329,6 +1336,14 @@ TEST_CASE("test head put and some other request") {
       "http://127.0.0.1:8090/delete/json.txt", json, req_content_type::json));
 
   CHECK(result.status == 200);
+
+  result = async_simple::coro::syncAwait(client1.async_delete(
+      "http://127.0.0.1:8090/delete1/json.txt", json, req_content_type::json));
+  CHECK(result.status == 404);
+
+  result = async_simple::coro::syncAwait(client1.async_delete(
+      "http://127.0.0.1:8090/delete2/json.txt", json, req_content_type::json));
+  CHECK(result.status == 404);
 }
 
 TEST_CASE("test upload file") {
