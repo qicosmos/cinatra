@@ -1212,6 +1212,32 @@ TEST_CASE("test coro_http_client connect/request timeout") {
   }
 }
 
+TEST_CASE("test out io_contex server") {
+  asio::io_context ioc;
+  auto work = std::make_shared<asio::io_context::work>(ioc);
+  std::promise<void> promise;
+  std::thread thd([&] {
+    promise.set_value();
+    ioc.run();
+  });
+  promise.get_future().wait();
+
+  coro_http_server server(ioc, "0.0.0.0:8002");
+  server.set_no_delay(true);
+  server.set_http_handler<GET>("/", [](request &req, response &res) {
+    res.set_status_and_content(status_type::ok, "hello");
+  });
+  server.async_start();
+
+  coro_http_client client{};
+  auto result = client.get("http://127.0.0.1:8002/");
+  CHECK(result.status == 200);
+  work = nullptr;
+  server.stop();
+
+  thd.join();
+}
+
 TEST_CASE("test coro_http_client async_http_connect") {
   coro_http_client client{};
   cinatra::coro_http_client::config conf{.req_timeout_duration = 60s};
