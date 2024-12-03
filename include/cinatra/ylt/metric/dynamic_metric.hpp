@@ -3,7 +3,7 @@
 
 #include "metric.hpp"
 #include "thread_local_value.hpp"
-#if __has_include("ylt/util/type_traits.h")
+#if __has_include("ylt/util/map_sharded.hpp")
 #include "ylt/util/map_sharded.hpp"
 #else
 #include "../util/map_sharded.hpp"
