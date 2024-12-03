@@ -2,16 +2,6 @@
 #if defined(__GNUC__)
 #include <sys/resource.h>
 #include <sys/time.h>
-#endif
-
-#if defined(WIN32)
-#include <psapi.h>
-#include <tlhelp32.h>
-#include <windows.h>
-
-// Link with Psapi.lib
-#pragma comment(lib, "Psapi.lib")
-#endif
 
 #include <chrono>
 #include <cstdint>
@@ -80,175 +70,6 @@ inline int read_command_output_through_popen(std::ostream& os,
   }
   errno = ECHILD;
   return -1;
-}
-#endif
-
-#if defined(WIN32)
-typedef struct timeval {
-  long tv_sec;
-  long tv_usec;
-} timeval;
-
-inline int gettimeofday(struct timeval* tp, struct timezone* tzp) {
-  // Note: some broken versions only have 8 trailing zero's, the correct epoch
-  // has 9 trailing zero's This magic number is the number of 100 nanosecond
-  // intervals since January 1, 1601 (UTC) until 00:00:00 January 1, 1970
-  static const uint64_t epoch = ((uint64_t)116444736000000000ULL);
-
-  SYSTEMTIME system_time;
-  FILETIME file_time;
-  uint64_t time;
-
-  GetSystemTime(&system_time);
-  SystemTimeToFileTime(&system_time, &file_time);
-  time = ((uint64_t)file_time.dwLowDateTime);
-  time += ((uint64_t)file_time.dwHighDateTime) << 32;
-
-  tp->tv_sec = (long)((time - epoch) / 10000000L);
-  tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
-  return 0;
-}
-
-#define RUSAGE_SELF 0
-#define RUSAGE_CHILDREN (-1)
-
-struct rusage {
-  struct timeval ru_utime; /* user time used */
-  struct timeval ru_stime; /* system time used */
-};
-
-inline int getrusage(int who, struct rusage* rusage) {
-  FILETIME starttime;
-  FILETIME exittime;
-  FILETIME kerneltime;
-  FILETIME usertime;
-  ULARGE_INTEGER li;
-
-  if (who != RUSAGE_SELF) {
-    /* Only RUSAGE_SELF is supported in this implementation for now */
-    errno = EINVAL;
-    return -1;
-  }
-
-  if (rusage == (struct rusage*)NULL) {
-    errno = EFAULT;
-    return -1;
-  }
-  memset(rusage, 0, sizeof(struct rusage));
-  if (GetProcessTimes(GetCurrentProcess(), &starttime, &exittime, &kerneltime,
-                      &usertime) == 0) {
-    return -1;
-  }
-
-  /* Convert FILETIMEs (0.1 us) to struct timeval */
-  memcpy(&li, &kerneltime, sizeof(FILETIME));
-  li.QuadPart /= 10L; /* Convert to microseconds */
-  rusage->ru_stime.tv_sec = li.QuadPart / 1000000L;
-  rusage->ru_stime.tv_usec = li.QuadPart % 1000000L;
-
-  memcpy(&li, &usertime, sizeof(FILETIME));
-  li.QuadPart /= 10L; /* Convert to microseconds */
-  rusage->ru_utime.tv_sec = li.QuadPart / 1000000L;
-  rusage->ru_utime.tv_usec = li.QuadPart % 1000000L;
-
-  return 0;
-}
-
-inline SIZE_T get_shared_memory_size(HANDLE h_process) {
-  MEMORY_BASIC_INFORMATION mbi;
-  SIZE_T base_address = 0;
-  SIZE_T shared_memory_size = 0;
-
-  while (VirtualQueryEx(h_process, (LPCVOID)base_address, &mbi, sizeof(mbi))) {
-    if (mbi.State == MEM_COMMIT) {
-      if (mbi.Type == MEM_MAPPED || mbi.Type == MEM_IMAGE) {
-        shared_memory_size += mbi.RegionSize;
-      }
-    }
-    base_address = (SIZE_T)mbi.BaseAddress + mbi.RegionSize;
-  }
-
-  return shared_memory_size;
-}
-
-inline DWORD getppid() {
-  HANDLE h_snapshot;
-  PROCESSENTRY32 pe32;
-  DWORD ppid = 0, pid = GetCurrentProcessId();
-
-  h_snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  try {
-    if (h_snapshot == INVALID_HANDLE_VALUE)
-      return ppid;
-
-    ZeroMemory(&pe32, sizeof(pe32));
-    pe32.dwSize = sizeof(pe32);
-    if (!Process32First(h_snapshot, &pe32))
-      return ppid;
-
-    do {
-      if (pe32.th32ProcessID == pid) {
-        ppid = pe32.th32ParentProcessID;
-        break;
-      }
-    } while (Process32Next(h_snapshot, &pe32));
-
-  } catch (...) {
-    if (h_snapshot != INVALID_HANDLE_VALUE)
-      CloseHandle(h_snapshot);
-  }
-
-  if (h_snapshot != INVALID_HANDLE_VALUE)
-    CloseHandle(h_snapshot);
-
-  return ppid;
-}
-
-inline DWORD get_thread_number(DWORD processId) {
-  DWORD thread_count = 0;
-  HANDLE snapshot_handle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-
-  if (snapshot_handle == INVALID_HANDLE_VALUE) {
-    std::cerr << "Failed to create snapshot. Error code: " << GetLastError()
-              << std::endl;
-    return 0;
-  }
-
-  THREADENTRY32 threadEntry;
-  threadEntry.dwSize = sizeof(THREADENTRY32);
-
-  if (Thread32First(snapshot_handle, &threadEntry)) {
-    do {
-      if (threadEntry.th32OwnerProcessID == processId) {
-        ++thread_count;
-      }
-    } while (Thread32Next(snapshot_handle, &threadEntry));
-  }
-  else {
-    std::cerr << "Failed to retrieve thread information. Error code: "
-              << GetLastError() << std::endl;
-  }
-
-  CloseHandle(snapshot_handle);
-  return thread_count;
-}
-
-inline DWORD get_process_group(HANDLE process_handle) {
-  DWORD_PTR process_affinity_mask;
-  DWORD_PTR system_affinity_mask;
-
-  if (GetProcessAffinityMask(process_handle, &process_affinity_mask,
-                             &system_affinity_mask)) {
-    // Output the processor group information
-    // Process Affinity Mask
-    DWORD grop_id = process_affinity_mask;
-    return grop_id;
-  }
-  else {
-    std::cerr << "Failed to get process affinity mask. Error code: "
-              << GetLastError() << std::endl;
-    return 0;
-  }
 }
 #endif
 
@@ -324,9 +145,7 @@ inline void stat_memory() {
   long virtual_size = 0;
   long resident = 0;
   long share = 0;
-#if defined(__GNUC__)
   static long page_size = sysconf(_SC_PAGE_SIZE);
-#endif
 
 #if defined(__APPLE__)
   static pid_t pid = getpid();
@@ -350,33 +169,9 @@ inline void stat_memory() {
   file >> virtual_size >> resident >> share;
 #endif
 
-#if defined(WIN32)
-  DWORD current_process = GetCurrentProcessId();
-  // open process
-  HANDLE h_process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                 FALSE, current_process);
-  if (h_process == NULL) {
-    virtual_size = 0;
-    resident = 0;
-    share = 0;
-  }
-  PROCESS_MEMORY_COUNTERS pmc;
-  if (GetProcessMemoryInfo(h_process, &pmc, sizeof(pmc))) {
-    virtual_size = pmc.PagefileUsage;
-    resident = pmc.WorkingSetSize;
-  }
-  share = get_shared_memory_size(h_process);
-
-  CloseHandle(h_process);
-
-  process_memory_virtual->update(virtual_size);
-  process_memory_resident->update(resident);
-  process_memory_shared->update(share);
-#else
   process_memory_virtual->update(virtual_size * page_size);
   process_memory_resident->update(resident * page_size);
   process_memory_shared->update(share * page_size);
-#endif
 }
 
 struct ProcIO {
@@ -404,9 +199,10 @@ inline void stat_io() {
           "ylt_process_io_write_second");
 
   ProcIO s{};
-#if defined(__GUNC__)
+#if defined(__APPLE__)
+#else
   auto stream_file =
-      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE* ptr) {
+      std::shared_ptr<FILE>(fopen("/proc/self/io", "r"), [](FILE *ptr) {
         fclose(ptr);
       });
   if (stream_file == nullptr) {
@@ -419,30 +215,6 @@ inline void stat_io() {
              &s.write_bytes, &s.cancelled_write_bytes) != 7) {
     return;
   }
-#endif
-
-#if defined(WIN32)
-  DWORD current_process_id = GetCurrentProcessId();
-  // open process
-  HANDLE h_process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                 FALSE, current_process_id);
-  if (h_process == NULL) {
-    s.rchar = 0;
-    s.wchar = 0;
-    s.syscr = 0;
-    s.syscw = 0;
-  }
-  else {
-    IO_COUNTERS io_counters = {0};
-    if (GetProcessIoCounters(h_process, &io_counters)) {
-      s.rchar = io_counters.ReadOperationCount;
-      s.wchar = io_counters.WriteOperationCount;
-      s.syscr = io_counters.ReadOperationCount;
-      s.syscw = io_counters.WriteOperationCount;
-    }
-  }
-
-  CloseHandle(h_process);
 #endif
 
   process_io_read_bytes_second->update(s.rchar);
@@ -564,7 +336,7 @@ inline void process_status() {
   if (read_command_output_through_popen(oss, cmdbuf) != 0) {
     return;
   }
-  const std::string& result = oss.str();
+  const std::string &result = oss.str();
   if (sscanf(result.c_str(),
              "%d %d %d %d"
              "%d %u %ld %ld",
@@ -572,16 +344,6 @@ inline void process_status() {
              &stat.flags, &stat.priority, &stat.nice) != 8) {
     return;
   }
-#elif defined(WIN32)
-  stat.pid = GetCurrentProcessId();
-  stat.ppid = getppid();
-
-  HANDLE h_process =
-      OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, stat.pid);
-  stat.priority = GetPriorityClass(h_process);
-  stat.num_threads = get_thread_number(stat.pid);
-  stat.pgrp = get_process_group(h_process);
-  CloseHandle(h_process);
 #endif
   process_uptime->inc();
   process_priority->update(stat.priority);
@@ -690,3 +452,4 @@ inline bool start_system_metric() {
   return true;
 }
 }  // namespace ylt::metric
+#endif

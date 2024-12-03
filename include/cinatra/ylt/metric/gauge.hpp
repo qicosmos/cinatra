@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "counter.hpp"
+#include "metric.hpp"
 
 namespace ylt::metric {
 

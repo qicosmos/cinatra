@@ -4,6 +4,11 @@
 #include <utility>
 
 #include "metric.hpp"
+#if __has_include("ylt/util/map_sharded.hpp")
+#include "ylt/util/map_sharded.hpp"
+#else
+#include "../util/map_sharded.hpp"
+#endif
 
 namespace ylt::metric {
 class manager_helper {
@@ -36,9 +41,6 @@ class manager_helper {
 #ifdef CINATRA_ENABLE_METRIC_JSON
   static std::string serialize_to_json(
       const std::vector<std::shared_ptr<metric_t>>& metrics) {
-    if (metrics.empty()) {
-      return "";
-    }
     std::string str;
     str.append("[");
     for (auto& m : metrics) {
@@ -49,7 +51,10 @@ class manager_helper {
     }
 
     if (str.size() == 1) {
-      return "";
+      str.append("]");
+    }
+    else {
+      str.back() = ']';
     }
 
     str.back() = ']';
@@ -139,6 +144,9 @@ class manager_helper {
   static void filter_by_label_name(
       std::vector<std::shared_ptr<metric_t>>& filtered_metrics,
       std::shared_ptr<metric_t> m, const metric_filter_options& options) {
+    if (!options.label_regex) {
+      return;
+    }
     const auto& labels_name = m->labels_name();
     for (auto& label_name : labels_name) {
       if (std::regex_match(label_name, *options.label_regex)) {

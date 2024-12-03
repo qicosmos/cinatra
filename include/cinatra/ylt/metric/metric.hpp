@@ -14,7 +14,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cinatra/cinatra_log_wrapper.hpp"
-#include "thread_local_value.hpp"
 #if __has_include("ylt/coro_io/coro_io.hpp")
 #include "ylt/coro_io/coro_io.hpp"
 #else
@@ -53,6 +52,7 @@ struct metric_filter_options {
 class metric_t {
  public:
   static inline std::atomic<int64_t> g_user_metric_count = 0;
+
   metric_t() = default;
   metric_t(MetricType type, std::string name, std::string help)
       : type_(type),
@@ -91,8 +91,6 @@ class metric_t {
   std::string_view help() { return help_; }
 
   MetricType metric_type() { return type_; }
-
-  auto get_created_time() { return metric_created_time_; }
 
   std::string_view metric_name() {
     switch (type_) {
@@ -197,14 +195,8 @@ inline std::chrono::seconds ylt_label_max_age{0};
 inline std::chrono::seconds ylt_label_check_expire_duration{60};
 
 inline std::atomic<int64_t> ylt_metric_capacity = 10000000;
-inline int64_t ylt_label_capacity = 20000000;
-
 inline void set_metric_capacity(int64_t max_count) {
   ylt_metric_capacity = max_count;
-}
-
-inline void set_label_capacity(int64_t max_label_count) {
-  ylt_label_capacity = max_label_count;
 }
 
 inline void set_label_max_age(
