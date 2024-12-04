@@ -256,6 +256,16 @@ TEST_CASE("test ssl client") {
   }
   {
     coro_http_client client{};
+    auto ret = client.get("https://baidu.com");
+    client.reset();
+    ret = client.get("http://cn.bing.com");
+    std::cout << ret.status << std::endl;
+    client.reset();
+    ret = client.get("https://baidu.com");
+    std::cout << ret.status << std::endl;
+  }
+  {
+    coro_http_client client{};
     auto result = client.get("https://www.bing.com");
     CHECK(result.status >= 200);
   }
