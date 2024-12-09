@@ -400,8 +400,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<void> write_ws_frame(std::span<char> msg,
                                                 websocket ws, opcode op,
                                                 resp_data &data,
-                                                bool eof = true) {
-    auto header = ws.encode_frame(msg, op, eof, true);
+                                                bool eof = true,
+                                                bool need_compression = false) {
+    auto header = ws.encode_frame(msg, op, eof, need_compression);
     std::vector<asio::const_buffer> buffers{
         asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
