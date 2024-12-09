@@ -400,9 +400,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<void> write_ws_frame(std::span<char> msg,
                                                 websocket ws, opcode op,
                                                 resp_data &data,
-                                                bool eof = true,
-                                                bool need_compression = false) {
-    auto header = ws.encode_frame(msg, op, eof, need_compression);
+                                                bool eof = true) {
+    auto header = ws.encode_frame(msg, op, eof, enable_ws_deflate_);
     std::vector<asio::const_buffer> buffers{
         asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
@@ -446,27 +445,27 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     std::span<char> span{};
     if constexpr (is_span_v<Source>) {
-      bool need_compress = false;
       span = {source.data(), source.size()};
 #ifdef CINATRA_ENABLE_GZIP
       std::string dest_buf;
-      gzip_compress({source.data(), source.size()}, dest_buf, span, data);
-      need_compress = true;
+      if (enable_ws_deflate_) {
+        gzip_compress({source.data(), source.size()}, dest_buf, span, data);
+      }
 #endif
-      co_await write_ws_frame(span, ws, op, data, true, need_compress);
+      co_await write_ws_frame(span, ws, op, data, true);
     }
     else {
       while (true) {
         auto result = co_await source();
-        bool need_compress = false;
         span = {result.buf.data(), result.buf.size()};
 #ifdef CINATRA_ENABLE_GZIP
         std::string dest_buf;
-        gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
-                      data);
-        need_compress = true;
+        if (enable_ws_deflate_) {
+          gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
+                        data);
+        }
 #endif
-        co_await write_ws_frame(span, ws, op, data, result.eof, need_compress);
+        co_await write_ws_frame(span, ws, op, data, result.eof);
 
         if (result.eof || data.status == 404) {
           break;
@@ -2402,8 +2401,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool should_reset_ = false;
   config config_;
 
-#ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
+#ifdef CINATRA_ENABLE_GZIP
   bool is_server_support_ws_deflate_ = false;
   std::string inflate_str_;
 #endif
