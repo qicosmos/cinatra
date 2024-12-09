@@ -400,8 +400,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<void> write_ws_frame(std::span<char> msg,
                                                 websocket ws, opcode op,
                                                 resp_data &data,
-                                                bool eof = true) {
-    auto header = ws.encode_frame(msg, op, eof, true);
+                                                bool eof = true,
+                                                bool need_compression = false) {
+    auto header = ws.encode_frame(msg, op, eof, need_compression);
     std::vector<asio::const_buffer> buffers{
         asio::buffer(header), asio::buffer(msg.data(), msg.size())};
 
@@ -445,23 +446,27 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     std::span<char> span{};
     if constexpr (is_span_v<Source>) {
+      bool need_compress = false;
       span = {source.data(), source.size()};
 #ifdef CINATRA_ENABLE_GZIP
       std::string dest_buf;
       gzip_compress({source.data(), source.size()}, dest_buf, span, data);
+      need_compress = true;
 #endif
-      co_await write_ws_frame(span, ws, op, data);
+      co_await write_ws_frame(span, ws, op, data, true, need_compress);
     }
     else {
       while (true) {
         auto result = co_await source();
+        bool need_compress = false;
         span = {result.buf.data(), result.buf.size()};
 #ifdef CINATRA_ENABLE_GZIP
         std::string dest_buf;
         gzip_compress({result.buf.data(), result.buf.size()}, dest_buf, span,
                       data);
+        need_compress = true;
 #endif
-        co_await write_ws_frame(span, ws, op, data, result.eof);
+        co_await write_ws_frame(span, ws, op, data, result.eof, need_compress);
 
         if (result.eof || data.status == 404) {
           break;
