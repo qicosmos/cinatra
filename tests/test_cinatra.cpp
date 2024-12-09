@@ -1055,6 +1055,8 @@ async_simple::coro::Lazy<void> test_collect_all() {
   std::vector<async_simple::coro::Lazy<resp_data>> futures;
   for (int i = 0; i < 2; ++i) {
     auto client = std::make_shared<coro_http_client>();
+    client->set_conn_timeout(3s);
+    client->set_req_timeout(5s);
     v.push_back(client);
     futures.push_back(client->async_get("http://www.baidu.com/"));
   }
@@ -1167,6 +1169,8 @@ TEST_CASE("test request with out buffer") {
   {
     detail::resize(str, 1024 * 64);
     coro_http_client client;
+    client.set_conn_timeout(3s);
+    client.set_req_timeout(5s);
     std::string dest = "http://www.baidu.com";
     auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
