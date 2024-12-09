@@ -2401,8 +2401,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool should_reset_ = false;
   config config_;
 
-#ifdef CINATRA_ENABLE_GZIP
   bool enable_ws_deflate_ = false;
+#ifdef CINATRA_ENABLE_GZIP
   bool is_server_support_ws_deflate_ = false;
   std::string inflate_str_;
 #endif
