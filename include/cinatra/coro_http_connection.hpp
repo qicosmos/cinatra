@@ -306,7 +306,8 @@ class coro_http_connection
 
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
-          if (type == content_type::multipart) {
+          if (type == content_type::multipart ||
+              type == content_type::chunked) {
             if (response_.content().empty())
               response_.set_status_and_content(
                   status_type::not_implemented,
@@ -320,9 +321,8 @@ class coro_http_connection
           }
           else if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
             // handle pipeling, only support GET and HEAD method now.
-            if (response_.content().empty())
-              response_.set_status_and_content(status_type::method_not_allowed,
-                                               "method not allowed");
+            response_.set_status_and_content(status_type::method_not_allowed,
+                                             "method not allowed");
             co_await reply();
           }
           else {

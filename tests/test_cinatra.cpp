@@ -738,6 +738,9 @@ TEST_CASE("test pipeline") {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET, POST>(
       "/test", [](coro_http_request &req, coro_http_response &res) {
+        if (req.get_content_type() == content_type::multipart) {
+          return;
+        }
         res.set_status_and_content(status_type::ok, "hello world");
       });
   server.set_http_handler<GET, POST>(
@@ -2355,7 +2358,7 @@ TEST_CASE("test multipart and chunked return error") {
     std::string uri1 = "http://127.0.0.1:8090/no_such";
     auto result = async_simple::coro::syncAwait(
         client.async_upload_chunked(uri1, http_method::PUT, filename));
-    CHECK(result.status == 404);
+    CHECK(result.status != 200);
   }
   std::error_code ec;
   fs::remove(filename, ec);
