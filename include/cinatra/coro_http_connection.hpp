@@ -90,6 +90,8 @@ class coro_http_connection
   }
 #endif
 
+  void consume_all() { head_buf_.consume(head_buf_.size()); }
+
   async_simple::coro::Lazy<void> start() {
 #ifdef CINATRA_ENABLE_SSL
     bool has_shake = false;
@@ -238,6 +240,7 @@ class coro_http_connection
                 (handler)(request_, response_);
               }
               else {
+                consume_all();
                 response_.set_status(status_type::not_found);
               }
             }
@@ -256,6 +259,7 @@ class coro_http_connection
                   co_await coro_handler(request_, response_);
                 }
                 else {
+                  consume_all();
                   response_.set_status(status_type::not_found);
                 }
               }
@@ -295,8 +299,10 @@ class coro_http_connection
                   }
                 }
                 // not found
-                if (!is_matched_regex_router)
+                if (!is_matched_regex_router) {
+                  consume_all();
                   response_.set_status(status_type::not_found);
+                }
               }
             }
           }
