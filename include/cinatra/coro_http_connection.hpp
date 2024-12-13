@@ -90,8 +90,6 @@ class coro_http_connection
   }
 #endif
 
-  void consume_all() { head_buf_.consume(head_buf_.size()); }
-
   async_simple::coro::Lazy<void> start() {
 #ifdef CINATRA_ENABLE_SSL
     bool has_shake = false;
@@ -240,7 +238,6 @@ class coro_http_connection
                 (handler)(request_, response_);
               }
               else {
-                consume_all();
                 response_.set_status(status_type::not_found);
               }
             }
@@ -259,7 +256,6 @@ class coro_http_connection
                   co_await coro_handler(request_, response_);
                 }
                 else {
-                  consume_all();
                   response_.set_status(status_type::not_found);
                 }
               }
@@ -300,7 +296,6 @@ class coro_http_connection
                 }
                 // not found
                 if (!is_matched_regex_router) {
-                  consume_all();
                   response_.set_status(status_type::not_found);
                 }
               }
@@ -312,9 +307,10 @@ class coro_http_connection
       if (!response_.get_delay()) {
         if (head_buf_.size()) {
           if (type == content_type::multipart) {
-            response_.set_status_and_content(
-                status_type::not_implemented,
-                "mutipart handler not implemented or incorrect implemented");
+            if (response_.content().empty())
+              response_.set_status_and_content(
+                  status_type::not_implemented,
+                  "mutipart handler not implemented or incorrect implemented");
             co_await reply();
             close();
             CINATRA_LOG_ERROR
@@ -324,8 +320,9 @@ class coro_http_connection
           }
           else if (parser_.method()[0] != 'G' && parser_.method()[0] != 'H') {
             // handle pipeling, only support GET and HEAD method now.
-            response_.set_status_and_content(status_type::method_not_allowed,
-                                             "method not allowed");
+            if (response_.content().empty())
+              response_.set_status_and_content(status_type::method_not_allowed,
+                                               "method not allowed");
             co_await reply();
           }
           else {
@@ -410,10 +407,6 @@ class coro_http_connection
     if (multi_buf_) {
       if (need_to_bufffer) {
         response_.to_buffers(buffers_, chunk_size_str_);
-      }
-      int64_t send_size = 0;
-      for (auto &buf : buffers_) {
-        send_size += buf.size();
       }
       std::tie(ec, size) = co_await async_write(buffers_);
     }

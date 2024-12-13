@@ -2318,7 +2318,6 @@ TEST_CASE("test multipart and chunked return error") {
   server.set_http_handler<cinatra::PUT, cinatra::POST>(
       "/multipart",
       [](request &req, response &resp) -> async_simple::coro::Lazy<void> {
-        resp.get_conn()->consume_all();
         resp.set_status_and_content(status_type::bad_request,
                                     "invalid headers");
         co_return;
@@ -2326,7 +2325,6 @@ TEST_CASE("test multipart and chunked return error") {
   server.set_http_handler<cinatra::PUT, cinatra::POST>(
       "/chunked",
       [](request &req, response &resp) -> async_simple::coro::Lazy<void> {
-        resp.get_conn()->consume_all();
         resp.set_status_and_content(status_type::bad_request,
                                     "invalid headers");
         co_return;
