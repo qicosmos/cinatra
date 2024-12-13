@@ -2346,7 +2346,7 @@ TEST_CASE("test multipart and chunked return error") {
   {
     coro_http_client client{};
     std::string uri2 = "http://127.0.0.1:8090/multipart";
-    client.add_file_part("test file", filename);
+    client.add_str_part("test", "test value");
     auto result =
         async_simple::coro::syncAwait(client.async_upload_multipart(uri2));
     CHECK(result.resp_body == "invalid headers");
@@ -2359,6 +2359,8 @@ TEST_CASE("test multipart and chunked return error") {
         client.async_upload_chunked(uri1, http_method::PUT, filename));
     CHECK(result.status == 404);
   }
+  std::error_code ec;
+  fs::remove(filename, ec);
 }
 
 TEST_CASE("test coro_http_client get") {
