@@ -558,14 +558,31 @@ struct add_more_data {
   }
 };
 
+std::vector<std::string> aspect_test_vec;
+
 struct auth_t {
   bool before(coro_http_request &req, coro_http_response &res) { return true; }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter auth_t after");
+    return false;
+  }
 };
 
 struct dely_t {
   bool before(coro_http_request &req, coro_http_response &res) {
     res.set_status_and_content(status_type::unauthorized, "unauthorized");
     return false;
+  }
+  bool after(coro_http_request &req, coro_http_response &res) {
+    aspect_test_vec.push_back("enter delay_t after");
+    return true;
+  }
+};
+
+struct another_t {
+  bool after(coro_http_request &req, coro_http_response &res) {
+    // won't comming
+    return true;
   }
 };
 
@@ -594,7 +611,7 @@ TEST_CASE("test aspect") {
       [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ok");
       },
-      dely_t{}, auth_t{});
+      dely_t{}, auth_t{}, another_t{});
   server.set_http_handler<GET>(
       "/exception", [](coro_http_request &req, coro_http_response &resp) {
         throw std::invalid_argument("invalid argument");
@@ -628,6 +645,7 @@ TEST_CASE("test aspect") {
   CHECK(result.status == 200);
   result = async_simple::coro::syncAwait(client.async_get("/auth"));
   CHECK(result.status == 401);
+  CHECK(aspect_test_vec.size() == 2);
   CHECK(result.resp_body == "unauthorized");
   result = async_simple::coro::syncAwait(client.async_get("/exception"));
   CHECK(result.status == 503);
