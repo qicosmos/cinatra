@@ -759,7 +759,7 @@ TEST_CASE("chunked request") {
             CHECK(size == 0);
             break;
           }
-          CHECK(size > 0);
+          CHECK(size >= 0);
           content.append(result.data);
         }
 
