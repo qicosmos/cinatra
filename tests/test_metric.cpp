@@ -950,7 +950,7 @@ TEST_CASE("test summary with illegal quantities") {
   CHECK(str.find("test_summary_sum") != std::string::npos);
   CHECK(str.find("test_summary{quantile=\"") != std::string::npos);
   CHECK(result[0] < 0);
-  CHECK(result[1] < 0);
+  CHECK(result[1] == 0);
   CHECK(result[result.size() - 1] > result[result.size() - 2]);
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
@@ -958,7 +958,7 @@ TEST_CASE("test summary with illegal quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 233);
+  CHECK(str_json.size() == 222);
 #endif
 }
 
@@ -994,7 +994,7 @@ TEST_CASE("test summary with many quantities") {
   summary.serialize_to_json(str_json);
   std::cout << str_json << "\n";
   std::cout << str_json.size() << std::endl;
-  CHECK(str_json.size() == 8868);
+  CHECK(str_json.size() == 8857);
 #endif
 }
 
@@ -2021,6 +2021,24 @@ TEST_CASE("test remove label value") {
   CHECK(!counter.has_label_value(std::vector<std::string>{"/", "test"}));
   CHECK(!counter.has_label_value(std::vector<std::string>{"/", "200", "test"}));
   CHECK(!counter.has_label_value(std::vector<std::string>{}));
+}
+
+TEST_CASE("test static summary with 0 and 1 quantiles") {
+  {
+    ylt::metric::summary_t s("test", "help", {0, 1});
+    for (uint64_t i = 0; i < 100ull; ++i) {
+      s.observe(1);
+    }
+    auto result = s.get_rates();
+    CHECK(result[0] == 1);
+    CHECK(result[1] == 1);
+  }
+  {
+    ylt::metric::summary_t s("test", "help", {0, 1});
+    auto result = s.get_rates();
+    CHECK(result[0] == 0);
+    CHECK(result[1] == 0);
+  }
 }
 
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4007)

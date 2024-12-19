@@ -37,7 +37,7 @@ YLT_REFL(json_summary_t, name, help, type, labels_name, quantiles_key, metrics);
 class summary_t : public static_metric {
  public:
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
-            std::chrono::seconds max_age = std::chrono::seconds{36000})
+            std::chrono::seconds max_age = std::chrono::seconds{0})
       : static_metric(MetricType::Summary, std::move(name), std::move(help)),
         quantiles_(std::move(quantiles)),
         impl_(quantiles_,
@@ -48,7 +48,7 @@ class summary_t : public static_metric {
 
   summary_t(std::string name, std::string help, std::vector<double> quantiles,
             std::map<std::string, std::string> static_labels,
-            std::chrono::seconds max_age = std::chrono::seconds{36000})
+            std::chrono::seconds max_age = std::chrono::seconds{60})
       : static_metric(MetricType::Summary, std::move(name), std::move(help),
                       std::move(static_labels)),
         quantiles_(std::move(quantiles)),
@@ -133,20 +133,22 @@ class summary_t : public static_metric {
 
  private:
   std::vector<double> quantiles_;
-  ylt::metric::detail::summary_impl<> impl_;
+  ylt::metric::detail::summary_impl<uint64_t> impl_;
 };
 
 template <size_t N>
 class basic_dynamic_summary
-    : public dynamic_metric_impl<ylt::metric::detail::summary_impl<>, N> {
+    : public dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>,
+                                 N> {
  private:
-  using Base = dynamic_metric_impl<ylt::metric::detail::summary_impl<>, N>;
+  using Base =
+      dynamic_metric_impl<ylt::metric::detail::summary_impl<uint32_t>, N>;
 
  public:
   basic_dynamic_summary(
       std::string name, std::string help, std::vector<double> quantiles,
       std::array<std::string, N> labels_name,
-      std::chrono::milliseconds max_age = std::chrono::seconds{36000})
+      std::chrono::milliseconds max_age = std::chrono::seconds{60})
       : Base(MetricType::Summary, std::move(name), std::move(help),
              std::move(labels_name)),
         quantiles_(std::move(quantiles)),
