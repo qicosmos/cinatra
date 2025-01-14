@@ -719,7 +719,7 @@ class coro_http_connection
           } break;
           case cinatra::ws_frame_type::WS_PING_FRAME: {
             result.data = {payload.data(), payload.size()};
-            auto ec = co_await write_websocket("pong", opcode::pong);
+            auto ec = co_await write_websocket(result.data, opcode::pong);
             if (ec) {
               close();
               result.ec = ec;
@@ -727,7 +727,7 @@ class coro_http_connection
           } break;
           case cinatra::ws_frame_type::WS_PONG_FRAME: {
             result.data = {payload.data(), payload.size()};
-            auto ec = co_await write_websocket("ping", opcode::ping);
+            auto ec = co_await write_websocket(result.data, opcode::ping);
             result.ec = ec;
           } break;
           default:
