@@ -1365,7 +1365,7 @@ TEST_CASE("test response standalone") {
   resp.clear();
   str.clear();
 
-  std::string out = "hello";
+  std::string_view out = "hello";
   resp.set_status_and_content_view(status_type::ok, out);
   resp.build_resp_str(str);
   CHECK(str.find("200") != std::string::npos);

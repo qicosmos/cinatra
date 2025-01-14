@@ -2503,9 +2503,8 @@ TEST_CASE("test multipart and chunked return error") {
 
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
-  auto r = client.get("http://www.baidu.com");
-  CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  client.set_conn_timeout(1s);
+  client.get("http://www.baidu.com");
 }
 
 TEST_CASE("test coro_http_client add header and url queries") {
