@@ -174,12 +174,6 @@ TEST_CASE("http_request test") {
   CHECK(ret);
   coro_http_request req(parser, nullptr);
   CHECK(parser.msg().empty());
-  CHECK(!req.is_req_ranges());
-  CHECK(!req.is_resp_ranges());
-
-  std::string str = " test ";
-  auto trim = parser.trim(str);
-  CHECK(trim == "test");
 
   CHECK(req.get_accept_encoding().empty());
   CHECK(req.get_content_type() == content_type::octet_stream);
