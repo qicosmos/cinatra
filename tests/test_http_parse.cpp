@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "cinatra/coro_http_server.hpp"
 #include "cinatra/picohttpparser.h"
 #include "doctest/doctest.h"
 
