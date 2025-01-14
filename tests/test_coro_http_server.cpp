@@ -958,6 +958,9 @@ TEST_CASE("test websocket") {
     co_await client.write_websocket("PING", opcode::ping);
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "PING");
+    co_await client.write_websocket("", opcode::ping);
+    data = co_await client.read_websocket();
+    CHECK(data.resp_body == "");
     co_await client.write_websocket("PONG", opcode::pong);
     data = co_await client.read_websocket();
     CHECK(data.resp_body == "PONG");
