@@ -106,6 +106,9 @@ endif ()
 add_executable(test_http_parse
         test_http_parse.cpp
         )
+if (UNIX)
+	target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
+endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")
 	if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
