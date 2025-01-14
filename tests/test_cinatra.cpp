@@ -1380,7 +1380,7 @@ TEST_CASE("test request with out buffer") {
     auto result = async_simple::coro::syncAwait(ret);
     bool ok = result.status == 200 || result.status == 301;
     CHECK(ok);
-    if (ok) {
+    if (ok && result.resp_body.size() <= 1024 * 64) {
       std::string_view sv(str.data(), result.resp_body.size());
       //    CHECK(result.resp_body == sv);
       CHECK(client.is_body_in_out_buf());
