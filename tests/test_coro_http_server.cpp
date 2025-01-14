@@ -1317,6 +1317,11 @@ TEST_CASE("test restful api") {
         CHECK(req.matches_.str(2) == "200");
         response.set_status_and_content(status_type::ok, "number regex ok");
       });
+  server.set_http_handler<cinatra::GET, cinatra::POST>(
+      "/test4/{}", [](coro_http_request &req, coro_http_response &response) {
+        CHECK(req.matches_.str(1) == "100");
+        response.set_status_and_content(status_type::ok, "number regex ok");
+      });
 
   server.async_start();
 
@@ -1325,6 +1330,50 @@ TEST_CASE("test restful api") {
   result = client.get("http://127.0.0.1:9001/numbers/100/test/200");
   result = client.get("http://127.0.0.1:9001/test4/100");
   CHECK(result.status == 200);
+}
+
+TEST_CASE("test response standalone") {
+  coro_http_response resp(nullptr);
+  resp.set_status_and_content(status_type::ok, "ok");
+  CHECK(resp.content() == "ok");
+  CHECK(resp.content_size() == 2);
+  CHECK(resp.need_date());
+  resp.need_date_head(false);
+  CHECK(!resp.need_date());
+
+  std::string str;
+  resp.build_resp_str(str);
+  CHECK(!str.empty());
+  CHECK(str.find("200") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  resp.set_status_and_content(status_type::ok, "");
+  std::vector<http_header> v{{"hello", "world"}};
+  resp.add_header_span(v);
+  resp.build_resp_str(str);
+  CHECK(str.find("200") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  resp.set_keepalive(true);
+  resp.build_resp_str(str);
+  CHECK(str.find("501") != std::string::npos);
+  resp.set_format_type(format_type::chunked);
+  resp.build_resp_str(str);
+  CHECK(str.find("501") != std::string::npos);
+  resp.clear();
+  str.clear();
+
+  std::string out = "hello";
+  resp.set_status_and_content_view(status_type::ok, out);
+  resp.build_resp_str(str);
+  CHECK(str.find("200") != std::string::npos);
+
+  std::vector<asio::const_buffer> buffers;
+  resp.set_content_type<4>();
+  resp.build_resp_head(buffers);
+  CHECK(buffers.size() == 13);
 }
 
 TEST_CASE("test radix tree restful api") {

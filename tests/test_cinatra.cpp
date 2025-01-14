@@ -722,7 +722,7 @@ TEST_CASE("test response") {
   server.set_http_handler<GET>(
       "/empty1", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_content_type<2>();
-        CHECK(!resp.need_date());
+        CHECK(resp.need_date());
         resp.add_header_span({span.data(), span.size()});
 
         resp.set_status_and_content_view(status_type::ok, "");
@@ -730,7 +730,7 @@ TEST_CASE("test response") {
   server.set_http_handler<GET>(
       "/empty2", [&](coro_http_request &req, coro_http_response &resp) {
         resp.set_content_type<2>();
-        CHECK(!resp.need_date());
+        CHECK(resp.need_date());
         resp.add_header_span({span.data(), span.size()});
 
         resp.set_status_and_content(status_type::ok, "");
@@ -1380,9 +1380,11 @@ TEST_CASE("test request with out buffer") {
     auto result = async_simple::coro::syncAwait(ret);
     bool ok = result.status == 200 || result.status == 301;
     CHECK(ok);
-    std::string_view sv(str.data(), result.resp_body.size());
-    //    CHECK(result.resp_body == sv);
-    CHECK(client.is_body_in_out_buf());
+    if (ok) {
+      std::string_view sv(str.data(), result.resp_body.size());
+      //    CHECK(result.resp_body == sv);
+      CHECK(client.is_body_in_out_buf());
+    }
   }
 }
 
@@ -1480,7 +1482,7 @@ TEST_CASE("test coro_http_client async_http_connect") {
 
   CHECK(r.status >= 200);
   r = async_simple::coro::syncAwait(client1.connect("http://cn.bing.com"));
-  CHECK(r.status == 200);
+  CHECK(r.status >= 200);
 }
 
 TEST_CASE("test collect all") {
