@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
     for (auto& counter : v) {
       for (auto& conn : counter.conns) {
         conn->set_bench_stop();
-        conn->close();
+        conn->reset();
       }
     }
   });
