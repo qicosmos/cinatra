@@ -683,7 +683,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   void reset() {
     if (!has_closed()) {
-      close_socket(*socket_);
+      std::promise<void> promise;
+      asio::dispatch(executor_wrapper_.get_asio_executor(),
+                     [&promise, socket = socket_] {
+                       close_socket(*socket);
+                       promise.set_value();
+                     });
+      promise.get_future().wait();
     }
 
     socket_->impl_ = asio::ip::tcp::socket{executor_wrapper_.context()};
