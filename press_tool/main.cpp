@@ -245,7 +245,6 @@ int main(int argc, char* argv[]) {
       }
     }
   });
-
   std::thread timer_thd([&timer_ioc] {
     timer_ioc.run();
   });
