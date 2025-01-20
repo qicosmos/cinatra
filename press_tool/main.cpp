@@ -273,9 +273,8 @@ int main(int argc, char* argv[]) {
 
   timer_thd.join();
   auto end = std::chrono::steady_clock::now();
-  auto dur =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count();
-  double dur_s = double(dur) / 1000000000;
+  double dur_s =
+      std::chrono::duration_cast<std::chrono::seconds>(end - beg).count();
 
   // statistic
   uint64_t total = 0;
