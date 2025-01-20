@@ -4,8 +4,8 @@ using namespace cinatra;
 using namespace std::chrono_literals;
 
 int main() {
-  coro_http_server server(std::thread::hardware_concurrency(), 8090,
-                          "127.0.0.1", true);
+  coro_http_server server(std::thread::hardware_concurrency(), 8090, "0.0.0.0",
+                          true);
   server.set_http_handler<GET>(
       "/plaintext", [](coro_http_request& req, coro_http_response& resp) {
         resp.set_delay(false);
