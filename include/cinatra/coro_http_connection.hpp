@@ -390,6 +390,11 @@ class coro_http_connection
         }
       }
 
+      if (!keep_alive_) {
+        // now in io thread, so can close socket immediately.
+        close();
+      }
+
       response_.clear();
       request_.clear();
       buffers_.clear();
@@ -422,11 +427,6 @@ class coro_http_connection
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
       co_return false;
-    }
-
-    if (!keep_alive_) {
-      // now in io thread, so can close socket immediately.
-      close();
     }
 
     co_return true;
@@ -477,11 +477,6 @@ class coro_http_connection
       CINATRA_LOG_ERROR << "async_write error: " << ec.message();
       close();
       co_return false;
-    }
-
-    if (!keep_alive_) {
-      // now in io thread, so can close socket immediately.
-      close();
     }
 
     co_return true;
