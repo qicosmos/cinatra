@@ -1642,6 +1642,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 #endif
     if (parse_ret < 0) [[unlikely]] {
+      head_buf_.consume(head_buf_.size());
       return std::make_error_code(std::errc::protocol_error);
     }
 
@@ -1649,6 +1650,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         [[unlikely]] {
       CINATRA_LOG_ERROR << "invalid http content length: "
                         << parser_.body_len();
+      head_buf_.consume(head_buf_.size());
       return std::make_error_code(std::errc::invalid_argument);
     }
 
