@@ -116,6 +116,7 @@ class coro_http_connection
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
 
+        head_buf_.consume(head_buf_.size());
         close();
         break;
       }
@@ -968,7 +969,8 @@ class coro_http_connection
   uint64_t conn_id_{0};
   std::function<void(const uint64_t &conn_id)> quit_cb_ = nullptr;
   bool checkout_timeout_ = false;
-  std::atomic<std::chrono::system_clock::time_point> last_rwtime_;
+  std::atomic<std::chrono::system_clock::time_point> last_rwtime_ =
+      std::chrono::system_clock::now();
   uint64_t max_part_size_ = 8 * 1024 * 1024;
   std::string resp_str_;
 
