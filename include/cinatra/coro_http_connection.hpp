@@ -116,8 +116,10 @@ class coro_http_connection
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
 
-        head_buf_.consume(head_buf_.size());
         close();
+        if(head_buf_.size()) {
+          head_buf_.consume(head_buf_.size());
+        }
         break;
       }
 
