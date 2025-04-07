@@ -117,9 +117,6 @@ class coro_http_connection
         }
 
         close();
-        if(head_buf_.size()) {
-          head_buf_.consume(head_buf_.size());
-        }
         break;
       }
 
@@ -407,6 +404,10 @@ class coro_http_connection
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
       }
+    }
+
+    if(head_buf_.size()) {
+      head_buf_.consume(head_buf_.size());
     }
   }
 
