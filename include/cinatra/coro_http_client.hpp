@@ -1548,7 +1548,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     else {
       if (req_headers_.find("Host") == req_headers_.end()) {
-        req_str.append(" HTTP/1.1\r\nHost:").append(u.host).append("\r\n");
+        req_str.append(" HTTP/1.1\r\nHost:").append(u.host);
+        if ((u.is_ssl && u.port.compare("443") != 0) ||
+            (!u.is_ssl && u.port.compare("80") != 0))
+          req_str.append(":").append(u.port);
+        req_str.append("\r\n");
       }
       else {
         req_str.append(" HTTP/1.1\r\n");
