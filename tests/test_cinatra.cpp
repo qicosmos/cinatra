@@ -42,6 +42,7 @@ TEST_CASE("test for gzip") {
   server.set_http_handler<GET, POST>(
       "/gzip", [](coro_http_request &req, coro_http_response &res) {
         CHECK(req.get_header_value("Content-Encoding") == "gzip");
+        CHECK(req.get_header_value("Host") == "127.0.0.1:8090");
         CHECK(req.get_encoding_type() == content_encoding::gzip);
         res.set_status_and_content(status_type::ok, "hello world",
                                    content_encoding::gzip);
