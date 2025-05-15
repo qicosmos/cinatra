@@ -95,7 +95,6 @@ add_executable(test_metric
         )
 
 if (ENABLE_SSL)
-    message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)

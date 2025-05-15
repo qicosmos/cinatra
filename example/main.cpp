@@ -414,13 +414,13 @@ async_simple::coro::Lazy<void> basic_usage() {
       "http://127.0.0.1:9001/users/ultramarines/subscriptions/guilliman");
   assert(result.status == 200);
 
-  // make sure you have install openssl and enable CINATRA_ENABLE_SSL
+  // make sure you have install openssl.
 #ifdef CINATRA_ENABLE_SSL
   coro_http_client client2{};
 
   result = client2.post("https://baidu.com", "test", req_content_type::string);
-  std::cout << result.resp_body << "\n";
-  result.net_err.value() assert(result.status == 200);
+  std::cout << result.net_err.message() << "resp content: " << result.resp_body
+            << "\n";
 #endif
 }
 async_simple::coro::Lazy<void> use_channel() {

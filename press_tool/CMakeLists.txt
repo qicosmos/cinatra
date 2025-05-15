@@ -20,10 +20,6 @@ if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 
-if (ENABLE_CLIENT_SSL)
-	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
-endif()
-
 if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()
@@ -72,10 +68,6 @@ if (ENABLE_PRESS_TOOL_TESTS)
     target_compile_definitions(${unittest_press_tool} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO PRESS_TOOL_UNITTESTS)
 
     if (ENABLE_SSL)
-        target_link_libraries(${unittest_press_tool} ${OPENSSL_LIBRARIES} pthread -ldl)
-    endif()
-
-    if (ENABLE_CLIENT_SSL)
         target_link_libraries(${unittest_press_tool} ${OPENSSL_LIBRARIES} pthread -ldl)
     endif()
 

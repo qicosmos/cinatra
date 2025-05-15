@@ -22,10 +22,6 @@ if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 
-if (ENABLE_CLIENT_SSL)
-	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
-endif()
-
 if (ENABLE_GZIP)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 	target_link_libraries(benchmark PRIVATE ${ZLIB_LIBRARIES})
