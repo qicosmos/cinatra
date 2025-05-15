@@ -98,7 +98,6 @@ if (ENABLE_SSL)
     find_package(OpenSSL REQUIRED)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
-    target_link_libraries(test_corofile  OpenSSL::SSL OpenSSL::Crypto)
 	target_link_libraries(test_metric  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
