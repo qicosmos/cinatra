@@ -43,7 +43,7 @@ if (ENABLE_BROTLI)
 endif()
 
 # test_coro_file
-option(ENABLE_FILE_IO_URING "enable io_uring" OFF)
+option(ENABLE_FILE_IO_URING "enable io_uring" ON)
 if(ENABLE_FILE_IO_URING)
     message(STATUS "enable io_uring")
     add_definitions(-DENABLE_FILE_IO_URING)
@@ -77,7 +77,11 @@ add_executable(test_corofile
 
 if(ENABLE_FILE_IO_URING)
 if (UNIX)
-        target_link_libraries(test_corofile PRIVATE uring)
+	if (ENABLE_SSL)
+        target_link_libraries(test_corofile PRIVATE uring OpenSSL::SSL OpenSSL::Crypto)
+	else()
+		target_link_libraries(test_corofile PRIVATE uring)
+	endif()
 endif()
 else()
         target_link_libraries(test_corofile PRIVATE)
@@ -105,7 +109,11 @@ add_executable(test_http_parse
         test_http_parse.cpp
         )
 if (UNIX)
-	target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
+	if (ENABLE_SSL)
+		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
+	elseif()
+		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
+	endif()
 endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")
