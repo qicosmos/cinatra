@@ -43,7 +43,7 @@ if (ENABLE_BROTLI)
 endif()
 
 # test_coro_file
-option(ENABLE_FILE_IO_URING "enable io_uring" ON)
+option(ENABLE_FILE_IO_URING "enable io_uring" OFF)
 if(ENABLE_FILE_IO_URING)
     message(STATUS "enable io_uring")
     add_definitions(-DENABLE_FILE_IO_URING)
