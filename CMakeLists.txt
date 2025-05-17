@@ -6,6 +6,7 @@ include_directories(include)
 #the thread library of the system.
 find_package(Threads REQUIRED)
 
+include(cmake/find_openssl.cmake)
 include(cmake/build.cmake)
 include(cmake/develop.cmake)
 

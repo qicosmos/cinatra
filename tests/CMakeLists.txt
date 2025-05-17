@@ -76,11 +76,17 @@ add_executable(test_corofile
         )
 
 if(ENABLE_FILE_IO_URING)
-if (UNIX)
-        target_link_libraries(test_corofile PRIVATE uring)
-endif()
+  if (UNIX)
+	if (ENABLE_SSL)
+		target_link_libraries(test_corofile PRIVATE uring OpenSSL::SSL OpenSSL::Crypto)
+	else()
+		target_link_libraries(test_corofile PRIVATE uring)
+	endif()
+  endif()
 else()
-        target_link_libraries(test_corofile PRIVATE)
+  if (ENABLE_SSL)
+	target_link_libraries(test_corofile PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  endif()
 endif()
 
 add_test(NAME test_corofile COMMAND test_corofile)
@@ -95,11 +101,9 @@ add_executable(test_metric
         )
 
 if (ENABLE_SSL)
-    message(STATUS "Use SSL")
     find_package(OpenSSL REQUIRED)
     add_definitions(-DCINATRA_ENABLE_SSL)
     target_link_libraries(test_cinatra  OpenSSL::SSL OpenSSL::Crypto)
-    target_link_libraries(test_corofile  OpenSSL::SSL OpenSSL::Crypto)
 	target_link_libraries(test_metric  OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
@@ -107,7 +111,11 @@ add_executable(test_http_parse
         test_http_parse.cpp
         )
 if (UNIX)
-	target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
+	if (ENABLE_SSL)
+		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
+	elseif()
+		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
+	endif()
 endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")

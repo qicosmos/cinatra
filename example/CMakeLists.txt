@@ -16,13 +16,12 @@ target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 if (BUILD_BENCHMARK)
 	add_executable(benchmark benchmark.cpp)
 	target_compile_definitions(benchmark PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+	if (ENABLE_SSL)
+		target_link_libraries(benchmark ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES})
+	endif()
 endif()
 
 if (ENABLE_SSL)
-	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
-endif()
-
-if (ENABLE_CLIENT_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
 endif()
 
