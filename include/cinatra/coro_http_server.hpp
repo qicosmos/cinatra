@@ -64,7 +64,7 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
-                const std::string &passwd) {
+                const std::string &passwd = "") {
     cert_file_ = cert_file;
     key_file_ = key_file;
     passwd_ = passwd;
@@ -414,8 +414,12 @@ class coro_http_server {
             coro_io::coro_file in_file{};
             in_file.open(file_name, std::ios::in);
             if (!in_file.is_open()) {
+#ifndef NDEBUG
               resp.set_status_and_content(status_type::not_found,
-                                          file_name + "not found");
+                                          file_name + " not found");
+#else
+              resp.set_status(status_type::not_found);
+#endif
               co_return;
             }
 
@@ -423,6 +427,7 @@ class coro_http_server {
 
             if (format_type_ == file_resp_format_type::chunked &&
                 range_str.empty()) {
+              resp.add_header("Content-Type", std::string{mime});
               resp.set_format_type(format_type::chunked);
               bool ok;
               if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -455,8 +460,7 @@ class coro_http_server {
               if (pos != std::string_view::npos) {
                 range_str = range_str.substr(pos + 1);
                 bool is_valid = true;
-                auto ranges =
-                    parse_ranges(range_str, fs::file_size(file_name), is_valid);
+                auto ranges = parse_ranges(range_str, file_size, is_valid);
                 if (!is_valid) {
                   resp.set_status(status_type::range_not_satisfiable);
                   co_return;
@@ -821,7 +825,9 @@ class coro_http_server {
       header_str.append(content_range);
     }
     header_str.append("Content-Disposition: attachment;filename=");
-    header_str.append(filename).append("\r\n");
+    std::string short_name =
+        std::filesystem::path(filename).filename().string();
+    header_str.append(short_name).append("\r\n");
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
