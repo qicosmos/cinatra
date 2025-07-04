@@ -282,8 +282,15 @@ template <size_t Hour = 8, size_t N>
 inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
                                            std::string_view format) {
   static_assert(N >= 20, "wrong buf");
-  struct tm *loc_time = gmtime(&t);
 
+ #ifdef DOCTEST_PLATFORM_WINDOWS 
+  struct tm loc_tm;
+  gmtime_s(&loc_tm, &t);
+#else
+  gmtime_r(&t, &loc_tm);
+#endif
+  struct tm *loc_time = &loc_tm;
+  
   char *p = buf;
 
   for (int i = 0; i < format.size(); ++i) {
