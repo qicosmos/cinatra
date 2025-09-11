@@ -238,7 +238,7 @@ static const char *get_token_to_eol(const char *buf, const char *buf_end,
                                     int *ret) {
   const char *token_start = buf;
 #ifdef CINATRA_SSE
-  static const char ranges1[] =
+  static const char ALIGNED(16) ranges1[] =
       "\0\010"
       /* allow HT */
       "\012\037"
