@@ -406,7 +406,7 @@ class coro_http_connection
       }
     }
 
-    if(head_buf_.size()) {
+    if (head_buf_.size()) {
       head_buf_.consume(head_buf_.size());
     }
   }
@@ -885,6 +885,10 @@ class coro_http_connection
                      has_closed_ = true;
                    });
   }
+
+  uint64_t conn_id() const { return conn_id_; }
+
+  bool has_closed() const { return has_closed_; }
 
   void set_check_timeout(bool r) { checkout_timeout_ = r; }
 
