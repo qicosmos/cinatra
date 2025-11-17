@@ -819,8 +819,7 @@ class coro_http_server {
     std::string header_str = "HTTP/1.1 ";
     header_str.append(std::to_string(status));
     header_str.append(
-        " OK\r\nAccess-Control-Allow-origin: "
-        "*\r\nAccept-Ranges: bytes\r\n");
+        " OK\r\nAccept-Ranges: bytes\r\n");
     if (!content_range.empty()) {
       header_str.append(content_range);
     }
