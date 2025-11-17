@@ -1000,7 +1000,7 @@ class coro_http_server {
   size_t chunked_size_ = 1024 * 10;
 
   std::unordered_map<std::string, std::string> static_file_cache_;
-  file_resp_format_type format_type_ = file_resp_format_type::chunked;
+  file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
   std::string key_file_;
