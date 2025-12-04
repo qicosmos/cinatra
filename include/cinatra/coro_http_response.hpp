@@ -377,6 +377,8 @@ class coro_http_response {
     has_set_content_ = false;
     cookies_.clear();
     need_date_ = true;
+    content_type_ = {};
+    content_view_ = {};
   }
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
