@@ -3085,15 +3085,18 @@ TEST_CASE("test get_local_time_str with_month") {
 TEST_CASE("Testing base64_encode function") {
   SUBCASE("Base64 encoding of an empty string") {
     CHECK(base64_encode("") == "");
+    CHECK(base64_decode("") == "");
   }
 
   SUBCASE("Base64 encoding of 'Hello'") {
     CHECK(base64_encode("Hello") == "SGVsbG8=");
+    CHECK(base64_decode("SGVsbG8=") == "Hello");
   }
 
   SUBCASE("Base64 encoding of a binary data") {
     std::string binaryData = "\x01\x02\x03";  // Example binary data
     CHECK(base64_encode(binaryData) == "AQID");
+    CHECK(base64_decode("AQID") == binaryData);
   }
 }
 
