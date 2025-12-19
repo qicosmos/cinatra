@@ -225,7 +225,6 @@ inline std::string base64_decode(const std::string &encoded_string) {
          is_base64(encoded_string[in_])) {
     unsigned char current_char = encoded_string[in_++];
 
-    // --- URL Safe 兼容逻辑 ---
     if (current_char == '-')
       current_char = '+';
     if (current_char == '_')
@@ -252,7 +251,6 @@ inline std::string base64_decode(const std::string &encoded_string) {
     for (j = i; j < 4; j++) char_array_4[j] = 0;
 
     for (j = 0; j < 4; j++) {
-      // 同样处理剩余字符的查找
       unsigned char c = char_array_4[j];
       if (c == '-')
         c = '+';
@@ -266,7 +264,6 @@ inline std::string base64_decode(const std::string &encoded_string) {
         ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
     char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-    // 根据输入长度决定输出字节数
     for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
   }
 
