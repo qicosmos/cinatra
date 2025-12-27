@@ -94,7 +94,10 @@ asio::error_code win_iocp_file_service::open(
   if ((open_flags & file_base::sync_all_on_write) != 0)
     flags |= FILE_FLAG_WRITE_THROUGH;
 
-  HANDLE handle = ::CreateFileA(path, access, share, 0, disposition, flags, 0);
+  size_t len = std::strlen(path) + 1;
+  auto wpath = std::make_unique<wchar_t[]>(len);
+  std::mbstowcs(wpath.get(), path, len);
+  HANDLE handle = ::CreateFileW(wpath.get(), access, share, 0, disposition, flags, 0);
   if (handle != INVALID_HANDLE_VALUE)
   {
     if (disposition == OPEN_ALWAYS && (open_flags & file_base::truncate) != 0)
