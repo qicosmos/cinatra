@@ -113,7 +113,7 @@ add_executable(test_http_parse
 if (UNIX)
 	if (ENABLE_SSL)
 		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
-	elseif()
+	else()
 		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
 	endif()
 endif()

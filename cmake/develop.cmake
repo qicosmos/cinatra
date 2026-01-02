@@ -87,8 +87,15 @@ endif()
 
 add_definitions(-DASIO_STANDALONE)
 
-if (ENABLE_SSL)
-find_package(OpenSSL REQUIRED)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(ENABLE_SSL ON)
+    find_package(OpenSSL REQUIRED)
+    message(STATUS "Found OpenSSL libraries")
+    include_directories(${OPENSSL_INCLUDE_DIR})
+else()
+    if (ENABLE_SSL)
+        find_package(OpenSSL REQUIRED)
+    endif()
 endif()
 
 if (ENABLE_GZIP)
