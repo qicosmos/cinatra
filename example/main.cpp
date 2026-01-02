@@ -479,6 +479,24 @@ async_simple::coro::Lazy<void> use_pool() {
   co_return;
 }
 
+void test_smtp() {
+  std::string from = "you@163.com";
+  std::string user_name = "you";
+  std::string auth_pwd = "xxxxxxxx";
+  std::string smtp_host = "smtp.163.com";
+  smtp::email_data data{from,                               // 发件人邮箱
+                        {"one@qq.com", "someone@163.com"},  // 收件人邮箱列表
+                        "test",                             // 邮件标题
+                        "it is a text",                     // 邮件正文
+                        user_name,
+                        auth_pwd};
+
+  auto client = smtp::get_smtp_client(
+      coro_io::get_global_executor()->get_asio_executor().context());
+  bool r = client.connect(smtp_host, "465");
+  client.send_email(data);
+}
+
 int main() {
   async_simple::coro::syncAwait(use_channel());
   async_simple::coro::syncAwait(use_pool());
