@@ -7,6 +7,6 @@
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_server.hpp"
-#include "cinatra/smtp_client.hpp"
+// #include "cinatra/smtp_client.hpp"
 
 #endif  // CINATRA_CINATRA_HPP
