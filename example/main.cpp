@@ -61,7 +61,7 @@ async_simple::coro::Lazy<void> byte_ranges_download() {
   }
 }
 
-async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client &client) {
+async_simple::coro::Lazy<resp_data> chunked_upload1(coro_http_client& client) {
   std::string filename = "test.txt";
   create_file(filename, 1010);
 
@@ -85,8 +85,8 @@ async_simple::coro::Lazy<void> chunked_upload_download() {
   cinatra::coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/chunked",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         assert(req.get_content_type() == content_type::chunked);
         chunked_result result{};
         std::string content;
@@ -111,8 +111,8 @@ async_simple::coro::Lazy<void> chunked_upload_download() {
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/write_chunked",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         resp.set_format_type(format_type::chunked);
         bool ok;
         if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -121,7 +121,7 @@ async_simple::coro::Lazy<void> chunked_upload_download() {
 
         std::vector<std::string> vec{"hello", " world", " ok"};
 
-        for (auto &str : vec) {
+        for (auto& str : vec) {
           if (ok = co_await resp.get_conn()->write_chunked(str); !ok) {
             co_return;
           }
@@ -154,8 +154,8 @@ async_simple::coro::Lazy<void> use_websocket() {
   coro_http_server server(1, 9001);
   server.set_http_handler<cinatra::GET>(
       "/ws_echo",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         assert(req.get_content_type() == content_type::websocket);
         websocket_result result{};
         while (true) {
@@ -233,12 +233,12 @@ async_simple::coro::Lazy<void> static_file_server() {
 }
 
 struct log_t {
-  bool before(coro_http_request &, coro_http_response &) {
+  bool before(coro_http_request&, coro_http_response&) {
     std::cout << "before log" << std::endl;
     return true;
   }
 
-  bool after(coro_http_request &, coro_http_response &res) {
+  bool after(coro_http_request&, coro_http_response& res) {
     std::cout << "after log" << std::endl;
     res.add_header("aaaa", "bbcc");
     return true;
@@ -246,7 +246,7 @@ struct log_t {
 };
 
 struct get_data {
-  bool before(coro_http_request &req, coro_http_response &res) {
+  bool before(coro_http_request& req, coro_http_response& res) {
     req.set_aspect_data("hello world");
     return true;
   }
@@ -256,8 +256,8 @@ async_simple::coro::Lazy<void> use_aspects() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
       "/get",
-      [](coro_http_request &req, coro_http_response &resp) {
-        auto &val = req.get_aspect_data();
+      [](coro_http_request& req, coro_http_response& resp) {
+        auto& val = req.get_aspect_data();
         assert(val[0] == "hello world");
         resp.set_status_and_content(status_type::ok, "ok");
       },
@@ -274,7 +274,7 @@ async_simple::coro::Lazy<void> use_aspects() {
 }
 
 struct person_t {
-  void foo(coro_http_request &, coro_http_response &res) {
+  void foo(coro_http_request&, coro_http_response& res) {
     res.set_status_and_content(status_type::ok, "ok");
   }
 };
@@ -282,22 +282,22 @@ struct person_t {
 async_simple::coro::Lazy<void> basic_usage() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
-      "/get", [](coro_http_request &req, coro_http_response &resp) {
+      "/get", [](coro_http_request& req, coro_http_response& resp) {
         resp.set_status_and_content(status_type::ok, "ok");
       });
 
   server.set_http_handler<GET>(
       "/coro",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         resp.set_status_and_content(status_type::ok, "ok");
         co_return;
       });
 
   server.set_http_handler<POST>(
       "/form_data",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         assert(req.get_content_type() == content_type::multipart);
         auto boundary = req.get_boundary();
         multipart_reader_t multipart(req.get_conn());
@@ -329,8 +329,8 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   server.set_http_handler<GET>(
       "/in_thread_pool",
-      [](coro_http_request &req,
-         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
         // will respose in another thread.
         co_await coro_io::post([&] {
           // do your heavy work here when finished work, response.
@@ -339,13 +339,13 @@ async_simple::coro::Lazy<void> basic_usage() {
       });
 
   server.set_http_handler<POST, PUT>(
-      "/post", [](coro_http_request &req, coro_http_response &resp) {
+      "/post", [](coro_http_request& req, coro_http_response& resp) {
         auto req_body = req.get_body();
         resp.set_status_and_content(status_type::ok, std::string{req_body});
       });
 
   server.set_http_handler<GET>(
-      "/headers", [](coro_http_request &req, coro_http_response &resp) {
+      "/headers", [](coro_http_request& req, coro_http_response& resp) {
         auto name = req.get_header_value("name");
         auto age = req.get_header_value("age");
         assert(name == "tom");
@@ -354,7 +354,7 @@ async_simple::coro::Lazy<void> basic_usage() {
       });
 
   server.set_http_handler<GET>(
-      "/query", [](coro_http_request &req, coro_http_response &resp) {
+      "/query", [](coro_http_request& req, coro_http_response& resp) {
         auto name = req.get_query_value("name");
         auto age = req.get_query_value("age");
         assert(name == "tom");
@@ -364,7 +364,7 @@ async_simple::coro::Lazy<void> basic_usage() {
 
   server.set_http_handler<cinatra::GET, cinatra::POST>(
       "/users/:userid/subscriptions/:subid",
-      [](coro_http_request &req, coro_http_response &response) {
+      [](coro_http_request& req, coro_http_response& response) {
         assert(req.params_["userid"] == "ultramarines");
         assert(req.params_["subid"] == "guilliman");
         response.set_status_and_content(status_type::ok, "ok");
@@ -426,7 +426,7 @@ async_simple::coro::Lazy<void> basic_usage() {
 async_simple::coro::Lazy<void> use_channel() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
-      "/", [&](coro_http_request &req, coro_http_response &resp) {
+      "/", [&](coro_http_request& req, coro_http_response& resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
   server.async_start();
@@ -437,7 +437,7 @@ async_simple::coro::Lazy<void> use_channel() {
           {"127.0.0.1:9001"}, {.lba = coro_io::load_blance_algorithm::random}));
   std::string url = "http://127.0.0.1:9001/";
   co_await channel->send_request(
-      [&url](coro_http_client &client,
+      [&url](coro_http_client& client,
              std::string_view host) -> async_simple::coro::Lazy<void> {
         auto data = co_await client.async_get(url);
         std::cout << data.net_err.message() << "\n";
@@ -448,7 +448,7 @@ async_simple::coro::Lazy<void> use_channel() {
 async_simple::coro::Lazy<void> use_pool() {
   coro_http_server server(1, 9001);
   server.set_http_handler<GET>(
-      "/", [&](coro_http_request &req, coro_http_response &resp) {
+      "/", [&](coro_http_request& req, coro_http_response& resp) {
         resp.set_status_and_content(status_type::ok, "hello world");
       });
   server.async_start();
@@ -461,11 +461,11 @@ async_simple::coro::Lazy<void> use_pool() {
   std::atomic<size_t> count = 0;
   for (size_t i = 0; i < 10000; i++) {
     pool->send_request(
-            [&](coro_http_client &client) -> async_simple::coro::Lazy<void> {
+            [&](coro_http_client& client) -> async_simple::coro::Lazy<void> {
               auto data = co_await client.async_get(url);
               std::cout << data.resp_body << "\n";
             })
-        .start([&](auto &&) {
+        .start([&](auto&&) {
           count++;
         });
   }
@@ -479,23 +479,23 @@ async_simple::coro::Lazy<void> use_pool() {
   co_return;
 }
 
-void test_smtp() {
-  std::string from = "you@163.com";
-  std::string user_name = "you";
-  std::string auth_pwd = "xxxxxxxx";
-  std::string smtp_host = "smtp.163.com";
-  smtp::email_data data{from,                               // 发件人邮箱
-                        {"one@qq.com", "someone@163.com"},  // 收件人邮箱列表
-                        "test",                             // 邮件标题
-                        "it is a text",                     // 邮件正文
-                        user_name,
-                        auth_pwd};
+// void test_smtp() {
+//   std::string from = "you@163.com";
+//   std::string user_name = "you";
+//   std::string auth_pwd = "xxxxxxxx";
+//   std::string smtp_host = "smtp.163.com";
+//   smtp::email_data data{from,                               // 发件人邮箱
+//                         {"one@qq.com", "someone@163.com"},  // 收件人邮箱列表
+//                         "test",                             // 邮件标题
+//                         "it is a text",                     // 邮件正文
+//                         user_name,
+//                         auth_pwd};
 
-  auto client = smtp::get_smtp_client(
-      coro_io::get_global_executor()->get_asio_executor().context());
-  bool r = client.connect(smtp_host, "465");
-  client.send_email(data);
-}
+//   auto client = smtp::get_smtp_client(
+//       coro_io::get_global_executor()->get_asio_executor().context());
+//   bool r = client.connect(smtp_host, "465");
+//   client.send_email(data);
+// }
 
 int main() {
   async_simple::coro::syncAwait(use_channel());
