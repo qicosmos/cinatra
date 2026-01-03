@@ -2,9 +2,9 @@
 #include <asio.hpp>
 #include <asio/ssl.hpp>
 
-#include "asio/io_context.hpp"
 #include "cinatra/cinatra_log_wrapper.hpp"
 #include "utils.hpp"
+#include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra::smtp {
 struct email_data {
@@ -19,66 +19,67 @@ struct email_data {
 
 class client {
  public:
-  client(asio::io_context& ctx)
-      : io_context_(ctx), socket_(ctx), resolver_(ctx) {}
+  client(coro_io::ExecutorWrapper<>* ctx)
+      : io_context_(ctx), socket_(ctx->get_asio_executor()) {}
 
   ~client() { close(); }
 
-  bool connect(std::string_view host, std::string_view port) {
-    auto endpoints = resolver_.resolve(host, port);
-    std::error_code ec;
-    asio::connect(socket_, endpoints, ec);
+  async_simple::coro::Lazy<bool> connect(const std::string& host,
+                                         const std::string& port) {
+    std::error_code ec =
+        co_await coro_io::async_connect(io_context_, socket_, host, port);
+
     if (ec) {
       std::cerr << "connect host: " << host << ":" << port << " failed\n";
-      return false;
+      co_return false;
     }
 
-    if (upgrade_to_ssl()) {
-      return false;
+    if (!(co_await upgrade_to_ssl())) {
+      co_return false;
     }
 
     // 读取服务器欢迎信息
-    return read_response();
+    co_return co_await read_response();
   }
 
-  bool send_email(const email_data& email) {
+  async_simple::coro::Lazy<bool> send_email(const email_data& email) {
     // 1. EHLO 命令
-    bool r = send_command("EHLO localhost");
+    bool r = co_await send_command("EHLO localhost");
     if (!r) {
-      return false;
+      co_return false;
     }
     // 2. 认证
-    r = send_command("AUTH LOGIN");
+    r = co_await send_command("AUTH LOGIN");
     if (!r) {
-      return false;
+      co_return false;
     }
-    r = send_command(cinatra::base64_encode(email.user_name));
+    r = co_await send_command(cinatra::base64_encode(email.user_name));
     if (!r) {
-      return false;
+      co_return false;
     }
-    r = send_command(cinatra::base64_encode(email.auth_pwd));
+    r = co_await send_command(cinatra::base64_encode(email.auth_pwd));
     if (!r) {
-      return false;
+      co_return false;
     }
 
     // 3. 设置发件人
-    r = send_command("MAIL FROM: <" + email.from_email + ">");
+    r = co_await send_command("MAIL FROM: <" + email.from_email + ">");
     if (!r) {
-      return false;
+      co_return false;
     }
 
     // 4. 设置收件人
     for (const auto& recipient : email.to_email) {
-      r = send_command("RCPT TO: <" + recipient + ">");
+      r = co_await send_command("RCPT TO: <" + recipient + ">");
       if (!r) {
-        return false;
+        co_return false;
       }
     }
 
     // 5. 发送数据
-    r = send_command("DATA");
+    r = co_await send_command("DATA");
     if (!r) {
-      return false;
+      co_return false;
     }
 
     // 6. 邮件内容
@@ -103,33 +104,33 @@ class client {
     email_content.append(email.text).append("\r\n");
 
     // 发送邮件正文
-    r = send_raw(std::move(email_content));
+    r = co_await send_raw(std::move(email_content));
     if (!r) {
-      return false;
+      co_return false;
     }
     // 7. 邮件结束
-    r = send_raw("\r\n.\r\n");
+    r = co_await send_raw("\r\n.\r\n");
     if (!r) {
-      return false;
+      co_return false;
     }
 
     // 8. 退出
-    r = send_command("QUIT");
-    return r;
+    r = co_await send_command("QUIT");
+    co_return r;
   }
 
  private:
-  bool read_response() {
-    std::error_code ec;
-    size_t n = asio::read_until(*ssl_socket_, response_, "\r\n", ec);
+  async_simple::coro::Lazy<bool> read_response() {
+    auto [ec, n] =
+        co_await coro_io::async_read_until(*ssl_socket_, response_, "\r\n");
     if (ec) {
       CINATRA_LOG_ERROR << "网络错误，读失败, " << ec.message();
-      return false;
+      co_return false;
     }
     if (n < 3) {
       CINATRA_LOG_ERROR << "无效的服务器响应";
       response_.consume(response_.size());
-      return false;
+      co_return false;
     }
 
     std::string_view content((const char*)response_.data().data(), n);
@@ -138,35 +139,35 @@ class client {
     char code = content[0];
     if (code != '2' && code != '3') {
       CINATRA_LOG_ERROR << "SMTP 错误: " << content;
-      return false;
+      co_return false;
     }
 
     CINATRA_LOG_DEBUG << content;
 
-    return true;
+    co_return true;
   }
 
-  bool send_raw(std::string cmd) {
-    std::error_code ec;
-    asio::write(*ssl_socket_, asio::buffer(cmd), ec);
+  async_simple::coro::Lazy<bool> send_raw(std::string cmd) {
+    auto [ec, _] =
+        co_await coro_io::async_write(*ssl_socket_, asio::buffer(cmd));
     if (ec) {
-      return false;
+      CINATRA_LOG_ERROR << ec.message();
+      co_return false;
     }
-
-    return true;
+    co_return true;
   }
 
-  bool send_command(std::string cmd) {
+  async_simple::coro::Lazy<bool> send_command(std::string cmd) {
     cmd.append("\r\n");
-    bool r = send_raw(std::move(cmd));
+    bool r = co_await send_raw(std::move(cmd));
     if (!r) {
-      return false;
+      co_return false;
     }
 
-    return read_response();
+    co_return co_await read_response();
   }
 
-  bool upgrade_to_ssl() {
+  async_simple::coro::Lazy<bool> upgrade_to_ssl() {
     asio::ssl::context ctx(asio::ssl::context::sslv23);
     ctx.set_default_verify_paths();
     ctx.set_verify_mode(ctx.verify_fail_if_no_peer_cert);
@@ -182,13 +183,14 @@ class client {
       return preverified;
     });
 
-    std::error_code ec;
-    ssl_socket_->handshake(asio::ssl::stream_base::client, ec);
+    std::error_code ec = co_await coro_io::async_handshake(
+        ssl_socket_, asio::ssl::stream_base::client);
     if (ec) {
       CINATRA_LOG_ERROR << "SSL handshake error: " << ec.message();
+      co_return false;
     }
 
-    return false;
+    co_return true;
   }
 
   void close() {
@@ -205,15 +207,14 @@ class client {
   }
 
  private:
-  asio::io_context& io_context_;
+  coro_io::ExecutorWrapper<>* io_context_;
   asio::ip::tcp::socket socket_;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket&>> ssl_socket_;
-  asio::ip::tcp::resolver resolver_;
 
   asio::streambuf response_;
 };
 
-static inline auto get_smtp_client(asio::io_context& ctx) {
+static inline smtp::client get_smtp_client(coro_io::ExecutorWrapper<>* ctx) {
   return smtp::client(ctx);
 }
 

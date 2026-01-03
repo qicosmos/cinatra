@@ -6,7 +6,9 @@
 #include <thread>
 #include <vector>
 
+// #define CINATRA_ENABLE_SSL 1
 #include "../include/cinatra.hpp"
+// #include "../include/cinatra/smtp_client.hpp"
 
 using namespace cinatra;
 using namespace std::chrono_literals;
@@ -479,22 +481,21 @@ async_simple::coro::Lazy<void> use_pool() {
   co_return;
 }
 
-// void test_smtp() {
+// async_simple::coro::Lazy<void> test_smtp() {
 //   std::string from = "you@163.com";
 //   std::string user_name = "you";
 //   std::string auth_pwd = "xxxxxxxx";
 //   std::string smtp_host = "smtp.163.com";
-//   smtp::email_data data{from,                               // 发件人邮箱
-//                         {"one@qq.com", "someone@163.com"},  // 收件人邮箱列表
-//                         "test",                             // 邮件标题
-//                         "it is a text",                     // 邮件正文
-//                         user_name,
-//                         auth_pwd};
 
-//   auto client = smtp::get_smtp_client(
-//       coro_io::get_global_executor()->get_asio_executor().context());
-//   bool r = client.connect(smtp_host, "465");
-//   client.send_email(data);
+//   smtp::email_data data{from,                               // 发件人邮箱
+//                         {"one@qq.com", "other@163.com"},  //
+//                         收件人邮箱列表 "test",                             //
+//                         邮件标题 "it is a text",                     //
+//                         邮件正文 user_name, auth_pwd};
+
+//   auto client = smtp::get_smtp_client(coro_io::get_global_executor());
+//   bool r = co_await client.connect(smtp_host, "465");
+//   r = co_await client.send_email(data);
 // }
 
 int main() {
