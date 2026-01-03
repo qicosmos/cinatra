@@ -82,31 +82,32 @@ class client {
     }
 
     // 6. 邮件内容
-    std::ostringstream email_content;
+    std::string email_content;
 
     // 邮件头
-    email_content << "From: " << email.from_email << "\r\n";
+    email_content.append("From: ").append(email.from_email).append("\r\n");
 
     // 显示所有收件人
-    email_content << "To: ";
+    email_content.append("To: ");
     for (size_t i = 0; i < email.to_email.size(); ++i) {
       if (i > 0)
-        email_content << ", ";
-      email_content << email.to_email[i];
+        email_content.append(", ");
+      email_content.append(email.to_email[i]);
     }
-    email_content << "\r\n";
+    email_content.append("\r\n");
 
-    email_content << "Subject: " << email.subject << "\r\n";
-    email_content << "\r\n";
+    email_content.append("Subject: ").append(email.subject).append("\r\n");
+    email_content.append("\r\n");
 
     // 邮件正文
-    email_content << email.text << "\r\n";
+    email_content.append(email.text).append("\r\n");
 
-    // 发送
-    r = send_raw(email_content.str());
+    // 发送邮件正文
+    r = send_raw(std::move(email_content));
     if (!r) {
       return false;
     }
+    // 7. 邮件结束
     r = send_raw("\r\n.\r\n");
     if (!r) {
       return false;
@@ -147,7 +148,6 @@ class client {
 
   bool send_raw(std::string cmd) {
     std::error_code ec;
-    cmd.append("\r\n");
     asio::write(*ssl_socket_, asio::buffer(cmd), ec);
     if (ec) {
       return false;
@@ -157,6 +157,7 @@ class client {
   }
 
   bool send_command(std::string cmd) {
+    cmd.append("\r\n");
     bool r = send_raw(std::move(cmd));
     if (!r) {
       return false;
