@@ -1877,9 +1877,7 @@ TEST_CASE("test inject") {
 TEST_CASE("test coro_http_client quit") {
   std::promise<bool> promise;
   [&] {
-    {
-      coro_http_client client{};
-    }
+    { coro_http_client client{}; }
     promise.set_value(true);
   }();
 

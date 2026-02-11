@@ -490,7 +490,7 @@ async_simple::coro::Lazy<void> rlimiter_usage() {
 
   server.set_http_handler<GET>(
       "/get",
-      [&rlimiter_get](coro_http_request &req, coro_http_response &resp) {
+      [&rlimiter_get](coro_http_request& req, coro_http_response& resp) {
         if (rlimiter_get.allow()) {
           resp.set_status_and_content(status_type::ok, "ok");
         }
@@ -503,7 +503,7 @@ async_simple::coro::Lazy<void> rlimiter_usage() {
 
   server.set_http_handler<GET>(
       "/coro",
-      [&coro_rlimiter](coro_http_request &req, coro_http_response &resp)
+      [&coro_rlimiter](coro_http_request& req, coro_http_response& resp)
           -> async_simple::coro::Lazy<void> {
         co_await coro_rlimiter.wait_async();
         resp.set_status_and_content(status_type::ok, "ok");
