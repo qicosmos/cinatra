@@ -818,8 +818,7 @@ class coro_http_server {
                                  std::string_view content_range = "") {
     std::string header_str = "HTTP/1.1 ";
     header_str.append(std::to_string(status));
-    header_str.append(
-        " OK\r\nAccept-Ranges: bytes\r\n");
+    header_str.append(" OK\r\nAccept-Ranges: bytes\r\n");
     if (!content_range.empty()) {
       header_str.append(content_range);
     }
