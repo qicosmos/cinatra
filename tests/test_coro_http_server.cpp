@@ -1807,15 +1807,16 @@ TEST_CASE("test static res dir dynamic file detection") {
   res = client.get("http://127.0.0.1:9001/test_static_www/sub/../../etc/passwd");
   CHECK(res.status != 200);
 
-  // Cache: populate it, then add another new file and refresh cache
-  server.set_max_size_of_cache_files();  // caches small files including new.html
-  write_file(dir / "after_cache.html", "<p>after</p>");
-  // before refresh: after_cache.html not in cache but still readable from disk
-  res = client.get("http://127.0.0.1:9001/test_static_www/after_cache.html");
-  CHECK(res.status == 200);
-  // after refresh: after_cache.html enters cache
+  // Manual cache populate: new.html enters cache
   server.set_max_size_of_cache_files();
-  res = client.get("http://127.0.0.1:9001/test_static_www/after_cache.html");
+  res = client.get("http://127.0.0.1:9001/test_static_www/new.html");
+  CHECK(res.status == 200);
+
+  // Auto refresh: add a file, wait for the refresh timer to fire and update cache
+  server.set_cache_refresh_interval(std::chrono::milliseconds(200));
+  write_file(dir / "auto_cached.html", "<p>auto</p>");
+  std::this_thread::sleep_for(500ms);  // wait for at least one refresh cycle
+  res = client.get("http://127.0.0.1:9001/test_static_www/auto_cached.html");
   CHECK(res.status == 200);
 
   server.stop();

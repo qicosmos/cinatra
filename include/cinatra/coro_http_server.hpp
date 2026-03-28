@@ -21,13 +21,20 @@ class coro_http_server {
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
-      : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {
+      : out_ctx_(&ctx),
+        port_(port),
+        acceptor_(ctx),
+        check_timer_(ctx),
+        cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx), acceptor_(ctx), check_timer_(ctx) {
+      : out_ctx_(&ctx),
+        acceptor_(ctx),
+        check_timer_(ctx),
+        cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
@@ -37,7 +44,8 @@ class coro_http_server {
                                                          cpu_affinity)),
         port_(port),
         acceptor_(pool_->get_executor()->get_asio_executor()),
-        check_timer_(pool_->get_executor()->get_asio_executor()) {
+        check_timer_(pool_->get_executor()->get_asio_executor()),
+        cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
   }
 
@@ -47,7 +55,8 @@ class coro_http_server {
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
         acceptor_(pool_->get_executor()->get_asio_executor()),
-        check_timer_(pool_->get_executor()->get_asio_executor()) {
+        check_timer_(pool_->get_executor()->get_asio_executor()),
+        cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
   }
 
@@ -119,6 +128,14 @@ class coro_http_server {
     stop_timer_ = true;
     std::error_code ec;
     check_timer_.cancel(ec);
+    // Wake up the sleeping cache refresh coroutine so it can exit cleanly.
+    cache_refresh_timer_.cancel(ec);
+    // Wait for the coroutine to fully exit before stopping the pool.
+    // Must happen here while the pool is still running: the coroutine may
+    // need the pool executor to resume after a coro_io::post completes.
+    if (cache_refresh_done_.valid()) {
+      cache_refresh_done_.wait();
+    }
 
     close_acceptor();
 
@@ -320,6 +337,19 @@ class coro_http_server {
   }
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
+
+  // Enable background cache refresh for the static resource directory.
+  // The timer checks the directory mtime every `interval`; only when the
+  // directory has changed (file added/removed) is the cache rebuilt.
+  void set_cache_refresh_interval(
+      std::chrono::steady_clock::duration interval = std::chrono::seconds(30),
+      size_t max_file_size = 3 * 1024 * 1024) {
+    cache_refresh_interval_ = interval;
+    max_cache_file_size_ = max_file_size;
+    cache_refresh_stopped_ = std::promise<void>{};
+    cache_refresh_done_ = cache_refresh_stopped_.get_future();
+    cache_refresh_loop().start([](auto &&) {});
+  }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
@@ -745,6 +775,76 @@ class coro_http_server {
     acceptor_close_waiter_.get_future().wait();
   }
 
+  // Coroutine-based cache refresh loop.
+  //
+  // Sleep is done via period_timer::async_await() so stop() can wake it up
+  // immediately by cancelling the timer. File reads are offloaded to the
+  // global block executor via coro_io::post (non-blocking for the event loop),
+  // with all data captured by value so 'this' is never accessed from that
+  // thread. After the loop exits, the promise is fulfilled so stop() can
+  // safely proceed to pool_->stop() without a use-after-free.
+  async_simple::coro::Lazy<void> cache_refresh_loop() {
+    while (true) {
+      cache_refresh_timer_.expires_after(cache_refresh_interval_);
+      bool timer_ok = co_await cache_refresh_timer_.async_await();
+      if (!timer_ok || stop_timer_) {
+        break;
+      }
+
+      std::error_code mtime_ec;
+      auto dir_mtime = fs::last_write_time(static_dir_, mtime_ec);
+      if (mtime_ec || dir_mtime == last_dir_mtime_) {
+        continue;
+      }
+      last_dir_mtime_ = dir_mtime;
+
+      // Capture by value: file reads run on the global block executor,
+      // 'this' must not be touched from that thread.
+      std::string static_dir = static_dir_;
+      size_t max_size = max_cache_file_size_;
+      auto result = co_await coro_io::post(
+          [static_dir = std::move(static_dir), max_size]() {
+            using FileMap =
+                std::unordered_map<std::string, std::string>;
+            auto new_cache = std::make_shared<FileMap>();
+            std::error_code iter_ec;
+            for (const auto &file :
+                 fs::recursive_directory_iterator(static_dir, iter_ec)) {
+              if (iter_ec || file.is_directory()) {
+                continue;
+              }
+              size_t filesize = fs::file_size(file, iter_ec);
+              if (iter_ec || filesize > max_size) {
+                continue;
+              }
+              std::ifstream ifs(file.path(), std::ios::binary);
+              if (ifs.is_open()) {
+                std::string content;
+                detail::resize(content, filesize);
+                ifs.read(content.data(), content.size());
+                new_cache->emplace(file.path().string(),
+                                   std::move(content));
+              }
+            }
+            return new_cache;
+          });
+
+      // Re-check stop flag: stop() may have been called while we were
+      // doing file reads on the block executor.
+      if (stop_timer_) {
+        break;
+      }
+
+      if (!result.hasError()) {
+        std::atomic_store(&file_cache_, result.value());
+      }
+    }
+
+    // Signal stop() that this coroutine has fully exited and will no
+    // longer access any member of 'this'.
+    cache_refresh_stopped_.set_value();
+  }
+
   void start_check_timer() {
     check_timer_.expires_after(check_duration_);
     check_timer_.async_wait([this](auto ec) {
@@ -997,6 +1097,13 @@ class coro_http_server {
   size_t chunked_size_ = 1024 * 10;
 
   std::shared_ptr<std::unordered_map<std::string, std::string>> file_cache_;
+  coro_io::period_timer cache_refresh_timer_;
+  std::chrono::steady_clock::duration cache_refresh_interval_ =
+      std::chrono::seconds(5);
+  size_t max_cache_file_size_ = 3 * 1024 * 1024;
+  fs::file_time_type last_dir_mtime_{};
+  std::promise<void> cache_refresh_stopped_;
+  std::future<void> cache_refresh_done_;
   file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
