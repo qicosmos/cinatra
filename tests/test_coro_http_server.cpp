@@ -1753,3 +1753,100 @@ TEST_CASE("test reverse proxy websocket") {
     CHECK(data.resp_body == "test websocket");
   }
 }
+
+TEST_CASE("test static res dir dynamic file detection") {
+  namespace fs = std::filesystem;
+
+  // Prepare temp directory with initial files
+  fs::path dir = "test_static_www";
+  fs::path subdir = dir / "css";
+  fs::remove_all(dir);
+  fs::create_directories(subdir);
+
+  auto write_file = [](const fs::path &p, std::string_view content) {
+    std::ofstream f(p);
+    f << content;
+  };
+  write_file(dir / "index.html", "<h1>hello</h1>");
+  write_file(subdir / "style.css", "body{}");
+
+  coro_http_server server(1, 9001);
+
+  // Normal API route registered before static dir - must not be intercepted
+  server.set_http_handler<GET>("/api/hello",
+                               [](coro_http_request &, coro_http_response &resp) {
+                                 resp.set_status_and_content(status_type::ok, "api ok");
+                               });
+
+  // uri_suffix empty: URI prefix derived from directory basename "test_static_www"
+  server.set_static_res_dir("", dir.string());
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+
+  // Existing files are accessible
+  auto res = client.get("http://127.0.0.1:9001/test_static_www/index.html");
+  CHECK(res.status == 200);
+  res = client.get("http://127.0.0.1:9001/test_static_www/css/style.css");
+  CHECK(res.status == 200);
+
+  // Normal API route is not intercepted by the static handler
+  res = client.get("http://127.0.0.1:9001/api/hello");
+  CHECK(res.status == 200);
+  CHECK(res.resp_body == "api ok");
+
+  // New file added after startup is immediately accessible (dynamic detection)
+  write_file(dir / "new.html", "<p>new file</p>");
+  res = client.get("http://127.0.0.1:9001/test_static_www/new.html");
+  CHECK(res.status == 200);
+
+  // Directory traversal is rejected: path escapes static_dir_ → 400
+  // /test_static_www/sub/../../etc/passwd resolves outside the static dir
+  res = client.get("http://127.0.0.1:9001/test_static_www/sub/../../etc/passwd");
+  CHECK(res.status != 200);
+
+  // Cache: populate it, then add another new file and refresh cache
+  server.set_max_size_of_cache_files();  // caches small files including new.html
+  write_file(dir / "after_cache.html", "<p>after</p>");
+  // before refresh: after_cache.html not in cache but still readable from disk
+  res = client.get("http://127.0.0.1:9001/test_static_www/after_cache.html");
+  CHECK(res.status == 200);
+  // after refresh: after_cache.html enters cache
+  server.set_max_size_of_cache_files();
+  res = client.get("http://127.0.0.1:9001/test_static_www/after_cache.html");
+  CHECK(res.status == 200);
+
+  server.stop();
+  fs::remove_all(dir);
+}
+
+TEST_CASE("test static res dir with uri suffix") {
+  namespace fs = std::filesystem;
+
+  fs::path dir = "test_static_assets";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  std::ofstream(dir / "hello.txt") << "hello world";
+
+  coro_http_server server(1, 9001);
+  // uri_suffix "assets": URI prefix is /assets/
+  server.set_static_res_dir("assets", dir.string());
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  auto res = client.get("http://127.0.0.1:9001/assets/hello.txt");
+  CHECK(res.status == 200);
+
+  // New file added after startup
+  std::ofstream(dir / "added.txt") << "added";
+  res = client.get("http://127.0.0.1:9001/assets/added.txt");
+  CHECK(res.status == 200);
+
+  server.stop();
+  fs::remove_all(dir);
+}
