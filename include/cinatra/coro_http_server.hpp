@@ -811,8 +811,7 @@ class coro_http_server {
               }
               std::ifstream ifs(file.path(), std::ios::binary);
               if (ifs.is_open()) {
-                std::string content;
-                detail::resize(content, filesize);
+                std::string content(filesize, '\0');
                 ifs.read(content.data(), content.size());
                 new_cache->emplace(file.path().string(),
                                    std::move(content));
