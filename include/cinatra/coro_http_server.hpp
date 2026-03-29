@@ -790,12 +790,17 @@ class coro_http_server {
       }
       last_dir_mtime_ = dir_mtime;
 
-      // Capture by value: file reads run on the global block executor,
-      // 'this' must not be touched from that thread.
+      // static_dir is a snapshot of static_dir_ on this coroutine's frame.
+      // Captured by reference so the lambda closure holds only a pointer —
+      // avoids GCC 11 coroutine-parameter SSO bitcopy bug where _M_p is
+      // copied but not updated to the new frame location, causing ASAN
+      // "attempting free on address which was not malloc()-ed" on destruction.
+      // The frame stays alive for the entire co_await suspension, so the
+      // reference is valid when the block executor reads it.
       std::string static_dir = static_dir_;
       size_t max_size = max_cache_file_size_;
       auto result = co_await coro_io::post(
-          [static_dir = std::move(static_dir), max_size]() {
+          [&static_dir, max_size]() {
             using FileMap =
                 std::unordered_map<std::string, std::string>;
             auto new_cache = std::make_shared<FileMap>();
