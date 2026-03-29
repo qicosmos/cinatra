@@ -348,7 +348,8 @@ class coro_http_server {
     max_cache_file_size_ = max_file_size;
     cache_refresh_stopped_ = std::promise<void>{};
     cache_refresh_done_ = cache_refresh_stopped_.get_future();
-    cache_refresh_loop().start([](auto &&) {});
+    cache_refresh_loop().start([](auto &&) {
+    });
   }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
@@ -642,8 +643,7 @@ class coro_http_server {
     auto endpoint = it->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
-      CINATRA_LOG_ERROR << "acceptor open failed"
-                        << " error: " << ec.message();
+      CINATRA_LOG_ERROR << "acceptor open failed" << " error: " << ec.message();
       return ec;
     }
 #ifdef __GNUC__
@@ -799,31 +799,28 @@ class coro_http_server {
       // reference is valid when the block executor reads it.
       std::string static_dir = static_dir_;
       size_t max_size = max_cache_file_size_;
-      auto result = co_await coro_io::post(
-          [&static_dir, max_size]() {
-            using FileMap =
-                std::unordered_map<std::string, std::string>;
-            auto new_cache = std::make_shared<FileMap>();
-            std::error_code iter_ec;
-            for (const auto &file :
-                 fs::recursive_directory_iterator(static_dir, iter_ec)) {
-              if (iter_ec || file.is_directory()) {
-                continue;
-              }
-              size_t filesize = fs::file_size(file, iter_ec);
-              if (iter_ec || filesize > max_size) {
-                continue;
-              }
-              std::ifstream ifs(file.path(), std::ios::binary);
-              if (ifs.is_open()) {
-                std::string content(filesize, '\0');
-                ifs.read(content.data(), content.size());
-                new_cache->emplace(file.path().string(),
-                                   std::move(content));
-              }
-            }
-            return new_cache;
-          });
+      auto result = co_await coro_io::post([&static_dir, max_size]() {
+        using FileMap = std::unordered_map<std::string, std::string>;
+        auto new_cache = std::make_shared<FileMap>();
+        std::error_code iter_ec;
+        for (const auto &file :
+             fs::recursive_directory_iterator(static_dir, iter_ec)) {
+          if (iter_ec || file.is_directory()) {
+            continue;
+          }
+          size_t filesize = fs::file_size(file, iter_ec);
+          if (iter_ec || filesize > max_size) {
+            continue;
+          }
+          std::ifstream ifs(file.path(), std::ios::binary);
+          if (ifs.is_open()) {
+            std::string content(filesize, '\0');
+            ifs.read(content.data(), content.size());
+            new_cache->emplace(file.path().string(), std::move(content));
+          }
+        }
+        return new_cache;
+      });
 
       // Re-check stop flag: stop() may have been called while we were
       // doing file reads on the block executor.

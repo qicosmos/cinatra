@@ -1773,12 +1773,13 @@ TEST_CASE("test static res dir dynamic file detection") {
   coro_http_server server(1, 9001);
 
   // Normal API route registered before static dir - must not be intercepted
-  server.set_http_handler<GET>("/api/hello",
-                               [](coro_http_request &, coro_http_response &resp) {
-                                 resp.set_status_and_content(status_type::ok, "api ok");
-                               });
+  server.set_http_handler<GET>(
+      "/api/hello", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "api ok");
+      });
 
-  // uri_suffix empty: URI prefix derived from directory basename "test_static_www"
+  // uri_suffix empty: URI prefix derived from directory basename
+  // "test_static_www"
   server.set_static_res_dir("", dir.string());
 
   server.async_start();
@@ -1804,7 +1805,8 @@ TEST_CASE("test static res dir dynamic file detection") {
 
   // Directory traversal is rejected: path escapes static_dir_ → 400
   // /test_static_www/sub/../../etc/passwd resolves outside the static dir
-  res = client.get("http://127.0.0.1:9001/test_static_www/sub/../../etc/passwd");
+  res =
+      client.get("http://127.0.0.1:9001/test_static_www/sub/../../etc/passwd");
   CHECK(res.status != 200);
 
   // Manual cache populate: new.html enters cache
@@ -1812,7 +1814,8 @@ TEST_CASE("test static res dir dynamic file detection") {
   res = client.get("http://127.0.0.1:9001/test_static_www/new.html");
   CHECK(res.status == 200);
 
-  // Auto refresh: add a file, wait for the refresh timer to fire and update cache
+  // Auto refresh: add a file, wait for the refresh timer to fire and update
+  // cache
   server.set_cache_refresh_interval(std::chrono::milliseconds(200));
   write_file(dir / "auto_cached.html", "<p>auto</p>");
   std::this_thread::sleep_for(500ms);  // wait for at least one refresh cycle

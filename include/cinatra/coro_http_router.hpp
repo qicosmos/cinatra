@@ -88,9 +88,10 @@ class coro_http_router {
             replace_all(pattern, "{}", "([^/]+)");
           }
 
-          auto it = std::find_if(
-              coro_regex_handles_.begin(), coro_regex_handles_.end(),
-              [&](const auto &t) { return std::get<2>(t) == pattern; });
+          auto it = std::find_if(coro_regex_handles_.begin(),
+                                 coro_regex_handles_.end(), [&](const auto& t) {
+                                   return std::get<2>(t) == pattern;
+                                 });
           if (it != coro_regex_handles_.end()) {
             std::get<1>(*it) = std::move(http_handler);
           }
@@ -142,9 +143,10 @@ class coro_http_router {
           replace_all(pattern, "{}", "([^/]+)");
         }
 
-        auto it = std::find_if(
-            regex_handles_.begin(), regex_handles_.end(),
-            [&](const auto &t) { return std::get<2>(t) == pattern; });
+        auto it = std::find_if(regex_handles_.begin(), regex_handles_.end(),
+                               [&](const auto& t) {
+                                 return std::get<2>(t) == pattern;
+                               });
         if (it != regex_handles_.end()) {
           std::get<1>(*it) = std::move(http_handler);
         }
@@ -269,11 +271,10 @@ class coro_http_router {
       std::string>>
       regex_handles_;
 
-  std::vector<std::tuple<
-      std::regex,
-      std::function<async_simple::coro::Lazy<void>(coro_http_request& req,
-                                                   coro_http_response& resp)>,
-      std::string>>
+  std::vector<std::tuple<std::regex,
+                         std::function<async_simple::coro::Lazy<void>(
+                             coro_http_request& req, coro_http_response& resp)>,
+                         std::string>>
       coro_regex_handles_;
 };
 }  // namespace cinatra
