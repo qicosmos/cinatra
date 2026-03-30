@@ -628,7 +628,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         : self(self), dur_(duration) {
       self->socket_->is_timeout_ = false;
 
-      if (duration.count() >= 0) {
+      if (duration.count() > 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });

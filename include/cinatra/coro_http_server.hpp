@@ -21,13 +21,20 @@ class coro_http_server {
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
-      : out_ctx_(&ctx), port_(port), acceptor_(ctx), check_timer_(ctx) {
+      : out_ctx_(&ctx),
+        port_(port),
+        acceptor_(ctx),
+        check_timer_(ctx),
+        cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx), acceptor_(ctx), check_timer_(ctx) {
+      : out_ctx_(&ctx),
+        acceptor_(ctx),
+        check_timer_(ctx),
+        cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
@@ -37,7 +44,8 @@ class coro_http_server {
                                                          cpu_affinity)),
         port_(port),
         acceptor_(pool_->get_executor()->get_asio_executor()),
-        check_timer_(pool_->get_executor()->get_asio_executor()) {
+        check_timer_(pool_->get_executor()->get_asio_executor()),
+        cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
   }
 
@@ -47,7 +55,8 @@ class coro_http_server {
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
         acceptor_(pool_->get_executor()->get_asio_executor()),
-        check_timer_(pool_->get_executor()->get_asio_executor()) {
+        check_timer_(pool_->get_executor()->get_asio_executor()),
+        cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
   }
 
@@ -119,6 +128,14 @@ class coro_http_server {
     stop_timer_ = true;
     std::error_code ec;
     check_timer_.cancel(ec);
+    // Wake up the sleeping cache refresh coroutine so it can exit cleanly.
+    cache_refresh_timer_.cancel(ec);
+    // Wait for the coroutine to fully exit before stopping the pool.
+    // Must happen here while the pool is still running: the coroutine may
+    // need the pool executor to resume after a coro_io::post completes.
+    if (cache_refresh_done_.valid()) {
+      cache_refresh_done_.wait();
+    }
 
     close_acceptor();
 
@@ -287,6 +304,8 @@ class coro_http_server {
 
   void set_max_size_of_cache_files(size_t max_size = 3 * 1024 * 1024) {
     std::error_code ec;
+    auto new_cache =
+        std::make_shared<std::unordered_map<std::string, std::string>>();
     for (const auto &file :
          std::filesystem::recursive_directory_iterator(static_dir_, ec)) {
       if (ec) {
@@ -304,10 +323,11 @@ class coro_http_server {
           std::string content;
           detail::resize(content, filesize);
           ifs.read(content.data(), content.size());
-          static_file_cache_.emplace(file.path().string(), std::move(content));
+          new_cache->emplace(file.path().string(), std::move(content));
         }
       }
     }
+    std::atomic_store(&file_cache_, new_cache);
   }
 
   const coro_http_router &get_router() const { return router_; }
@@ -317,6 +337,20 @@ class coro_http_server {
   }
 
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
+
+  // Enable background cache refresh for the static resource directory.
+  // The timer checks the directory mtime every `interval`; only when the
+  // directory has changed (file added/removed) is the cache rebuilt.
+  void set_cache_refresh_interval(
+      std::chrono::steady_clock::duration interval = std::chrono::seconds(3),
+      size_t max_file_size = 3 * 1024 * 1024) {
+    cache_refresh_interval_ = interval;
+    max_cache_file_size_ = max_file_size;
+    cache_refresh_stopped_ = std::promise<void>{};
+    cache_refresh_done_ = cache_refresh_stopped_.get_future();
+    cache_refresh_loop().start([](auto &&) {
+    });
+  }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
@@ -340,6 +374,9 @@ class coro_http_server {
           std::filesystem::path(uri_suffix).make_preferred().string();
     }
 
+    // Track whether a named subdirectory was given, which determines the URI
+    // prefix when uri_suffix is also empty.
+    bool has_named_dir = false;
     if (!file_path.empty()) {
       file_path = std::filesystem::path(file_path).filename().string();
       if (file_path.empty()) {
@@ -348,225 +385,213 @@ class coro_http_server {
       else {
         static_dir_ =
             std::filesystem::path(file_path).make_preferred().string();
+        has_named_dir = true;
       }
     }
     else {
       static_dir_ = fs::absolute(fs::current_path().string()).string();
     }
 
-    files_.clear();
-    std::error_code ec;
-    for (const auto &file :
-         std::filesystem::recursive_directory_iterator(static_dir_, ec)) {
-      if (ec) {
-        continue;
-      }
-      if (!file.is_directory()) {
-        files_.push_back(file.path().string());
+    // Derive URI prefix internally, preserving original routing semantics:
+    // - uri_suffix given       → use it as prefix  (e.g. "assets" → /assets)
+    // - named subdir, no suffix → use dirname       (e.g. "www"   → /www)
+    // - current dir, no suffix  → empty prefix      (e.g. ""      → /)
+    //   The last case keeps the original behaviour where files are served
+    //   at the root, and avoids a bare /(.+) catch-all by falling through
+    //   to the exact-match / prefix pattern /(.+) only for that dir.
+    std::string uri_prefix;
+    if (!static_dir_router_path_.empty()) {
+      uri_prefix = "/" + static_dir_router_path_;
+    }
+    else if (has_named_dir) {
+      uri_prefix = "/" + fs::path(static_dir_).filename().string();
+    }
+    // else: current directory → uri_prefix stays empty, pattern is "/(.+)"
+    std::string pattern = uri_prefix + "/(.+)";
+    set_http_handler<cinatra::GET>(
+        pattern,
+        [this, base_dir = static_dir_](
+            coro_http_request &req,
+            coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          std::string rel = req.matches_.str(1);
+          replace_all(rel, "\\", "/");
+          std::string file_name =
+              (fs::path(base_dir) / rel).make_preferred().string();
+
+          std::error_code path_ec;
+          auto abs = fs::weakly_canonical(file_name, path_ec);
+          auto base = fs::weakly_canonical(base_dir, path_ec);
+          if (path_ec || abs.string().find(base.string()) != 0) {
+            resp.set_status(status_type::bad_request);
+            co_return;
+          }
+
+          co_await serve_static_file_(file_name, req, resp);
+        },
+        std::forward<Aspects>(aspects)...);
+
+    set_cache_refresh_interval(std::chrono::seconds(3));
+  }
+
+ public:
+  async_simple::coro::Lazy<void> serve_static_file_(
+      const std::string &file_name, coro_http_request &req,
+      coro_http_response &resp) {
+    std::string_view extension = get_extension(file_name);
+    std::string_view mime = get_mime_type(extension);
+    auto range_str = req.get_header_value("Range");
+
+    auto cache = std::atomic_load(&file_cache_);
+    if (cache) {
+      if (auto it = cache->find(file_name); it != cache->end()) {
+        auto range_header = build_range_header(
+            mime, file_name, std::to_string(fs::file_size(file_name)));
+        resp.set_delay(true);
+        const std::string &body = it->second;
+        std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
+                                              asio::buffer(body)};
+        co_await req.get_conn()->async_write(arr);
+        co_return;
       }
     }
 
-    std::filesystem::path router_path =
-        std::filesystem::path(static_dir_router_path_);
+    std::string content;
+    detail::resize(content, chunked_size_);
 
-    std::string uri;
-    for (auto &file : files_) {
-      auto relative_path =
-          std::filesystem::path(file.substr(static_dir_.length())).string();
-      if (size_t pos = relative_path.find('\\') != std::string::npos) {
-        replace_all(relative_path, "\\", "/");
+    coro_io::coro_file in_file{};
+    in_file.open(file_name, std::ios::in);
+    if (!in_file.is_open()) {
+#ifndef NDEBUG
+      resp.set_status_and_content(status_type::not_found,
+                                  file_name + " not found");
+#else
+      resp.set_status(status_type::not_found);
+#endif
+      co_return;
+    }
+
+    size_t file_size = fs::file_size(file_name);
+
+    if (format_type_ == file_resp_format_type::chunked && range_str.empty()) {
+      resp.add_header("Content-Type", std::string{mime});
+      resp.set_format_type(format_type::chunked);
+      bool ok;
+      if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
+        co_return;
       }
+      while (true) {
+        auto [ec, size] =
+            co_await in_file.async_read(content.data(), content.size());
+        if (ec) {
+          resp.set_status(status_type::no_content);
+          co_await resp.get_conn()->reply();
+          co_return;
+        }
+        bool r = co_await resp.get_conn()->write_chunked(
+            std::string_view(content.data(), size));
+        if (!r) {
+          co_return;
+        }
+        if (in_file.eof()) {
+          co_await resp.get_conn()->end_chunked();
+          break;
+        }
+      }
+      co_return;
+    }
 
-      if (static_dir_router_path_.empty()) {
-        uri = relative_path;
+    auto pos = range_str.find('=');
+    if (pos != std::string_view::npos) {
+      range_str = range_str.substr(pos + 1);
+      bool is_valid = true;
+      auto ranges = parse_ranges(range_str, file_size, is_valid);
+      if (!is_valid) {
+        resp.set_status(status_type::range_not_satisfiable);
+        co_return;
+      }
+      assert(!ranges.empty());
+
+      if (ranges.size() == 1) {
+        auto [start, end] = ranges[0];
+        in_file.seek(start, std::ios::beg);
+        size_t part_size = end + 1 - start;
+        int status = (part_size == file_size) ? 200 : 206;
+        std::string content_range = "Content-Range: bytes ";
+        content_range.append(std::to_string(start))
+            .append("-")
+            .append(std::to_string(end))
+            .append("/")
+            .append(std::to_string(file_size))
+            .append(CRCF);
+        auto range_header = build_range_header(
+            mime, file_name, std::to_string(part_size), status, content_range);
+        resp.set_delay(true);
+        bool r = co_await req.get_conn()->write_data(range_header);
+        if (!r) {
+          co_return;
+        }
+        co_await send_single_part(in_file, content, req, resp, part_size);
       }
       else {
-        uri = fs::path("/")
-                  .append(static_dir_router_path_)
-                  .concat(relative_path)
-                  .string();
+        resp.set_delay(true);
+        std::string file_size_str = std::to_string(file_size);
+        size_t content_len = 0;
+        std::vector<std::string> multi_heads =
+            build_part_heads(ranges, mime, file_size_str, content_len);
+        auto range_header = build_multiple_range_header(content_len);
+        bool r = co_await req.get_conn()->write_data(range_header);
+        if (!r) {
+          co_return;
+        }
+        for (int i = 0; i < ranges.size(); i++) {
+          r = co_await req.get_conn()->write_data(multi_heads[i]);
+          if (!r) {
+            co_return;
+          }
+          auto [start, end] = ranges[i];
+          bool ok = in_file.seek(start, std::ios::beg);
+          if (!ok) {
+            resp.set_status_and_content(status_type::bad_request,
+                                        "invalid range");
+            co_await resp.get_conn()->reply();
+            co_return;
+          }
+          size_t part_size = end + 1 - start;
+          std::string_view more =
+              (i == (int)ranges.size() - 1) ? MULTIPART_END : CRCF;
+          r = co_await send_single_part(in_file, content, req, resp, part_size,
+                                        more);
+          if (!r) {
+            co_return;
+          }
+        }
       }
+      co_return;
+    }
 
-      set_http_handler<cinatra::GET>(
-          uri,
-          [this, file_name = file](
-              coro_http_request &req,
-              coro_http_response &resp) -> async_simple::coro::Lazy<void> {
-            std::string_view extension = get_extension(file_name);
-            std::string_view mime = get_mime_type(extension);
-            auto range_str = req.get_header_value("Range");
-
-            if (auto it = static_file_cache_.find(file_name);
-                it != static_file_cache_.end()) {
-              auto range_header = build_range_header(
-                  mime, file_name, std::to_string(fs::file_size(file_name)));
-              resp.set_delay(true);
-              std::string &body = it->second;
-              std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
-                                                    asio::buffer(body)};
-              co_await req.get_conn()->async_write(arr);
-              co_return;
-            }
-
-            std::string content;
-            detail::resize(content, chunked_size_);
-
-            coro_io::coro_file in_file{};
-            in_file.open(file_name, std::ios::in);
-            if (!in_file.is_open()) {
-#ifndef NDEBUG
-              resp.set_status_and_content(status_type::not_found,
-                                          file_name + " not found");
-#else
-              resp.set_status(status_type::not_found);
-#endif
-              co_return;
-            }
-
-            size_t file_size = fs::file_size(file_name);
-
-            if (format_type_ == file_resp_format_type::chunked &&
-                range_str.empty()) {
-              resp.add_header("Content-Type", std::string{mime});
-              resp.set_format_type(format_type::chunked);
-              bool ok;
-              if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
-                co_return;
-              }
-
-              while (true) {
-                auto [ec, size] =
-                    co_await in_file.async_read(content.data(), content.size());
-                if (ec) {
-                  resp.set_status(status_type::no_content);
-                  co_await resp.get_conn()->reply();
-                  co_return;
-                }
-
-                bool r = co_await resp.get_conn()->write_chunked(
-                    std::string_view(content.data(), size));
-                if (!r) {
-                  co_return;
-                }
-
-                if (in_file.eof()) {
-                  co_await resp.get_conn()->end_chunked();
-                  break;
-                }
-              }
-            }
-            else {
-              auto pos = range_str.find('=');
-              if (pos != std::string_view::npos) {
-                range_str = range_str.substr(pos + 1);
-                bool is_valid = true;
-                auto ranges = parse_ranges(range_str, file_size, is_valid);
-                if (!is_valid) {
-                  resp.set_status(status_type::range_not_satisfiable);
-                  co_return;
-                }
-
-                assert(!ranges.empty());
-
-                if (ranges.size() == 1) {
-                  // single part
-                  auto [start, end] = ranges[0];
-                  in_file.seek(start, std::ios::beg);
-                  size_t part_size = end + 1 - start;
-                  int status = (part_size == file_size) ? 200 : 206;
-                  std::string content_range = "Content-Range: bytes ";
-                  content_range.append(std::to_string(start))
-                      .append("-")
-                      .append(std::to_string(end))
-                      .append("/")
-                      .append(std::to_string(file_size))
-                      .append(CRCF);
-                  auto range_header = build_range_header(
-                      mime, file_name, std::to_string(part_size), status,
-                      content_range);
-                  resp.set_delay(true);
-                  bool r = co_await req.get_conn()->write_data(range_header);
-                  if (!r) {
-                    co_return;
-                  }
-
-                  co_await send_single_part(in_file, content, req, resp,
-                                            part_size);
-                }
-                else {
-                  // multiple ranges
-                  resp.set_delay(true);
-                  std::string file_size_str = std::to_string(file_size);
-                  size_t content_len = 0;
-                  std::vector<std::string> multi_heads = build_part_heads(
-                      ranges, mime, file_size_str, content_len);
-                  auto range_header = build_multiple_range_header(content_len);
-                  bool r = co_await req.get_conn()->write_data(range_header);
-                  if (!r) {
-                    co_return;
-                  }
-
-                  for (int i = 0; i < ranges.size(); i++) {
-                    std::string &part_header = multi_heads[i];
-                    r = co_await req.get_conn()->write_data(part_header);
-                    if (!r) {
-                      co_return;
-                    }
-
-                    auto [start, end] = ranges[i];
-                    bool ok = in_file.seek(start, std::ios::beg);
-                    if (!ok) {
-                      resp.set_status_and_content(status_type::bad_request,
-                                                  "invalid range");
-                      co_await resp.get_conn()->reply();
-                      co_return;
-                    }
-                    size_t part_size = end + 1 - start;
-
-                    std::string_view more = CRCF;
-                    if (i == ranges.size() - 1) {
-                      more = MULTIPART_END;
-                    }
-                    r = co_await send_single_part(in_file, content, req, resp,
-                                                  part_size, more);
-                    if (!r) {
-                      co_return;
-                    }
-                  }
-                }
-                co_return;
-              }
-
-              auto range_header = build_range_header(mime, file_name,
-                                                     std::to_string(file_size));
-              resp.set_delay(true);
-              bool r = co_await req.get_conn()->write_data(range_header);
-              if (!r) {
-                co_return;
-              }
-
-              while (true) {
-                auto [ec, size] =
-                    co_await in_file.async_read(content.data(), content.size());
-                if (ec) {
-                  resp.set_status(status_type::no_content);
-                  co_await resp.get_conn()->reply();
-                  co_return;
-                }
-
-                r = co_await req.get_conn()->write_data(
-                    std::string_view(content.data(), size));
-                if (!r) {
-                  co_return;
-                }
-
-                if (in_file.eof()) {
-                  break;
-                }
-              }
-            }
-          },
-          std::forward<Aspects>(aspects)...);
+    auto range_header =
+        build_range_header(mime, file_name, std::to_string(file_size));
+    resp.set_delay(true);
+    bool r = co_await req.get_conn()->write_data(range_header);
+    if (!r) {
+      co_return;
+    }
+    while (true) {
+      auto [ec, size] =
+          co_await in_file.async_read(content.data(), content.size());
+      if (ec) {
+        resp.set_status(status_type::no_content);
+        co_await resp.get_conn()->reply();
+        co_return;
+      }
+      r = co_await req.get_conn()->write_data(
+          std::string_view(content.data(), size));
+      if (!r) {
+        co_return;
+      }
+      if (in_file.eof()) {
+        break;
+      }
     }
   }
 
@@ -620,8 +645,7 @@ class coro_http_server {
     auto endpoint = it->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
-      CINATRA_LOG_ERROR << "acceptor open failed"
-                        << " error: " << ec.message();
+      CINATRA_LOG_ERROR << "acceptor open failed" << " error: " << ec.message();
       return ec;
     }
 #ifdef __GNUC__
@@ -743,6 +767,77 @@ class coro_http_server {
       acceptor_.close(ec);
     });
     acceptor_close_waiter_.get_future().wait();
+  }
+
+  // Coroutine-based cache refresh loop.
+  //
+  // Sleep is done via period_timer::async_await() so stop() can wake it up
+  // immediately by cancelling the timer. File reads are offloaded to the
+  // global block executor via coro_io::post (non-blocking for the event loop),
+  // with all data captured by value so 'this' is never accessed from that
+  // thread. After the loop exits, the promise is fulfilled so stop() can
+  // safely proceed to pool_->stop() without a use-after-free.
+  async_simple::coro::Lazy<void> cache_refresh_loop() {
+    while (true) {
+      cache_refresh_timer_.expires_after(cache_refresh_interval_);
+      bool timer_ok = co_await cache_refresh_timer_.async_await();
+      if (!timer_ok || stop_timer_) {
+        break;
+      }
+
+      std::error_code mtime_ec;
+      auto dir_mtime = fs::last_write_time(static_dir_, mtime_ec);
+      if (mtime_ec || dir_mtime == last_dir_mtime_) {
+        continue;
+      }
+      last_dir_mtime_ = dir_mtime;
+
+      // static_dir is a snapshot of static_dir_ on this coroutine's frame.
+      // Captured by reference so the lambda closure holds only a pointer —
+      // avoids GCC 11 coroutine-parameter SSO bitcopy bug where _M_p is
+      // copied but not updated to the new frame location, causing ASAN
+      // "attempting free on address which was not malloc()-ed" on destruction.
+      // The frame stays alive for the entire co_await suspension, so the
+      // reference is valid when the block executor reads it.
+      std::string static_dir = static_dir_;
+      size_t max_size = max_cache_file_size_;
+      auto result = co_await coro_io::post([&static_dir, max_size]() {
+        using FileMap = std::unordered_map<std::string, std::string>;
+        auto new_cache = std::make_shared<FileMap>();
+        std::error_code iter_ec;
+        for (const auto &file :
+             fs::recursive_directory_iterator(static_dir, iter_ec)) {
+          if (iter_ec || file.is_directory()) {
+            continue;
+          }
+          size_t filesize = fs::file_size(file, iter_ec);
+          if (iter_ec || filesize > max_size) {
+            continue;
+          }
+          std::ifstream ifs(file.path(), std::ios::binary);
+          if (ifs.is_open()) {
+            std::string content(filesize, '\0');
+            ifs.read(content.data(), content.size());
+            new_cache->emplace(file.path().string(), std::move(content));
+          }
+        }
+        return new_cache;
+      });
+
+      // Re-check stop flag: stop() may have been called while we were
+      // doing file reads on the block executor.
+      if (stop_timer_) {
+        break;
+      }
+
+      if (!result.hasError()) {
+        std::atomic_store(&file_cache_, result.value());
+      }
+    }
+
+    // Signal stop() that this coroutine has fully exited and will no
+    // longer access any member of 'this'.
+    cache_refresh_stopped_.set_value();
   }
 
   void start_check_timer() {
@@ -994,10 +1089,16 @@ class coro_http_server {
 
   std::string static_dir_router_path_ = "";
   std::string static_dir_ = "";
-  std::vector<std::string> files_;
   size_t chunked_size_ = 1024 * 10;
 
-  std::unordered_map<std::string, std::string> static_file_cache_;
+  std::shared_ptr<std::unordered_map<std::string, std::string>> file_cache_;
+  coro_io::period_timer cache_refresh_timer_;
+  std::chrono::steady_clock::duration cache_refresh_interval_ =
+      std::chrono::seconds(5);
+  size_t max_cache_file_size_ = 3 * 1024 * 1024;
+  fs::file_time_type last_dir_mtime_{};
+  std::promise<void> cache_refresh_stopped_;
+  std::future<void> cache_refresh_done_;
   file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
