@@ -155,7 +155,7 @@ class io_context_pool {
         CPU_SET(i, &cpuset);
 #if defined(__ANDROID__)
         pid_t tid = pthread_gettid_np(threads.back()->native_handle());
-        int rc = syscall(__NR_sched_setaffinity, tid, sizeof(cpu_set_t), &cpuset);
+        int rc = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
 #else
         int rc = pthread_setaffinity_np(threads.back()->native_handle(),
                                         sizeof(cpu_set_t), &cpuset);
