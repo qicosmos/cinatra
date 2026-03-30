@@ -342,7 +342,7 @@ class coro_http_server {
   // The timer checks the directory mtime every `interval`; only when the
   // directory has changed (file added/removed) is the cache rebuilt.
   void set_cache_refresh_interval(
-      std::chrono::steady_clock::duration interval = std::chrono::seconds(30),
+      std::chrono::steady_clock::duration interval = std::chrono::seconds(3),
       size_t max_file_size = 3 * 1024 * 1024) {
     cache_refresh_interval_ = interval;
     max_cache_file_size_ = max_file_size;
@@ -429,6 +429,8 @@ class coro_http_server {
           co_await serve_static_file_(file_name, req, resp);
         },
         std::forward<Aspects>(aspects)...);
+
+    set_cache_refresh_interval(std::chrono::seconds(3));
   }
 
  public:
