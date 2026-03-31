@@ -327,7 +327,7 @@ class coro_http_server {
         }
       }
     }
-    file_cache_.store(new_cache);
+    std::atomic_store(&file_cache_, new_cache);
   }
 
   const coro_http_router &get_router() const { return router_; }
@@ -441,7 +441,7 @@ class coro_http_server {
     std::string_view mime = get_mime_type(extension);
     auto range_str = req.get_header_value("Range");
 
-    auto cache = file_cache_.load();
+    auto cache = std::atomic_load(&file_cache_);
     if (cache) {
       if (auto it = cache->find(file_name); it != cache->end()) {
         auto range_header = build_range_header(
@@ -831,7 +831,7 @@ class coro_http_server {
       }
 
       if (!result.hasError()) {
-        file_cache_.store(result.value());
+        std::atomic_store(&file_cache_, result.value());
       }
     }
 
@@ -1091,8 +1091,7 @@ class coro_http_server {
   std::string static_dir_ = "";
   size_t chunked_size_ = 1024 * 10;
 
-  std::atomic<std::shared_ptr<std::unordered_map<std::string, std::string>>>
-      file_cache_;
+  std::shared_ptr<std::unordered_map<std::string, std::string>> file_cache_;
   coro_io::period_timer cache_refresh_timer_;
   std::chrono::steady_clock::duration cache_refresh_interval_ =
       std::chrono::seconds(5);
