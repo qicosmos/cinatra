@@ -1588,19 +1588,24 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       req_str.append("Connection: keep-alive\r\n");
     }
 
-    if (!proxy_basic_auth_username_.empty() &&
-        !proxy_basic_auth_password_.empty()) {
-      std::string basic_auth_str = "Proxy-Authorization: Basic ";
-      std::string basic_base64_str = base64_encode(
-          proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_);
-      req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
-    }
+    // For HTTPS proxying, Proxy-Authorization is already sent in the CONNECT
+    // request.  After the tunnel is established the request goes directly to
+    // the upstream server, so it must not carry proxy credentials.
+    if (!u.is_ssl) {
+      if (!proxy_basic_auth_username_.empty() &&
+          !proxy_basic_auth_password_.empty()) {
+        std::string basic_auth_str = "Proxy-Authorization: Basic ";
+        std::string basic_base64_str = base64_encode(
+            proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_);
+        req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
+      }
 
-    if (!proxy_bearer_token_auth_token_.empty()) {
-      std::string bearer_token_str = "Proxy-Authorization: Bearer ";
-      req_str.append(bearer_token_str)
-          .append(proxy_bearer_token_auth_token_)
-          .append(CRCF);
+      if (!proxy_bearer_token_auth_token_.empty()) {
+        std::string bearer_token_str = "Proxy-Authorization: Bearer ";
+        req_str.append(bearer_token_str)
+            .append(proxy_bearer_token_auth_token_)
+            .append(CRCF);
+      }
     }
 
     if (!ctx.req_header.empty())
@@ -2071,8 +2076,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           auto buf_data =
               asio::buffer_cast<const char *>(head_buf_.data());
           std::string_view resp_view(buf_data, head_buf_.size());
-          // Expect "HTTP/1.x 200"
-          if (resp_view.find(" 200") == std::string_view::npos) {
+          // Check the status line (first line) for "200".
+          auto first_line = resp_view.substr(0, resp_view.find("\r\n"));
+          if (first_line.find(" 200") == std::string_view::npos) {
             co_return resp_data{
                 std::make_error_code(std::errc::connection_refused), 407};
           }
