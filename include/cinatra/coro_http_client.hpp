@@ -2073,8 +2073,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
             co_return resp_data{ec, 404};
           }
 
-          auto buf_data =
-              asio::buffer_cast<const char *>(head_buf_.data());
+          auto buf_data = asio::buffer_cast<const char *>(head_buf_.data());
           std::string_view resp_view(buf_data, head_buf_.size());
           // Check the status line (first line) for "200".
           auto first_line = resp_view.substr(0, resp_view.find("\r\n"));
