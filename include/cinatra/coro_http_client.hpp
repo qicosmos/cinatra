@@ -161,7 +161,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       set_max_single_part_size(conf.max_single_part_size);
     }
     if (!conf.proxy_host.empty()) {
-      set_proxy_basic_auth(conf.proxy_host, conf.proxy_port);
+      set_proxy(conf.proxy_host, conf.proxy_port);
     }
     if (!conf.proxy_auth_username.empty()) {
       set_proxy_basic_auth(conf.proxy_auth_username, conf.proxy_auth_passwd);
@@ -1509,15 +1509,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
   void construct_proxy_uri(uri_t &u) {
     if (!proxy_host_.empty() && !proxy_port_.empty()) {
+      // For HTTPS, a CONNECT tunnel is used; the request goes directly to the
+      // upstream server after the tunnel is established, so do not rewrite the
+      // request URI to absolute-form.
+      if (u.is_ssl) {
+        return;
+      }
       if (!proxy_request_uri_.empty())
         proxy_request_uri_.clear();
       if (u.get_port() == "80") {
         proxy_request_uri_.append("http://").append(u.get_host()).append(":80");
-      }
-      else if (u.get_port() == "443") {
-        proxy_request_uri_.append("https://")
-            .append(u.get_host())
-            .append(":443");
       }
       else {
         // all be http
@@ -1544,21 +1545,18 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     if (!headers.empty()) {
       req_headers_ = std::move(headers);
-      req_str.append(" HTTP/1.1\r\n");
     }
-    else {
-      if (req_headers_.find("Host") == req_headers_.end()) {
-        req_str.append(" HTTP/1.1\r\nHost:").append(u.host);
-        if (u.port.empty()) {
-          req_str.append("\r\n");
-        }
-        else {
-          req_str.append(":").append(u.port).append("\r\n");
-        }
+    if (req_headers_.find("Host") == req_headers_.end()) {
+      req_str.append(" HTTP/1.1\r\nHost:").append(u.host);
+      if (u.port.empty()) {
+        req_str.append("\r\n");
       }
       else {
-        req_str.append(" HTTP/1.1\r\n");
+        req_str.append(":").append(u.port).append("\r\n");
       }
+    }
+    else {
+      req_str.append(" HTTP/1.1\r\n");
     }
 
     auto type_str = get_content_type_str(ctx.content_type);
@@ -1566,7 +1564,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (ctx.content_type == req_content_type::multipart) {
         type_str.append(BOUNDARY);
       }
-      req_headers_["Content-Type"] = std::move(type_str);
+      // Only set if the user has not already provided a Content-Type header.
+      if (req_headers_.find("Content-Type") == req_headers_.end()) {
+        req_headers_["Content-Type"] = std::move(type_str);
+      }
     }
 
     bool has_connection = false;
@@ -1587,19 +1588,24 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       req_str.append("Connection: keep-alive\r\n");
     }
 
-    if (!proxy_basic_auth_username_.empty() &&
-        !proxy_basic_auth_password_.empty()) {
-      std::string basic_auth_str = "Proxy-Authorization: Basic ";
-      std::string basic_base64_str = base64_encode(
-          proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_);
-      req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
-    }
+    // For HTTPS proxying, Proxy-Authorization is already sent in the CONNECT
+    // request.  After the tunnel is established the request goes directly to
+    // the upstream server, so it must not carry proxy credentials.
+    if (!u.is_ssl) {
+      if (!proxy_basic_auth_username_.empty() &&
+          !proxy_basic_auth_password_.empty()) {
+        std::string basic_auth_str = "Proxy-Authorization: Basic ";
+        std::string basic_base64_str = base64_encode(
+            proxy_basic_auth_username_ + ":" + proxy_basic_auth_password_);
+        req_str.append(basic_auth_str).append(basic_base64_str).append(CRCF);
+      }
 
-    if (!proxy_bearer_token_auth_token_.empty()) {
-      std::string bearer_token_str = "Proxy-Authorization: Bearer ";
-      req_str.append(bearer_token_str)
-          .append(proxy_bearer_token_auth_token_)
-          .append(CRCF);
+      if (!proxy_bearer_token_auth_token_.empty()) {
+        std::string bearer_token_str = "Proxy-Authorization: Bearer ";
+        req_str.append(bearer_token_str)
+            .append(proxy_bearer_token_auth_token_)
+            .append(CRCF);
+      }
     }
 
     if (!ctx.req_header.empty())
@@ -2028,6 +2034,56 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       if (u.is_ssl) {
+        if (!proxy_host_.empty()) {
+          // Establish a CONNECT tunnel through the HTTP proxy before the SSL
+          // handshake so that the proxy forwards the encrypted stream.
+          std::string target_host = u.get_host();
+          std::string target_port = u.get_port();
+          std::string connect_req;
+          connect_req.append("CONNECT ")
+              .append(target_host)
+              .append(":")
+              .append(target_port)
+              .append(" HTTP/1.1\r\nHost: ")
+              .append(target_host)
+              .append(":")
+              .append(target_port);
+          if (!proxy_basic_auth_username_.empty() &&
+              !proxy_basic_auth_password_.empty()) {
+            connect_req.append("\r\nProxy-Authorization: Basic ")
+                .append(base64_encode(proxy_basic_auth_username_ + ":" +
+                                      proxy_basic_auth_password_));
+          }
+          if (!proxy_bearer_token_auth_token_.empty()) {
+            connect_req.append("\r\nProxy-Authorization: Bearer ")
+                .append(proxy_bearer_token_auth_token_);
+          }
+          connect_req.append("\r\n\r\n");
+
+          if (auto [ec, _] = co_await coro_io::async_write(
+                  socket_->impl_, asio::buffer(connect_req));
+              ec) {
+            co_return resp_data{ec, 404};
+          }
+
+          // Read proxy response until end of headers
+          if (auto [ec, _] = co_await coro_io::async_read_until(
+                  socket_->impl_, head_buf_, "\r\n\r\n");
+              ec) {
+            co_return resp_data{ec, 404};
+          }
+
+          auto buf_data = asio::buffer_cast<const char *>(head_buf_.data());
+          std::string_view resp_view(buf_data, head_buf_.size());
+          // Check the status line (first line) for "200".
+          auto first_line = resp_view.substr(0, resp_view.find("\r\n"));
+          if (first_line.find(" 200") == std::string_view::npos) {
+            co_return resp_data{
+                std::make_error_code(std::errc::connection_refused), 407};
+          }
+          head_buf_.consume(head_buf_.size());
+        }
+
 #ifdef CINATRA_ENABLE_SSL
         if (!has_init_ssl_) {
           size_t pos = u.host.find("www.");
