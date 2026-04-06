@@ -98,6 +98,10 @@ add_test(NAME test_time_util COMMAND test_time_util)
 
 add_executable(test_rlimiter test_token_bucket_rlimiter.cpp)
 
+if (ENABLE_SSL)
+    target_link_libraries(test_rlimiter PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()
+
 add_test(NAME test_rlimiter COMMAND test_rlimiter)
 
 add_executable(test_metric

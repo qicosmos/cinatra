@@ -1,12 +1,19 @@
 #pragma once
 
+#include <async_simple/Executor.h>
+#include <async_simple/coro/Collect.h>
+#include <async_simple/coro/Lazy.h>
+#include <async_simple/coro/Sleep.h>
+#include <async_simple/coro/SyncAwait.h>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <coroutine>
 #include <future>
 #include <iostream>
 #include <thread>
+
+#include "ylt/coro_io/coro_io.hpp"
 
 namespace cinatra {
 class rate_limiter {
@@ -46,26 +53,18 @@ class rate_limiter {
     }
   }
 
-  struct awaitable {
-    rate_limiter& limiter;
-    std::chrono::nanoseconds delay;
-
-    bool await_ready() { return delay <= std::chrono::nanoseconds(0); }
-    void await_suspend(std::coroutine_handle<> h) {
-      std::thread([h, d = delay]() {
-        std::this_thread::sleep_for(d);
-        h.resume();
-      }).detach();
+  async_simple::coro::Lazy<void> wait_async() {
+    auto delay = reserve(std::chrono::steady_clock::now(), 1);
+    if (delay > std::chrono::nanoseconds(0)) {
+      co_await coro_io::sleep_for(delay);
     }
-    void await_resume() {}
-  };
-
-  awaitable wait_async() {
-    return awaitable{*this, reserve(std::chrono::steady_clock::now(), 1)};
   }
 
-  awaitable wait_async_n(int n) {
-    return awaitable{*this, reserve(std::chrono::steady_clock::now(), n)};
+  async_simple::coro::Lazy<void> wait_async_n(int n) {
+    auto delay = reserve(std::chrono::steady_clock::now(), n);
+    if (delay > std::chrono::nanoseconds(0)) {
+      co_await coro_io::sleep_for(delay);
+    }
   }
 
  private:
