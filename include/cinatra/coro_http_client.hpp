@@ -1787,7 +1787,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       size_t size_to_read = content_len - part_size;
 
       if (!is_out_buf) {
-          detail::resize(body_, content_len);
+        detail::resize(body_, content_len);
       }
 
       if (part_size > 0) {
