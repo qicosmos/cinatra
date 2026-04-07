@@ -8,6 +8,7 @@
 
 // #define CINATRA_ENABLE_SSL 1
 #include "../include/cinatra.hpp"
+#include "../include/cinatra/rate_limiter.hpp"
 // #include "../include/cinatra/smtp_client.hpp"
 
 using namespace cinatra;
@@ -481,6 +482,59 @@ async_simple::coro::Lazy<void> use_pool() {
   co_return;
 }
 
+async_simple::coro::Lazy<void> rlimiter_usage() {
+  coro_http_server server(1, 9001);
+
+  cinatra::rate_limiter rlimiter_get(1.0, 1);
+  cinatra::rate_limiter coro_rlimiter(1.0, 1);
+
+  server.set_http_handler<GET>(
+      "/get",
+      [&rlimiter_get](coro_http_request& req, coro_http_response& resp) {
+        if (rlimiter_get.allow()) {
+          resp.set_status_and_content(status_type::ok, "ok");
+        }
+        else {
+          resp.set_status_and_content(
+              status_type::service_unavailable,
+              "access was blocked due to excessive access frequency.");
+        }
+      });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [&coro_rlimiter](coro_http_request& req, coro_http_response& resp)
+          -> async_simple::coro::Lazy<void> {
+        co_await coro_rlimiter.wait_async();
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(300ms);  // wait for server start
+
+  coro_http_client client{};
+  auto result = co_await client.async_get("http://127.0.0.1:9001/get");
+  assert(result.status == 200);
+  assert(result.resp_body == "ok");
+  for (auto [key, val] : result.resp_headers) {
+    std::cout << key << ": " << val << "\n";
+  }
+
+  result = co_await client.async_get("http://127.0.0.1:9001/get");
+  assert(result.status == 503);
+
+  std::this_thread::sleep_for(1000ms);
+
+  result = co_await client.async_get("/coro");
+  assert(result.status == 200);
+
+  auto start = std::chrono::steady_clock::now();
+  result = co_await client.async_get("/coro");
+  auto duration = std::chrono::steady_clock::now() - start;
+  assert(duration >= 900ms);
+  assert(duration <= 2100ms);
+}
 // async_simple::coro::Lazy<void> test_smtp() {
 //   std::string from = "you@163.com";
 //   std::string user_name = "you";
@@ -507,5 +561,6 @@ int main() {
   async_simple::coro::syncAwait(use_websocket());
   async_simple::coro::syncAwait(chunked_upload_download());
   async_simple::coro::syncAwait(byte_ranges_download());
+  async_simple::coro::syncAwait(rlimiter_usage());
   return 0;
 }

@@ -19,6 +19,7 @@
 #include "cinatra/coro_http_server.hpp"
 #include "cinatra/define.h"
 #include "cinatra/multipart.hpp"
+#include "cinatra/rate_limiter.hpp"
 #include "cinatra/string_resize.hpp"
 #include "cinatra/time_util.hpp"
 #include "cinatra_log_wrapper.hpp"
@@ -3414,5 +3415,59 @@ TEST_CASE("test session validate") {
       client.async_get("http://127.0.0.1:8090/after_sleep_2s"));
   CHECK(r3.status == 200);
 
+  server.stop();
+}
+
+TEST_CASE("test_rlimiter_for_http") {
+  coro_http_server server(1, 8090);
+
+  rate_limiter rlimiter_get(1.0, 1);
+  rate_limiter coro_rlimiter(1.0, 1);
+
+  server.set_http_handler<GET>(
+      "/get",
+      [&rlimiter_get](coro_http_request &req, coro_http_response &resp) {
+        if (rlimiter_get.allow()) {
+          resp.set_status_and_content(status_type::ok, "ok");
+        }
+        else {
+          resp.set_status_and_content(
+              status_type::service_unavailable,
+              "access was blocked due to excessive access frequency.");
+        }
+      });
+
+  server.set_http_handler<GET>(
+      "/coro",
+      [&coro_rlimiter](coro_http_request &req, coro_http_response &resp)
+          -> async_simple::coro::Lazy<void> {
+        co_await coro_rlimiter.wait_async();
+        resp.set_status_and_content(status_type::ok, "ok");
+        co_return;
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(300ms);  // wait for server start
+
+  coro_http_client client{};
+  auto result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/get"));
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "ok");
+
+  result = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:8090/get"));
+  CHECK(result.status == 503);
+
+  std::this_thread::sleep_for(1000ms);
+
+  result = async_simple::coro::syncAwait(client.async_get("/coro"));
+  CHECK(result.status == 200);
+
+  auto start = std::chrono::steady_clock::now();
+  result = async_simple::coro::syncAwait(client.async_get("/coro"));
+  auto duration = std::chrono::steady_clock::now() - start;
+  CHECK(duration >= 900ms);
+  CHECK(duration <= 2100ms);
   server.stop();
 }
