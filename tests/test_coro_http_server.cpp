@@ -1916,8 +1916,8 @@ TEST_CASE("test static res dir content-disposition") {
 
   coro_http_client client2;
   auto check = [&](std::string_view path, bool expect_inline) {
-    auto r =
-        client2.get(std::string("http://127.0.0.1:9001/test_static_cd/") + std::string(path));
+    auto r = client2.get(std::string("http://127.0.0.1:9001/test_static_cd/") +
+                         std::string(path));
     CHECK(r.status == 200);
     std::string cd;
     for (auto &h : r.resp_headers) {
