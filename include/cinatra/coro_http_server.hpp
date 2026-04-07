@@ -931,8 +931,7 @@ class coro_http_server {
     }
     else {
       header_str.append("Content-Disposition: attachment;filename=");
-      header_str
-          .append(std::filesystem::path(filename).filename().string())
+      header_str.append(std::filesystem::path(filename).filename().string())
           .append("\r\n");
     }
     header_str.append("Connection: keep-alive\r\n");

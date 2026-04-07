@@ -1874,14 +1874,12 @@ TEST_CASE("test error handler") {
         co_return;
       });
 
-  server.set_error_handler(
-      [](coro_http_request &req, coro_http_response &resp,
-         std::string_view what) {
-        resp.set_status(status_type::internal_server_error);
-        resp.add_header("Content-Type", "application/json");
-        resp.set_content(std::string("{\"error\":\"") + std::string(what) +
-                         "\"}");
-      });
+  server.set_error_handler([](coro_http_request &req, coro_http_response &resp,
+                              std::string_view what) {
+    resp.set_status(status_type::internal_server_error);
+    resp.add_header("Content-Type", "application/json");
+    resp.set_content(std::string("{\"error\":\"") + std::string(what) + "\"}");
+  });
 
   server.async_start();
   std::this_thread::sleep_for(200ms);
@@ -1918,8 +1916,8 @@ TEST_CASE("test static res dir content-disposition") {
 
   coro_http_client client2;
   auto check = [&](std::string_view path, bool expect_inline) {
-    auto r = client2.get(std::string("http://127.0.0.1:9001/") +
-                         std::string(path));
+    auto r =
+        client2.get(std::string("http://127.0.0.1:9001/") + std::string(path));
     CHECK(r.status == 200);
     std::string cd;
     for (auto &h : r.resp_headers) {
