@@ -753,15 +753,19 @@ TEST_CASE("delay reply, server stop, form-urlencode, qureies, throw") {
 
   result = client1.get("http://127.0.0.1:9001/throw");
   CHECK(result.status == 503);
+  CHECK(result.resp_body == "invalid arguments");
 
   result = client1.get("http://127.0.0.1:9001/coro_throw");
   CHECK(result.status == 503);
+  CHECK(result.resp_body == "invalid arguments");
 
   result = client1.get("http://127.0.0.1:9001/throw1");
   CHECK(result.status == 503);
+  CHECK(result.resp_body == "unknown exception");
 
   result = client1.get("http://127.0.0.1:9001/coro_throw1");
   CHECK(result.status == 503);
+  CHECK(result.resp_body == "unknown exception");
 
   server.stop();
   std::cout << "ok\n";
@@ -1853,4 +1857,120 @@ TEST_CASE("test static res dir with uri suffix") {
 
   server.stop();
   fs::remove_all(dir);
+}
+
+TEST_CASE("test error handler") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_http_handler<cinatra::GET>(
+      "/throw_ex", [](coro_http_request &req, coro_http_response &resp) {
+        throw std::runtime_error("something went wrong");
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/coro_throw_ex",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        throw std::runtime_error("coro went wrong");
+        co_return;
+      });
+
+  server.set_error_handler(
+      [](coro_http_request &req, coro_http_response &resp,
+         std::string_view what) {
+        resp.set_status(status_type::internal_server_error);
+        resp.add_header("Content-Type", "application/json");
+        resp.set_content(std::string("{\"error\":\"") + std::string(what) +
+                         "\"}");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  auto result = client.get("http://127.0.0.1:9001/throw_ex");
+  CHECK(result.status == 500);
+  CHECK(result.resp_body.find("something went wrong") != std::string::npos);
+
+  result = client.get("http://127.0.0.1:9001/coro_throw_ex");
+  CHECK(result.status == 500);
+  CHECK(result.resp_body.find("coro went wrong") != std::string::npos);
+
+  server.stop();
+}
+
+TEST_CASE("test static res dir content-disposition") {
+  namespace fs = std::filesystem;
+
+  fs::path dir = "test_static_cd";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  std::ofstream(dir / "index.html") << "<h1>hello</h1>";
+  std::ofstream(dir / "style.css") << "body{}";
+  std::ofstream(dir / "app.js") << "console.log(1)";
+  std::ofstream(dir / "logo.png") << "PNG";
+  std::ofstream(dir / "data.bin") << "\x00\x01\x02";
+
+  coro_http_server server(1, 9001);
+  server.set_static_res_dir("", dir.string());
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client2;
+  auto check = [&](std::string_view path, bool expect_inline) {
+    auto r = client2.get(std::string("http://127.0.0.1:9001/") +
+                         std::string(path));
+    CHECK(r.status == 200);
+    std::string cd;
+    for (auto &h : r.resp_headers) {
+      if (h.name == "Content-Disposition" || h.name == "content-disposition") {
+        cd = std::string(h.value);
+        break;
+      }
+    }
+    if (expect_inline) {
+      CHECK(cd == "inline");
+    }
+    else {
+      CHECK(cd.find("attachment") != std::string::npos);
+    }
+  };
+
+  check("index.html", true);
+  check("style.css", true);
+  check("app.js", true);
+  check("logo.png", true);
+  check("data.bin", false);
+
+  server.stop();
+  fs::remove_all(dir);
+}
+
+// Regression test: handle_read must not pass nullptr to memcpy when
+// part_size == 0 (i.e. response headers arrived but no body bytes buffered).
+TEST_CASE("test client handle_read no body bytes buffered") {
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_http_handler<cinatra::GET>(
+      "/empty_body", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "");
+      });
+  server.set_http_handler<cinatra::GET>(
+      "/small_body", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "hello");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
+  auto r = client.get("http://127.0.0.1:9001/empty_body");
+  CHECK(r.status == 200);
+  CHECK(r.resp_body.empty());
+
+  r = client.get("http://127.0.0.1:9001/small_body");
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "hello");
+
+  server.stop();
 }

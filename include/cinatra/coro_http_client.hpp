@@ -1782,16 +1782,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       size_t part_size = head_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       if (is_out_buf) {
-        memcpy(out_buf_.data(), data_ptr, part_size);
+        if (part_size > 0) {
+          memcpy(out_buf_.data(),
+                 asio::buffer_cast<const char *>(head_buf_.data()), part_size);
+          head_buf_.consume(part_size);
+        }
       }
       else {
         detail::resize(body_, content_len);
-        memcpy(body_.data(), data_ptr, part_size);
+        if (part_size > 0) {
+          memcpy(body_.data(),
+                 asio::buffer_cast<const char *>(head_buf_.data()), part_size);
+          head_buf_.consume(part_size);
+        }
       }
-
-      head_buf_.consume(part_size);
 
       if (is_out_buf) {
         if (std::tie(ec, size) = co_await async_read(
