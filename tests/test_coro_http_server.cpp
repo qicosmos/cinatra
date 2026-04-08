@@ -1972,3 +1972,27 @@ TEST_CASE("test client handle_read no body bytes buffered") {
 
   server.stop();
 }
+
+TEST_CASE("test max http header size") {
+  cinatra::coro_http_server server(1, 9001);
+  server.set_max_http_header_size(256);  // very small limit for testing
+  server.set_http_handler<cinatra::GET>(
+      "/ok", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  // Normal request: small header, should succeed
+  coro_http_client client;
+  auto r = client.get("http://127.0.0.1:9001/ok");
+  CHECK(r.status == 200);
+
+  // Oversized header: add a huge custom header to exceed the 256-byte limit
+  coro_http_client client2;
+  client2.add_header("X-Padding", std::string(512, 'A'));
+  r = client2.get("http://127.0.0.1:9001/ok");
+  CHECK(r.status == 431);
+
+  server.stop();
+}

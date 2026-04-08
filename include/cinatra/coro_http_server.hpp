@@ -71,6 +71,10 @@ class coro_http_server {
     max_http_body_len_ = max_size;
   }
 
+  void set_max_http_header_size(size_t max_size) {
+    max_http_header_size_ = max_size;
+  }
+
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
                 const std::string &passwd = "") {
@@ -720,6 +724,7 @@ class coro_http_server {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
       conn->set_max_http_body_size(max_http_body_len_);
+      conn->set_max_http_header_size(max_http_header_size_);
       if (need_shrink_every_time_) {
         conn->set_shrink_to_fit(true);
       }
@@ -1125,6 +1130,7 @@ class coro_http_server {
                                                coro_http_response &)>
       default_handler_ = nullptr;
   int64_t max_http_body_len_ = MAX_HTTP_BODY_SIZE;
+  size_t max_http_header_size_ = 8 * 1024;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
