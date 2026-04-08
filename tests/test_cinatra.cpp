@@ -2510,17 +2510,27 @@ TEST_CASE("test coro_http_client get") {
 }
 
 TEST_CASE("test coro_http_client add header and url queries") {
-  coro_http_client client{};
+  cinatra::coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client;
   client.add_header("Connection", "keep-alive");
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.baidu.cn"));
+      async_simple::coro::syncAwait(client.async_get("http://127.0.0.1:9001/"));
   CHECK(!r.net_err);
   CHECK(r.status < 400);
 
   auto r2 = async_simple::coro::syncAwait(
-      client.async_get("http://www.baidu.com?name='tom'&age=20"));
+      client.async_get("http://127.0.0.1:9001/?name='tom'&age=20"));
   CHECK(!r2.net_err);
   CHECK(r2.status < 400);
+
+  server.stop();
 }
 
 TEST_CASE("test coro_http_client not exist domain and bad uri") {

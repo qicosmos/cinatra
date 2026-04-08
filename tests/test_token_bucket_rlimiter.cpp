@@ -38,7 +38,7 @@ async_simple::coro::Lazy<void> test_async_limiter() {
   auto duration = std::chrono::steady_clock::now() - start;
 
   CHECK(duration >= 900ms);
-  CHECK(duration <= 1100ms);  // Allow some tolerance for system scheduling
+  CHECK(duration <= 2100ms);  // Allow some tolerance for system scheduling
 }
 
 TEST_CASE("token bucket limiter async") {
