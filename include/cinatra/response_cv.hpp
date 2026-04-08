@@ -222,6 +222,8 @@ inline constexpr std::string_view to_http_status_string(status_type status) {
       return rep_conflict;
     case cinatra::status_type::range_not_satisfiable:
       return rep_range_not_satisfiable;
+    case cinatra::status_type::request_header_fields_too_large:
+      return rep_request_header_fields_too_large;
     case cinatra::status_type::internal_server_error:
       return rep_internal_server_error;
     case cinatra::status_type::not_implemented:

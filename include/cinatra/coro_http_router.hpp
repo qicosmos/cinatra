@@ -205,6 +205,13 @@ class coro_http_router {
     return nullptr;
   }
 
+  void set_error_handler(
+      std::function<void(coro_http_request&, coro_http_response&,
+                         std::string_view)>
+          handler) {
+    error_handler_ = std::move(handler);
+  }
+
   void route(auto handler, auto& req, auto& resp, std::string_view key) {
     try {
       (*handler)(req, resp);
@@ -212,9 +219,21 @@ class coro_http_router {
       CINATRA_LOG_WARNING << "exception in business function, reason: "
                           << e.what();
       resp.set_status(status_type::service_unavailable);
+      if (error_handler_) {
+        error_handler_(req, resp, e.what());
+      }
+      else {
+        resp.set_content(e.what());
+      }
     } catch (...) {
       CINATRA_LOG_WARNING << "unknown exception in business function";
       resp.set_status(status_type::service_unavailable);
+      if (error_handler_) {
+        error_handler_(req, resp, "unknown exception");
+      }
+      else {
+        resp.set_content("unknown exception");
+      }
     }
   }
 
@@ -226,9 +245,21 @@ class coro_http_router {
       CINATRA_LOG_WARNING << "exception in business function, reason: "
                           << e.what();
       resp.set_status(status_type::service_unavailable);
+      if (error_handler_) {
+        error_handler_(req, resp, e.what());
+      }
+      else {
+        resp.set_content(e.what());
+      }
     } catch (...) {
       CINATRA_LOG_WARNING << "unknown exception in business function";
       resp.set_status(status_type::service_unavailable);
+      if (error_handler_) {
+        error_handler_(req, resp, "unknown exception");
+      }
+      else {
+        resp.set_content("unknown exception");
+      }
     }
   }
 
@@ -247,6 +278,9 @@ class coro_http_router {
   const auto& get_regex_handlers() { return regex_handles_; }
 
  private:
+  std::function<void(coro_http_request&, coro_http_response&, std::string_view)>
+      error_handler_;
+
   std::set<std::string> keys_;
   std::unordered_map<
       std::string_view,
