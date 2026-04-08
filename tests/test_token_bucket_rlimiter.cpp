@@ -20,13 +20,15 @@ TEST_CASE("token bucket limiter basic") {
   std::this_thread::sleep_for(1100ms);  // Wait 1.1 seconds
   CHECK(limiter.allow());               // Should be allowed again
 
+  // Use a fresh limiter so the bucket is full: first wait passes immediately
+  cinatra::rate_limiter limiter2(1.0, 1);
   auto start = std::chrono::steady_clock::now();
-  limiter.wait();  // First passes immediately
-  limiter.wait();  // Second needs to wait about 1 second
+  limiter2.wait();  // First passes immediately (bucket full)
+  limiter2.wait();  // Second needs to wait about 1 second
   auto duration = std::chrono::steady_clock::now() - start;
 
   CHECK(duration >= 900ms);   // Should wait at least 0.9 seconds
-  CHECK(duration <= 2100ms);  // Allow some tolerance for system scheduling
+  CHECK(duration <= 1500ms);  // Only second wait blocks (~1s total)
 }
 
 async_simple::coro::Lazy<void> test_async_limiter() {
@@ -38,7 +40,7 @@ async_simple::coro::Lazy<void> test_async_limiter() {
   auto duration = std::chrono::steady_clock::now() - start;
 
   CHECK(duration >= 900ms);
-  CHECK(duration <= 2100ms);  // Allow some tolerance for system scheduling
+  CHECK(duration <= 1500ms);  // Only second wait blocks (~1s total)
 }
 
 TEST_CASE("token bucket limiter async") {
