@@ -1973,6 +1973,50 @@ TEST_CASE("test client handle_read no body bytes buffered") {
   server.stop();
 }
 
+TEST_CASE("test multipart early return keeps server valid") {
+  // Verify that when a multipart handler returns early (e.g. 503) without
+  // reading the body, the server properly closes that connection and continues
+  // serving subsequent requests from other clients without parse errors.
+  cinatra::coro_http_server server(1, 9001);
+
+  server.set_http_handler<cinatra::POST>(
+      "/upload",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        // Simulate rate-limit: return 503 without reading multipart body
+        resp.set_status_and_content(status_type::service_unavailable,
+                                    "too many requests");
+        co_return;
+      });
+
+  server.set_http_handler<cinatra::GET>(
+      "/ping", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "pong");
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  // Client 1: upload multipart, server returns 503 early (body not read)
+  {
+    coro_http_client client{};
+    client.add_str_part("field", std::string(1024, 'x'));
+    auto r = async_simple::coro::syncAwait(
+        client.async_upload_multipart("http://127.0.0.1:9001/upload"));
+    CHECK(r.status == 503);
+  }
+
+  // Client 2: new connection, server must still be healthy (no parse errors)
+  {
+    coro_http_client client{};
+    auto r = client.get("http://127.0.0.1:9001/ping");
+    CHECK(r.status == 200);
+    CHECK(r.resp_body == "pong");
+  }
+
+  server.stop();
+}
+
 TEST_CASE("test max http header size") {
   cinatra::coro_http_server server(1, 9001);
   server.set_max_http_header_size(256);  // very small limit for testing

@@ -104,6 +104,9 @@ class multipart_reader_t {
       constexpr std::string_view complete_flag = "--\r\n";
       if (data == complete_flag) {
         result.eof = true;
+        if constexpr (requires { conn_->multipart_body_finished_; }) {
+          conn_->multipart_body_finished_ = true;
+        }
       }
     }
 

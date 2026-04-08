@@ -402,6 +402,10 @@ class coro_http_connection
         }
       }
 
+      if (type == content_type::multipart && !multipart_body_finished_) {
+        keep_alive_ = false;
+      }
+
       if (!keep_alive_) {
         // now in io thread, so can close socket immediately.
         close();
@@ -412,6 +416,7 @@ class coro_http_connection
       buffers_.clear();
       body_.clear();
       resp_str_.clear();
+      multipart_body_finished_ = false;
       multi_buf_ = true;
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
@@ -997,6 +1002,7 @@ class coro_http_connection
       std::chrono::system_clock::now();
   uint64_t max_part_size_ = 8 * 1024 * 1024;
   std::string resp_str_;
+  bool multipart_body_finished_ = false;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool is_client_ws_compressed_ = false;
