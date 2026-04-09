@@ -257,7 +257,7 @@ inline constexpr std::string_view to_http_status_string(status_type status) {
     case cinatra::status_type::request_uri_too_long:
       return rep_request_uri_too_long;
     case cinatra::status_type::unsupported_media_type:
-      return rep_unsupported_media_type; 
+      return rep_unsupported_media_type;
     case cinatra::status_type::range_not_satisfiable:
       return rep_range_not_satisfiable;
     case cinatra::status_type::expectation_failed:
