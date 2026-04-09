@@ -1782,8 +1782,7 @@ TEST_CASE("test static res dir dynamic file detection") {
         resp.set_status_and_content(status_type::ok, "api ok");
       });
 
-  // uri_suffix empty: URI prefix derived from directory basename
-  // "test_static_www"
+  // uri_suffix empty: files are served at root /(.+), base dir is "test_static_www"
   server.set_static_res_dir("", dir.string());
 
   server.async_start();
@@ -1791,10 +1790,10 @@ TEST_CASE("test static res dir dynamic file detection") {
 
   coro_http_client client;
 
-  // Existing files are accessible
-  auto res = client.get("http://127.0.0.1:9001/test_static_www/index.html");
+  // Existing files are accessible at root path
+  auto res = client.get("http://127.0.0.1:9001/index.html");
   CHECK(res.status == 200);
-  res = client.get("http://127.0.0.1:9001/test_static_www/css/style.css");
+  res = client.get("http://127.0.0.1:9001/css/style.css");
   CHECK(res.status == 200);
 
   // Normal API route is not intercepted by the static handler
@@ -1804,18 +1803,16 @@ TEST_CASE("test static res dir dynamic file detection") {
 
   // New file added after startup is immediately accessible (dynamic detection)
   write_file(dir / "new.html", "<p>new file</p>");
-  res = client.get("http://127.0.0.1:9001/test_static_www/new.html");
+  res = client.get("http://127.0.0.1:9001/new.html");
   CHECK(res.status == 200);
 
   // Directory traversal is rejected: path escapes static_dir_ → 400
-  // /test_static_www/sub/../../etc/passwd resolves outside the static dir
-  res =
-      client.get("http://127.0.0.1:9001/test_static_www/sub/../../etc/passwd");
+  res = client.get("http://127.0.0.1:9001/sub/../../etc/passwd");
   CHECK(res.status != 200);
 
   // Manual cache populate: new.html enters cache
   server.set_max_size_of_cache_files();
-  res = client.get("http://127.0.0.1:9001/test_static_www/new.html");
+  res = client.get("http://127.0.0.1:9001/new.html");
   CHECK(res.status == 200);
 
   // Auto refresh: add a file, wait for the refresh timer to fire and update
@@ -1823,7 +1820,7 @@ TEST_CASE("test static res dir dynamic file detection") {
   server.set_cache_refresh_interval(std::chrono::milliseconds(200));
   write_file(dir / "auto_cached.html", "<p>auto</p>");
   std::this_thread::sleep_for(500ms);  // wait for at least one refresh cycle
-  res = client.get("http://127.0.0.1:9001/test_static_www/auto_cached.html");
+  res = client.get("http://127.0.0.1:9001/auto_cached.html");
   CHECK(res.status == 200);
 
   server.stop();
@@ -1916,7 +1913,7 @@ TEST_CASE("test static res dir content-disposition") {
 
   coro_http_client client2;
   auto check = [&](std::string_view path, bool expect_inline) {
-    auto r = client2.get(std::string("http://127.0.0.1:9001/test_static_cd/") +
+    auto r = client2.get(std::string("http://127.0.0.1:9001/") +
                          std::string(path));
     CHECK(r.status == 200);
     std::string cd;
