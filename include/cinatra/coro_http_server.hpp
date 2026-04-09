@@ -71,6 +71,10 @@ class coro_http_server {
     max_http_body_len_ = max_size;
   }
 
+  void set_max_http_header_size(size_t max_size) {
+    max_http_header_size_ = max_size;
+  }
+
 #ifdef CINATRA_ENABLE_SSL
   void init_ssl(const std::string &cert_file, const std::string &key_file,
                 const std::string &passwd = "") {
@@ -614,6 +618,13 @@ class coro_http_server {
     default_handler_ = std::move(handler);
   }
 
+  void set_error_handler(
+      std::function<void(coro_http_request &, coro_http_response &,
+                         std::string_view)>
+          handler) {
+    router_.set_error_handler(std::move(handler));
+  }
+
   size_t connection_count() {
     std::scoped_lock lock(conn_mtx_);
     return connections_.size();
@@ -713,6 +724,7 @@ class coro_http_server {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
       conn->set_max_http_body_size(max_http_body_len_);
+      conn->set_max_http_header_size(max_http_header_size_);
       if (need_shrink_every_time_) {
         conn->set_shrink_to_fit(true);
       }
@@ -917,10 +929,16 @@ class coro_http_server {
     if (!content_range.empty()) {
       header_str.append(content_range);
     }
-    header_str.append("Content-Disposition: attachment;filename=");
-    std::string short_name =
-        std::filesystem::path(filename).filename().string();
-    header_str.append(short_name).append("\r\n");
+    if (mime.starts_with("text/") || mime.starts_with("image/") ||
+        mime == "application/javascript" ||
+        mime == "application/x-javascript" || mime == "application/json") {
+      header_str.append("Content-Disposition: inline\r\n");
+    }
+    else {
+      header_str.append("Content-Disposition: attachment;filename=");
+      header_str.append(std::filesystem::path(filename).filename().string())
+          .append("\r\n");
+    }
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
@@ -1112,6 +1130,7 @@ class coro_http_server {
                                                coro_http_response &)>
       default_handler_ = nullptr;
   int64_t max_http_body_len_ = MAX_HTTP_BODY_SIZE;
+  size_t max_http_header_size_ = 8 * 1024;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;

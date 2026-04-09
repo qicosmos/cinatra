@@ -44,6 +44,7 @@ class coro_http_connection
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
+        head_buf_(max_http_header_size_),
         request_(parser_, this),
         response_(this) {
     buffers_.reserve(3);
@@ -96,6 +97,8 @@ class coro_http_connection
 #endif
     std::chrono::system_clock::time_point start{};
     std::chrono::system_clock::time_point mid{};
+    std::destroy_at(&head_buf_);
+    new (&head_buf_) asio::streambuf(max_http_header_size_);
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -111,11 +114,20 @@ class coro_http_connection
       }
 #endif
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
+      if (ec == asio::error::not_found) {
+        CINATRA_LOG_WARNING << "http header too large (> "
+                            << max_http_header_size_ << " bytes)";
+        response_.set_status_and_content(
+            status_type::request_header_fields_too_large,
+            "request header too large");
+        co_await reply();
+        close();
+        break;
+      }
       if (ec) {
         if (ec != asio::error::eof) {
           CINATRA_LOG_WARNING << "read http header error: " << ec.message();
         }
-
         close();
         break;
       }
@@ -390,6 +402,10 @@ class coro_http_connection
         }
       }
 
+      if (type == content_type::multipart && !multipart_body_finished_) {
+        keep_alive_ = false;
+      }
+
       if (!keep_alive_) {
         // now in io thread, so can close socket immediately.
         close();
@@ -400,6 +416,7 @@ class coro_http_connection
       buffers_.clear();
       body_.clear();
       resp_str_.clear();
+      multipart_body_finished_ = false;
       multi_buf_ = true;
       if (need_shrink_every_time_) {
         body_.shrink_to_fit();
@@ -465,6 +482,10 @@ class coro_http_connection
 
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
+  }
+
+  void set_max_http_header_size(size_t max_size) {
+    max_http_header_size_ = max_size;
   }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
@@ -964,6 +985,7 @@ class coro_http_connection
   coro_io::ExecutorWrapper<> *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
+  size_t max_http_header_size_ = 8 * 1024;
   asio::streambuf head_buf_;
   std::string body_;
   asio::streambuf chunked_buf_;
@@ -980,6 +1002,7 @@ class coro_http_connection
       std::chrono::system_clock::now();
   uint64_t max_part_size_ = 8 * 1024 * 1024;
   std::string resp_str_;
+  bool multipart_body_finished_ = false;
 
 #ifdef CINATRA_ENABLE_GZIP
   bool is_client_ws_compressed_ = false;
