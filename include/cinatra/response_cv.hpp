@@ -186,18 +186,32 @@ inline constexpr std::string_view rep_network_authentication_required =
 inline constexpr std::string_view to_http_status_string(status_type status) {
   using namespace http_status_string;
   switch (status) {
+    case cinatra::status_type::http_continue:
+      return http_continue;
     case cinatra::status_type::switching_protocols:
       return switching_protocols;
+    case cinatra::status_type::processing:
+      return processing;
     case cinatra::status_type::ok:
       return rep_ok;
     case cinatra::status_type::created:
       return rep_created;
     case cinatra::status_type::accepted:
       return rep_accepted;
+    case cinatra::status_type::nonauthoritative:
+      return rep_nonauthoritative;
     case cinatra::status_type::no_content:
       return rep_no_content;
+    case cinatra::status_type::reset_content:
+      return rep_reset_content;
     case cinatra::status_type::partial_content:
       return rep_partial_content;
+    case cinatra::status_type::multi_status:
+      return rep_multi_status;
+    case cinatra::status_type::already_reported:
+      return rep_already_reported;
+    case cinatra::status_type::im_used:
+      return rep_im_used;
     case cinatra::status_type::multiple_choices:
       return rep_multiple_choices;
     case cinatra::status_type::moved_permanently:
@@ -206,24 +220,72 @@ inline constexpr std::string_view to_http_status_string(status_type status) {
       return rep_moved_temporarily;
     case cinatra::status_type::not_modified:
       return rep_not_modified;
+    case cinatra::status_type::use_proxy:
+      return rep_use_proxy;
     case cinatra::status_type::temporary_redirect:
       return rep_temporary_redirect;
+    case cinatra::status_type::permanent_redirect:
+      return rep_permanent_redirect;
     case cinatra::status_type::bad_request:
       return rep_bad_request;
     case cinatra::status_type::unauthorized:
       return rep_unauthorized;
+    case cinatra::status_type::payment_required:
+      return rep_payment_required;
     case cinatra::status_type::forbidden:
       return rep_forbidden;
     case cinatra::status_type::not_found:
       return rep_not_found;
     case cinatra::status_type::method_not_allowed:
       return rep_method_not_allowed;
+    case cinatra::status_type::not_acceptable:
+      return rep_not_acceptable;
+    case cinatra::status_type::proxy_authentication_required:
+      return rep_proxy_authentication_required;
+    case cinatra::status_type::request_timeout:
+      return rep_request_timeout;
     case cinatra::status_type::conflict:
       return rep_conflict;
+    case cinatra::status_type::gone:
+      return rep_gone;
+    case cinatra::status_type::length_required:
+      return rep_length_required;
+    case cinatra::status_type::precondition_failed:
+      return rep_precondition_failed;
+    case cinatra::status_type::request_entity_too_large:
+      return rep_request_entity_too_large;
+    case cinatra::status_type::request_uri_too_long:
+      return rep_request_uri_too_long;
+    case cinatra::status_type::unsupported_media_type:
+      return rep_unsupported_media_type;
     case cinatra::status_type::range_not_satisfiable:
       return rep_range_not_satisfiable;
+    case cinatra::status_type::expectation_failed:
+      return rep_expectation_failed;
+    case cinatra::status_type::im_a_teapot:
+      return rep_im_a_teapot;
+    case cinatra::status_type::enchance_your_calm:
+      return rep_enchance_your_calm;
+    case cinatra::status_type::misdirected_request:
+      return rep_misdirected_request;
+    case cinatra::status_type::unprocessable_entity:
+      return rep_unprocessable_entity;
+    case cinatra::status_type::locked:
+      return rep_locked;
+    case cinatra::status_type::failed_dependency:
+      return rep_failed_dependency;
+    case cinatra::status_type::too_early:
+      return rep_too_early;
+    case cinatra::status_type::upgrade_required:
+      return rep_upgrade_required;
+    case cinatra::status_type::precondition_required:
+      return rep_precondition_required;
+    case cinatra::status_type::too_many_requests:
+      return rep_too_many_requests;
     case cinatra::status_type::request_header_fields_too_large:
       return rep_request_header_fields_too_large;
+    case cinatra::status_type::unavailable_for_legal_reasons:
+      return rep_unavailable_for_legal_reasons;
     case cinatra::status_type::internal_server_error:
       return rep_internal_server_error;
     case cinatra::status_type::not_implemented:
@@ -232,6 +294,20 @@ inline constexpr std::string_view to_http_status_string(status_type status) {
       return rep_bad_gateway;
     case cinatra::status_type::service_unavailable:
       return rep_service_unavailable;
+    case cinatra::status_type::gateway_timeout:
+      return rep_gateway_timeout;
+    case cinatra::status_type::version_not_supported:
+      return rep_version_not_supported;
+    case cinatra::status_type::variant_also_negotiates:
+      return rep_variant_also_negotiates;
+    case cinatra::status_type::insufficient_storage:
+      return rep_insufficient_storage;
+    case cinatra::status_type::loop_detected:
+      return rep_loop_detected;
+    case cinatra::status_type::not_extended:
+      return rep_not_extended;
+    case cinatra::status_type::network_authentication_required:
+      return rep_network_authentication_required;
     default:
       return rep_not_implemented;
   }
