@@ -1326,6 +1326,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else {
         u.path = uri;
+        u.host = host_;
+        u.port = port_;
       }
       if (socket_->has_closed_) {
         data = co_await connect(u);
