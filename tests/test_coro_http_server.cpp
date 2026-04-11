@@ -2001,7 +2001,9 @@ TEST_CASE("test multipart early return keeps server valid") {
     client.add_str_part("field", std::string(1024, 'x'));
     auto r = async_simple::coro::syncAwait(
         client.async_upload_multipart("http://127.0.0.1:9001/upload"));
-    CHECK(r.status == 503);
+    // Server may have sent 503 and closed before client finished writing.
+    // Depending on TCP timing, client may see 503 or a write/connection error.
+    CHECK((r.status == 503 || r.net_err));
   }
 
   // Client 2: new connection, server must still be healthy (no parse errors)
