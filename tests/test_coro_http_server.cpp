@@ -1782,7 +1782,8 @@ TEST_CASE("test static res dir dynamic file detection") {
         resp.set_status_and_content(status_type::ok, "api ok");
       });
 
-  // uri_suffix empty: files are served at root /(.+), base dir is "test_static_www"
+  // uri_suffix empty: files are served at root /(.+), base dir is
+  // "test_static_www"
   server.set_static_res_dir("", dir.string());
 
   server.async_start();
@@ -1913,8 +1914,8 @@ TEST_CASE("test static res dir content-disposition") {
 
   coro_http_client client2;
   auto check = [&](std::string_view path, bool expect_inline) {
-    auto r = client2.get(std::string("http://127.0.0.1:9001/") +
-                         std::string(path));
+    auto r =
+        client2.get(std::string("http://127.0.0.1:9001/") + std::string(path));
     CHECK(r.status == 200);
     std::string cd;
     for (auto &h : r.resp_headers) {
