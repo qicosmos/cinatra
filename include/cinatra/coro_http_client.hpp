@@ -1213,8 +1213,18 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
     if (ec) {
-      handle_upload_timeout_error(ec);
-      co_return resp_data{ec, 404};
+      // Body send failed; server may have already sent an early response
+      // (e.g. 503 or 413) before closing the connection.  Try to read it.
+      auto write_ec = ec;
+      ec = {};
+      data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
+                                  http_method::POST);
+      if (ec || data.status == 0) {
+        handle_upload_timeout_error(write_ec);
+        co_return resp_data{write_ec, 404};
+      }
+      handle_result(data, ec, is_keep_alive);
+      co_return data;
     }
 
     data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
@@ -1326,6 +1336,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else {
         u.path = uri;
+        u.host = host_;
+        u.port = port_;
       }
       if (socket_->has_closed_) {
         data = co_await connect(u);

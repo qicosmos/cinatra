@@ -396,21 +396,11 @@ class coro_http_server {
       static_dir_ = fs::absolute(fs::current_path().string()).string();
     }
 
-    // Derive URI prefix internally, preserving original routing semantics:
-    // - uri_suffix given       → use it as prefix  (e.g. "assets" → /assets)
-    // - named subdir, no suffix → use dirname       (e.g. "www"   → /www)
-    // - current dir, no suffix  → empty prefix      (e.g. ""      → /)
-    //   The last case keeps the original behaviour where files are served
-    //   at the root, and avoids a bare /(.+) catch-all by falling through
-    //   to the exact-match / prefix pattern /(.+) only for that dir.
+    // URI prefix: use uri_suffix if given, otherwise serve at root "/(.+)"
     std::string uri_prefix;
     if (!static_dir_router_path_.empty()) {
       uri_prefix = "/" + static_dir_router_path_;
     }
-    else if (has_named_dir) {
-      uri_prefix = "/" + fs::path(static_dir_).filename().string();
-    }
-    // else: current directory → uri_prefix stays empty, pattern is "/(.+)"
     std::string pattern = uri_prefix + "/(.+)";
     set_http_handler<cinatra::GET>(
         pattern,
