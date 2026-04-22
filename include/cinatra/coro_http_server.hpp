@@ -452,6 +452,18 @@ class coro_http_server {
     std::string content;
     detail::resize(content, chunked_size_);
 
+    if (fs::is_directory(file_name)) {
+      resp.set_status(status_type::not_found);
+      co_return;
+    }
+
+    std::error_code size_ec;
+    size_t file_size = fs::file_size(file_name, size_ec);
+    if (size_ec) {
+      resp.set_status(status_type::not_found);
+      co_return;
+    }
+
     coro_io::coro_file in_file{};
     in_file.open(file_name, std::ios::in);
     if (!in_file.is_open()) {
@@ -463,8 +475,6 @@ class coro_http_server {
 #endif
       co_return;
     }
-
-    size_t file_size = fs::file_size(file_name);
 
     if (format_type_ == file_resp_format_type::chunked && range_str.empty()) {
       resp.add_header("Content-Type", std::string{mime});
