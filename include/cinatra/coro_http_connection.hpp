@@ -143,10 +143,14 @@ class coro_http_connection
         break;
       }
 
-      if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
-          [[unlikely]] {
-        CINATRA_LOG_ERROR << "invalid http content length: "
-                          << parser_.body_len();
+      auto type = request_.get_content_type();
+      int64_t body_len = parser_.body_len();
+      size_t part_size = head_buf_.size() - size;
+
+      if (body_len > max_http_body_len_ || body_len < 0 ||
+          (type != content_type::chunked && type != content_type::multipart &&
+           (size_t)body_len < part_size)) [[unlikely]] {
+        CINATRA_LOG_ERROR << "invalid http content length: " << body_len;
         response_.set_status_and_content(status_type::bad_request,
                                          "invalid http content length");
         co_await reply();
@@ -157,11 +161,8 @@ class coro_http_connection
       head_buf_.consume(size);
       keep_alive_ = check_keep_alive();
 
-      auto type = request_.get_content_type();
-
       if (type != content_type::chunked && type != content_type::multipart) {
-        size_t body_len = (size_t)parser_.body_len();
-        if (body_len == 0) {
+        if ((size_t)body_len == 0) {
           if (parser_.method() == "GET"sv) {
             if (request_.is_upgrade()) {
 #ifdef CINATRA_ENABLE_GZIP
@@ -183,29 +184,22 @@ class coro_http_connection
             }
           }
         }
-        else if (body_len <= head_buf_.size()) {
-          if (body_len > 0) {
-            detail::resize(body_, body_len);
-            auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-            memcpy(body_.data(), data_ptr, body_len);
-            head_buf_.consume(head_buf_.size());
-          }
-        }
         else {
-          size_t part_size = head_buf_.size();
-          size_t size_to_read = body_len - part_size;
+          size_t size_to_read = (size_t)body_len - part_size;
+          detail::resize(body_, (size_t)body_len);
           auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-          detail::resize(body_, body_len);
           memcpy(body_.data(), data_ptr, part_size);
           head_buf_.consume(part_size);
 
-          auto [ec, size] = co_await async_read(
-              asio::buffer(body_.data() + part_size, size_to_read),
-              size_to_read);
-          if (ec) {
-            CINATRA_LOG_ERROR << "async_read error: " << ec.message();
-            close();
-            break;
+          if (size_to_read > 0) {
+            auto [ec, size] = co_await async_read(
+                asio::buffer(body_.data() + part_size, size_to_read),
+                size_to_read);
+            if (ec) {
+              CINATRA_LOG_ERROR << "async_read error: " << ec.message();
+              close();
+              break;
+            }
           }
         }
       }
