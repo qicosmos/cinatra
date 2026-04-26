@@ -533,19 +533,20 @@ class coro_http_connection
     co_return co_await begin_chunked();
   }
 
-  async_simple::coro::Lazy<bool> write_sse_event(sse_event event) {
-    return write_sse_payload(serialize_sse_event(event));
+  async_simple::coro::Lazy<bool> write_sse_event(const sse_event &event) {
+    co_return co_await write_sse_payload(serialize_sse_event(event));
   }
 
   async_simple::coro::Lazy<bool> write_sse_data(std::string_view data) {
-    return write_sse_event(sse_event{.data = std::string(data)});
+    co_return co_await write_sse_payload(serialize_sse_event(
+        sse_event{.data = std::string(data)}));
   }
 
   async_simple::coro::Lazy<bool> write_sse_comment(std::string_view comment) {
     std::string out;
     append_sse_field(out, "", comment, true);
     out.append(CRCF);
-    return write_sse_payload(std::move(out));
+    co_return co_await write_sse_payload(std::move(out));
   }
 
   async_simple::coro::Lazy<bool> end_sse() { co_return co_await end_chunked(); }
@@ -950,8 +951,24 @@ class coro_http_connection
   }
 
  private:
+  async_simple::coro::Lazy<bool> write_chunked_owned(std::string chunked_data,
+                                                     bool eof = false) {
+    response_.set_delay(true);
+    std::vector<asio::const_buffer> buffers;
+    std::string chunk_size_str;
+    to_chunked_buffers(buffers, chunk_size_str, chunked_data, eof);
+    auto [ec, _] = co_await async_write(buffers);
+    if (ec) {
+      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      close();
+      co_return false;
+    }
+
+    co_return true;
+  }
+
   async_simple::coro::Lazy<bool> write_sse_payload(std::string payload) {
-    co_return co_await write_chunked(payload);
+    co_return co_await write_chunked_owned(std::move(payload));
   }
 
   bool check_keep_alive() {
