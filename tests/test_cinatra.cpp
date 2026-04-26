@@ -988,6 +988,16 @@ TEST_CASE("test out buffer and async upload ") {
 
   server.async_start();
 
+  {
+    coro_http_client client{};
+    auto request =
+        client.async_post("http://127.0.0.1:9000/normal", std::string(128, 'x'),
+                          req_content_type::text);
+    auto result = async_simple::coro::syncAwait(std::move(request));
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "test");
+  }
+
   auto lazy = [](upload_type flag) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
     std::string uri = "http://127.0.0.1:9000/normal";
@@ -2802,6 +2812,41 @@ TEST_CASE("test sse server and client") {
         ok = co_await conn->end_sse();
         CHECK(ok);
       });
+  server.set_http_handler<GET>(
+      "/sse_temporary_payloads",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_comment(std::string(80, 'c'));
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_data(std::string(256, 'd'));
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_event(
+            sse_event{.event = std::string(64, 'e'),
+                      .data = std::string(512, 'x'),
+                      .id = std::string(64, 'i')});
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
 
   server.async_start();
   std::this_thread::sleep_for(200ms);
@@ -2869,6 +2914,25 @@ TEST_CASE("test sse server and client") {
     CHECK(events[0].id.empty());
     CHECK(events[1].event == "two");
     CHECK(events[1].data == "2");
+  }
+
+  SUBCASE("sse helpers own temporary payloads until async write completes") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(
+        client.async_get_sse("http://127.0.0.1:9001/sse_temporary_payloads",
+                             [&events](const sse_event &event) {
+                               events.push_back(event);
+                             }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(result.eof);
+    REQUIRE(events.size() == 2);
+    CHECK(events[0].data == std::string(256, 'd'));
+    CHECK(events[1].event == std::string(64, 'e'));
+    CHECK(events[1].data == std::string(512, 'x'));
+    CHECK(events[1].id == std::string(64, 'i'));
   }
 
   SUBCASE("async_post_sse supports request body") {

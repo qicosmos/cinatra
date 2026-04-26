@@ -533,19 +533,19 @@ class coro_http_connection
     co_return co_await begin_chunked();
   }
 
-  async_simple::coro::Lazy<bool> write_sse_event(const sse_event &event) {
-    co_return co_await write_chunked(serialize_sse_event(event));
+  async_simple::coro::Lazy<bool> write_sse_event(sse_event event) {
+    return write_sse_payload(serialize_sse_event(event));
   }
 
   async_simple::coro::Lazy<bool> write_sse_data(std::string_view data) {
-    co_return co_await write_sse_event(sse_event{.data = std::string(data)});
+    return write_sse_event(sse_event{.data = std::string(data)});
   }
 
   async_simple::coro::Lazy<bool> write_sse_comment(std::string_view comment) {
     std::string out;
     append_sse_field(out, "", comment, true);
     out.append(CRCF);
-    co_return co_await write_chunked(out);
+    return write_sse_payload(std::move(out));
   }
 
   async_simple::coro::Lazy<bool> end_sse() { co_return co_await end_chunked(); }
@@ -950,6 +950,10 @@ class coro_http_connection
   }
 
  private:
+  async_simple::coro::Lazy<bool> write_sse_payload(std::string payload) {
+    co_return co_await write_chunked(payload);
+  }
+
   bool check_keep_alive() {
     if (parser_.has_close()) {
       return false;
