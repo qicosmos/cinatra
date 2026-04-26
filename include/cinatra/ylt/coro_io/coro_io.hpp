@@ -25,6 +25,7 @@
 #include <asio/ssl.hpp>
 #endif
 
+#include <algorithm>
 #include <asio/connect.hpp>
 #include <asio/experimental/channel.hpp>
 #include <asio/ip/tcp.hpp>
@@ -33,7 +34,6 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 #include <asio/write_at.hpp>
-#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <vector>

@@ -548,9 +548,7 @@ class coro_http_connection
     co_return co_await write_chunked(out);
   }
 
-  async_simple::coro::Lazy<bool> end_sse() {
-    co_return co_await end_chunked();
-  }
+  async_simple::coro::Lazy<bool> end_sse() { co_return co_await end_chunked(); }
 
   async_simple::coro::Lazy<bool> begin_multipart(
       std::string_view boundary = "", std::string_view content_type = "") {

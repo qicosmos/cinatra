@@ -156,9 +156,9 @@ inline void append_sse_field(std::string &out, std::string_view key,
   size_t start = 0;
   while (start < value.size()) {
     size_t end = value.find('\n', start);
-    auto line = value.substr(start, end == std::string_view::npos
-                                        ? value.size() - start
-                                        : end - start);
+    auto line =
+        value.substr(start, end == std::string_view::npos ? value.size() - start
+                                                          : end - start);
     if (!line.empty() && line.back() == '\r') {
       line.remove_suffix(1);
     }
