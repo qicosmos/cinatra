@@ -148,8 +148,8 @@ async_simple::coro::Lazy<void> chunked_upload_download() {
   assert(result.status == 200);
   assert(result.resp_body == "chunked ok");
 
-  result = co_await client.async_post_chunked(
-      "http://127.0.0.1:9001/chunked", "hello chunked string");
+  result = co_await client.async_post_chunked("http://127.0.0.1:9001/chunked",
+                                              "hello chunked string");
   assert(result.status == 200);
   assert(result.resp_body == "chunked ok");
 

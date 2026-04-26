@@ -2462,8 +2462,8 @@ TEST_CASE("test coro_http_client chunked upload and download") {
     {
       coro_http_client client{};
       auto result = async_simple::coro::syncAwait(client.async_post_chunked(
-          "http://127.0.0.1:8090/chunked_echo",
-          "hello chunked string", req_content_type::text));
+          "http://127.0.0.1:8090/chunked_echo", "hello chunked string",
+          req_content_type::text));
       CHECK(result.status == 200);
       CHECK(result.resp_body == "hello chunked string");
     }
@@ -2633,8 +2633,8 @@ TEST_CASE("test sse server and client") {
 
   server.set_http_handler<GET>(
       "/sse",
-      [](coro_http_request &, coro_http_response &resp)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         auto *conn = resp.get_conn();
         bool ok = co_await conn->begin_sse();
         CHECK(ok);
@@ -2648,11 +2648,10 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(
-            sse_event{.event = "message",
-                      .data = "hello\nworld",
-                      .id = "42",
-                      .retry = 1500});
+        ok = co_await conn->write_sse_event(sse_event{.event = "message",
+                                                      .data = "hello\nworld",
+                                                      .id = "42",
+                                                      .retry = 1500});
         CHECK(ok);
         if (!ok) {
           co_return;
@@ -2670,8 +2669,8 @@ TEST_CASE("test sse server and client") {
 
   server.set_http_handler<POST>(
       "/sse_post",
-      [](coro_http_request &req, coro_http_response &resp)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         CHECK(req.get_body() == "ping");
         auto *conn = resp.get_conn();
         bool ok = co_await conn->begin_sse();
@@ -2693,8 +2692,8 @@ TEST_CASE("test sse server and client") {
 
   server.set_http_handler<GET>(
       "/sse_split",
-      [](coro_http_request &, coro_http_response &resp)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         auto *conn = resp.get_conn();
         bool ok = co_await conn->begin_sse();
         CHECK(ok);
@@ -2738,8 +2737,8 @@ TEST_CASE("test sse server and client") {
 
   server.set_http_handler<GET>(
       "/sse_once",
-      [](coro_http_request &, coro_http_response &resp)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         auto *conn = resp.get_conn();
         bool ok = co_await conn->begin_sse();
         CHECK(ok);
@@ -2753,8 +2752,8 @@ TEST_CASE("test sse server and client") {
 
   server.set_http_handler<GET>(
       "/sse_edges",
-      [](coro_http_request &, coro_http_response &resp)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
         auto *conn = resp.get_conn();
         bool ok = co_await conn->begin_sse();
         CHECK(ok);
@@ -2774,8 +2773,7 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_chunked(
-            "\xef\xbb\xbfid: bad");
+        ok = co_await conn->write_chunked("\xef\xbb\xbfid: bad");
         CHECK(ok);
         if (!ok) {
           co_return;
@@ -2819,8 +2817,9 @@ TEST_CASE("test sse server and client") {
     coro_http_client client{};
     std::vector<sse_event> events;
     auto result = async_simple::coro::syncAwait(client.async_get_sse(
-        "http://127.0.0.1:9001/sse",
-        [&events](const sse_event &event) { events.push_back(event); }));
+        "http://127.0.0.1:9001/sse", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
 
     CHECK(!result.net_err);
     CHECK(result.status == 200);
@@ -2841,8 +2840,9 @@ TEST_CASE("test sse server and client") {
     coro_http_client client{};
     std::vector<sse_event> events;
     auto result = async_simple::coro::syncAwait(client.async_get_sse(
-        "http://127.0.0.1:9001/sse_split",
-        [&events](const sse_event &event) { events.push_back(event); }));
+        "http://127.0.0.1:9001/sse_split", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
 
     CHECK(!result.net_err);
     CHECK(result.status == 200);
@@ -2856,8 +2856,9 @@ TEST_CASE("test sse server and client") {
     coro_http_client client{};
     std::vector<sse_event> events;
     auto result = async_simple::coro::syncAwait(client.async_get_sse(
-        "http://127.0.0.1:9001/sse_edges",
-        [&events](const sse_event &event) { events.push_back(event); }));
+        "http://127.0.0.1:9001/sse_edges", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
 
     CHECK(!result.net_err);
     CHECK(result.status == 200);
@@ -2875,7 +2876,9 @@ TEST_CASE("test sse server and client") {
     std::vector<sse_event> events;
     auto result = async_simple::coro::syncAwait(client.async_post_sse(
         "http://127.0.0.1:9001/sse_post", "ping", req_content_type::text,
-        [&events](const sse_event &event) { events.push_back(event); }));
+        [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
 
     CHECK(!result.net_err);
     CHECK(result.status == 200);
@@ -2888,12 +2891,12 @@ TEST_CASE("test sse server and client") {
   SUBCASE("handler returning false stops stream") {
     coro_http_client client{};
     int event_count = 0;
-    auto result = async_simple::coro::syncAwait(client.async_get_sse(
-        "http://127.0.0.1:9001/sse_once",
-        [&event_count](const sse_event &event) {
-          event_count++;
-          return false;
-        }));
+    auto result = async_simple::coro::syncAwait(
+        client.async_get_sse("http://127.0.0.1:9001/sse_once",
+                             [&event_count](const sse_event &event) {
+                               event_count++;
+                               return false;
+                             }));
 
     CHECK(!result.net_err);
     CHECK(result.status == 200);
@@ -2923,12 +2926,11 @@ TEST_CASE("test sse server and client") {
   }
 
   SUBCASE("retry field ignores negative values") {
-    auto payload1 = serialize_sse_event(
-        sse_event{.data = "test", .retry = -100});
+    auto payload1 =
+        serialize_sse_event(sse_event{.data = "test", .retry = -100});
     CHECK(payload1.find("retry:") == std::string::npos);
 
-    auto payload2 = serialize_sse_event(
-        sse_event{.data = "test", .retry = 0});
+    auto payload2 = serialize_sse_event(sse_event{.data = "test", .retry = 0});
     CHECK(payload2.find("retry: 0") != std::string::npos);
   }
 

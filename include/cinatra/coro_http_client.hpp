@@ -96,6 +96,16 @@ template <typename T>
 constexpr bool is_sse_event_handler_v =
     is_sse_event_handler<std::remove_cvref_t<T>>::value;
 
+template <typename BodyTarget>
+auto make_body_target(BodyTarget &&out_buf) {
+  if constexpr (is_sse_event_handler_v<BodyTarget>) {
+    return std::remove_cvref_t<BodyTarget>{out_buf};
+  }
+  else {
+    return std::span<char>{out_buf.data(), out_buf.size()};
+  }
+}
+
 struct http_header;
 
 struct resp_data {
@@ -610,10 +620,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     if (enable_follow_redirect_) {
       req_context<> redirect_ctx{};
-      data = co_await async_sse_request(std::move(redirect_uri_),
-                                        http_method::GET,
-                                        std::move(redirect_ctx), handler,
-                                        std::move(headers));
+      data = co_await async_sse_request(
+          std::move(redirect_uri_), http_method::GET, std::move(redirect_ctx),
+          handler, std::move(headers));
     }
     co_return data;
   }
@@ -1313,8 +1322,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       S uri, http_method method, std::string content,
       req_content_type content_type = req_content_type::text,
       std::unordered_map<std::string, std::string> headers = {}) {
-    auto source = [content = std::move(content),
-                   sent = false]() mutable -> async_simple::coro::Lazy<read_result> {
+    auto source =
+        [content = std::move(content),
+         sent = false]() mutable -> async_simple::coro::Lazy<read_result> {
       if (sent) {
         co_return read_result{{}, true, {}};
       }
@@ -1363,7 +1373,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<resp_data> async_request(
       S uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {},
-      BodyTarget out_buf = {}) {
+      BodyTarget &&out_buf = {}) {
+    return async_request_impl(
+        std::move(uri), method, std::move(ctx), std::move(headers),
+        make_body_target(std::forward<BodyTarget>(out_buf)));
+  }
+
+  template <typename S, typename String, typename BodyTarget>
+  async_simple::coro::Lazy<resp_data> async_request_impl(
+      S uri, http_method method, req_context<String> ctx,
+      std::unordered_map<std::string, std::string> headers,
+      BodyTarget out_buf) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
@@ -1484,9 +1504,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       headers["Accept"] = "text/event-stream";
     }
 
-    auto data = co_await async_request(
-        std::move(uri), method, std::move(ctx), std::move(headers),
-        sse_event_handler<Handler>{&handler});
+    auto data = co_await async_request(std::move(uri), method, std::move(ctx),
+                                       std::move(headers),
+                                       sse_event_handler<Handler>{&handler});
     co_return data;
   }
 
@@ -1796,12 +1816,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   template <typename String, typename BodyTarget = std::span<char>>
-  async_simple::coro::Lazy<resp_data> handle_read(std::error_code &ec,
-                                                  size_t &size,
-                                                  bool &is_keep_alive,
-                                                  req_context<String> ctx,
-                                                  http_method method,
-                                                  BodyTarget out_buf = {}) {
+  async_simple::coro::Lazy<resp_data> handle_read(
+      std::error_code &ec, size_t &size, bool &is_keep_alive,
+      req_context<String> ctx, http_method method, BodyTarget out_buf = {}) {
     resp_data data{};
     do {
       if (std::tie(ec, size) = co_await async_read_until(head_buf_, TWO_CRCF);
@@ -2159,8 +2176,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
       if constexpr (is_sse_event_handler_v<BodyTarget>) {
-        ec = parse_sse_events({data_ptr, (size_t)chunk_size},
-                              *out_buf.handler, false);
+        ec = parse_sse_events({data_ptr, (size_t)chunk_size}, *out_buf.handler,
+                              false);
       }
       else {
         if (ctx.resp_body_stream) {
@@ -2219,8 +2236,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       auto ec = dispatch_sse_event(
-          std::string_view{resp_chunk_str_.data(), event_end},
-          handler);
+          std::string_view{resp_chunk_str_.data(), event_end}, handler);
       resp_chunk_str_.erase(0, event_next);
       if (ec) {
         return ec;
@@ -2242,9 +2258,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     size_t start = 0;
     while (start < raw.size()) {
       size_t end = raw.find_first_of("\r\n", start);
-      auto line = raw.substr(start, end == std::string_view::npos
-                                        ? raw.size() - start
-                                        : end - start);
+      auto line =
+          raw.substr(start, end == std::string_view::npos ? raw.size() - start
+                                                          : end - start);
 
       if (!line.empty() && line.front() != ':') {
         auto colon = line.find(':');
@@ -2272,8 +2288,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
         else if (key == "retry") {
           int64_t retry = 0;
-          auto [ptr, conv_ec] = std::from_chars(
-              value.data(), value.data() + value.size(), retry);
+          auto [ptr, conv_ec] =
+              std::from_chars(value.data(), value.data() + value.size(), retry);
           if (conv_ec == std::errc{} && ptr == value.data() + value.size() &&
               retry >= 0) {
             event.retry = retry;
@@ -2294,15 +2310,17 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       return {};
     }
 
-    if constexpr (std::is_same_v<std::invoke_result_t<Handler &, const sse_event &>,
-                                 std::error_code>) {
+    if constexpr (std::is_same_v<
+                      std::invoke_result_t<Handler &, const sse_event &>,
+                      std::error_code>) {
       return handler(event);
     }
     else if constexpr (std::is_same_v<
                            std::invoke_result_t<Handler &, const sse_event &>,
                            bool>) {
-      return handler(event) ? std::error_code{}
-                            : std::make_error_code(std::errc::operation_canceled);
+      return handler(event)
+                 ? std::error_code{}
+                 : std::make_error_code(std::errc::operation_canceled);
     }
     else {
       handler(event);
