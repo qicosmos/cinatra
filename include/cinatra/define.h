@@ -1,6 +1,9 @@
 #pragma once
 #include <array>
+#include <cstdint>
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 namespace fs = std::filesystem;
@@ -119,6 +122,78 @@ struct chunked_result {
   bool eof = false;
   std::string_view data;
 };
+
+struct sse_event {
+  std::string event;
+  std::string data;
+  std::string id;
+  std::optional<int64_t> retry;
+};
+
+inline void append_sse_field(std::string &out, std::string_view key,
+                             std::string_view value, bool is_comment = false) {
+  auto append_line = [&](std::string_view line) {
+    if (is_comment) {
+      out.push_back(':');
+      if (!line.empty()) {
+        out.push_back(' ');
+        out.append(line);
+      }
+    }
+    else {
+      out.append(key);
+      out.append(": ");
+      out.append(line);
+    }
+    out.append(CRCF);
+  };
+
+  if (value.empty()) {
+    append_line({});
+    return;
+  }
+
+  size_t start = 0;
+  while (start < value.size()) {
+    size_t end = value.find('\n', start);
+    auto line = value.substr(start, end == std::string_view::npos
+                                        ? value.size() - start
+                                        : end - start);
+    if (!line.empty() && line.back() == '\r') {
+      line.remove_suffix(1);
+    }
+
+    append_line(line);
+
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
+  }
+
+  if (start == value.size() && start > 0 && value[start - 1] == '\n') {
+    append_line({});
+  }
+}
+
+inline std::string serialize_sse_event(const sse_event &event) {
+  std::string out;
+  if (!event.id.empty()) {
+    append_sse_field(out, "id", event.id);
+  }
+  if (!event.event.empty()) {
+    append_sse_field(out, "event", event.event);
+  }
+  if (event.retry.has_value() && *event.retry >= 0) {
+    out.append("retry: ");
+    out.append(std::to_string(*event.retry));
+    out.append(CRCF);
+  }
+
+  append_sse_field(out, "data", event.data);
+  out.append(CRCF);
+  return out;
+}
 
 struct part_head_t {
   std::error_code ec;

@@ -549,6 +549,56 @@ async_simple::coro::Lazy<void> test_download() {
 }
 ```
 
+### chunked request and SSE
+
+普通字符串请求体如果希望用chunked 方式发送，可以使用`async_post_chunked` 或者`async_request_chunked`；文件、iostream 或自定义异步数据源仍然使用`async_upload_chunked`。
+
+```c++
+async_simple::coro::Lazy<void> test_chunked_request() {
+  coro_http_client client{};
+  auto result = co_await client.async_post_chunked(
+      "http://127.0.0.1:9001/chunked", "hello chunked string");
+  assert(result.status == 200);
+}
+```
+
+SSE(Server-Sent Events) 基于`text/event-stream`，cinatra 的SSE 实现复用chunked 传输。服务端通过`begin_sse`、`write_sse_event`、`end_sse` 写事件流，客户端通过`async_get_sse` 读取解析后的`sse_event`。
+
+```c++
+async_simple::coro::Lazy<void> test_sse() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<GET>(
+      "/sse",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_event(
+            sse_event{.event = "message", .data = "hello", .id = "1"});
+        if (!ok) {
+          co_return;
+        }
+
+        co_await conn->end_sse();
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  coro_http_client client{};
+  auto result = co_await client.async_get_sse(
+      "http://127.0.0.1:9001/sse", [](const sse_event &event) {
+        std::cout << event.event << ": " << event.data << "\n";
+        return true;
+      });
+  assert(result.status == 200);
+}
+```
+
 ### web socket
 ```c++
 async_simple::coro::Lazy<void> test_websocket() {

@@ -525,6 +525,33 @@ class coro_http_connection
     co_return co_await write_chunked("", true);
   }
 
+  async_simple::coro::Lazy<bool> begin_sse() {
+    response_.set_format_type(format_type::chunked);
+    response_.add_header("Content-Type", "text/event-stream");
+    response_.add_header("Cache-Control", "no-cache");
+    response_.add_header("Connection", "keep-alive");
+    co_return co_await begin_chunked();
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_event(const sse_event &event) {
+    co_return co_await write_chunked(serialize_sse_event(event));
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_data(std::string_view data) {
+    co_return co_await write_sse_event(sse_event{.data = std::string(data)});
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_comment(std::string_view comment) {
+    std::string out;
+    append_sse_field(out, "", comment, true);
+    out.append(CRCF);
+    co_return co_await write_chunked(out);
+  }
+
+  async_simple::coro::Lazy<bool> end_sse() {
+    co_return co_await end_chunked();
+  }
+
   async_simple::coro::Lazy<bool> begin_multipart(
       std::string_view boundary = "", std::string_view content_type = "") {
     response_.set_delay(true);
