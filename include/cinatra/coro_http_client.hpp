@@ -1363,7 +1363,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<resp_data> async_request(
       S uri, http_method method, req_context<String> ctx,
       std::unordered_map<std::string, std::string> headers = {},
-      BodyTarget &&out_buf = {}) {
+      BodyTarget out_buf = {}) {
     if (!resp_chunk_str_.empty()) {
       resp_chunk_str_.clear();
     }
