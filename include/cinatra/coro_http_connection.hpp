@@ -533,16 +533,17 @@ class coro_http_connection
     co_return co_await begin_chunked();
   }
 
-  async_simple::coro::Lazy<bool> write_sse_event(const sse_event &event) {
-    co_return co_await write_sse_payload(serialize_sse_event(event));
+  async_simple::coro::Lazy<bool> write_sse_event(sse_event event) {
+    auto payload = serialize_sse_event(event);
+    co_return co_await write_sse_payload(std::move(payload));
   }
 
-  async_simple::coro::Lazy<bool> write_sse_data(std::string_view data) {
+  async_simple::coro::Lazy<bool> write_sse_data(std::string data) {
     co_return co_await write_sse_payload(
-        serialize_sse_event(sse_event{.data = std::string(data)}));
+        serialize_sse_event(sse_event{.data = std::move(data)}));
   }
 
-  async_simple::coro::Lazy<bool> write_sse_comment(std::string_view comment) {
+  async_simple::coro::Lazy<bool> write_sse_comment(std::string comment) {
     std::string out;
     append_sse_field(out, "", comment, true);
     out.append(CRCF);
