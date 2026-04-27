@@ -538,8 +538,8 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<bool> write_sse_data(std::string_view data) {
-    co_return co_await write_sse_payload(serialize_sse_event(
-        sse_event{.data = std::string(data)}));
+    co_return co_await write_sse_payload(
+        serialize_sse_event(sse_event{.data = std::string(data)}));
   }
 
   async_simple::coro::Lazy<bool> write_sse_comment(std::string_view comment) {
