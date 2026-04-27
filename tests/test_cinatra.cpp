@@ -2658,10 +2658,11 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(sse_event{.event = "message",
-                                                      .data = "hello\nworld",
-                                                      .id = "42",
-                                                      .retry = 1500});
+        sse_event event{.event = "message",
+                        .data = "hello\nworld",
+                        .id = "42",
+                        .retry = 1500};
+        ok = co_await conn->write_sse_event(event);
         CHECK(ok);
         if (!ok) {
           co_return;
@@ -2689,8 +2690,8 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(
-            sse_event{.event = "ack", .data = "pong", .id = "post-1"});
+        sse_event event{.event = "ack", .data = "pong", .id = "post-1"};
+        ok = co_await conn->write_sse_event(event);
         CHECK(ok);
         if (!ok) {
           co_return;
@@ -2756,7 +2757,8 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(sse_event{.data = "stop"});
+        sse_event event{.data = "stop"};
+        ok = co_await conn->write_sse_event(event);
         CHECK(ok);
       });
 
@@ -2835,10 +2837,10 @@ TEST_CASE("test sse server and client") {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(
-            sse_event{.event = std::string(64, 'e'),
-                      .data = std::string(512, 'x'),
-                      .id = std::string(64, 'i')});
+        sse_event event{.event = std::string(64, 'e'),
+                        .data = std::string(512, 'x'),
+                        .id = std::string(64, 'i')};
+        ok = co_await conn->write_sse_event(event);
         CHECK(ok);
         if (!ok) {
           co_return;
