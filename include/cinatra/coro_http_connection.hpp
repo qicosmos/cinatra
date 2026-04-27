@@ -44,6 +44,7 @@ class coro_http_connection
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
+        max_http_header_size_(8 * 1024),
         head_buf_(max_http_header_size_),
         request_(parser_, this),
         response_(this) {
@@ -971,7 +972,7 @@ class coro_http_connection
   async_simple::coro::Lazy<bool> write_sse_payload() {
     response_.set_delay(true);
     buffers_.clear();
-    to_chunked_buffers(buffers_, chunk_size_str_, sse_payload_);
+    to_chunked_buffers(buffers_, chunk_size_str_, sse_payload_, false);
     co_return co_await reply(false);
   }
 
