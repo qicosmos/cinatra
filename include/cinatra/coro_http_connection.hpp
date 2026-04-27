@@ -534,20 +534,20 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<bool> write_sse_event(sse_event event) {
-    auto payload = serialize_sse_event(event);
-    co_return co_await write_sse_payload(std::move(payload));
+    sse_payload_ = serialize_sse_event(event);
+    return write_sse_payload();
   }
 
   async_simple::coro::Lazy<bool> write_sse_data(std::string data) {
-    co_return co_await write_sse_payload(
-        serialize_sse_event(sse_event{.data = std::move(data)}));
+    sse_payload_ = serialize_sse_event(sse_event{.data = std::move(data)});
+    return write_sse_payload();
   }
 
   async_simple::coro::Lazy<bool> write_sse_comment(std::string comment) {
-    std::string out;
-    append_sse_field(out, "", comment, true);
-    out.append(CRCF);
-    co_return co_await write_sse_payload(std::move(out));
+    sse_payload_.clear();
+    append_sse_field(sse_payload_, "", comment, true);
+    sse_payload_.append(CRCF);
+    return write_sse_payload();
   }
 
   async_simple::coro::Lazy<bool> end_sse() { co_return co_await end_chunked(); }
@@ -968,8 +968,11 @@ class coro_http_connection
     co_return true;
   }
 
-  async_simple::coro::Lazy<bool> write_sse_payload(std::string payload) {
-    co_return co_await write_chunked_owned(std::move(payload));
+  async_simple::coro::Lazy<bool> write_sse_payload() {
+    response_.set_delay(true);
+    buffers_.clear();
+    to_chunked_buffers(buffers_, chunk_size_str_, sse_payload_);
+    co_return co_await reply(false);
   }
 
   bool check_keep_alive() {
@@ -1068,6 +1071,7 @@ class coro_http_connection
                                                coro_http_response &)>
       default_handler_ = nullptr;
   std::string chunk_size_str_;
+  std::string sse_payload_;
   std::string remote_addr_;
   int64_t max_http_body_len_ = 0;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
