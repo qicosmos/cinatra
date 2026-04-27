@@ -148,9 +148,57 @@ async_simple::coro::Lazy<void> chunked_upload_download() {
   assert(result.status == 200);
   assert(result.resp_body == "chunked ok");
 
+  result = co_await client.async_post_chunked("http://127.0.0.1:9001/chunked",
+                                              "hello chunked string");
+  assert(result.status == 200);
+  assert(result.resp_body == "chunked ok");
+
   result = co_await client.async_get("http://127.0.0.1:9001/write_chunked");
   assert(result.status == 200);
   assert(result.resp_body == "hello world ok");
+}
+
+async_simple::coro::Lazy<void> use_sse() {
+  coro_http_server server(1, 9001);
+  server.set_http_handler<cinatra::GET>(
+      "/sse",
+      [](coro_http_request& req,
+         coro_http_response& resp) -> async_simple::coro::Lazy<void> {
+        auto* conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_event(
+            sse_event{.event = "message", .data = "hello\nworld", .id = "1"});
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_data("done");
+        if (!ok) {
+          co_return;
+        }
+
+        co_await conn->end_sse();
+      });
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  std::vector<sse_event> events;
+  coro_http_client client{};
+  auto result = co_await client.async_get_sse(
+      "http://127.0.0.1:9001/sse", [&events](const sse_event& event) {
+        events.push_back(event);
+        return true;
+      });
+  assert(result.status == 200);
+  assert(events.size() == 2);
+  assert(events[0].event == "message");
+  assert(events[0].data == "hello\nworld");
+  assert(events[0].id == "1");
+  assert(events[1].data == "done");
 }
 
 async_simple::coro::Lazy<void> use_websocket() {
@@ -560,6 +608,7 @@ int main() {
   async_simple::coro::syncAwait(static_file_server());
   async_simple::coro::syncAwait(use_websocket());
   async_simple::coro::syncAwait(chunked_upload_download());
+  async_simple::coro::syncAwait(use_sse());
   async_simple::coro::syncAwait(byte_ranges_download());
   async_simple::coro::syncAwait(rlimiter_usage());
   return 0;

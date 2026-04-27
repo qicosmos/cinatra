@@ -44,6 +44,7 @@ class coro_http_connection
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
+        max_http_header_size_(8 * 1024),
         head_buf_(max_http_header_size_),
         request_(parser_, this),
         response_(this) {
@@ -525,6 +526,33 @@ class coro_http_connection
     co_return co_await write_chunked("", true);
   }
 
+  async_simple::coro::Lazy<bool> begin_sse() {
+    response_.set_format_type(format_type::chunked);
+    response_.add_header("Content-Type", "text/event-stream");
+    response_.add_header("Cache-Control", "no-cache");
+    response_.add_header("Connection", "keep-alive");
+    co_return co_await begin_chunked();
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_event(sse_event event) {
+    sse_payload_ = serialize_sse_event(event);
+    return write_sse_payload();
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_data(std::string data) {
+    sse_payload_ = serialize_sse_event(sse_event{.data = std::move(data)});
+    return write_sse_payload();
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_comment(std::string comment) {
+    sse_payload_.clear();
+    append_sse_field(sse_payload_, "", comment, true);
+    sse_payload_.append(CRCF);
+    return write_sse_payload();
+  }
+
+  async_simple::coro::Lazy<bool> end_sse() { co_return co_await end_chunked(); }
+
   async_simple::coro::Lazy<bool> begin_multipart(
       std::string_view boundary = "", std::string_view content_type = "") {
     response_.set_delay(true);
@@ -925,6 +953,29 @@ class coro_http_connection
   }
 
  private:
+  async_simple::coro::Lazy<bool> write_chunked_owned(std::string chunked_data,
+                                                     bool eof = false) {
+    response_.set_delay(true);
+    std::vector<asio::const_buffer> buffers;
+    std::string chunk_size_str;
+    to_chunked_buffers(buffers, chunk_size_str, chunked_data, eof);
+    auto [ec, _] = co_await async_write(buffers);
+    if (ec) {
+      CINATRA_LOG_ERROR << "async_write error: " << ec.message();
+      close();
+      co_return false;
+    }
+
+    co_return true;
+  }
+
+  async_simple::coro::Lazy<bool> write_sse_payload() {
+    response_.set_delay(true);
+    buffers_.clear();
+    to_chunked_buffers(buffers_, chunk_size_str_, sse_payload_, false);
+    co_return co_await reply(false);
+  }
+
   bool check_keep_alive() {
     if (parser_.has_close()) {
       return false;
@@ -1021,6 +1072,7 @@ class coro_http_connection
                                                coro_http_response &)>
       default_handler_ = nullptr;
   std::string chunk_size_str_;
+  std::string sse_payload_;
   std::string remote_addr_;
   int64_t max_http_body_len_ = 0;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST

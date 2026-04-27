@@ -25,6 +25,7 @@
 #include <asio/ssl.hpp>
 #endif
 
+#include <algorithm>
 #include <asio/connect.hpp>
 #include <asio/experimental/channel.hpp>
 #include <asio/ip/tcp.hpp>
@@ -35,6 +36,7 @@
 #include <asio/write_at.hpp>
 #include <chrono>
 #include <deque>
+#include <vector>
 
 #include "io_context_pool.hpp"
 #if __has_include("ylt/util/type_traits.h")
@@ -250,10 +252,28 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
   }
 
   co_return co_await awaitor.await_resume([&](auto handler) {
+#ifdef CINATRA_CORO_IO_IPV4_FIRST
+    std::vector<asio::ip::tcp::endpoint> endpoints;
+    for (auto it = iterator; it != asio::ip::tcp::resolver::iterator{}; ++it) {
+      if (it->endpoint().address().is_v4()) {
+        endpoints.emplace_back(it->endpoint());
+      }
+    }
+    for (auto it = iterator; it != asio::ip::tcp::resolver::iterator{}; ++it) {
+      if (it->endpoint().address().is_v6()) {
+        endpoints.emplace_back(it->endpoint());
+      }
+    }
+    asio::async_connect(socket, endpoints,
+                        [&, handler](const auto &ec, const auto &) mutable {
+                          handler.set_value_then_resume(ec);
+                        });
+#else
     asio::async_connect(socket, iterator,
                         [&, handler](const auto &ec, const auto &) mutable {
                           handler.set_value_then_resume(ec);
                         });
+#endif
   });
 }
 

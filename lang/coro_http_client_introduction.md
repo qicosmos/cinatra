@@ -314,6 +314,41 @@ method 一般是POST 或者PUT，file 可以是带路径的文件名，也可以
 
 chunked 每块的大小默认为1MB，如果希望修改分块大小可以通过set_max_single_part_size 接口去设置大小，或者通过config 里面的max_single_part_size配置项去设置。
 
+如果要发送字符串形式的chunked 请求体，可以使用async_request_chunked 或async_post_chunked，这两个接口会复用chunked 上传流程，但不需要把字符串包装成文件或iostream：
+```c++
+auto result = co_await client.async_post_chunked(
+    "http://127.0.0.1:9001/chunked", "hello chunked string");
+```
+
+服务器读取chunked 请求体时继续使用read_chunked：
+```c++
+std::string body;
+while (true) {
+  auto result = co_await req.get_conn()->read_chunked();
+  if (result.ec) {
+    co_return;
+  }
+  if (result.eof) {
+    break;
+  }
+
+  body.append(result.data);
+}
+```
+
+## SSE
+SSE(Server-Sent Events) 是基于text/event-stream 的服务端事件流，cinatra 的实现复用chunked 传输。client 通过async_get_sse 读取事件，handler 收到解析后的sse_event：
+```c++
+coro_http_client client{};
+auto result = co_await client.async_get_sse(
+    "http://127.0.0.1:9001/sse", [](const sse_event& event) {
+      std::cout << event.event << ": " << event.data << "\n";
+      return true; // 返回false 会停止继续读取SSE流
+    });
+```
+
+如果handler 返回std::error_code，返回非0错误码也会停止读取；如果返回void，则会一直读取到服务端结束SSE流或网络出错。
+
 ## multipart 格式上传
 multipart 上传有两个接口，一个是一步实现上传，一个是分两步实现上传。
 
