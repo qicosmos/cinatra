@@ -693,8 +693,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     ~timer_guard() {
       if (dur_.count() > 0 && self->socket_->is_timeout_ == false) {
-        std::error_code ignore_ec;
-        self->timer_.cancel(ignore_ec);
+        try {
+          self->timer_.cancel();
+        } catch (...) {
+        }
       }
     }
     coro_http_client *self;
@@ -1150,6 +1152,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
   }
 
+  static bool is_local_upload_source_error(const std::error_code &ec) {
+    return ec == std::make_error_code(std::errc::invalid_argument) ||
+           ec == std::make_error_code(std::errc::bad_file_descriptor);
+  }
+
   template <upload_type_t upload_type, typename S, typename Source>
   async_simple::coro::Lazy<resp_data> async_upload_impl(
       S uri, http_method method, Source source /* file */,
@@ -1269,6 +1276,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
     if (ec) {
+      if (is_local_upload_source_error(ec)) {
+        close_socket(*socket_);
+        co_return resp_data{ec, 404};
+      }
+
       // Body send failed; server may have already sent an early response
       // (e.g. 503 or 413) before closing the connection.  Try to read it.
       auto write_ec = ec;

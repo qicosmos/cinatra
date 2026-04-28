@@ -78,8 +78,7 @@ class session_manager {
 
   void stop_timer() {
     stop_timer_ = true;
-    std::error_code ec;
-    check_session_timer_.cancel(ec);
+    check_session_timer_.cancel();
   }
 
  private:

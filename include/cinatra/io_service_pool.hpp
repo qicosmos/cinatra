@@ -17,9 +17,9 @@ class io_service_pool {
 
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context);
-      work_ptr work(new asio::io_context::work(*io_context));
+      auto work = asio::make_work_guard(*io_context);
       io_contexts_.push_back(io_context);
-      work_.push_back(work);
+      work_.push_back(std::move(work));
     }
   }
 
@@ -57,20 +57,23 @@ class io_service_pool {
     return io_context.get_executor();
   }
 
-  asio::io_service &get_io_service() {
-    asio::io_service &io_service = *io_contexts_[next_io_context_];
+  asio::io_context &get_io_context() {
+    asio::io_context &io_context = *io_contexts_[next_io_context_];
     ++next_io_context_;
     if (next_io_context_ == io_contexts_.size())
       next_io_context_ = 0;
-    return io_service;
+    return io_context;
   }
+
+  asio::io_context &get_io_service() { return get_io_context(); }
 
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
-  using work_ptr = std::shared_ptr<asio::io_context::work>;
+  using work_type =
+      asio::executor_work_guard<asio::io_context::executor_type>;
 
   std::vector<io_context_ptr> io_contexts_;
-  std::vector<work_ptr> work_;
+  std::vector<work_type> work_;
   std::size_t next_io_context_;
   std::promise<void> promise_;
 };
@@ -78,8 +81,8 @@ class io_service_pool {
 class io_service_inplace : private noncopyable {
  public:
   explicit io_service_inplace() {
-    io_services_ = std::make_shared<asio::io_service>();
-    work_ = std::make_shared<asio::io_service::work>(*io_services_);
+    io_services_ = std::make_shared<asio::io_context>();
+    work_ = std::make_unique<work_type>(asio::make_work_guard(*io_services_));
   }
 
   void run() { io_services_->run(); }
@@ -91,19 +94,23 @@ class io_service_inplace : private noncopyable {
   intptr_t poll_one() { return io_services_->poll_one(); }
 
   void stop() {
-    work_ = nullptr;
+    work_.reset();
 
     if (io_services_)
       io_services_->stop();
   }
 
-  asio::io_service &get_io_service() { return *io_services_; }
+  asio::io_context &get_io_context() { return *io_services_; }
+
+  asio::io_context &get_io_service() { return get_io_context(); }
 
  private:
-  using io_service_ptr = std::shared_ptr<asio::io_service>;
-  using work_ptr = std::shared_ptr<asio::io_service::work>;
+  using io_context_ptr = std::shared_ptr<asio::io_context>;
+  using work_type =
+      asio::executor_work_guard<asio::io_context::executor_type>;
+  using work_ptr = std::unique_ptr<work_type>;
 
-  io_service_ptr io_services_;
+  io_context_ptr io_services_;
   work_ptr work_;
 };
 }  // namespace cinatra

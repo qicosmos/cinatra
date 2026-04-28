@@ -206,10 +206,10 @@ int main(int argc, char* argv[]) {
 
   // create threads
   std::vector<thread_counter> v;
-  std::vector<std::shared_ptr<asio::io_context::work>> works;
+  std::vector<asio::executor_work_guard<asio::io_context::executor_type>> works;
   for (int i = 0; i < conf.threads_num; ++i) {
     auto ioc = std::make_shared<asio::io_context>();
-    works.push_back(std::make_shared<asio::io_context::work>(*ioc));
+    works.emplace_back(asio::make_work_guard(*ioc));
     std::thread thd([ioc] {
       ioc->run();
     });
@@ -265,9 +265,8 @@ int main(int argc, char* argv[]) {
   };
   async_simple::coro::syncAwait(wait_finish());
   if (!has_timeout) {
-    timer_ioc.post([&timer] {
-      asio::error_code ec;
-      timer.cancel(ec);
+    asio::post(timer_ioc, [&timer] {
+      timer.cancel();
     });
   }
 

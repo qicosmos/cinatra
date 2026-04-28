@@ -239,10 +239,10 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     const std::string &host, const std::string &port) noexcept {
   callback_awaitor<std::error_code> awaitor;
   asio::ip::tcp::resolver resolver(executor->get_asio_executor());
-  asio::ip::tcp::resolver::iterator iterator;
+  asio::ip::tcp::resolver::results_type results;
   auto ec = co_await awaitor.await_resume([&](auto handler) {
     resolver.async_resolve(host, port, [&, handler](auto ec, auto it) {
-      iterator = it;
+      results = std::move(it);
       handler.set_value_then_resume(ec);
     });
   });
@@ -254,12 +254,12 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
   co_return co_await awaitor.await_resume([&](auto handler) {
 #ifdef CINATRA_CORO_IO_IPV4_FIRST
     std::vector<asio::ip::tcp::endpoint> endpoints;
-    for (auto it = iterator; it != asio::ip::tcp::resolver::iterator{}; ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       if (it->endpoint().address().is_v4()) {
         endpoints.emplace_back(it->endpoint());
       }
     }
-    for (auto it = iterator; it != asio::ip::tcp::resolver::iterator{}; ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       if (it->endpoint().address().is_v6()) {
         endpoints.emplace_back(it->endpoint());
       }
@@ -269,7 +269,7 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
                           handler.set_value_then_resume(ec);
                         });
 #else
-    asio::async_connect(socket, iterator,
+    asio::async_connect(socket, results,
                         [&, handler](const auto &ec, const auto &) mutable {
                           handler.set_value_then_resume(ec);
                         });
