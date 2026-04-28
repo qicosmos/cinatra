@@ -577,8 +577,8 @@ async_simple::coro::Lazy<void> test_sse() {
           co_return;
         }
 
-        ok = co_await conn->write_sse_event(
-            sse_event{.event = "message", .data = "hello", .id = "1"});
+        sse_event event{.event = "message", .data = "hello", .id = "1"};
+        ok = co_await conn->write_sse_event(event);
         if (!ok) {
           co_return;
         }
