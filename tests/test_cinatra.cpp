@@ -954,6 +954,29 @@ TEST_CASE("test out buffer and async upload ") {
 
         ok = co_await resp.get_conn()->end_chunked();
       });
+  server.set_http_handler<GET>(
+      "/write_chunked_ext",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->write_data(
+            "HTTP/1.1 200 OK\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "Connection: keep-alive\r\n"
+            "\r\n"
+            "5;foo=bar\r\nhello\r\n"
+            "6\r\n world\r\n"
+            "0\r\n"
+            "X-Trailer: ok\r\n"
+            "\r\n");
+        CHECK(ok);
+      });
+  server.set_http_handler<GET>(
+      "/after_chunked_ext",
+      [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "after");
+      });
   server.set_http_handler<GET, POST>(
       "/normal", [](coro_http_request &req, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "test");
@@ -964,6 +987,16 @@ TEST_CASE("test out buffer and async upload ") {
       });
 
   server.async_start();
+
+  {
+    coro_http_client client{};
+    auto request =
+        client.async_post("http://127.0.0.1:9000/normal", std::string(128, 'x'),
+                          req_content_type::text);
+    auto result = async_simple::coro::syncAwait(std::move(request));
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "test");
+  }
 
   auto lazy = [](upload_type flag) -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
@@ -978,6 +1011,17 @@ TEST_CASE("test out buffer and async upload ") {
     std::string_view out_view(oubuf.data(), result.resp_body.size());
     assert(out_view == "test");
     assert(out_view == result.resp_body);
+
+    result = co_await client.async_get("http://127.0.0.1:9000/write_chunked");
+    assert(result.resp_body == "hello world ok");
+
+    result =
+        co_await client.async_get("http://127.0.0.1:9000/write_chunked_ext");
+    assert(result.resp_body == "hello world");
+
+    result =
+        co_await client.async_get("http://127.0.0.1:9000/after_chunked_ext");
+    assert(result.resp_body == "after");
 
     auto ss = std::make_shared<std::stringstream>();
     *ss << "hello world";
@@ -2380,6 +2424,26 @@ TEST_CASE("test coro_http_client chunked upload and download") {
           CHECK(sz == std::filesystem::file_size(newpath));
           resp.set_status_and_content(status_type::ok, std::string(filename));
         });
+    server.set_http_handler<cinatra::POST>(
+        "/chunked_echo",
+        [](coro_http_request &req,
+           coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          CHECK(req.get_content_type() == content_type::chunked);
+          std::string content;
+
+          while (true) {
+            auto result = co_await req.get_conn()->read_chunked();
+            if (result.ec) {
+              co_return;
+            }
+            if (result.eof) {
+              break;
+            }
+            content.append(result.data);
+          }
+
+          resp.set_status_and_content(status_type::ok, std::move(content));
+        });
 
     server.async_start();
     {
@@ -2404,6 +2468,14 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
       auto code = async_simple::coro::syncAwait(client.handle_shake());
       CHECK(code);
+    }
+    {
+      coro_http_client client{};
+      auto result = async_simple::coro::syncAwait(client.async_post_chunked(
+          "http://127.0.0.1:8090/chunked_echo", "hello chunked string",
+          req_content_type::text));
+      CHECK(result.status == 200);
+      CHECK(result.resp_body == "hello chunked string");
     }
     auto sizes = {1024 * 1024, 2'000'000, 1024, 100, 0};
     for ([[maybe_unused]] auto size : sizes) {
@@ -2564,6 +2636,371 @@ TEST_CASE("test coro_http_client async_get") {
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
   CHECK(!r1.net_err);
   CHECK(r1.status == 200);
+}
+
+TEST_CASE("test sse server and client") {
+  coro_http_server server(1, 9001);
+
+  server.set_http_handler<GET>(
+      "/sse",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_comment("stream started");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        sse_event event{.event = "message",
+                        .data = "hello\nworld",
+                        .id = "42",
+                        .retry = 1500};
+        ok = co_await conn->write_sse_event(event);
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_data("[DONE]");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
+
+  server.set_http_handler<POST>(
+      "/sse_post",
+      [](coro_http_request &req,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        CHECK(req.get_body() == "ping");
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        sse_event event{.event = "ack", .data = "pong", .id = "post-1"};
+        ok = co_await conn->write_sse_event(event);
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
+
+  server.set_http_handler<GET>(
+      "/sse_split",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("event: split\r\n");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("data: hel");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("lo\r\n");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("data: wor");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("ld\r\n\r\n");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
+
+  server.set_http_handler<GET>(
+      "/sse_once",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        sse_event event{.data = "stop"};
+        ok = co_await conn->write_sse_event(event);
+        CHECK(ok);
+      });
+
+  server.set_http_handler<GET>(
+      "/sse_edges",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked(": ignored\r\n\r\n");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("id: control\r\nretry: 100\r\n\r\n");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("\xef\xbb\xbfid: bad");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        std::string_view nul_id{"\0\r\nevent: one\r\ndata: 1\n\n",
+                                sizeof("\0\r\nevent: one\r\ndata: 1\n\n") - 1};
+        ok = co_await conn->write_chunked(nul_id);
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("event: two\rdata: 2\r\r");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_chunked("data: partial");
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
+  server.set_http_handler<GET>(
+      "/sse_temporary_payloads",
+      [](coro_http_request &,
+         coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        auto *conn = resp.get_conn();
+        bool ok = co_await conn->begin_sse();
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_comment(std::string(80, 'c'));
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->write_sse_data(std::string(256, 'd'));
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        sse_event event{.event = std::string(64, 'e'),
+                        .data = std::string(512, 'x'),
+                        .id = std::string(64, 'i')};
+        ok = co_await conn->write_sse_event(event);
+        CHECK(ok);
+        if (!ok) {
+          co_return;
+        }
+
+        ok = co_await conn->end_sse();
+        CHECK(ok);
+      });
+
+  server.async_start();
+  std::this_thread::sleep_for(200ms);
+
+  SUBCASE("serialize_sse_event helper") {
+    auto payload = serialize_sse_event(
+        sse_event{.event = "message", .data = "line1\nline2", .id = "7"});
+    CHECK(payload ==
+          "id: 7\r\nevent: message\r\ndata: line1\r\ndata: line2\r\n\r\n");
+  }
+
+  SUBCASE("async_get_sse parses events incrementally") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(client.async_get_sse(
+        "http://127.0.0.1:9001/sse", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(result.eof);
+    CHECK(get_header_value(result.resp_headers, "Content-Type") ==
+          "text/event-stream");
+    REQUIRE(events.size() == 2);
+    CHECK(events[0].event == "message");
+    CHECK(events[0].data == "hello\nworld");
+    CHECK(events[0].id == "42");
+    REQUIRE(events[0].retry.has_value());
+    CHECK(*events[0].retry == 1500);
+    CHECK(events[1].data == "[DONE]");
+    CHECK(events[1].event.empty());
+  }
+
+  SUBCASE("async_get_sse buffers incomplete event data") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(client.async_get_sse(
+        "http://127.0.0.1:9001/sse_split", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(result.eof);
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].event == "split");
+    CHECK(events[0].data == "hello\nworld");
+  }
+
+  SUBCASE("async_get_sse handles stream edge cases") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(client.async_get_sse(
+        "http://127.0.0.1:9001/sse_edges", [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(result.eof);
+    REQUIRE(events.size() == 2);
+    CHECK(events[0].event == "one");
+    CHECK(events[0].data == "1");
+    CHECK(events[0].id.empty());
+    CHECK(events[1].event == "two");
+    CHECK(events[1].data == "2");
+  }
+
+  SUBCASE("sse helpers own temporary payloads until async write completes") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(
+        client.async_get_sse("http://127.0.0.1:9001/sse_temporary_payloads",
+                             [&events](const sse_event &event) {
+                               events.push_back(event);
+                             }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(result.eof);
+    REQUIRE(events.size() == 2);
+    CHECK(events[0].data == std::string(256, 'd'));
+    CHECK(events[1].event == std::string(64, 'e'));
+    CHECK(events[1].data == std::string(512, 'x'));
+    CHECK(events[1].id == std::string(64, 'i'));
+  }
+
+  SUBCASE("async_post_sse supports request body") {
+    coro_http_client client{};
+    std::vector<sse_event> events;
+    auto result = async_simple::coro::syncAwait(client.async_post_sse(
+        "http://127.0.0.1:9001/sse_post", "ping", req_content_type::text,
+        [&events](const sse_event &event) {
+          events.push_back(event);
+        }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].event == "ack");
+    CHECK(events[0].data == "pong");
+    CHECK(events[0].id == "post-1");
+  }
+
+  SUBCASE("handler returning false stops stream") {
+    coro_http_client client{};
+    int event_count = 0;
+    auto result = async_simple::coro::syncAwait(
+        client.async_get_sse("http://127.0.0.1:9001/sse_once",
+                             [&event_count](const sse_event &event) {
+                               event_count++;
+                               return false;
+                             }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(event_count == 1);
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("handler returning error_code stops stream") {
+    coro_http_client client{};
+    int event_count = 0;
+    auto result = async_simple::coro::syncAwait(client.async_get_sse(
+        "http://127.0.0.1:9001/sse_once",
+        [&event_count](const sse_event &event) -> std::error_code {
+          event_count++;
+          return std::make_error_code(std::errc::operation_canceled);
+        }));
+
+    CHECK(!result.net_err);
+    CHECK(result.status == 200);
+    CHECK(event_count == 1);
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("empty event fields are handled") {
+    auto payload = serialize_sse_event(sse_event{.data = ""});
+    CHECK(payload == "data: \r\n\r\n");
+  }
+
+  SUBCASE("retry field ignores negative values") {
+    auto payload1 =
+        serialize_sse_event(sse_event{.data = "test", .retry = -100});
+    CHECK(payload1.find("retry:") == std::string::npos);
+
+    auto payload2 = serialize_sse_event(sse_event{.data = "test", .retry = 0});
+    CHECK(payload2.find("retry: 0") != std::string::npos);
+  }
+
+  server.stop();
 }
 
 TEST_CASE("test basic http request") {
@@ -2868,6 +3305,14 @@ TEST_CASE("test coro http request timeout") {
 }
 
 TEST_CASE("test coro_http_client using external io_context") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &, coro_http_response &res) {
+        res.set_status_and_content(status_type::ok, "external io_context");
+      });
+
+  server.async_start();
+
   asio::io_context io_context;
   std::promise<void> promise;
   auto future = promise.get_future();
@@ -2880,12 +3325,14 @@ TEST_CASE("test coro_http_client using external io_context") {
 
   coro_http_client client(io_context.get_executor());
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+      async_simple::coro::syncAwait(client.async_get("http://127.0.0.1:8090"));
   CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "external io_context");
   work.reset();
   io_context.run();
   io_thd.join();
+  server.stop();
 }
 
 async_simple::coro::Lazy<resp_data> simulate_self_join() {
