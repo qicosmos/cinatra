@@ -3305,6 +3305,14 @@ TEST_CASE("test coro http request timeout") {
 }
 
 TEST_CASE("test coro_http_client using external io_context") {
+  coro_http_server server(1, 8090);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &, coro_http_response &res) {
+        res.set_status_and_content(status_type::ok, "external io_context");
+      });
+
+  server.async_start();
+
   asio::io_context io_context;
   std::promise<void> promise;
   auto future = promise.get_future();
@@ -3317,12 +3325,14 @@ TEST_CASE("test coro_http_client using external io_context") {
 
   coro_http_client client(io_context.get_executor());
   auto r =
-      async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
+      async_simple::coro::syncAwait(client.async_get("http://127.0.0.1:8090"));
   CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  CHECK(r.status == 200);
+  CHECK(r.resp_body == "external io_context");
   work.reset();
   io_context.run();
   io_thd.join();
+  server.stop();
 }
 
 async_simple::coro::Lazy<resp_data> simulate_self_join() {
