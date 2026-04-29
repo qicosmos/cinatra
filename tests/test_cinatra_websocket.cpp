@@ -14,7 +14,7 @@ using namespace cinatra;
 
 #ifdef CINATRA_ENABLE_SSL
 TEST_CASE("test wss client") {
-  cinatra::coro_http_server server(1, 9001);
+  cinatra::coro_http_server server(1, 19001);
   server.init_ssl("../../include/cinatra/server.crt",
                   "../../include/cinatra/server.key", "test");
   server.set_http_handler<cinatra::GET>(
@@ -43,7 +43,7 @@ TEST_CASE("test wss client") {
                             "../../include/cinatra/server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
-  async_simple::coro::syncAwait(client.connect("wss://localhost:9001"));
+  async_simple::coro::syncAwait(client.connect("wss://localhost:19001"));
 
   async_simple::coro::syncAwait(client.write_websocket("hello"));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
@@ -56,7 +56,7 @@ TEST_CASE("test wss client") {
 #endif
 
 async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
-  auto r = co_await client.connect("ws://localhost:8090/ws");
+  auto r = co_await client.connect("ws://localhost:18090/ws");
   if (r.net_err) {
     co_return;
   }
@@ -75,7 +75,7 @@ async_simple::coro::Lazy<void> test_websocket(coro_http_client &client) {
 
 #ifdef CINATRA_ENABLE_GZIP
 async_simple::coro::Lazy<void> test_gzip_websocket(coro_http_client &client) {
-  auto r = co_await client.connect("ws://localhost:8090/ws");
+  auto r = co_await client.connect("ws://localhost:18090/ws");
   if (r.net_err) {
     co_return;
   }
@@ -93,7 +93,7 @@ async_simple::coro::Lazy<void> test_gzip_websocket(coro_http_client &client) {
 #endif
 
 TEST_CASE("test websocket") {
-  cinatra::coro_http_server server(1, 8090);
+  cinatra::coro_http_server server(1, 18090);
   server.set_http_handler<cinatra::GET>(
       "/ws",
       [](coro_http_request &req,
@@ -139,7 +139,7 @@ TEST_CASE("test websocket") {
     client.set_req_timeout(50ms);
     client.set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
 
-    auto r = co_await client.connect("ws://localhost:8090/test_client_timeout");
+    auto r = co_await client.connect("ws://localhost:18090/test_client_timeout");
     if (r.net_err) {
       co_return;
     }
@@ -161,7 +161,7 @@ TEST_CASE("test websocket") {
   {
     auto lazy1 = []() -> async_simple::coro::Lazy<void> {
       coro_http_client client{};
-      co_await client.connect("ws://localhost:8090/ws");
+      co_await client.connect("ws://localhost:18090/ws");
       std::string send_str = "test";
       websocket ws{};
       // msg too long
@@ -178,7 +178,7 @@ TEST_CASE("test websocket") {
   {
     auto lazy1 = []() -> async_simple::coro::Lazy<void> {
       coro_http_client client{};
-      co_await client.connect("ws://localhost:8090/ws");
+      co_await client.connect("ws://localhost:18090/ws");
       std::string send_str = "test";
       websocket ws{};
       // error frame
@@ -204,7 +204,7 @@ TEST_CASE("test websocket") {
 }
 
 void test_websocket_content(size_t len) {
-  cinatra::coro_http_server server(1, 8090);
+  cinatra::coro_http_server server(1, 18090);
   server.set_http_handler<cinatra::GET>(
       "/",
       [](coro_http_request &req,
@@ -227,7 +227,7 @@ void test_websocket_content(size_t len) {
 
   auto lazy = [len]() -> async_simple::coro::Lazy<void> {
     coro_http_client client{};
-    co_await client.connect("ws://localhost:8090");
+    co_await client.connect("ws://localhost:18090");
     std::string send_str(len, 'a');
     co_await client.write_websocket(std::string(send_str));
     auto data = co_await client.read_websocket();
@@ -258,13 +258,13 @@ TEST_CASE("test websocket content ge 65535") {
 }
 
 TEST_CASE("test send after server stop") {
-  cinatra::coro_http_server server(1, 8090);
+  cinatra::coro_http_server server(1, 18090);
   server.async_start();
 
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   coro_http_client client{};
-  async_simple::coro::syncAwait(client.connect("ws://127.0.0.1:8090"));
+  async_simple::coro::syncAwait(client.connect("ws://127.0.0.1:18090"));
 
   server.stop();
 
@@ -276,7 +276,7 @@ TEST_CASE("test send after server stop") {
 }
 
 TEST_CASE("test read write in different threads") {
-  cinatra::coro_http_server server(1, 8090);
+  cinatra::coro_http_server server(1, 18090);
   size_t count = 0;
   std::promise<void> promise;
   server.set_http_handler<cinatra::GET>(
@@ -321,7 +321,7 @@ TEST_CASE("test read write in different threads") {
   });
 
   auto lazy = [client, weak, &send_str]() -> async_simple::coro::Lazy<void> {
-    co_await client->connect("ws://localhost:8090");
+    co_await client->connect("ws://localhost:18090");
     for (int i = 0; i < 100; i++) {
       auto data = co_await client->write_websocket(std::string(send_str));
       if (data.net_err) {
@@ -382,7 +382,7 @@ TEST_CASE("test client quit after send msg") {
 
 #ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test websocket permessage defalte") {
-  coro_http_server server(1, 8090);
+  coro_http_server server(1, 18090);
   server.set_http_handler<cinatra::GET>(
       "/ws_extesion",
       [](coro_http_request &req,
@@ -428,7 +428,7 @@ TEST_CASE("test websocket permessage defalte") {
   coro_http_client client{};
   client.set_ws_deflate(true);
   async_simple::coro::syncAwait(
-      client.connect("ws://localhost:8090/ws_extesion"));
+      client.connect("ws://localhost:18090/ws_extesion"));
 
   std::string send_str("test");
 

@@ -130,10 +130,9 @@ class coro_http_server {
     }
 
     stop_timer_ = true;
-    std::error_code ec;
-    check_timer_.cancel(ec);
+    check_timer_.cancel();
     // Wake up the sleeping cache refresh coroutine so it can exit cleanly.
-    cache_refresh_timer_.cancel(ec);
+    cache_refresh_timer_.cancel();
     // Wait for the coroutine to fully exit before stopping the pool.
     // Must happen here while the pool is still running: the coroutine may
     // need the pool executor to resume after a coro_io::post completes.
@@ -639,12 +638,10 @@ class coro_http_server {
     using asio::ip::tcp;
     asio::error_code ec;
 
-    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
     asio::ip::tcp::resolver resolver(acceptor_.get_executor());
-    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
+    auto results = resolver.resolve(address_, std::to_string(port_), ec);
 
-    asio::ip::tcp::resolver::iterator it_end;
-    if (ec || it == it_end) {
+    if (ec || results.empty()) {
       CINATRA_LOG_ERROR << "bad address: " << address_
                         << " error: " << ec.message();
       if (ec) {
@@ -653,7 +650,7 @@ class coro_http_server {
       return std::make_error_code(std::errc::address_not_available);
     }
 
-    auto endpoint = it->endpoint();
+    auto endpoint = results.begin()->endpoint();
     acceptor_.open(endpoint.protocol(), ec);
     if (ec) {
       CINATRA_LOG_ERROR << "acceptor open failed" << " error: " << ec.message();
