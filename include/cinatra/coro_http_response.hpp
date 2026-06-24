@@ -1,11 +1,17 @@
 #pragma once
 #include <charconv>
 #include <functional>
+#ifdef CINATRA_ENABLE_SSL
+#include <memory>
+#endif
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#ifdef CINATRA_ENABLE_SSL
+#include <utility>
+#endif
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -34,14 +40,64 @@ struct resp_header_sv {
   std::string_view value;
 };
 
+#ifdef CINATRA_ENABLE_SSL
+namespace detail {
+struct response_push {
+  std::string method = "GET";
+  std::string path = "/";
+  std::string scheme;
+  std::string authority;
+  status_type status = status_type::ok;
+  std::string body;
+  std::vector<resp_header> request_headers;
+  std::vector<resp_header> response_headers;
+  std::vector<resp_header> response_trailers;
+
+  void add_request_header(std::string name, std::string value) {
+    request_headers.push_back({std::move(name), std::move(value)});
+  }
+
+  void add_response_header(std::string name, std::string value) {
+    response_headers.push_back({std::move(name), std::move(value)});
+  }
+
+  void add_response_trailer(std::string name, std::string value) {
+    response_trailers.push_back({std::move(name), std::move(value)});
+  }
+};
+
+struct protocol_response {
+  std::vector<response_push> pushes;
+};
+}  // namespace detail
+#endif
+
 enum class format_type {
   normal,
   chunked,
 };
 
 class coro_http_connection;
+#ifdef CINATRA_ENABLE_SSL
+class coro_http_response;
+namespace http2 {
+class coro_http2_connection;
+using response_push = detail::response_push;
+response_push &add_push(coro_http_response &resp, std::string path,
+                        std::string body = {},
+                        status_type status = status_type::ok);
+}  // namespace http2
+#endif
+
 class coro_http_response {
  public:
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_response()
+      : status_(status_type::not_implemented),
+        fmt_type_(format_type::normal),
+        delay_(false),
+        conn_(nullptr) {}
+#endif
   coro_http_response(coro_http_connection *conn)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
@@ -167,11 +223,23 @@ class coro_http_response {
 
   status_type status() { return status_; }
   std::string_view content() { return content_; }
+#ifdef CINATRA_ENABLE_SSL
+  std::string_view content() const { return content_; }
+#endif
   size_t content_size() { return content_.size(); }
+#ifdef CINATRA_ENABLE_SSL
+  size_t content_size() const { return content_.size(); }
+#endif
 
   void add_header(auto k, auto v) {
     resp_headers_.emplace_back(resp_header{std::move(k), std::move(v)});
   }
+
+#ifdef CINATRA_ENABLE_SSL
+  void add_trailer(auto k, auto v) {
+    trailers_.emplace_back(resp_header{std::move(k), std::move(v)});
+  }
+#endif
 
   void add_header_span(std::span<http_header> resp_headers) {
     resp_header_span_ = resp_headers;
@@ -185,6 +253,11 @@ class coro_http_response {
   void set_boundary(std::string_view boundary) { boundary_ = boundary; }
 
   std::string_view get_boundary() { return boundary_; }
+#ifdef CINATRA_ENABLE_SSL
+  std::string_view get_boundary() const { return boundary_; }
+
+  void bind_connection(coro_http_connection *conn) { conn_ = conn; }
+#endif
 
   void to_buffers(std::vector<asio::const_buffer> &buffers,
                   std::string &size_str) {
@@ -361,6 +434,9 @@ class coro_http_response {
   }
 
   coro_http_connection *get_conn() { return conn_; }
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_connection *get_conn() const { return conn_; }
+#endif
 
   void clear() {
     content_.clear();
@@ -376,6 +452,10 @@ class coro_http_response {
     boundary_.clear();
     has_set_content_ = false;
     cookies_.clear();
+#ifdef CINATRA_ENABLE_SSL
+    trailers_.clear();
+    protocol_response_.reset();
+#endif
     need_date_ = true;
     content_type_ = {};
     content_view_ = {};
@@ -395,6 +475,53 @@ class coro_http_response {
   }
 
  private:
+#ifdef CINATRA_ENABLE_SSL
+  friend class http2::coro_http2_connection;
+  friend http2::response_push &http2::add_push(coro_http_response &resp,
+                                               std::string path,
+                                               std::string body,
+                                               status_type status);
+
+  detail::protocol_response &mutable_protocol_response() {
+    if (!protocol_response_) {
+      protocol_response_ = std::make_unique<detail::protocol_response>();
+    }
+    return *protocol_response_;
+  }
+
+  const detail::protocol_response *protocol_response() const {
+    return protocol_response_.get();
+  }
+
+  const std::vector<resp_header> &headers() const { return resp_headers_; }
+  std::span<const http_header> header_span() const { return resp_header_span_; }
+  const std::vector<resp_header> &trailers() const { return trailers_; }
+  const std::unordered_map<std::string, cookie> &cookies() const {
+    return cookies_;
+  }
+  bool has_explicit_content() const { return has_set_content_; }
+  std::string_view content_view() const { return content_view_; }
+  std::string_view body_view() const {
+    return content_.empty() ? content_view_ : std::string_view(content_);
+  }
+  std::string_view content_type_value() const {
+    if (content_type_.empty()) {
+      return {};
+    }
+
+    constexpr std::string_view prefix = "Content-Type: ";
+    constexpr std::string_view suffix = "\r\n";
+    auto value = content_type_;
+    if (value.starts_with(prefix)) {
+      value.remove_prefix(prefix.size());
+    }
+    if (value.ends_with(suffix)) {
+      value.remove_suffix(suffix.size());
+    }
+    return value;
+  }
+#endif
+
   void handle_content(std::vector<asio::const_buffer> &buffers,
                       std::string &size_str, std::string_view content) {
     if (fmt_type_ == format_type::chunked) {
@@ -428,7 +555,24 @@ class coro_http_response {
   bool need_shrink_every_time_ = false;
   bool need_date_ = true;
   std::unordered_map<std::string, cookie> cookies_;
+#ifdef CINATRA_ENABLE_SSL
+  std::vector<resp_header> trailers_;
+  std::unique_ptr<detail::protocol_response> protocol_response_;
+#endif
   std::string_view content_type_;
   std::string_view content_view_;
 };
+
+#ifdef CINATRA_ENABLE_SSL
+namespace http2 {
+inline response_push &add_push(coro_http_response &resp, std::string path,
+                               std::string body, status_type status) {
+  auto &push = resp.mutable_protocol_response().pushes.emplace_back();
+  push.path = std::move(path);
+  push.body = std::move(body);
+  push.status = status;
+  return push;
+}
+}  // namespace http2
+#endif
 }  // namespace cinatra

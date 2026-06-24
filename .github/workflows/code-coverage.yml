@@ -5,11 +5,11 @@ on: [ push, pull_request ]
 jobs:
   build:
   
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         fetch-depth: 2
     
@@ -17,13 +17,13 @@ jobs:
       run:  cmake -B${{github.workspace}}/build -DCOVERAGE_TEST=ON -DENABLE_SSL=ON -DCINATRA_ENABLE_SSL=ON -DCMAKE_BUILD_TYPE=Debug
 
     - name: Build with ${{ matrix.compiler }}
-      run:  cmake --build ${{github.workspace}}/build --config Debug
+      run:  cmake --build ${{github.workspace}}/build --config Debug --parallel 2
       
     - name: Test
       working-directory: ${{github.workspace}}/build
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
-      run: ctest ${{ matrix.configuration }} -j `nproc` -V
+      run: ctest ${{ matrix.configuration }} -j 2 -V
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v6

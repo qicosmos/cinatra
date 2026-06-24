@@ -1,6 +1,5 @@
 #pragma once
 #include <async_simple/Executor.h>
-#include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
 #include <system_error>
@@ -55,7 +54,8 @@ class coro_http_connection
 
 #ifdef CINATRA_ENABLE_SSL
   bool init_ssl(const std::string &cert_file, const std::string &key_file,
-                std::string passwd) {
+                std::string passwd, bool enable_http2_alpn = false,
+                bool require_http2 = false) {
     unsigned long ssl_options = asio::ssl::context::default_workarounds |
                                 asio::ssl::context::no_sslv2 |
                                 asio::ssl::context::single_dh_use;
@@ -80,6 +80,13 @@ class coro_http_connection
                                        asio::ssl::context::pem);
       }
 
+      ssl_require_http2_ = require_http2;
+      if (enable_http2_alpn) {
+        SSL_CTX_set_alpn_select_cb(ssl_ctx_->native_handle(),
+                                   select_http_alpn_callback,
+                                   &ssl_require_http2_);
+      }
+
       ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_, *ssl_ctx_);
@@ -89,6 +96,14 @@ class coro_http_connection
       return false;
     }
     return true;
+  }
+
+  using ssl_stream_type = asio::ssl::stream<asio::ip::tcp::socket &>;
+  using ssl_http2_handler =
+      std::function<async_simple::coro::Lazy<void>(ssl_stream_type &)>;
+
+  void set_ssl_http2_handler(ssl_http2_handler handler) {
+    ssl_http2_handler_ = std::move(handler);
   }
 #endif
 
@@ -112,6 +127,17 @@ class coro_http_connection
         }
 
         has_shake = true;
+        if (selected_alpn_is_h2(ssl_stream_->native_handle())) {
+          if (ssl_http2_handler_) {
+            co_await ssl_http2_handler_(*ssl_stream_);
+          }
+          close();
+          break;
+        }
+        if (ssl_require_http2_) {
+          close();
+          break;
+        }
       }
 #endif
       auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
@@ -211,6 +237,10 @@ class coro_http_connection
         }
       }
 
+      if (!body_.empty()) {
+        request_.set_body(body_);
+      }
+
       std::string_view key = {
           parser_.method().data(),
           parser_.method().length() + 1 + parser_.url().length()};
@@ -219,10 +249,6 @@ class coro_http_connection
       if (parser_.url().find('%') != std::string_view::npos) {
         decode_key = code_utils::url_decode(key);
         key = decode_key;
-      }
-
-      if (!body_.empty()) {
-        request_.set_body(body_);
       }
 
       if (auto handler = router_.get_handler(key); handler) {
@@ -365,13 +391,13 @@ class coro_http_connection
 
               head_buf_.consume(pos + TWO_CRCF.length());
 
+              coro_http_request req(parser, this);
+              coro_http_response resp(this);
+              resp.need_date_head(response_.need_date());
               std::string_view next_key = {
                   parser.method().data(),
                   parser.method().length() + 1 + parser.url().length()};
 
-              coro_http_request req(parser, this);
-              coro_http_response resp(this);
-              resp.need_date_head(response_.need_date());
               if (auto handler = router_.get_handler(next_key); handler) {
                 router_.route(handler, req, resp, key);
               }
@@ -1034,6 +1060,56 @@ class coro_http_connection
 
  private:
   friend class multipart_reader_t<coro_http_connection>;
+#ifdef CINATRA_ENABLE_SSL
+  static bool alpn_list_contains(const unsigned char *data, unsigned int len,
+                                 std::string_view protocol) {
+    unsigned int pos = 0;
+    while (pos < len) {
+      unsigned int proto_len = data[pos++];
+      if (pos + proto_len > len) {
+        return false;
+      }
+      if (proto_len == protocol.size() &&
+          std::string_view(reinterpret_cast<const char *>(data + pos),
+                           proto_len) == protocol) {
+        return true;
+      }
+      pos += proto_len;
+    }
+    return false;
+  }
+
+  static int select_http_alpn_callback(::SSL * /*ssl*/,
+                                       const unsigned char **out,
+                                       unsigned char *outlen,
+                                       const unsigned char *in,
+                                       unsigned int inlen, void *arg) {
+    static constexpr unsigned char H2_PROTO[] = {'h', '2'};
+    static constexpr unsigned char HTTP1_PROTO[] = {'h', 't', 't', 'p',
+                                                    '/', '1', '.', '1'};
+    bool require_http2 = arg != nullptr && *static_cast<bool *>(arg);
+    if (alpn_list_contains(in, inlen, "h2")) {
+      *out = H2_PROTO;
+      *outlen = static_cast<unsigned char>(sizeof(H2_PROTO));
+      return SSL_TLSEXT_ERR_OK;
+    }
+    if (!require_http2 && alpn_list_contains(in, inlen, "http/1.1")) {
+      *out = HTTP1_PROTO;
+      *outlen = static_cast<unsigned char>(sizeof(HTTP1_PROTO));
+      return SSL_TLSEXT_ERR_OK;
+    }
+    return require_http2 ? SSL_TLSEXT_ERR_ALERT_FATAL : SSL_TLSEXT_ERR_NOACK;
+  }
+
+  static bool selected_alpn_is_h2(::SSL *ssl) {
+    const unsigned char *proto = nullptr;
+    unsigned int proto_len = 0;
+    SSL_get0_alpn_selected(ssl, &proto, &proto_len);
+    return proto_len == 2 && proto != nullptr && proto[0] == 'h' &&
+           proto[1] == '2';
+  }
+#endif
+
   coro_io::ExecutorWrapper<> *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
@@ -1066,6 +1142,8 @@ class coro_http_connection
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
   bool use_ssl_ = false;
+  bool ssl_require_http2_ = false;
+  ssl_http2_handler ssl_http2_handler_;
 #endif
   bool need_shrink_every_time_ = false;
   bool multi_buf_ = true;

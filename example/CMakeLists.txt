@@ -12,17 +12,28 @@ endif()
 
 add_executable(${project_name} ${CINATRA_EXAMPLE})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+target_link_libraries(${project_name} PRIVATE Threads::Threads)
+
+add_executable(http2_example http2_example.cpp)
+target_compile_definitions(http2_example PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+target_link_libraries(http2_example PRIVATE Threads::Threads)
+
+add_executable(http2_conformance_server http2_conformance_server.cpp)
+target_compile_definitions(http2_conformance_server PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+target_link_libraries(http2_conformance_server PRIVATE Threads::Threads)
 
 if (BUILD_BENCHMARK)
 	add_executable(benchmark benchmark.cpp)
 	target_compile_definitions(benchmark PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 	if (ENABLE_SSL)
-		target_link_libraries(benchmark ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES})
+		target_link_libraries(benchmark PRIVATE OpenSSL::SSL OpenSSL::Crypto ${ZLIB_LIBRARIES})
 	endif()
 endif()
 
 if (ENABLE_SSL)
-	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
+	target_link_libraries(${project_name} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+	target_link_libraries(http2_example PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+	target_link_libraries(http2_conformance_server PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 if (ENABLE_GZIP)

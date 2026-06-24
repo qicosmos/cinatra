@@ -32,6 +32,7 @@
 *.exe
 *.out
 *.app
+*.dmp
 
 #
 .idea
@@ -52,3 +53,10 @@ CMakeUserPresets.json
 node_modules
 /CMakeSettings.json
 !cmake/build.cmake
+
+# HTTP/2 conformance test artifacts
+/third_party/h2spec_*.txt
+/third_party/h2spec_*.xml
+/third_party/h2spec_server.*
+/third_party/h2spec_windows_amd64.zip
+/third_party/h2spec_isolated/

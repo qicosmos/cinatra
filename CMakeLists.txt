@@ -6,6 +6,11 @@ include_directories(include)
 #the thread library of the system.
 find_package(Threads REQUIRED)
 
+if(DEFINED ENABLE_SSL AND NOT DEFINED CINATRA_ENABLE_SSL)
+    set(CINATRA_ENABLE_SSL "${ENABLE_SSL}" CACHE BOOL "Enable SSL support")
+endif()
+option(CINATRA_ENABLE_SSL "Enable SSL support" ON)
+
 include(cmake/find_openssl.cmake)
 include(cmake/build.cmake)
 include(cmake/develop.cmake)

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --build build --target test_http2)",
+      "Bash(./build/tests/Debug/test_http2.exe)"
+    ]
+  }
+}

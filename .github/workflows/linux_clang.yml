@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
         run: |
@@ -45,11 +45,11 @@ jobs:
         run: CXX=clang++-17 CC=clang-17 cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DCINATRA_ENABLE_SSL=${{matrix.ssl}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --parallel 2
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{matrix.mode}} -j `nproc` -V
+        run: ctest -C ${{matrix.mode}} -j 2 -V
 
   ubuntu_clang_for_liburing:
     strategy:
@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Install liburing
         run: |      
@@ -75,10 +75,10 @@ jobs:
           sudo make install
 
       - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        uses: seanmiddleditch/gha-setup-ninja@v6
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
 
@@ -91,8 +91,8 @@ jobs:
                 -DENABLE_FILE_IO_URING=${{matrix.io_uring}} \
                 -DUSE_CCACHE=${{env.ccache}}
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}}
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target ${{matrix.case_name}} --parallel 2
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{matrix.mode}} -R ${{matrix.case_name}} -j 1 `nproc` -V
+        run: ctest -C ${{matrix.mode}} -R ${{matrix.case_name}} -j 2 -V

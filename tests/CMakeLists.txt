@@ -96,6 +96,28 @@ add_executable(test_time_util
         )
 add_test(NAME test_time_util COMMAND test_time_util)
 
+# HTTP/2 Phase 1 tests
+add_executable(test_http2
+        test_http2.cpp
+        )
+target_compile_definitions(test_http2 PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+target_include_directories(test_http2 PRIVATE
+        ${cinatra_SOURCE_DIR}/include
+        ${cinatra_SOURCE_DIR}/include/cinatra
+)
+if (UNIX)
+    target_compile_options(test_http2 PRIVATE -pthread)
+    target_link_libraries(test_http2 PRIVATE pthread)
+endif()
+if (ENABLE_SSL)
+    target_compile_definitions(test_http2 PRIVATE CINATRA_ENABLE_SSL)
+    target_link_libraries(test_http2 PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif()
+if (ZLIB_FOUND)
+    target_link_libraries(test_http2 PRIVATE ${ZLIB_LIBRARIES})
+endif()
+add_test(NAME test_http2 COMMAND test_http2)
+
 add_executable(test_rlimiter test_token_bucket_rlimiter.cpp)
 
 if (ENABLE_SSL)
@@ -124,6 +146,9 @@ if (UNIX)
 	else()
 		target_link_libraries(test_http_parse ${ZLIB_LIBRARIES})
 	endif()
+endif()
+if (WIN32 AND ENABLE_SSL)
+	target_link_libraries(test_http_parse PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 if (ENABLE_SIMD STREQUAL "AARCH64")

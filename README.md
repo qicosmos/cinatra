@@ -34,10 +34,10 @@
 4. 高效
 5. 支持面向切面编程
 
-cinatra目前支持了http1.1/1.0, ssl和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
+cinatra目前支持了http1.1/1.0, http/2, ssl和websocket, 你可以用它轻易地开发一个http服务器，比如常见的数据库访问服务器、文件上传下载服务器、实时消息推送服务器，你也可以基于cinatra开发一个mqtt服务器。
 cinatra是世界上性能最好的http服务器之一，性能测试详见[性能测试](#性能测试)
 
-除此之外，cinatra 还提供了一个基于C++20 协程的http(https) client，包括普通get/post请求、文件上传下载和web socket、redirect、proxy等功能。
+除此之外，cinatra 还提供了一个基于C++20 协程的http(https) client，包括普通get/post请求、文件上传下载和web socket、redirect、proxy等功能。`cinatra::coro_http_client` 在 HTTPS 场景默认通过 ALPN 自动协商 HTTP/2 或 HTTP/1.1；需要 trailers、push、h2c 等协议级能力时，也可以使用 `cinatra::http2` 命名空间下的专用 HTTP/2 API。服务端由 `cinatra::coro_http_server` 统一支持。
 
 ## 谁在用cinatra
 
@@ -94,6 +94,48 @@ cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 ```
 
 5行代码就可以实现一个简单http服务器了，用户不需要关注多少细节，直接写业务逻辑就行了。
+
+## HTTP/2 快速示例
+
+服务端通过 `cinatra::coro_http_server` 统一支持 HTTP/1.1 和 HTTP/2。客户端使用 `cinatra::coro_http_client` 即可在 HTTPS 下自动协商 HTTP/2 或 HTTP/1.1，不需要手动开启 HTTP/2。下面的例子展示了一个最小的 HTTP/2 服务端和客户端，完整代码见 [example/http2_example.cpp](example/http2_example.cpp)。
+
+注意：`coro_http_server` 的 HTTP/2 服务端只在开启 TLS 后通过 ALPN 启用；明文连接保持原 HTTP/1.1 行为。
+
+```c++
+#include <async_simple/coro/SyncAwait.h>
+
+#include <chrono>
+#include <iostream>
+#include <thread>
+
+#include "cinatra/coro_http_client.hpp"
+#include "cinatra/coro_http_server.hpp"
+
+using namespace std::chrono_literals;
+
+int main() {
+  cinatra::coro_http_server server(1, 0);
+  server.set_http2_mode(cinatra::http2_mode::required);
+  server.init_ssl("include/cinatra/server.crt", "include/cinatra/server.key",
+                  "test");
+  server.set_http_handler<cinatra::GET>(
+      "/hello",
+      [](cinatra::coro_http_request&, cinatra::coro_http_response& resp) {
+        resp.set_status_and_content(cinatra::status_type::ok, "hello http2");
+      });
+  server.async_start();
+  auto port = server.port();
+  std::this_thread::sleep_for(50ms);
+
+  cinatra::coro_http_client client;
+  auto url = std::string("https://127.0.0.1:") + std::to_string(port) + "/hello";
+  auto resp = async_simple::coro::syncAwait(client.async_get(std::move(url)));
+  std::cout << resp.status << " " << resp.resp_body << "\n";
+
+  client.close();
+  server.stop();
+}
+```
 
 ## 示例2：基本用法
 ```c++
@@ -702,7 +744,3 @@ purecpp@163.com
 [https://github.com/qicosmos/cinatra](https://github.com/qicosmos/cinatra "cinatra")
 
 [https://gitcode.com/qicosmos/cinatra](https://gitcode.com/qicosmos/cinatra "cinatra")
-
-
-
-

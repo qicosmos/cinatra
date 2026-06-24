@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
         run: |
@@ -33,7 +33,7 @@ jobs:
           mkdir build && cd build
           mkdir .coverage_llvm_cov
           CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DCINATRA_ENABLE_SSL=ON
-          make -j
+          make -j2
           export LLVM_PROFILE_FILE="test_cinatra-%m.profraw"
           cd tests
           ./test_cinatra 
@@ -54,7 +54,7 @@ jobs:
           ls ${{ github.workspace }}/build
 
       - name: Upload Coverage Results
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v7
         with:
           name: llvm-cov
           path: ${{ github.workspace }}/build/.coverage_llvm_cov
@@ -69,7 +69,7 @@ jobs:
           echo "\`\`\`" >> tmp.log
 
       - name: Create Comment
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-file: '${{github.workspace}}/build/tests/tmp.log'

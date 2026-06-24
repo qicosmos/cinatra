@@ -23,6 +23,7 @@
 #include "async_simple/Unit.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
 #endif
@@ -31,6 +32,9 @@
 #endif
 #include "cinatra_log_wrapper.hpp"
 #include "http_parser.hpp"
+#ifdef CINATRA_ENABLE_SSL
+#include "http2/h2_client_adapter.hpp"
+#endif
 #include "multipart.hpp"
 #include "picohttpparser.h"
 #include "response_cv.hpp"
@@ -206,6 +210,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   ~coro_http_client() { close(); }
 
   void close() {
+#ifdef CINATRA_ENABLE_SSL
+    if (http2_adapter_ != nullptr) {
+      http2_adapter_->close();
+    }
+#endif
     if (socket_ == nullptr || socket_->has_closed_)
       return;
 
@@ -360,6 +369,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
         co_return data;
       }
+#ifdef CINATRA_ENABLE_SSL
+      if (auto h2_connect = co_await try_http2_connect(u); h2_connect) {
+        co_return *h2_connect;
+      }
+#endif
       data = co_await connect(u);
     }
     if (socket_->is_timeout_) {
@@ -758,6 +772,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     socket_->has_closed_ = true;
 #ifdef CINATRA_ENABLE_SSL
+    if (http2_adapter_ != nullptr) {
+      http2_adapter_->close();
+    }
     need_set_sni_host_ = true;
     if (has_init_ssl_) {
       socket_->ssl_stream_ = nullptr;
@@ -1418,6 +1435,16 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
     resp_data data{};
 
+#ifdef CINATRA_ENABLE_SSL
+    if (socket_->has_closed_ && !uri.empty() && uri[0] == '/') {
+      std::string_view path(uri.data(), uri.size());
+      if (auto h2_resp = co_await try_http2_request(path, method, ctx, headers);
+          h2_resp) {
+        co_return *h2_resp;
+      }
+    }
+#endif
+
     std::error_code ec{};
     size_t size = 0;
     bool is_keep_alive = true;
@@ -1445,6 +1472,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         if (!ok) {
           break;
         }
+#ifdef CINATRA_ENABLE_SSL
+        if (auto h2_resp = co_await try_http2_request(u, method, ctx, headers);
+            h2_resp) {
+          co_return *h2_resp;
+        }
+#endif
       }
       else {
         u.path = uri;
@@ -1602,6 +1635,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef CINATRA_ENABLE_SSL
   void set_ssl_schema(bool r) { is_ssl_schema_ = r; }
+
+  void set_enable_http2(bool enabled = true) { enable_http2_ = enabled; }
 #endif
 
   std::string get_redirect_uri() { return redirect_uri_; }
@@ -1643,6 +1678,108 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   static bool is_ok(const resp_data &data) noexcept {
     return data.net_err == std::error_code{};
   }
+
+#ifdef CINATRA_ENABLE_SSL
+  resp_data make_http2_resp_data(http2::h2_client_adapter_response &&h2_resp) {
+    body_ = std::move(h2_resp.body);
+    http2_header_storage_ = std::move(h2_resp.headers);
+    http2_resp_headers_.clear();
+    http2_resp_headers_.reserve(http2_header_storage_.size());
+    for (auto &header : http2_header_storage_) {
+      http2_resp_headers_.push_back({header.first, header.second});
+    }
+
+    resp_data data{};
+    data.net_err = h2_resp.net_err;
+    data.status = h2_resp.status;
+    data.resp_body = body_;
+    data.resp_headers = std::span<http_header>(http2_resp_headers_.data(),
+                                               http2_resp_headers_.size());
+    return data;
+  }
+
+  bool can_try_http2(const uri_t &u, http_method method, auto &ctx) const {
+    bool is_websocket = u.schema == "ws"sv || u.schema == "wss"sv;
+    return enable_http2_ && u.is_ssl && !is_websocket &&
+           method != http_method::CONNECT && ctx.resp_body_stream == nullptr &&
+           ctx.req_header.empty() &&
+           ctx.content_type != req_content_type::multipart &&
+           proxy_host_.empty() && proxy_port_.empty() && out_buf_.empty();
+  }
+
+  template <typename String>
+  async_simple::coro::Lazy<std::optional<resp_data>> try_http2_request(
+      const uri_t &u, http_method method, req_context<String> &ctx,
+      const std::unordered_map<std::string, std::string> &headers) {
+    if (!can_try_http2(u, method, ctx)) {
+      co_return std::nullopt;
+    }
+    if (http2_adapter_ == nullptr) {
+      http2_adapter_ =
+          std::make_unique<http2::h2_client_adapter>(&executor_wrapper_);
+    }
+
+    auto &active_headers = headers.empty() ? req_headers_ : headers;
+    std::string_view content(ctx.content.data(), ctx.content.size());
+    auto h2_resp = co_await http2_adapter_->async_request(
+        u, method, ctx.content_type, content, active_headers);
+    if (h2_resp.fallback_to_http1) {
+      co_return std::nullopt;
+    }
+    co_return make_http2_resp_data(std::move(h2_resp));
+  }
+
+  template <typename String>
+  async_simple::coro::Lazy<std::optional<resp_data>> try_http2_request(
+      std::string_view path, http_method method, req_context<String> &ctx,
+      const std::unordered_map<std::string, std::string> &headers) {
+    if (!enable_http2_ || http2_adapter_ == nullptr ||
+        !http2_adapter_->connected() || method == http_method::CONNECT ||
+        ctx.resp_body_stream != nullptr || !ctx.req_header.empty() ||
+        ctx.content_type == req_content_type::multipart ||
+        !proxy_host_.empty() || !proxy_port_.empty() || !out_buf_.empty()) {
+      co_return std::nullopt;
+    }
+
+    auto &active_headers = headers.empty() ? req_headers_ : headers;
+    std::string_view content(ctx.content.data(), ctx.content.size());
+    auto h2_resp = co_await http2_adapter_->async_request(
+        path, method, ctx.content_type, content, active_headers);
+    if (h2_resp.fallback_to_http1) {
+      co_return std::nullopt;
+    }
+    co_return make_http2_resp_data(std::move(h2_resp));
+  }
+
+  async_simple::coro::Lazy<std::optional<resp_data>> try_http2_connect(
+      const uri_t &u) {
+    bool is_websocket = u.schema == "ws"sv || u.schema == "wss"sv;
+    if (!enable_http2_ || !u.is_ssl || is_websocket || !proxy_host_.empty() ||
+        !proxy_port_.empty()) {
+      co_return std::nullopt;
+    }
+    if (http2_adapter_ == nullptr) {
+      http2_adapter_ =
+          std::make_unique<http2::h2_client_adapter>(&executor_wrapper_);
+    }
+
+    auto ec = co_await http2_adapter_->async_connect(u);
+    if (ec == std::make_error_code(std::errc::protocol_error)) {
+      co_return std::nullopt;
+    }
+    resp_data data{};
+    if (ec) {
+      data.net_err = ec;
+      data.status = 404;
+    }
+    else {
+      host_ = u.get_host();
+      port_ = u.get_port();
+      data.status = 200;
+    }
+    co_return data;
+  }
+#endif
 
   template <typename S>
   std::pair<bool, uri_t> handle_uri(resp_data &data, const S &uri) {
@@ -2808,9 +2945,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
+  std::unique_ptr<http2::h2_client_adapter> http2_adapter_;
+  std::vector<std::pair<std::string, std::string>> http2_header_storage_;
+  std::vector<http_header> http2_resp_headers_;
   bool has_init_ssl_ = false;
   bool is_ssl_schema_ = false;
   bool need_set_sni_host_ = true;
+  bool enable_http2_ = true;
 #endif
   std::string redirect_uri_;
   bool enable_follow_redirect_ = false;

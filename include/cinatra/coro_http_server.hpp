@@ -7,6 +7,9 @@
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
+#ifdef CINATRA_ENABLE_SSL
+#include "http2/h2_connection.hpp"
+#endif
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -17,6 +20,11 @@ enum class file_resp_format_type {
   chunked,
   range,
 };
+
+#ifdef CINATRA_ENABLE_SSL
+enum class http2_mode { auto_detect, disabled, required };
+#endif
+
 class coro_http_server {
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port,
@@ -76,6 +84,16 @@ class coro_http_server {
   }
 
 #ifdef CINATRA_ENABLE_SSL
+  void set_enable_http2(bool enabled = true) {
+    http2_mode_ = enabled ? http2_mode::auto_detect : http2_mode::disabled;
+  }
+
+  void set_http2_mode(http2_mode mode) { http2_mode_ = mode; }
+
+  void set_enable_http2_connect_protocol(bool enabled) {
+    enable_http2_connect_protocol_ = enabled;
+  }
+
   void init_ssl(const std::string &cert_file, const std::string &key_file,
                 const std::string &passwd = "") {
     cert_file_ = cert_file;
@@ -696,8 +714,10 @@ class coro_http_server {
         executor = pool_->get_executor();
       }
       else {
-        out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
-            out_ctx_->get_executor());
+        if (!out_executor_) {
+          out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
+              out_ctx_->get_executor());
+        }
         executor = out_executor_.get();
       }
 
@@ -743,7 +763,27 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
-        conn->init_ssl(cert_file_, key_file_, passwd_);
+        bool enable_http2_alpn = http2_mode_ != http2_mode::disabled;
+        bool require_http2 = http2_mode_ == http2_mode::required;
+        conn->init_ssl(cert_file_, key_file_, passwd_, enable_http2_alpn,
+                       require_http2);
+        if (enable_http2_alpn) {
+          conn->set_ssl_http2_handler(
+              [this,
+               executor](coro_http_connection::ssl_stream_type &ssl_stream)
+                  -> async_simple::coro::Lazy<void> {
+                auto h2_conn = std::make_shared<http2::coro_http2_connection>(
+                    ssl_stream,
+                    [this](coro_http_request &req, coro_http_response &resp)
+                        -> async_simple::coro::Lazy<void> {
+                      co_await router_.dispatch(req, resp, &default_handler_);
+                    },
+                    executor);
+                h2_conn->set_enable_connect_protocol(
+                    enable_http2_connect_protocol_);
+                co_await h2_conn->start();
+              });
+        }
       }
 #endif
 
@@ -1100,7 +1140,7 @@ class coro_http_server {
   std::chrono::steady_clock::duration timeout_duration_{};
   asio::steady_timer check_timer_;
   bool need_check_ = false;
-  std::atomic<bool> stop_timer_ = false;
+  bool stop_timer_ = false;
 
   std::string static_dir_router_path_ = "";
   std::string static_dir_ = "";
@@ -1123,6 +1163,10 @@ class coro_http_server {
 #endif
   coro_http_router router_;
   bool need_shrink_every_time_ = false;
+#ifdef CINATRA_ENABLE_SSL
+  http2_mode http2_mode_ = http2_mode::auto_detect;
+  bool enable_http2_connect_protocol_ = false;
+#endif
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;

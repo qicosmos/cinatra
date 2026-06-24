@@ -17,7 +17,10 @@ add_executable(${project_name} ${cinatra_press_tool})
 target_compile_definitions(${project_name} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 
 if (ENABLE_SSL)
-	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
+	target_link_libraries(${project_name} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+	if (UNIX)
+		target_link_libraries(${project_name} PRIVATE pthread dl)
+	endif()
 endif()
 
 if (ENABLE_GZIP)
@@ -68,7 +71,10 @@ if (ENABLE_PRESS_TOOL_TESTS)
     target_compile_definitions(${unittest_press_tool} PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO PRESS_TOOL_UNITTESTS)
 
     if (ENABLE_SSL)
-        target_link_libraries(${unittest_press_tool} ${OPENSSL_LIBRARIES} pthread -ldl)
+        target_link_libraries(${unittest_press_tool} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        if (UNIX)
+            target_link_libraries(${unittest_press_tool} PRIVATE pthread dl)
+        endif()
     endif()
 
     if (ENABLE_GZIP)

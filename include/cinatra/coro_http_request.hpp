@@ -1,14 +1,23 @@
 #pragma once
 
+#include <algorithm>
 #include <any>
 #include <charconv>
 #include <initializer_list>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <regex>
+#include <span>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "async_simple/coro/Lazy.h"
 #include "define.h"
+#ifdef CINATRA_ENABLE_SSL
+#include "detail/protocol_request.hpp"
+#endif
 #include "http_parser.hpp"
 #include "session.hpp"
 #include "session_manager.hpp"
@@ -16,13 +25,25 @@
 #include "ws_define.h"
 
 namespace cinatra {
+#ifdef CINATRA_ENABLE_SSL
+namespace http2 {
+class coro_http2_connection;
+}
+#endif
 
 inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
                                                      size_t file_size,
                                                      bool &is_valid) {
+  if (file_size == 0) {
+    is_valid = false;
+    return {};
+  }
+
+  auto file_last = static_cast<int>((std::min)(
+      file_size - 1, static_cast<size_t>(std::numeric_limits<int>::max())));
   range_str = trim_sv(range_str);
   if (range_str.empty()) {
-    return {{0, file_size - 1}};
+    return {{0, file_last}};
   }
 
   if (range_str.find("--") != std::string_view::npos) {
@@ -31,7 +52,7 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
   }
 
   if (range_str == "-") {
-    return {{0, file_size - 1}};
+    return {{0, file_last}};
   }
 
   std::vector<std::pair<int, int>> vec;
@@ -55,12 +76,12 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
 
     int end = 0;
     if (sub_range.size() == 1) {
-      end = file_size - 1;
+      end = file_last;
     }
     else {
       auto second_range = trim_sv(sub_range[1]);
       if (second_range.empty()) {
-        end = file_size - 1;
+        end = file_last;
       }
       else {
         auto [ptr, ec] =
@@ -73,19 +94,22 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
       }
     }
 
-    if (start > 0 && (start >= file_size || start == end)) {
+    if (start > 0 &&
+        (static_cast<size_t>(start) >= file_size || start == end)) {
       // out of range
       is_valid = false;
       return {};
     }
 
-    if (end > 0 && end >= file_size) {
-      end = file_size - 1;
+    if (end > 0 && static_cast<size_t>(end) >= file_size) {
+      end = file_last;
     }
 
     if (start == -1) {
-      start = file_size - end;
-      end = file_size - 1;
+      start = static_cast<int>(
+          (std::min)(file_size - static_cast<size_t>(end),
+                     static_cast<size_t>(std::numeric_limits<int>::max())));
+      end = file_last;
     }
 
     vec.push_back({start, end});
@@ -96,11 +120,24 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
 class coro_http_connection;
 class coro_http_request {
  public:
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_request() = default;
+#endif
   coro_http_request(http_parser &parser, coro_http_connection *conn)
-      : parser_(parser), conn_(conn) {}
+#ifdef CINATRA_ENABLE_SSL
+      : parser_(&parser),
+        conn_(conn){}
+#else
+      : parser_(parser), conn_(conn) {
+  }
+#endif
 
-  std::string_view get_header_value(std::string_view key) {
+        std::string_view get_header_value(std::string_view key) {
+#ifndef CINATRA_ENABLE_SSL
     auto headers = parser_.get_headers();
+#else
+    auto headers = get_headers();
+#endif
     for (auto &header : headers) {
       if (iequal0(header.name, key)) {
         return header.value;
@@ -111,11 +148,26 @@ class coro_http_request {
   }
 
   std::string_view get_query_value(std::string_view key) {
+#ifndef CINATRA_ENABLE_SSL
     return parser_.get_query_value(key);
+#else
+    if (has_parser()) {
+      return parser().get_query_value(key);
+    }
+
+    if (protocol_request_) {
+      return protocol_request_->get_query_value(key);
+    }
+    return {};
+#endif
   }
 
   std::string get_decode_query_value(std::string_view key) {
+#ifndef CINATRA_ENABLE_SSL
     auto value = parser_.get_query_value(key);
+#else
+    auto value = get_query_value(key);
+#endif
     if (value.empty()) {
       return "";
     }
@@ -123,23 +175,92 @@ class coro_http_request {
     return code_utils::get_string_by_urldecode(value);
   }
 
-  std::span<http_header> get_headers() const { return parser_.get_headers(); }
+  std::span<http_header> get_headers() const {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.get_headers();
+#else
+    if (has_parser()) {
+      return parser().get_headers();
+    }
+    if (protocol_request_) {
+      return protocol_request_->get_headers();
+    }
+    return {};
+#endif
+  }
 
-  const auto &get_queries() const { return parser_.queries(); }
+#ifdef CINATRA_ENABLE_SSL
+  std::span<http_header> get_trailers() const {
+    if (protocol_request_) {
+      return protocol_request_->get_trailers();
+    }
+    return {};
+  }
+#endif
 
-  std::string_view full_url() { return parser_.full_url(); }
+  const auto &get_queries() const {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.queries();
+#else
+    if (has_parser()) {
+      return parser().queries();
+    }
+    if (protocol_request_) {
+      return protocol_request_->get_queries();
+    }
+    static const std::unordered_map<std::string_view, std::string_view>
+        empty_queries;
+    return empty_queries;
+#endif
+  }
+
+  std::string_view full_url() {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.full_url();
+#else
+    if (has_parser()) {
+      return parser().full_url();
+    }
+    if (protocol_request_) {
+      return protocol_request_->full_url();
+    }
+    return {};
+#endif
+  }
 
   void set_body(std::string &body) {
     body_ = body;
     auto type = get_content_type();
+#ifndef CINATRA_ENABLE_SSL
     if (type == content_type::urlencoded) {
       parser_.parse_query(body_);
     }
+#else
+    if (type == content_type::urlencoded && has_parser()) {
+      parser().parse_query(body_);
+    }
+#endif
   }
 
-  std::string_view get_body() const { return body_; }
+  std::string_view get_body() const {
+#ifdef CINATRA_ENABLE_SSL
+    if (protocol_request_) {
+      return protocol_request_->body();
+    }
+#endif
+    return body_;
+  }
 
-  bool is_chunked() { return parser_.is_chunked(); }
+  bool is_chunked() {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.is_chunked();
+#else
+    if (has_parser()) {
+      return parser().is_chunked();
+    }
+    return protocol_request_ && protocol_request_->is_chunked();
+#endif
+  }
 
   std::string_view get_accept_encoding() {
     return get_header_value("Accept-Encoding");
@@ -192,9 +313,49 @@ class coro_http_request {
     return content_type::unknown;
   }
 
-  std::string_view get_url() { return parser_.url(); }
+  std::string_view get_url() {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.url();
+#else
+    if (has_parser()) {
+      return parser().url();
+    }
+    if (protocol_request_) {
+      return protocol_request_->url();
+    }
+    return {};
+#endif
+  }
 
-  std::string_view get_method() { return parser_.method(); }
+  std::string_view get_method() {
+#ifndef CINATRA_ENABLE_SSL
+    return parser_.method();
+#else
+    if (has_parser()) {
+      return parser().method();
+    }
+    if (protocol_request_) {
+      return protocol_request_->method();
+    }
+    return {};
+#endif
+  }
+
+#ifdef CINATRA_ENABLE_SSL
+  std::string_view get_scheme() const {
+    return protocol_request_ ? protocol_request_->scheme() : std::string_view{};
+  }
+
+  std::string_view get_authority() const {
+    return protocol_request_ ? protocol_request_->authority()
+                             : std::string_view{};
+  }
+
+  std::string_view get_protocol() const {
+    return protocol_request_ ? protocol_request_->protocol()
+                             : std::string_view{};
+  }
+#endif
 
   std::string_view get_boundary() {
     auto content_type = get_header_value("content-type");
@@ -213,8 +374,16 @@ class coro_http_request {
   coro_http_connection *get_conn() { return conn_; }
 
   bool is_upgrade() {
+#ifndef CINATRA_ENABLE_SSL
     if (!parser_.has_upgrade())
       return false;
+#else
+    if (!has_parser()) {
+      return false;
+    }
+    if (!parser().has_upgrade())
+      return false;
+#endif
 
     auto u = get_header_value("Upgrade");
     if (u.empty())
@@ -289,6 +458,9 @@ class coro_http_request {
   bool has_session() { return !cached_session_id_.empty(); }
   void clear() {
     body_ = {};
+#ifdef CINATRA_ENABLE_SSL
+    protocol_request_.reset();
+#endif
     if (!aspect_data_.empty()) {
       aspect_data_.clear();
     }
@@ -301,10 +473,45 @@ class coro_http_request {
   std::smatch matches_;
 
  private:
+#ifdef CINATRA_ENABLE_SSL
+  friend class http2::coro_http2_connection;
+
+  template <typename ProtocolRequest, typename... Args>
+  ProtocolRequest &reset_protocol_request(coro_http_connection *conn,
+                                          Args &&...args) {
+    clear();
+    parser_ = nullptr;
+    conn_ = conn;
+    is_websocket_ = false;
+    auto request =
+        std::make_shared<ProtocolRequest>(std::forward<Args>(args)...);
+    auto &ref = *request;
+    protocol_request_ = std::move(request);
+    return ref;
+  }
+#endif
+
+#ifdef CINATRA_ENABLE_SSL
+  bool has_parser() const { return parser_ != nullptr; }
+
+  http_parser &parser() const { return *parser_; }
+#endif
+
+#ifdef CINATRA_ENABLE_SSL
+  http_parser *parser_ = nullptr;
+#else
   http_parser &parser_;
+#endif
   std::string_view body_;
+#ifdef CINATRA_ENABLE_SSL
+  coro_http_connection *conn_ = nullptr;
+#else
   coro_http_connection *conn_;
+#endif
   bool is_websocket_ = false;
+#ifdef CINATRA_ENABLE_SSL
+  std::shared_ptr<detail::protocol_request> protocol_request_;
+#endif
   std::vector<std::string> aspect_data_;
   std::string cached_session_id_;
   std::any user_data_;
