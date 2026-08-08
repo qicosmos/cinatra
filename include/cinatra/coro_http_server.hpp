@@ -1,5 +1,8 @@
 #pragma once
 
+#include <atomic>
+#include <memory>
+
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
@@ -330,7 +333,7 @@ class coro_http_server {
         }
       }
     }
-    std::atomic_store(&file_cache_, new_cache);
+    file_cache_.store(std::move(new_cache));
   }
 
   const coro_http_router &get_router() const { return router_; }
@@ -434,7 +437,7 @@ class coro_http_server {
     std::string_view mime = get_mime_type(extension);
     auto range_str = req.get_header_value("Range");
 
-    auto cache = std::atomic_load(&file_cache_);
+    auto cache = file_cache_.load();
     if (cache) {
       if (auto it = cache->find(file_name); it != cache->end()) {
         auto range_header = build_range_header(
@@ -840,7 +843,7 @@ class coro_http_server {
       }
 
       if (!result.hasError()) {
-        std::atomic_store(&file_cache_, result.value());
+        file_cache_.store(result.value());
       }
     }
 
@@ -1106,7 +1109,8 @@ class coro_http_server {
   std::string static_dir_ = "";
   size_t chunked_size_ = 1024 * 10;
 
-  std::shared_ptr<std::unordered_map<std::string, std::string>> file_cache_;
+  std::atomic<std::shared_ptr<std::unordered_map<std::string, std::string>>>
+      file_cache_;
   coro_io::period_timer cache_refresh_timer_;
   std::chrono::steady_clock::duration cache_refresh_interval_ =
       std::chrono::seconds(5);
