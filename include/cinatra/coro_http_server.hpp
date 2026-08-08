@@ -21,6 +21,9 @@ enum class file_resp_format_type {
   range,
 };
 class coro_http_server {
+  using file_cache_type = std::unordered_map<std::string, std::string>;
+  using file_cache_ptr = std::shared_ptr<file_cache_type>;
+
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
@@ -333,7 +336,7 @@ class coro_http_server {
         }
       }
     }
-    file_cache_.store(std::move(new_cache));
+    store_file_cache(std::move(new_cache));
   }
 
   const coro_http_router &get_router() const { return router_; }
@@ -437,7 +440,7 @@ class coro_http_server {
     std::string_view mime = get_mime_type(extension);
     auto range_str = req.get_header_value("Range");
 
-    auto cache = file_cache_.load();
+    auto cache = load_file_cache();
     if (cache) {
       if (auto it = cache->find(file_name); it != cache->end()) {
         auto range_header = build_range_header(
@@ -843,7 +846,7 @@ class coro_http_server {
       }
 
       if (!result.hasError()) {
-        file_cache_.store(result.value());
+        store_file_cache(result.value());
       }
     }
 
@@ -1083,6 +1086,24 @@ class coro_http_server {
   }
 
  private:
+  void store_file_cache(file_cache_ptr cache) {
+#if defined(__cpp_lib_atomic_shared_ptr) && \
+    __cpp_lib_atomic_shared_ptr >= 201711L
+    file_cache_.store(std::move(cache));
+#else
+    std::atomic_store(&file_cache_, std::move(cache));
+#endif
+  }
+
+  file_cache_ptr load_file_cache() const {
+#if defined(__cpp_lib_atomic_shared_ptr) && \
+    __cpp_lib_atomic_shared_ptr >= 201711L
+    return file_cache_.load();
+#else
+    return std::atomic_load(&file_cache_);
+#endif
+  }
+
   std::unique_ptr<coro_io::io_context_pool> pool_;
   asio::io_context *out_ctx_ = nullptr;
   std::unique_ptr<coro_io::ExecutorWrapper<>> out_executor_ = nullptr;
@@ -1109,8 +1130,12 @@ class coro_http_server {
   std::string static_dir_ = "";
   size_t chunked_size_ = 1024 * 10;
 
-  std::atomic<std::shared_ptr<std::unordered_map<std::string, std::string>>>
-      file_cache_;
+#if defined(__cpp_lib_atomic_shared_ptr) && \
+    __cpp_lib_atomic_shared_ptr >= 201711L
+  std::atomic<file_cache_ptr> file_cache_;
+#else
+  file_cache_ptr file_cache_;
+#endif
   coro_io::period_timer cache_refresh_timer_;
   std::chrono::steady_clock::duration cache_refresh_interval_ =
       std::chrono::seconds(5);
