@@ -261,6 +261,36 @@ TEST_CASE("query and form fields are bounded") {
   CHECK(form_parser.parameter_limit_exceeded());
 }
 
+TEST_CASE("cookie fields are bounded") {
+  std::string cookies;
+  for (size_t i = 0; i < CINATRA_MAX_COOKIE_COUNT; ++i) {
+    if (!cookies.empty()) {
+      cookies.append("; ");
+    }
+    cookies.append("cookie").append(std::to_string(i)).append("=value");
+  }
+
+  bool limit_exceeded = true;
+  auto at_limit = get_cookies_map(cookies, &limit_exceeded);
+  CHECK_FALSE(limit_exceeded);
+  CHECK(at_limit.size() == CINATRA_MAX_COOKIE_COUNT);
+
+  cookies.append("; overflow=value");
+  CHECK(get_cookies_map(cookies, &limit_exceeded).empty());
+  CHECK(limit_exceeded);
+
+  std::string raw_request = "GET / HTTP/1.1\r\nCookie: " + cookies + "\r\n\r\n";
+  http_parser parser;
+  REQUIRE(parser.parse_request(raw_request.data(), raw_request.size(), 0) > 0);
+  coro_http_request request(parser, nullptr);
+  CHECK(request.get_session() == nullptr);
+
+  auto ordinary = get_cookies_map("first=one; second=two");
+  CHECK(ordinary.size() == 2);
+  CHECK(ordinary.at("first") == "one");
+  CHECK(ordinary.at("second") == "two");
+}
+
 TEST_CASE("siphash matches the reference vectors") {
   constexpr uint64_t key0 = UINT64_C(0x0706050403020100);
   constexpr uint64_t key1 = UINT64_C(0x0f0e0d0c0b0a0908);
