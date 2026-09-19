@@ -1475,15 +1475,17 @@ TEST_CASE("test radix tree restful api") {
   coro_http_client client;
   client.get("http://127.0.0.1:19001/user/cinatra");
   client.get("http://127.0.0.1:19001/user/subid/subscriptions");
-  client.get("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
+  client.get(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:19001/value/guilliman/cawl/yvraine");
 
   client.post("http://127.0.0.1:19001/user/cinatra", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/user/subid/subscriptions", "hello",
               req_content_type::string);
-  client.post("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
-              "hello", req_content_type::string);
+  client.post(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
+      "hello", req_content_type::string);
   client.post("http://127.0.0.1:19001/value/guilliman/cawl/yvraine", "hello",
               req_content_type::string);
 }
@@ -1559,15 +1561,17 @@ TEST_CASE("test coro radix tree restful api") {
   coro_http_client client;
   client.get("http://127.0.0.1:19001/user/cinatra");
   client.get("http://127.0.0.1:19001/user/subid/subscriptions");
-  client.get("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
+  client.get(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:19001/value/guilliman/cawl/yvraine");
 
   client.post("http://127.0.0.1:19001/user/cinatra", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/user/subid/subscriptions", "hello",
               req_content_type::string);
-  client.post("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
-              "hello", req_content_type::string);
+  client.post(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
+      "hello", req_content_type::string);
   client.post("http://127.0.0.1:19001/value/guilliman/cawl/yvraine", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/ai/robot/android", "hello",
@@ -1694,6 +1698,37 @@ TEST_CASE("test reverse proxy") {
                                 req_content_type::text);
   std::cout << resp_random.resp_body << "\n";
   CHECK(!resp_random.resp_body.empty());
+}
+
+TEST_CASE("reverse proxy forwards headers without hashing their names") {
+  std::atomic<bool> forwarded = false;
+  coro_http_server upstream(1, 0);
+  upstream.set_http_handler<POST>(
+      "/", [&forwarded](coro_http_request &req, coro_http_response &response) {
+        forwarded = req.get_header_value("X-Proxy-Test") == "forwarded" &&
+                    req.get_header_value("Content-Length") == "7";
+        response.set_status_and_content(status_type::ok,
+                                        std::string(req.get_body()));
+      });
+  upstream.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  std::string upstream_host = "127.0.0.1:" + std::to_string(upstream.port());
+  coro_http_server proxy(1, 0);
+  proxy.set_http_proxy_handler<POST>("/", {upstream_host});
+  proxy.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  coro_http_client client;
+  client.add_header("X-Proxy-Test", "forwarded");
+  auto result = client.post("http://127.0.0.1:" + std::to_string(proxy.port()),
+                            "content", req_content_type::text);
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "content");
+  CHECK(forwarded);
+
+  proxy.stop();
+  upstream.stop();
 }
 
 TEST_CASE("test reverse proxy download") {
