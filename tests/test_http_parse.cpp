@@ -218,6 +218,49 @@ TEST_CASE("http_request test") {
   CHECK(req.get_encoding_type() == content_encoding::none);
 }
 
+TEST_CASE("query and form fields are bounded") {
+  auto make_fields = [](size_t count, bool unique) {
+    std::string fields;
+    for (size_t i = 0; i < count; ++i) {
+      if (!fields.empty()) {
+        fields.push_back('&');
+      }
+      if (unique) {
+        fields.append("key").append(std::to_string(i));
+      }
+      else {
+        fields.push_back('a');
+      }
+    }
+    return fields;
+  };
+
+  http_parser parser{};
+  parser.parse_query(make_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1, true));
+  CHECK(parser.parameter_limit_exceeded());
+  CHECK(parser.queries().size() == CINATRA_MAX_QUERY_FIELD_COUNT);
+
+  auto over_limit = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1, false);
+  std::string request =
+      "GET /?" + over_limit + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  http_parser request_parser{};
+  CHECK(request_parser.parse_request(request.data(), request.size(), 0) < 0);
+  CHECK(request_parser.parameter_limit_exceeded());
+
+  std::string form_request =
+      "POST /?url=value HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Type: application/x-www-form-urlencoded\r\n"
+      "Content-Length: 0\r\n\r\n";
+  http_parser form_parser{};
+  REQUIRE(form_parser.parse_request(form_request.data(), form_request.size(),
+                                    0) > 0);
+  coro_http_request form(form_parser, nullptr);
+  auto fields = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT, false);
+  form.set_body(fields);
+  CHECK(form_parser.parameter_limit_exceeded());
+}
+
 TEST_CASE("siphash matches the reference vectors") {
   constexpr uint64_t key0 = UINT64_C(0x0706050403020100);
   constexpr uint64_t key1 = UINT64_C(0x0f0e0d0c0b0a0908);
