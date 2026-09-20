@@ -1,6 +1,10 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 
+#include <array>
+#include <cstdint>
+
 #include "cinatra/coro_http_server.hpp"
+#include "cinatra/secure_string_hash.hpp"
 #include "doctest/doctest.h"
 
 using namespace cinatra;
@@ -212,6 +216,123 @@ TEST_CASE("http_request test") {
   parser.parse_request(req_str7.data(), req_str7.size(), 0);
   CHECK(req.is_upgrade());
   CHECK(req.get_encoding_type() == content_encoding::none);
+}
+
+TEST_CASE("query and form fields are bounded") {
+  auto make_fields = [](size_t count, bool unique) {
+    std::string fields;
+    for (size_t i = 0; i < count; ++i) {
+      if (!fields.empty()) {
+        fields.push_back('&');
+      }
+      if (unique) {
+        fields.append("key").append(std::to_string(i));
+      }
+      else {
+        fields.push_back('a');
+      }
+    }
+    return fields;
+  };
+
+  http_parser parser{};
+  parser.parse_query(make_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1, true));
+  CHECK(parser.parameter_limit_exceeded());
+  CHECK(parser.queries().size() == CINATRA_MAX_QUERY_FIELD_COUNT);
+
+  auto over_limit = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1, false);
+  std::string request =
+      "GET /?" + over_limit + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  http_parser request_parser{};
+  CHECK(request_parser.parse_request(request.data(), request.size(), 0) < 0);
+  CHECK(request_parser.parameter_limit_exceeded());
+
+  std::string form_request =
+      "POST /?url=value HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "Content-Type: application/x-www-form-urlencoded\r\n"
+      "Content-Length: 0\r\n\r\n";
+  http_parser form_parser{};
+  REQUIRE(form_parser.parse_request(form_request.data(), form_request.size(),
+                                    0) > 0);
+  coro_http_request form(form_parser, nullptr);
+  auto fields = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT, false);
+  form.set_body(fields);
+  CHECK(form_parser.parameter_limit_exceeded());
+}
+
+TEST_CASE("cookie fields are bounded") {
+  std::string cookies;
+  for (size_t i = 0; i < CINATRA_MAX_COOKIE_COUNT; ++i) {
+    if (!cookies.empty()) {
+      cookies.append("; ");
+    }
+    cookies.append("cookie").append(std::to_string(i)).append("=value");
+  }
+
+  bool limit_exceeded = true;
+  auto at_limit = get_cookies_map(cookies, &limit_exceeded);
+  CHECK_FALSE(limit_exceeded);
+  CHECK(at_limit.size() == CINATRA_MAX_COOKIE_COUNT);
+
+  cookies.append("; overflow=value");
+  CHECK(get_cookies_map(cookies, &limit_exceeded).empty());
+  CHECK(limit_exceeded);
+
+  std::string raw_request = "GET / HTTP/1.1\r\nCookie: " + cookies + "\r\n\r\n";
+  http_parser parser;
+  REQUIRE(parser.parse_request(raw_request.data(), raw_request.size(), 0) > 0);
+  coro_http_request request(parser, nullptr);
+  CHECK(request.get_session() == nullptr);
+
+  auto ordinary = get_cookies_map("first=one; second=two");
+  CHECK(ordinary.size() == 2);
+  CHECK(ordinary.at("first") == "one");
+  CHECK(ordinary.at("second") == "two");
+}
+
+TEST_CASE("siphash matches the reference vectors") {
+  constexpr uint64_t key0 = UINT64_C(0x0706050403020100);
+  constexpr uint64_t key1 = UINT64_C(0x0f0e0d0c0b0a0908);
+  constexpr std::array<uint64_t, 64> expected = {
+      UINT64_C(0x726fdb47dd0e0e31), UINT64_C(0x74f839c593dc67fd),
+      UINT64_C(0x0d6c8009d9a94f5a), UINT64_C(0x85676696d7fb7e2d),
+      UINT64_C(0xcf2794e0277187b7), UINT64_C(0x18765564cd99a68d),
+      UINT64_C(0xcbc9466e58fee3ce), UINT64_C(0xab0200f58b01d137),
+      UINT64_C(0x93f5f5799a932462), UINT64_C(0x9e0082df0ba9e4b0),
+      UINT64_C(0x7a5dbbc594ddb9f3), UINT64_C(0xf4b32f46226bada7),
+      UINT64_C(0x751e8fbc860ee5fb), UINT64_C(0x14ea5627c0843d90),
+      UINT64_C(0xf723ca908e7af2ee), UINT64_C(0xa129ca6149be45e5),
+      UINT64_C(0x3f2acc7f57c29bdb), UINT64_C(0x699ae9f52cbe4794),
+      UINT64_C(0x4bc1b3f0968dd39c), UINT64_C(0xbb6dc91da77961bd),
+      UINT64_C(0xbed65cf21aa2ee98), UINT64_C(0xd0f2cbb02e3b67c7),
+      UINT64_C(0x93536795e3a33e88), UINT64_C(0xa80c038ccd5ccec8),
+      UINT64_C(0xb8ad50c6f649af94), UINT64_C(0xbce192de8a85b8ea),
+      UINT64_C(0x17d835b85bbb15f3), UINT64_C(0x2f2e6163076bcfad),
+      UINT64_C(0xde4daaaca71dc9a5), UINT64_C(0xa6a2506687956571),
+      UINT64_C(0xad87a3535c49ef28), UINT64_C(0x32d892fad841c342),
+      UINT64_C(0x7127512f72f27cce), UINT64_C(0xa7f32346f95978e3),
+      UINT64_C(0x12e0b01abb051238), UINT64_C(0x15e034d40fa197ae),
+      UINT64_C(0x314dffbe0815a3b4), UINT64_C(0x027990f029623981),
+      UINT64_C(0xcadcd4e59ef40c4d), UINT64_C(0x9abfd8766a33735c),
+      UINT64_C(0x0e3ea96b5304a7d0), UINT64_C(0xad0c42d6fc585992),
+      UINT64_C(0x187306c89bc215a9), UINT64_C(0xd4a60abcf3792b95),
+      UINT64_C(0xf935451de4f21df2), UINT64_C(0xa9538f0419755787),
+      UINT64_C(0xdb9acddff56ca510), UINT64_C(0xd06c98cd5c0975eb),
+      UINT64_C(0xe612a3cb9ecba951), UINT64_C(0xc766e62cfcadaf96),
+      UINT64_C(0xee64435a9752fe72), UINT64_C(0xa192d576b245165a),
+      UINT64_C(0x0a8787bf8ecb74b2), UINT64_C(0x81b3e73d20b49b6f),
+      UINT64_C(0x7fa8220ba3b2ecea), UINT64_C(0x245731c13ca42499),
+      UINT64_C(0xb78dbfaf3a8d83bd), UINT64_C(0xea1ad565322a1a0b),
+      UINT64_C(0x60e61c23a3795013), UINT64_C(0x6606d7e446282b93),
+      UINT64_C(0x6ca4ecb15c5f91e1), UINT64_C(0x9f626da15c9625f3),
+      UINT64_C(0xe51b38608ef25f57), UINT64_C(0x958a324ceb064572)};
+
+  std::string input;
+  for (size_t i = 0; i < expected.size(); ++i) {
+    CHECK(cinatra::detail::sip_hash_2_4(input, key0, key1) == expected[i]);
+    input.push_back(static_cast<char>(i));
+  }
 }
 
 TEST_CASE("uri test") {

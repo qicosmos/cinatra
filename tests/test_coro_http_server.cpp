@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -26,6 +27,56 @@
 using namespace cinatra;
 
 using namespace std::chrono_literals;
+
+TEST_CASE("request field limits reject before routing") {
+  auto make_fields = [](size_t count) {
+    std::string fields;
+    fields.reserve(count * 2);
+    for (size_t i = 0; i < count; ++i) {
+      if (!fields.empty()) {
+        fields.push_back('&');
+      }
+      fields.push_back('a');
+    }
+    return fields;
+  };
+
+  std::atomic<size_t> handler_calls = 0;
+  coro_http_server server(1, 0);
+  server.set_http_handler<GET, POST>(
+      "/field-limit",
+      [&handler_calls](coro_http_request &, coro_http_response &response) {
+        ++handler_calls;
+        response.set_status_and_content(status_type::ok, "accepted");
+      });
+  server.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  const auto uri =
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/field-limit";
+  const auto at_limit = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT);
+  const auto over_limit = make_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1);
+
+  auto get_status = [](const std::string &target) {
+    coro_http_client client;
+    return client.get(target).status;
+  };
+  auto post_status = [&uri](const std::string &body) {
+    coro_http_client client;
+    return client.post(uri, body, req_content_type::form_url_encode).status;
+  };
+
+  CHECK(get_status(uri + "?" + at_limit) == 200);
+  CHECK(handler_calls == 1);
+  CHECK(get_status(uri + "?" + over_limit) == 400);
+  CHECK(handler_calls == 1);
+  CHECK(post_status(at_limit) == 200);
+  CHECK(handler_calls == 2);
+  CHECK(post_status(over_limit) == 413);
+  CHECK(handler_calls == 2);
+
+  server.stop();
+}
 
 TEST_CASE("test parse ranges") {
   bool is_valid = true;
@@ -1424,15 +1475,17 @@ TEST_CASE("test radix tree restful api") {
   coro_http_client client;
   client.get("http://127.0.0.1:19001/user/cinatra");
   client.get("http://127.0.0.1:19001/user/subid/subscriptions");
-  client.get("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
+  client.get(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:19001/value/guilliman/cawl/yvraine");
 
   client.post("http://127.0.0.1:19001/user/cinatra", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/user/subid/subscriptions", "hello",
               req_content_type::string);
-  client.post("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
-              "hello", req_content_type::string);
+  client.post(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
+      "hello", req_content_type::string);
   client.post("http://127.0.0.1:19001/value/guilliman/cawl/yvraine", "hello",
               req_content_type::string);
 }
@@ -1508,15 +1561,17 @@ TEST_CASE("test coro radix tree restful api") {
   coro_http_client client;
   client.get("http://127.0.0.1:19001/user/cinatra");
   client.get("http://127.0.0.1:19001/user/subid/subscriptions");
-  client.get("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
+  client.get(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman");
   client.get("http://127.0.0.1:19001/value/guilliman/cawl/yvraine");
 
   client.post("http://127.0.0.1:19001/user/cinatra", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/user/subid/subscriptions", "hello",
               req_content_type::string);
-  client.post("http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
-              "hello", req_content_type::string);
+  client.post(
+      "http://127.0.0.1:19001/user/ultramarines/subscriptions/guilliman",
+      "hello", req_content_type::string);
   client.post("http://127.0.0.1:19001/value/guilliman/cawl/yvraine", "hello",
               req_content_type::string);
   client.post("http://127.0.0.1:19001/ai/robot/android", "hello",
@@ -1643,6 +1698,37 @@ TEST_CASE("test reverse proxy") {
                                 req_content_type::text);
   std::cout << resp_random.resp_body << "\n";
   CHECK(!resp_random.resp_body.empty());
+}
+
+TEST_CASE("reverse proxy forwards headers without hashing their names") {
+  std::atomic<bool> forwarded = false;
+  coro_http_server upstream(1, 0);
+  upstream.set_http_handler<POST>(
+      "/", [&forwarded](coro_http_request &req, coro_http_response &response) {
+        forwarded = req.get_header_value("X-Proxy-Test") == "forwarded" &&
+                    req.get_header_value("Content-Length") == "7";
+        response.set_status_and_content(status_type::ok,
+                                        std::string(req.get_body()));
+      });
+  upstream.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  std::string upstream_host = "127.0.0.1:" + std::to_string(upstream.port());
+  coro_http_server proxy(1, 0);
+  proxy.set_http_proxy_handler<POST>("/", {upstream_host});
+  proxy.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  coro_http_client client;
+  client.add_header("X-Proxy-Test", "forwarded");
+  auto result = client.post("http://127.0.0.1:" + std::to_string(proxy.port()),
+                            "content", req_content_type::text);
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "content");
+  CHECK(forwarded);
+
+  proxy.stop();
+  upstream.stop();
 }
 
 TEST_CASE("test reverse proxy download") {

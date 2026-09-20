@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -217,8 +218,9 @@ TEST_CASE("test encoding type") {
   std::string ziped_str;
   std::string_view data = "Hello World";
   gzip_codec::compress(data, ziped_str);
-  result = async_simple::coro::syncAwait(client3.async_post(
-      "http://127.0.0.1:19001/get", ziped_str, req_content_type::none, headers));
+  result = async_simple::coro::syncAwait(
+      client3.async_post("http://127.0.0.1:19001/get", ziped_str,
+                         req_content_type::none, headers));
   CHECK(result.resp_body == "ok");
 
   coro_http_client client4{};
@@ -268,8 +270,9 @@ TEST_CASE("test brotli type") {
   std::string_view data = "Hello World";
   bool r = br_codec::brotli_compress(data, ziped_str);
 
-  auto result = async_simple::coro::syncAwait(client.async_post(
-      "http://127.0.0.1:19001/get", ziped_str, req_content_type::none, headers));
+  auto result = async_simple::coro::syncAwait(
+      client.async_post("http://127.0.0.1:19001/get", ziped_str,
+                        req_content_type::none, headers));
   CHECK(result.resp_body == "ok");
   server.stop();
 }
@@ -376,6 +379,30 @@ TEST_CASE("test ssl client") {
   // client.set_sni_hostname("https://www.bing.com");
   auto result = client.get("https://www.bing.com");
   CHECK(result.status >= 200);
+}
+
+TEST_CASE("initial HTTPS request honors connect timeout") {
+  asio::io_context io;
+  asio::ip::tcp::acceptor acceptor(io, {asio::ip::tcp::v4(), 0});
+  auto port = acceptor.local_endpoint().port();
+
+  std::jthread stalled_peer([&] {
+    asio::ip::tcp::socket socket(io);
+    std::error_code ec;
+    acceptor.accept(socket, ec);
+    if (!ec) {
+      // Keep the TCP connection open without completing the TLS handshake.
+      // The client's connection timer must close it first.
+      std::this_thread::sleep_for(500ms);
+    }
+  });
+
+  coro_http_client client{};
+  client.set_conn_timeout(50ms);
+  auto result = client.get("https://127.0.0.1:" + std::to_string(port));
+
+  CHECK(result.net_err == std::errc::timed_out);
+  CHECK(result.status == 404);
 }
 #endif
 
@@ -991,8 +1018,8 @@ TEST_CASE("test out buffer and async upload ") {
   {
     coro_http_client client{};
     auto request =
-        client.async_post("http://127.0.0.1:19000/normal", std::string(128, 'x'),
-                          req_content_type::text);
+        client.async_post("http://127.0.0.1:19000/normal",
+                          std::string(128, 'x'), req_content_type::text);
     auto result = async_simple::coro::syncAwait(std::move(request));
     CHECK(result.status == 200);
     CHECK(result.resp_body == "test");
@@ -2508,7 +2535,8 @@ TEST_CASE("test coro_http_client chunked upload and download") {
 
     coro_http_client client{};
 
-    std::string download_url = "http://127.0.0.1:18090/download/test_static.txt";
+    std::string download_url =
+        "http://127.0.0.1:18090/download/test_static.txt";
     std::string download_name = "test1.txt";
     auto r = client.download(download_url, download_name);
     CHECK(r.status == 200);
@@ -2591,8 +2619,8 @@ TEST_CASE("test coro_http_client add header and url queries") {
 
   coro_http_client client;
   client.add_header("Connection", "keep-alive");
-  auto r =
-      async_simple::coro::syncAwait(client.async_get("http://127.0.0.1:19001/"));
+  auto r = async_simple::coro::syncAwait(
+      client.async_get("http://127.0.0.1:19001/"));
   CHECK(!r.net_err);
   CHECK(r.status < 400);
 
@@ -3359,7 +3387,8 @@ TEST_CASE("test coro_http_client no scheme still send request check") {
   std::string uri = "http://127.0.0.1:18090";
 
   coro_http_client client{};
-  auto resp = async_simple::coro::syncAwait(client.async_get("127.0.0.1:18090"));
+  auto resp =
+      async_simple::coro::syncAwait(client.async_get("127.0.0.1:18090"));
   CHECK(!resp.net_err);
   CHECK(resp.status == 200);
   resp = async_simple::coro::syncAwait(
