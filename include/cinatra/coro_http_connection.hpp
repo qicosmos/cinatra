@@ -455,7 +455,8 @@ class coro_http_connection
       }
       const size_t total = asio::buffer_size(buffers_);
       bool try_optimistic_write = optimistic_write_ && socket_.non_blocking() &&
-                                  total != 0 && total <= optimistic_write_limit_;
+                                  total != 0 &&
+                                  total <= optimistic_write_limit_;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
       try_optimistic_write = try_optimistic_write && !write_failed_forever_;
 #endif
@@ -511,9 +512,8 @@ class coro_http_connection
       }
 
       if (!ec) {
-        std::tie(ec, size) =
-            co_await async_write(asio::buffer(resp_str_.data() + size,
-                                              resp_str_.size() - size));
+        std::tie(ec, size) = co_await async_write(
+            asio::buffer(resp_str_.data() + size, resp_str_.size() - size));
       }
     }
 

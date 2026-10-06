@@ -551,9 +551,8 @@ TEST_CASE("small and large response writes preserve response bytes") {
     if (req.get_url().starts_with("/string")) {
       req.get_conn()->set_multi_buf(false);
     }
-    resp.set_status_and_content(status_type::ok,
-                                req.get_url().ends_with("small") ? small_body
-                                                                  : body);
+    resp.set_status_and_content(
+        status_type::ok, req.get_url().ends_with("small") ? small_body : body);
   };
   server.set_http_handler<GET>("/buffers", handler);
   server.set_http_handler<GET>("/string", handler);
@@ -562,13 +561,14 @@ TEST_CASE("small and large response writes preserve response bytes") {
   server.async_start();
   std::this_thread::sleep_for(50ms);
 
-  for (const auto path : {"/buffers-small", "/string-small", "/buffers",
-                          "/string"}) {
+  for (const auto path :
+       {"/buffers-small", "/string-small", "/buffers", "/string"}) {
     asio::io_context context;
     asio::ip::tcp::socket socket(context);
     socket.connect({asio::ip::make_address("127.0.0.1"), server.port()});
-    std::string request = std::string("GET ") + path +
-                          " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    std::string request =
+        std::string("GET ") + path +
+        " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     asio::write(socket, asio::buffer(request));
     std::this_thread::sleep_for(50ms);
 
@@ -583,9 +583,8 @@ TEST_CASE("small and large response writes preserve response bytes") {
     REQUIRE(body_start != std::string::npos);
     CHECK(raw.substr(0, 15) == "HTTP/1.1 200 OK");
     auto received = std::string_view(raw).substr(body_start + 4);
-    const auto &expected = std::string_view(path).ends_with("small")
-                               ? small_body
-                               : body;
+    const auto &expected =
+        std::string_view(path).ends_with("small") ? small_body : body;
     CHECK(received.size() == expected.size());
     CHECK(received == std::string_view(expected));
   }

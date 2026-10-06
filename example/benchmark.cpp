@@ -4,7 +4,7 @@
 using namespace cinatra;
 using namespace std::chrono_literals;
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   coro_http_server server(std::thread::hardware_concurrency(), 8090, "0.0.0.0",
                           true);
   if (argc > 1 && std::string_view(argv[1]) == "--multi-acceptor") {

@@ -120,19 +120,16 @@ class coro_http_server {
           accept_failed_ = true;
         }
         if (acceptors_running_.fetch_sub(1) == 1) {
-          errc_ = accept_failed_
-                      ? std::make_error_code(std::errc::io_error)
-                      : res.value();
+          errc_ = accept_failed_ ? std::make_error_code(std::errc::io_error)
+                                 : res.value();
           promise->setValue(errc_);
           acceptor_close_waiter_.set_value();
         }
       };
       for (size_t i = 0; i < acceptors_.size(); ++i) {
-        auto *executor = acceptors_.size() > 1
-                             ? pool_->get_executor_at(i)
-                             : nullptr;
-        accept(*acceptors_[i], executor)
-            .start(on_finished);
+        auto *executor =
+            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
+        accept(*acceptors_[i], executor).start(on_finished);
       }
     }
     else {
