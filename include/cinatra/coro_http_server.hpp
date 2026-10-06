@@ -3,7 +3,6 @@
 #include <atomic>
 #include <memory>
 
-#include "asio/detail/socket_option.hpp"
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
@@ -651,8 +650,33 @@ class coro_http_server {
 
  private:
 #if defined(SO_REUSEPORT)
-  using reuse_port_option =
-      asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>;
+  class reuse_port_option {
+   public:
+    explicit reuse_port_option(bool enabled) : value_(enabled ? 1 : 0) {}
+
+    template <typename Protocol>
+    int level(const Protocol &) const {
+      return SOL_SOCKET;
+    }
+
+    template <typename Protocol>
+    int name(const Protocol &) const {
+      return SO_REUSEPORT;
+    }
+
+    template <typename Protocol>
+    const int *data(const Protocol &) const {
+      return &value_;
+    }
+
+    template <typename Protocol>
+    size_t size(const Protocol &) const {
+      return sizeof(value_);
+    }
+
+   private:
+    int value_;
+  };
 #endif
 
   std::error_code listen() {
