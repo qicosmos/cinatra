@@ -1447,8 +1447,7 @@ TEST_CASE("test request with out buffer") {
     coro_http_client client;
     client.set_conn_timeout(3s);
     client.set_req_timeout(5s);
-    std::string dest = "http://www.baidu.com";
-    auto ret = client.async_request(dest, http_method::GET, req_context<>{}, {},
+    auto ret = client.async_request(url, http_method::GET, req_context<>{}, {},
                                     std::span<char>{str.data(), str.size()});
     auto result = async_simple::coro::syncAwait(ret);
     bool ok = result.status == 200 || result.status == 301;
