@@ -36,9 +36,7 @@ class coro_http_server {
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx),
-        check_timer_(ctx),
-        cache_refresh_timer_(ctx) {
+      : out_ctx_(&ctx), check_timer_(ctx), cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
