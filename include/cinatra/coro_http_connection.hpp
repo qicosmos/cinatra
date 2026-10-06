@@ -100,6 +100,15 @@ class coro_http_connection
     std::chrono::system_clock::time_point mid{};
     std::destroy_at(&head_buf_);
     new (&head_buf_) asio::streambuf(max_http_header_size_);
+#ifdef CINATRA_ENABLE_SSL
+    if (!use_ssl_) {
+#endif
+      std::error_code ec;
+      socket_.non_blocking(true, ec);
+      optimistic_write_ = !ec;
+#ifdef CINATRA_ENABLE_SSL
+    }
+#endif
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -439,18 +448,73 @@ class coro_http_connection
 
   async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
     std::error_code ec;
-    size_t size;
+    size_t size = 0;
     if (multi_buf_) {
       if (need_to_bufffer) {
         response_.to_buffers(buffers_, chunk_size_str_);
       }
-      std::tie(ec, size) = co_await async_write(buffers_);
+      const size_t total = asio::buffer_size(buffers_);
+      bool try_optimistic_write = optimistic_write_ && socket_.non_blocking() &&
+                                  total != 0 && total <= optimistic_write_limit_;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      try_optimistic_write = try_optimistic_write && !write_failed_forever_;
+#endif
+      if (try_optimistic_write) {
+        set_last_time();
+        size = socket_.write_some(buffers_, ec);
+        if (ec == asio::error::would_block || ec == asio::error::try_again) {
+          ec.clear();
+        }
+        if (!ec && size == total) {
+          co_return true;
+        }
+      }
+
+      if (!ec) {
+        std::vector<asio::const_buffer> remaining;
+        if (size != 0) {
+          remaining.reserve(buffers_.size());
+          size_t skip = size;
+          for (auto buffer : buffers_) {
+            if (skip >= buffer.size()) {
+              skip -= buffer.size();
+            }
+            else {
+              remaining.push_back(buffer + skip);
+              skip = 0;
+            }
+          }
+        }
+        std::tie(ec, size) =
+            co_await async_write(size == 0 ? buffers_ : remaining);
+      }
     }
     else {
       if (need_to_bufffer) {
         response_.build_resp_str(resp_str_);
       }
-      std::tie(ec, size) = co_await async_write(asio::buffer(resp_str_));
+      bool try_optimistic_write = optimistic_write_ && socket_.non_blocking() &&
+                                  !resp_str_.empty() &&
+                                  resp_str_.size() <= optimistic_write_limit_;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      try_optimistic_write = try_optimistic_write && !write_failed_forever_;
+#endif
+      if (try_optimistic_write) {
+        set_last_time();
+        size = socket_.write_some(asio::buffer(resp_str_), ec);
+        if (ec == asio::error::would_block || ec == asio::error::try_again) {
+          ec.clear();
+        }
+        if (!ec && size == resp_str_.size()) {
+          co_return true;
+        }
+      }
+
+      if (!ec) {
+        std::tie(ec, size) =
+            co_await async_write(asio::buffer(resp_str_.data() + size,
+                                              resp_str_.size() - size));
+      }
     }
 
     if (ec) {
@@ -961,6 +1025,9 @@ class coro_http_connection
   }
 
  private:
+  // Keep large responses on the existing asynchronous path.
+  static constexpr size_t optimistic_write_limit_ = 4 * 1024;
+
   async_simple::coro::Lazy<bool> write_chunked_owned(std::string chunked_data,
                                                      bool eof = false) {
     response_.set_delay(true);
@@ -1077,6 +1144,7 @@ class coro_http_connection
 #endif
   bool need_shrink_every_time_ = false;
   bool multi_buf_ = true;
+  bool optimistic_write_ = false;
   std::function<async_simple::coro::Lazy<void>(coro_http_request &,
                                                coro_http_response &)>
       default_handler_ = nullptr;

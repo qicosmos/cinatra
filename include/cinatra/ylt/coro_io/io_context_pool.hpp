@@ -210,6 +210,10 @@ class io_context_pool {
     return ret;
   }
 
+  coro_io::ExecutorWrapper<> *get_executor_at(std::size_t index) {
+    return executors.at(index).get();
+  }
+
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
