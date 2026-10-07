@@ -95,6 +95,14 @@ cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 
 5行代码就可以实现一个简单http服务器了，用户不需要关注多少细节，直接写业务逻辑就行了。
 
+支持 `SO_REUSEPORT` 的平台如需应对大量连接同时建立，可在启动前调用
+`server.set_multi_acceptor(true)`。这会为每个 IO 线程创建独立的监听 socket，
+通过 `SO_REUSEPORT` 共享端口。默认仍使用单个 acceptor，连接接入后轮询分配给 IO 线程。
+只有一个 IO 线程时仍使用单个 acceptor。
+该模式需要由 `coro_http_server` 自行创建 IO 线程池；传入外部 `asio::io_context`
+时不支持。不提供 `SO_REUSEPORT` 的平台在多线程配置下启用该模式会返回
+`operation_not_supported`。
+
 ## 示例2：基本用法
 ```c++
 #include "cinatra.hpp"

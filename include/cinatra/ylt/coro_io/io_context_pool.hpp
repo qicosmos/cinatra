@@ -175,7 +175,7 @@ class io_context_pool {
   }
 
   void stop() {
-    std::call_once(flag_, [this] {
+    std::call_once(*flag_, [this] {
       bool has_run_or_stop = false;
       bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
 
@@ -191,6 +191,17 @@ class io_context_pool {
 
       promise_.get_future().wait();
     });
+  }
+
+  // Reuse the contexts after stop() has joined the worker threads.
+  void restart() {
+    for (auto &context : io_contexts_) {
+      context->restart();
+      work_.push_back(asio::make_work_guard(*context));
+    }
+    promise_ = std::promise<void>{};
+    has_run_or_stop_ = false;
+    flag_ = std::make_unique<std::once_flag>();
   }
 
   ~io_context_pool() {
@@ -210,6 +221,10 @@ class io_context_pool {
     return ret;
   }
 
+  coro_io::ExecutorWrapper<> *get_executor_at(std::size_t index) {
+    return executors.at(index).get();
+  }
+
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
@@ -217,8 +232,7 @@ class io_context_pool {
 
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
-  using work_type =
-      asio::executor_work_guard<asio::io_context::executor_type>;
+  using work_type = asio::executor_work_guard<asio::io_context::executor_type>;
 
   std::vector<io_context_ptr> io_contexts_;
   std::vector<std::unique_ptr<coro_io::ExecutorWrapper<>>> executors;
@@ -226,7 +240,7 @@ class io_context_pool {
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
   std::atomic<bool> has_run_or_stop_ = false;
-  std::once_flag flag_;
+  std::unique_ptr<std::once_flag> flag_ = std::make_unique<std::once_flag>();
   bool cpu_affinity_ = false;
   inline static std::atomic<size_t> total_thread_num_ = 0;
 };

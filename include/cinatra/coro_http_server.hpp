@@ -29,7 +29,6 @@ class coro_http_server {
                    std::string address = "0.0.0.0")
       : out_ctx_(&ctx),
         port_(port),
-        acceptor_(ctx),
         check_timer_(ctx),
         cache_refresh_timer_(ctx) {
     init_address(std::move(address));
@@ -37,10 +36,7 @@ class coro_http_server {
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx),
-        acceptor_(ctx),
-        check_timer_(ctx),
-        cache_refresh_timer_(ctx) {
+      : out_ctx_(&ctx), check_timer_(ctx), cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
@@ -49,7 +45,6 @@ class coro_http_server {
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
         port_(port),
-        acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -60,7 +55,6 @@ class coro_http_server {
                    bool cpu_affinity = false)
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
-        acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -91,47 +85,76 @@ class coro_http_server {
   }
 #endif
 
-  // only call once, not thread safe.
   std::error_code sync_start() noexcept {
     auto ret = async_start();
     ret.wait();
     return ret.value();
   }
 
-  // only call once, not thread safe.
   async_simple::Future<std::error_code> async_start() {
-    errc_ = listen();
+    const bool restarting = stop_timer_.exchange(false);
+    if (restarting) {
+      if (pool_ && pool_->has_stop()) {
+        pool_->restart();
+      }
+      if (need_check_) {
+        start_check_timer();
+      }
+    }
 
-    async_simple::Promise<std::error_code> promise;
-    auto future = promise.getFuture();
+    auto listen_error = listen();
+    set_errc(listen_error);
 
-    if (!errc_) {
+    auto promise = std::make_shared<async_simple::Promise<std::error_code>>();
+    auto future = promise->getFuture();
+
+    if (!listen_error) {
       if (out_ctx_ == nullptr) {
         thd_ = std::thread([this] {
           pool_->run();
         });
       }
+      if (restarting && cache_refresh_done_.valid() &&
+          cache_refresh_done_.wait_for(std::chrono::seconds(0)) ==
+              std::future_status::ready) {
+        cache_refresh_stopped_ = std::promise<void>{};
+        cache_refresh_done_ = cache_refresh_stopped_.get_future();
+        cache_refresh_loop().start([](auto &&) {
+        });
+      }
 
-      accept().start([p = std::move(promise), this](auto &&res) mutable {
+      accept_failed_ = false;
+      acceptors_running_ = acceptors_.size();
+      acceptor_close_waiter_ = std::promise<void>{};
+      acceptors_started_ = true;
+      auto on_finished = [promise, this](auto &&res) mutable {
         if (res.hasError()) {
-          errc_ = std::make_error_code(std::errc::io_error);
-          p.setValue(errc_);
+          accept_failed_ = true;
         }
-        else {
-          p.setValue(res.value());
+        if (acceptors_running_.fetch_sub(1) == 1) {
+          auto result = accept_failed_
+                            ? std::make_error_code(std::errc::io_error)
+                            : res.value();
+          set_errc(result);
+          promise->setValue(result);
+          acceptor_close_waiter_.set_value();
         }
-      });
+      };
+      for (size_t i = 0; i < acceptors_.size(); ++i) {
+        auto *executor =
+            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
+        accept(*acceptors_[i], executor).start(on_finished);
+      }
     }
     else {
-      promise.setValue(errc_);
+      promise->setValue(listen_error);
     }
 
     return future;
   }
 
-  // only call once, not thread safe.
   void stop() {
-    if (out_ctx_ == nullptr && !thd_.joinable()) {
+    if (!acceptors_started_) {
       return;
     }
 
@@ -165,9 +188,7 @@ class coro_http_server {
       thd_.join();
       CINATRA_LOG_INFO << "stop coro_http_server ok";
     }
-    else {
-      out_ctx_ = nullptr;
-    }
+    acceptors_started_ = false;
   }
 
   // call it after server async_start or sync_start.
@@ -636,15 +657,69 @@ class coro_http_server {
   }
 
   std::string_view address() { return address_; }
-  std::error_code get_errc() { return errc_; }
+  std::error_code get_errc() {
+    std::scoped_lock lock(errc_mtx_);
+    return errc_;
+  }
 
  private:
+  void set_errc(std::error_code ec) {
+    std::scoped_lock lock(errc_mtx_);
+    errc_ = ec;
+  }
+
+#if defined(SO_REUSEPORT)
+  class reuse_port_option {
+   public:
+    explicit reuse_port_option(bool enabled) : value_(enabled ? 1 : 0) {}
+
+    template <typename Protocol>
+    int level(const Protocol &) const {
+      return SOL_SOCKET;
+    }
+
+    template <typename Protocol>
+    int name(const Protocol &) const {
+      return SO_REUSEPORT;
+    }
+
+    template <typename Protocol>
+    const int *data(const Protocol &) const {
+      return &value_;
+    }
+
+    template <typename Protocol>
+    size_t size(const Protocol &) const {
+      return sizeof(value_);
+    }
+
+   private:
+    int value_;
+  };
+#endif
+
   std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen " << port_;
     using asio::ip::tcp;
     asio::error_code ec;
 
-    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
+#if defined(SO_REUSEPORT)
+    const bool use_multi_acceptor = pool_ && pool_->pool_size() > 1;
+#else
+    constexpr bool use_multi_acceptor = false;
+#endif
+
+    const auto acceptor_count =
+        use_multi_acceptor ? pool_->pool_size() : size_t{1};
+    acceptors_.clear();
+    acceptors_.reserve(acceptor_count);
+    for (size_t i = 0; i < acceptor_count; ++i) {
+      auto executor = out_ctx_ ? out_ctx_->get_executor()
+                               : pool_->get_executor_at(i)->get_asio_executor();
+      acceptors_.push_back(std::make_unique<tcp::acceptor>(executor));
+    }
+
+    asio::ip::tcp::resolver resolver(acceptors_.front()->get_executor());
     auto results = resolver.resolve(address_, std::to_string(port_), ec);
 
     if (ec || results.empty()) {
@@ -655,65 +730,95 @@ class coro_http_server {
       }
       return std::make_error_code(std::errc::address_not_available);
     }
-
     auto endpoint = results.begin()->endpoint();
-    acceptor_.open(endpoint.protocol(), ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "acceptor open failed" << " error: " << ec.message();
-      return ec;
-    }
-#ifdef __GNUC__
-    acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
+
+    auto listen_one = [&](tcp::acceptor &acceptor) -> std::error_code {
+      acceptor.open(endpoint.protocol(), ec);
+      if (ec) {
+        return ec;
+      }
+#if !defined(ASIO_WINDOWS) && !defined(__CYGWIN__)
+      acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+      if (ec) {
+        return ec;
+      }
 #endif
-    acceptor_.bind(endpoint, ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "bind port: " << port_ << " error: " << ec.message();
-      std::error_code ignore_ec;
-      acceptor_.cancel(ignore_ec);
-      acceptor_.close(ignore_ec);
-      return ec;
-    }
-#ifdef _MSC_VER
-    acceptor_.set_option(tcp::acceptor::reuse_address(true));
+#if defined(SO_REUSEPORT)
+      if (use_multi_acceptor) {
+        acceptor.set_option(reuse_port_option(true), ec);
+        if (ec) {
+          return ec;
+        }
+      }
 #endif
-    acceptor_.listen(asio::socket_base::max_listen_connections, ec);
+      acceptor.bind(endpoint, ec);
+      if (ec) {
+        return ec;
+      }
+#if defined(ASIO_WINDOWS) || defined(__CYGWIN__)
+      acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+      if (ec) {
+        return ec;
+      }
+#endif
+      acceptor.listen(asio::socket_base::max_listen_connections, ec);
+      return ec;
+    };
+
+    ec = listen_one(*acceptors_.front());
     if (ec) {
-      CINATRA_LOG_ERROR << "get local endpoint port: " << port_
-                        << " listen error: " << ec.message();
+      CINATRA_LOG_ERROR << "listen failed: " << ec.message();
+      close_listeners();
       return ec;
     }
 
-    auto end_point = acceptor_.local_endpoint(ec);
+    auto end_point = acceptors_.front()->local_endpoint(ec);
     if (ec) {
       CINATRA_LOG_ERROR << "get local endpoint port: " << port_
                         << " error: " << ec.message();
+      close_listeners();
       return ec;
     }
     port_ = end_point.port();
+
+    if (use_multi_acceptor) {
+      endpoint.port(port_);
+      for (size_t i = 1; i < pool_->pool_size(); ++i) {
+        ec = listen_one(*acceptors_[i]);
+        if (ec) {
+          CINATRA_LOG_ERROR << "listen failed: " << ec.message();
+          close_listeners();
+          return ec;
+        }
+      }
+    }
 
     CINATRA_LOG_INFO << "listen port " << port_ << " successfully";
     return {};
   }
 
-  async_simple::coro::Lazy<std::error_code> accept() {
+  async_simple::coro::Lazy<std::error_code> accept(
+      asio::ip::tcp::acceptor &acceptor,
+      coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
     for (;;) {
-      coro_io::ExecutorWrapper<> *executor;
-      if (out_ctx_ == nullptr) {
+      coro_io::ExecutorWrapper<> *executor = fixed_executor;
+      if (executor == nullptr && out_ctx_ == nullptr) {
         executor = pool_->get_executor();
       }
-      else {
-        out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
-            out_ctx_->get_executor());
+      else if (executor == nullptr) {
+        if (!out_executor_) {
+          out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
+              out_ctx_->get_executor());
+        }
         executor = out_executor_.get();
       }
 
       asio::ip::tcp::socket socket(executor->get_asio_executor());
-      auto error = co_await coro_io::async_accept(acceptor_, socket);
+      auto error = co_await coro_io::async_accept(acceptor, socket);
       if (error) {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
-          acceptor_close_waiter_.set_value();
           co_return error;
         }
         continue;
@@ -776,12 +881,26 @@ class coro_http_server {
   }
 
   void close_acceptor() {
-    asio::dispatch(acceptor_.get_executor(), [this]() {
-      asio::error_code ec;
-      acceptor_.cancel(ec);
-      acceptor_.close(ec);
-    });
+    auto close_one = [](asio::ip::tcp::acceptor &acceptor) {
+      auto *listener = &acceptor;
+      asio::dispatch(acceptor.get_executor(), [listener]() {
+        asio::error_code ec;
+        listener->cancel(ec);
+        listener->close(ec);
+      });
+    };
+    for (auto &acceptor : acceptors_) {
+      close_one(*acceptor);
+    }
     acceptor_close_waiter_.get_future().wait();
+  }
+
+  void close_listeners() {
+    asio::error_code ec;
+    for (auto &acceptor : acceptors_) {
+      acceptor->close(ec);
+    }
+    acceptors_.clear();
   }
 
   // Coroutine-based cache refresh loop.
@@ -1123,12 +1242,16 @@ class coro_http_server {
   uint16_t port_;
   std::string address_;
   std::error_code errc_ = {};
-  asio::ip::tcp::acceptor acceptor_;
+  std::mutex errc_mtx_;
+  std::vector<std::unique_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
+  std::atomic<size_t> acceptors_running_ = 0;
+  std::atomic<bool> accept_failed_ = false;
+  std::atomic<bool> acceptors_started_ = false;
   bool no_delay_ = true;
 
-  uint64_t conn_id_ = 0;
+  std::atomic<uint64_t> conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::mutex conn_mtx_;

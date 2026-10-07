@@ -1,3 +1,4 @@
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -483,6 +484,104 @@ TEST_CASE("test server sync_start and stop") {
   thd.join();
   CHECK(server.port() > 0);
   CHECK(ec == asio::error::operation_aborted);
+}
+
+#if defined(SO_REUSEPORT)
+TEST_CASE(
+    "default multi acceptor serves concurrent requests on an ephemeral port") {
+  coro_http_server server(3, static_cast<unsigned short>(0),
+                          std::string("127.0.0.1"), false);
+  server.set_http_handler<GET>(
+      "/multi", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  for (int run = 0; run < 2; ++run) {
+    auto started = server.async_start();
+    REQUIRE(server.port() != 0);
+    REQUIRE(server.get_errc() == std::error_code{});
+    const auto uri =
+        "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
+
+    std::vector<std::future<int>> requests;
+    for (int i = 0; i < 24; ++i) {
+      requests.push_back(std::async(std::launch::async, [uri] {
+        coro_http_client client;
+        return client.get(uri).status;
+      }));
+    }
+    for (auto &request : requests) {
+      CHECK(request.get() == 200);
+    }
+
+    server.stop();
+    started.wait();
+    CHECK(started.value() == asio::error::operation_aborted);
+  }
+}
+#endif
+
+TEST_CASE("small and large response writes preserve response bytes") {
+  std::string body(2 * 1024 * 1024, '\0');
+  for (size_t i = 0; i < body.size(); ++i) {
+    body[i] = static_cast<char>('a' + i % 26);
+  }
+  const std::string small_body = body.substr(0, 2048);
+
+  std::atomic<bool> send_buffer_set = true;
+  coro_http_server server(1, static_cast<unsigned short>(0),
+                          std::string("127.0.0.1"));
+  auto handler = [&body, &small_body, &send_buffer_set](
+                     coro_http_request &req, coro_http_response &resp) {
+    std::error_code ec;
+    req.get_conn()->tcp_socket().set_option(
+        asio::socket_base::send_buffer_size(4096), ec);
+    if (ec) {
+      send_buffer_set = false;
+    }
+    if (req.get_url().starts_with("/string")) {
+      req.get_conn()->set_multi_buf(false);
+    }
+    resp.set_status_and_content(
+        status_type::ok, req.get_url().ends_with("small") ? small_body : body);
+  };
+  server.set_http_handler<GET>("/buffers", handler);
+  server.set_http_handler<GET>("/string", handler);
+  server.set_http_handler<GET>("/buffers-small", handler);
+  server.set_http_handler<GET>("/string-small", handler);
+  server.async_start();
+  std::this_thread::sleep_for(50ms);
+
+  for (const auto path :
+       {"/buffers-small", "/string-small", "/buffers", "/string"}) {
+    asio::io_context context;
+    asio::ip::tcp::socket socket(context);
+    socket.connect({asio::ip::make_address("127.0.0.1"), server.port()});
+    std::string request =
+        std::string("GET ") + path +
+        " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    asio::write(socket, asio::buffer(request));
+    std::this_thread::sleep_for(50ms);
+
+    std::string raw;
+    std::array<char, 16384> chunk;
+    std::error_code ec;
+    while (size_t read = socket.read_some(asio::buffer(chunk), ec)) {
+      raw.append(chunk.data(), read);
+    }
+    CHECK(ec == asio::error::eof);
+    auto body_start = raw.find("\r\n\r\n");
+    REQUIRE(body_start != std::string::npos);
+    CHECK(raw.substr(0, 15) == "HTTP/1.1 200 OK");
+    auto received = std::string_view(raw).substr(body_start + 4);
+    const auto &expected =
+        std::string_view(path).ends_with("small") ? small_body : body;
+    CHECK(received.size() == expected.size());
+    CHECK(received == std::string_view(expected));
+  }
+
+  CHECK(send_buffer_set);
+  server.stop();
 }
 
 TEST_CASE("get post") {
