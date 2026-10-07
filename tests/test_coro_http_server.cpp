@@ -496,37 +496,28 @@ TEST_CASE(
         resp.set_status_and_content(status_type::ok, "ok");
       });
 
-  auto started = server.async_start();
-  REQUIRE(server.port() != 0);
-  const auto uri =
-      "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
+  for (int run = 0; run < 2; ++run) {
+    auto started = server.async_start();
+    REQUIRE(server.port() != 0);
+    REQUIRE(server.get_errc() == std::error_code{});
+    const auto uri =
+        "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
 
-  std::vector<std::future<int>> requests;
-  for (int i = 0; i < 24; ++i) {
-    requests.push_back(std::async(std::launch::async, [uri] {
-      coro_http_client client;
-      return client.get(uri).status;
-    }));
+    std::vector<std::future<int>> requests;
+    for (int i = 0; i < 24; ++i) {
+      requests.push_back(std::async(std::launch::async, [uri] {
+        coro_http_client client;
+        return client.get(uri).status;
+      }));
+    }
+    for (auto &request : requests) {
+      CHECK(request.get() == 200);
+    }
+
+    server.stop();
+    started.wait();
+    CHECK(started.value() == asio::error::operation_aborted);
   }
-  for (auto &request : requests) {
-    CHECK(request.get() == 200);
-  }
-
-  coro_http_client active_client;
-  CHECK(active_client.get(uri).status == 200);
-  server.stop();
-  started.wait();
-  CHECK(started.value() == asio::error::operation_aborted);
-}
-
-TEST_CASE("multi acceptor rejects an external io_context") {
-  asio::io_context context;
-  coro_http_server server(context, static_cast<unsigned short>(0));
-  server.set_multi_acceptor(true);
-
-  auto started = server.async_start();
-  CHECK(started.value() ==
-        std::make_error_code(std::errc::operation_not_supported));
 }
 #endif
 

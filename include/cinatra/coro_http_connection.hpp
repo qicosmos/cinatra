@@ -103,6 +103,9 @@ class coro_http_connection
 #ifdef CINATRA_ENABLE_SSL
     if (!use_ssl_) {
 #endif
+      // Keep plain TCP sockets in non-blocking mode: the bounded synchronous
+      // write_some fast path cannot wait for socket readiness, while Asio's
+      // asynchronous reads and writes still handle readiness and partial I/O.
       std::error_code ec;
       socket_.non_blocking(true, ec);
       optimistic_write_ = !ec;
@@ -446,11 +449,11 @@ class coro_http_connection
     }
   }
 
-  async_simple::coro::Lazy<bool> reply(bool need_to_bufffer = true) {
+  async_simple::coro::Lazy<bool> reply(bool need_to_buffer = true) {
     std::error_code ec;
     size_t size = 0;
     if (multi_buf_) {
-      if (need_to_bufffer) {
+      if (need_to_buffer) {
         response_.to_buffers(buffers_, chunk_size_str_);
       }
       const size_t total = asio::buffer_size(buffers_);
@@ -460,6 +463,8 @@ class coro_http_connection
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
       try_optimistic_write = try_optimistic_write && !write_failed_forever_;
 #endif
+      // This synchronous call is non-blocking and limited to 4 KiB. A full
+      // write completes inline; would_block or a partial write uses async I/O.
       if (try_optimistic_write) {
         set_last_time();
         size = socket_.write_some(buffers_, ec);
@@ -491,7 +496,7 @@ class coro_http_connection
       }
     }
     else {
-      if (need_to_bufffer) {
+      if (need_to_buffer) {
         response_.build_resp_str(resp_str_);
       }
       bool try_optimistic_write = optimistic_write_ && socket_.non_blocking() &&
@@ -500,6 +505,7 @@ class coro_http_connection
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
       try_optimistic_write = try_optimistic_write && !write_failed_forever_;
 #endif
+      // Keep the same bounded non-blocking fast path for string responses.
       if (try_optimistic_write) {
         set_last_time();
         size = socket_.write_some(asio::buffer(resp_str_), ec);

@@ -22,10 +22,12 @@
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
 #include <atomic>
+#include <condition_variable>
 #include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -175,22 +177,53 @@ class io_context_pool {
   }
 
   void stop() {
-    std::call_once(flag_, [this] {
-      bool has_run_or_stop = false;
-      bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
-
-      work_.clear();
-
-      if (ok) {
-        // clear all unfinished work
-        for (auto &e : io_contexts_) {
-          e->run();
-        }
+    {
+      std::unique_lock lock(stop_mtx_);
+      if (stop_started_) {
+        stop_cv_.wait(lock, [this] {
+          return stop_completed_;
+        });
         return;
       }
+      stop_started_ = true;
+    }
 
+    bool has_run_or_stop = false;
+    bool ok = has_run_or_stop_.compare_exchange_strong(has_run_or_stop, true);
+    work_.clear();
+
+    if (ok) {
+      // Drain any operations queued before the pool was started.
+      for (auto &context : io_contexts_) {
+        context->run();
+      }
+    }
+    else {
       promise_.get_future().wait();
-    });
+    }
+
+    {
+      std::lock_guard lock(stop_mtx_);
+      stop_completed_ = true;
+    }
+    stop_cv_.notify_all();
+  }
+
+  // Reuse the same io_contexts after stop() has joined their worker threads.
+  void restart() {
+    std::lock_guard lock(stop_mtx_);
+    if (!stop_completed_) {
+      throw std::logic_error("io_context_pool::restart requires stop()");
+    }
+
+    for (auto &context : io_contexts_) {
+      context->restart();
+      work_.push_back(asio::make_work_guard(*context));
+    }
+    promise_ = std::promise<void>{};
+    has_run_or_stop_ = false;
+    stop_started_ = false;
+    stop_completed_ = false;
   }
 
   ~io_context_pool() {
@@ -229,7 +262,10 @@ class io_context_pool {
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
   std::atomic<bool> has_run_or_stop_ = false;
-  std::once_flag flag_;
+  std::mutex stop_mtx_;
+  std::condition_variable stop_cv_;
+  bool stop_started_ = false;
+  bool stop_completed_ = false;
   bool cpu_affinity_ = false;
   inline static std::atomic<size_t> total_thread_num_ = 0;
 };
