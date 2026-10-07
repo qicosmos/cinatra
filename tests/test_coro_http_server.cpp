@@ -487,10 +487,10 @@ TEST_CASE("test server sync_start and stop") {
 }
 
 #if defined(SO_REUSEPORT)
-TEST_CASE("multi acceptor serves concurrent requests on an ephemeral port") {
+TEST_CASE(
+    "default multi acceptor serves concurrent requests on an ephemeral port") {
   coro_http_server server(3, static_cast<unsigned short>(0),
                           std::string("127.0.0.1"), false);
-  server.set_multi_acceptor(true);
   server.set_http_handler<GET>(
       "/multi", [](coro_http_request &, coro_http_response &resp) {
         resp.set_status_and_content(status_type::ok, "ok");

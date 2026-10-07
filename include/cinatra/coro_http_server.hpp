@@ -32,12 +32,14 @@ class coro_http_server {
         check_timer_(ctx),
         cache_refresh_timer_(ctx) {
     init_address(std::move(address));
+    multi_acceptor_ = false;
   }
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
       : out_ctx_(&ctx), check_timer_(ctx), cache_refresh_timer_(ctx) {
     init_address(std::move(address));
+    multi_acceptor_ = false;
   }
 
   coro_http_server(size_t thread_num, unsigned short port,
@@ -1231,7 +1233,11 @@ class coro_http_server {
   std::atomic<size_t> acceptors_running_ = 0;
   std::atomic<bool> accept_failed_ = false;
   std::atomic<bool> acceptors_started_ = false;
+#if defined(SO_REUSEPORT)
+  bool multi_acceptor_ = true;
+#else
   bool multi_acceptor_ = false;
+#endif
   bool no_delay_ = true;
 
   std::atomic<uint64_t> conn_id_ = 0;
