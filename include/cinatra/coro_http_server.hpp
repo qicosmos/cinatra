@@ -85,32 +85,18 @@ class coro_http_server {
   }
 #endif
 
-  // stop() must run on another thread to finish a blocking sync_start().
   std::error_code sync_start() noexcept {
     auto ret = async_start();
     ret.wait();
     return ret.value();
   }
 
-  // Do not call concurrently with another start() or stop().
   async_simple::Future<std::error_code> async_start() {
-    auto promise = std::make_shared<async_simple::Promise<std::error_code>>();
-    auto future = promise->getFuture();
-    std::unique_lock lifecycle_lock(lifecycle_mtx_);
-
-    if (acceptors_started_) {
-      promise->setValue(std::make_error_code(std::errc::operation_in_progress));
-      return future;
-    }
-
-    // io_context_pool is stopped by stop() and must be restarted before it
-    // accepts another run loop.
-    if (pool_ && pool_->has_stop()) {
-      pool_->restart();
-    }
-
-    if (stopped_) {
-      stop_timer_ = false;
+    const bool restarting = stop_timer_.exchange(false);
+    if (restarting) {
+      if (pool_ && pool_->has_stop()) {
+        pool_->restart();
+      }
       if (need_check_) {
         start_check_timer();
       }
@@ -119,49 +105,38 @@ class coro_http_server {
     auto listen_error = listen();
     set_errc(listen_error);
 
+    auto promise = std::make_shared<async_simple::Promise<std::error_code>>();
+    auto future = promise->getFuture();
+
     if (!listen_error) {
       if (out_ctx_ == nullptr) {
         thd_ = std::thread([this] {
           pool_->run();
         });
       }
-      if (cache_refresh_enabled_ && !cache_refresh_started_) {
-        start_cache_refresh_loop();
+      if (restarting && cache_refresh_done_.valid() &&
+          cache_refresh_done_.wait_for(std::chrono::seconds(0)) ==
+              std::future_status::ready) {
+        cache_refresh_stopped_ = std::promise<void>{};
+        cache_refresh_done_ = cache_refresh_stopped_.get_future();
+        cache_refresh_loop().start([](auto &&) {
+        });
       }
 
-      {
-        std::scoped_lock lock(acceptors_mtx_);
-        acceptors_running_ = acceptors_.size();
-        acceptors_error_.clear();
-        acceptors_stopping_ = false;
-      }
+      accept_failed_ = false;
+      acceptors_running_ = acceptors_.size();
       acceptor_close_waiter_ = std::promise<void>{};
-      acceptor_close_future_ = acceptor_close_waiter_.get_future();
       acceptors_started_ = true;
       auto on_finished = [promise, this](auto &&res) mutable {
-        bool all_finished = false;
-        std::error_code result_error;
-        {
-          std::scoped_lock lock(acceptors_mtx_);
-          if (!acceptors_stopping_) {
-            auto accept_error = res.hasError()
-                                    ? std::make_error_code(std::errc::io_error)
-                                    : res.value();
-            if (accept_error && !acceptors_error_) {
-              acceptors_error_ = accept_error;
-            }
-          }
-          if (--acceptors_running_ == 0) {
-            result_error = acceptors_error_;
-            if (!result_error && acceptors_stopping_) {
-              result_error = asio::error::operation_aborted;
-            }
-            all_finished = true;
-          }
+        if (res.hasError()) {
+          accept_failed_ = true;
         }
-        if (all_finished) {
-          set_errc(result_error);
-          promise->setValue(result_error);
+        if (acceptors_running_.fetch_sub(1) == 1) {
+          auto result = accept_failed_
+                            ? std::make_error_code(std::errc::io_error)
+                            : res.value();
+          set_errc(result);
+          promise->setValue(result);
           acceptor_close_waiter_.set_value();
         }
       };
@@ -172,20 +147,17 @@ class coro_http_server {
       }
     }
     else {
-      close_listeners();
       promise->setValue(listen_error);
     }
-
-    stopped_ = false;
 
     return future;
   }
 
-  // May run while sync_start() is waiting; do not overlap another start() or
-  // stop() call.
   void stop() {
-    std::unique_lock lifecycle_lock(lifecycle_mtx_);
-    const bool was_started = acceptors_started_;
+    if (!acceptors_started_) {
+      return;
+    }
+
     stop_timer_ = true;
     check_timer_.cancel();
     // Wake up the sleeping cache refresh coroutine so it can exit cleanly.
@@ -196,38 +168,27 @@ class coro_http_server {
     if (cache_refresh_done_.valid()) {
       cache_refresh_done_.wait();
     }
-    cache_refresh_started_ = false;
 
-    if (was_started) {
-      {
-        std::scoped_lock lock(acceptors_mtx_);
-        acceptors_stopping_ = true;
-      }
-      close_acceptor();
-      acceptors_.clear();
+    close_acceptor();
 
-      // close current connections.
-      {
-        std::scoped_lock lock(conn_mtx_);
-        for (auto &conn : connections_) {
-          conn.second->close(false);
-        }
-        connections_.clear();
+    // close current connections.
+    {
+      std::scoped_lock lock(conn_mtx_);
+      for (auto &conn : connections_) {
+        conn.second->close(false);
       }
+      connections_.clear();
     }
 
-    if (out_ctx_ == nullptr && pool_ && !pool_->has_stop()) {
+    if (out_ctx_ == nullptr) {
       CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
       pool_->stop();
 
       CINATRA_LOG_INFO << "server's thread-pool finished.";
-      if (thd_.joinable()) {
-        thd_.join();
-      }
+      thd_.join();
       CINATRA_LOG_INFO << "stop coro_http_server ok";
     }
     acceptors_started_ = false;
-    stopped_ = true;
   }
 
   // call it after server async_start or sync_start.
@@ -413,13 +374,12 @@ class coro_http_server {
   void set_cache_refresh_interval(
       std::chrono::steady_clock::duration interval = std::chrono::seconds(3),
       size_t max_file_size = 3 * 1024 * 1024) {
-    std::unique_lock lifecycle_lock(lifecycle_mtx_);
     cache_refresh_interval_ = interval;
     max_cache_file_size_ = max_file_size;
-    cache_refresh_enabled_ = true;
-    if (acceptors_started_ && !cache_refresh_started_) {
-      start_cache_refresh_loop();
-    }
+    cache_refresh_stopped_ = std::promise<void>{};
+    cache_refresh_done_ = cache_refresh_stopped_.get_future();
+    cache_refresh_loop().start([](auto &&) {
+    });
   }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
@@ -669,13 +629,10 @@ class coro_http_server {
 
   void set_timeout_duration(
       std::chrono::steady_clock::duration timeout_duration) {
-    std::unique_lock lifecycle_lock(lifecycle_mtx_);
     if (timeout_duration > std::chrono::steady_clock::duration::zero()) {
       need_check_ = true;
       timeout_duration_ = timeout_duration;
-      if (!stopped_) {
-        start_check_timer();
-      }
+      start_check_timer();
     }
   }
 
@@ -700,7 +657,7 @@ class coro_http_server {
   }
 
   std::string_view address() { return address_; }
-  std::error_code get_errc() const {
+  std::error_code get_errc() {
     std::scoped_lock lock(errc_mtx_);
     return errc_;
   }
@@ -746,9 +703,6 @@ class coro_http_server {
     using asio::ip::tcp;
     asio::error_code ec;
 
-    // Each worker owns its io_context, so SO_REUSEPORT lets each one accept
-    // directly. A caller-provided io_context and unsupported platforms use a
-    // single listener.
 #if defined(SO_REUSEPORT)
     const bool use_multi_acceptor = pool_ && pool_->pool_size() > 1;
 #else
@@ -938,7 +892,7 @@ class coro_http_server {
     for (auto &acceptor : acceptors_) {
       close_one(*acceptor);
     }
-    acceptor_close_future_.wait();
+    acceptor_close_waiter_.get_future().wait();
   }
 
   void close_listeners() {
@@ -1018,14 +972,6 @@ class coro_http_server {
     // Signal stop() that this coroutine has fully exited and will no
     // longer access any member of 'this'.
     cache_refresh_stopped_.set_value();
-  }
-
-  void start_cache_refresh_loop() {
-    cache_refresh_stopped_ = std::promise<void>{};
-    cache_refresh_done_ = cache_refresh_stopped_.get_future();
-    cache_refresh_started_ = true;
-    cache_refresh_loop().start([](auto &&) {
-    });
   }
 
   void start_check_timer() {
@@ -1296,18 +1242,13 @@ class coro_http_server {
   uint16_t port_;
   std::string address_;
   std::error_code errc_ = {};
-  mutable std::mutex errc_mtx_;
-  std::mutex lifecycle_mtx_;
+  std::mutex errc_mtx_;
   std::vector<std::unique_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
-  std::future<void> acceptor_close_future_;
-  std::mutex acceptors_mtx_;
-  size_t acceptors_running_ = 0;
-  std::error_code acceptors_error_;
-  bool acceptors_stopping_ = false;
-  bool acceptors_started_ = false;
-  bool stopped_ = false;
+  std::atomic<size_t> acceptors_running_ = 0;
+  std::atomic<bool> accept_failed_ = false;
+  std::atomic<bool> acceptors_started_ = false;
   bool no_delay_ = true;
 
   std::atomic<uint64_t> conn_id_ = 0;
@@ -1338,8 +1279,6 @@ class coro_http_server {
   fs::file_time_type last_dir_mtime_{};
   std::promise<void> cache_refresh_stopped_;
   std::future<void> cache_refresh_done_;
-  bool cache_refresh_enabled_ = false;
-  bool cache_refresh_started_ = false;
   file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
