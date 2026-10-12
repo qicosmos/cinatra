@@ -19,7 +19,11 @@ if (BUILD_BENCHMARK)
 	if (ENABLE_SSL)
 		target_link_libraries(benchmark ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES})
 	endif()
+
 endif()
+
+add_executable(bench_thread_pool bench_thread_pool.cpp)
+target_compile_definitions(bench_thread_pool PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
 
 if (ENABLE_SSL)
 	target_link_libraries(${project_name} ${OPENSSL_LIBRARIES} pthread -ldl)
