@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <future>
 #include <memory>
 
 #include "cinatra/coro_http_client.hpp"
@@ -106,41 +107,69 @@ class coro_http_server {
         });
       }
 
+      struct accept_error_state {
+        std::mutex mtx;
+        std::error_code first_error;
+      };
+      auto accept_errors = std::make_shared<accept_error_state>();
+
       accept_pending_.store(acceptors_.size(), std::memory_order_relaxed);
       for (size_t i = 0; i < acceptors_.size(); ++i) {
         coro_io::ExecutorWrapper<> *fixed_executor =
             acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
         auto *listener = acceptors_[i].get();
         accept(*acceptors_[i], fixed_executor)
-            .start([promise, listener, this](auto &&res) mutable {
-              bool failed = res.hasError();
-              if (!failed) {
-                failed = res.value() != asio::error::operation_aborted &&
-                         res.value() != asio::error::bad_descriptor;
-              }
-              if (failed) {
-                // Stop SO_REUSEPORT from routing new connections to a
-                // listener that nobody accepts on anymore.
-                CINATRA_LOG_ERROR << "accept coroutine failed";
-                std::error_code ec;
-                listener->close(ec);
-              }
+            .start(
+                [promise, listener, accept_errors, this](auto &&res) mutable {
+                  std::error_code loop_error;
+                  if (res.hasError()) {
+                    loop_error = std::make_error_code(std::errc::io_error);
+                  }
+                  else if (res.value() != asio::error::operation_aborted &&
+                           res.value() != asio::error::bad_descriptor) {
+                    loop_error = res.value();
+                  }
 
-              if (accept_pending_.fetch_sub(1, std::memory_order_acq_rel) !=
-                  1) {
-                return;
-              }
+                  if (loop_error) {
+                    CINATRA_LOG_ERROR << "accept coroutine failed: "
+                                      << loop_error.message();
+                    // Stop SO_REUSEPORT from routing new connections to a
+                    // listener that nobody accepts on anymore.
+                    std::error_code ignore_ec;
+                    listener->close(ignore_ec);
+                    std::scoped_lock lock(accept_errors->mtx);
+                    if (!accept_errors->first_error) {
+                      accept_errors->first_error = loop_error;
+                    }
+                  }
 
-              if (res.hasError()) {
-                errc_ = std::make_error_code(std::errc::io_error);
-                promise->setValue(errc_);
-              }
-              else {
-                promise->setValue(res.value());
-              }
-              // Wake stop() only after the last access to `this`.
-              acceptor_close_waiter_.set_value();
-            });
+                  if (accept_pending_.fetch_sub(1, std::memory_order_acq_rel) !=
+                      1) {
+                    return;
+                  }
+
+                  std::error_code final_error;
+                  {
+                    std::scoped_lock lock(accept_errors->mtx);
+                    final_error = accept_errors->first_error;
+                  }
+                  if (final_error) {
+                    errc_ = final_error;
+                  }
+                  else if (res.hasError()) {
+                    errc_ = std::make_error_code(std::errc::io_error);
+                    final_error = errc_;
+                  }
+                  else {
+                    final_error = res.value();
+                  }
+
+                  // The future continuation may call stop() or destroy the
+                  // server synchronously, so wake stop() before completing the
+                  // future and touch no member of `this` afterwards.
+                  acceptor_close_waiter_.set_value();
+                  promise->setValue(final_error);
+                });
       }
     }
     else {
@@ -683,7 +712,7 @@ class coro_http_server {
 
     acceptors_.clear();
     acceptors_.reserve(acceptor_count);
-    acceptors_.push_back(std::make_unique<tcp::acceptor>(executor_at(0)));
+    acceptors_.push_back(std::make_shared<tcp::acceptor>(executor_at(0)));
 
     asio::ip::tcp::resolver resolver(executor_at(0));
     auto results = resolver.resolve(address_, std::to_string(port_), ec);
@@ -751,7 +780,7 @@ class coro_http_server {
           << ec.message();
       acceptors_.clear();
       multi_acceptor = false;
-      acceptors_.push_back(std::make_unique<tcp::acceptor>(executor_at(0)));
+      acceptors_.push_back(std::make_shared<tcp::acceptor>(executor_at(0)));
       ec = listen_one(*acceptors_.front(), endpoint, false);
     }
 #endif
@@ -774,7 +803,7 @@ class coro_http_server {
     if (multi_acceptor) {
       tcp::endpoint extra_endpoint(endpoint.address(), port_);
       for (size_t i = 1; i < acceptor_count; ++i) {
-        auto acceptor = std::make_unique<tcp::acceptor>(executor_at(i));
+        auto acceptor = std::make_shared<tcp::acceptor>(executor_at(i));
         ec = listen_one(*acceptor, extra_endpoint, true);
         if (ec) {
           CINATRA_LOG_WARNING
@@ -881,14 +910,15 @@ class coro_http_server {
     }
 
     for (auto &acceptor : acceptors_) {
-      auto *listener = acceptor.get();
-      asio::dispatch(listener->get_executor(), [listener]() {
+      // Keep the listener alive until the queued close runs: the server may
+      // be destroyed before an external io_context dispatches it.
+      asio::dispatch(acceptor->get_executor(), [acceptor]() {
         asio::error_code ec;
-        listener->cancel(ec);
-        listener->close(ec);
+        acceptor->cancel(ec);
+        acceptor->close(ec);
       });
     }
-    acceptor_close_waiter_.get_future().wait();
+    acceptor_close_future_.wait();
   }
 
   void close_listeners() {
@@ -1239,9 +1269,11 @@ class coro_http_server {
   uint16_t port_;
   std::string address_;
   std::error_code errc_ = {};
-  std::vector<std::unique_ptr<asio::ip::tcp::acceptor>> acceptors_;
+  std::vector<std::shared_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
+  std::future<void> acceptor_close_future_ =
+      acceptor_close_waiter_.get_future();
   std::atomic<size_t> accept_pending_{0};
   bool no_delay_ = true;
 
