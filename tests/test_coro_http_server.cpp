@@ -485,6 +485,38 @@ TEST_CASE("test server sync_start and stop") {
   CHECK(ec == asio::error::operation_aborted);
 }
 
+#if defined(SO_REUSEPORT)
+TEST_CASE("multi acceptor serves concurrent requests") {
+  coro_http_server server(3, static_cast<unsigned short>(0),
+                          std::string("127.0.0.1"), false);
+  server.set_http_handler<GET>(
+      "/multi", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto started = server.async_start();
+  REQUIRE(server.port() != 0);
+  REQUIRE(server.get_errc() == std::error_code{});
+
+  const auto uri =
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
+  std::vector<std::future<int>> requests;
+  for (int i = 0; i < 120; ++i) {
+    requests.push_back(std::async(std::launch::async, [uri] {
+      coro_http_client client;
+      return client.get(uri).status;
+    }));
+  }
+  for (auto &request : requests) {
+    CHECK(request.get() == 200);
+  }
+
+  server.stop();
+  started.wait();
+  CHECK(started.value() == asio::error::operation_aborted);
+}
+#endif
+
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 19001);
   server.set_shrink_to_fit(true);
