@@ -110,17 +110,27 @@ class coro_http_server {
       for (size_t i = 0; i < acceptors_.size(); ++i) {
         coro_io::ExecutorWrapper<> *fixed_executor =
             acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
+        auto *listener = acceptors_[i].get();
         accept(*acceptors_[i], fixed_executor)
-            .start([promise, this](auto &&res) mutable {
+            .start([promise, listener, this](auto &&res) mutable {
+              bool failed = res.hasError();
+              if (!failed) {
+                failed = res.value() != asio::error::operation_aborted &&
+                         res.value() != asio::error::bad_descriptor;
+              }
+              if (failed) {
+                // Stop SO_REUSEPORT from routing new connections to a
+                // listener that nobody accepts on anymore.
+                CINATRA_LOG_ERROR << "accept coroutine failed";
+                std::error_code ec;
+                listener->close(ec);
+              }
+
               if (accept_pending_.fetch_sub(1, std::memory_order_acq_rel) !=
                   1) {
-                if (res.hasError()) {
-                  CINATRA_LOG_ERROR << "accept coroutine failed";
-                }
                 return;
               }
 
-              acceptor_close_waiter_.set_value();
               if (res.hasError()) {
                 errc_ = std::make_error_code(std::errc::io_error);
                 promise->setValue(errc_);
@@ -128,6 +138,8 @@ class coro_http_server {
               else {
                 promise->setValue(res.value());
               }
+              // Wake stop() only after the last access to `this`.
+              acceptor_close_waiter_.set_value();
             });
       }
     }
@@ -654,7 +666,7 @@ class coro_http_server {
     asio::error_code ec;
 
 #if defined(SO_REUSEPORT)
-    const bool multi_acceptor =
+    bool multi_acceptor =
         out_ctx_ == nullptr && pool_ != nullptr && pool_->pool_size() > 1;
     const size_t acceptor_count = multi_acceptor ? pool_->pool_size() : 1;
 #else
@@ -688,14 +700,14 @@ class coro_http_server {
 
     auto endpoint = results.begin()->endpoint();
 
-    auto listen_one = [&](tcp::acceptor &acceptor,
-                          const tcp::endpoint &ep) -> std::error_code {
+    auto listen_one = [&](tcp::acceptor &acceptor, const tcp::endpoint &ep,
+                          bool use_reuse_port) -> std::error_code {
       acceptor.open(ep.protocol(), ec);
       if (ec) {
         return ec;
       }
 #if defined(SO_REUSEPORT)
-      if (multi_acceptor) {
+      if (use_reuse_port) {
         acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
         if (ec) {
           return ec;
@@ -707,6 +719,8 @@ class coro_http_server {
           return ec;
         }
       }
+#else
+      (void)use_reuse_port;
 #endif
 #ifdef __GNUC__
       acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
@@ -728,7 +742,19 @@ class coro_http_server {
       return ec;
     };
 
-    ec = listen_one(*acceptors_.front(), endpoint);
+    ec = listen_one(*acceptors_.front(), endpoint, multi_acceptor);
+#if defined(SO_REUSEPORT)
+    if (ec && multi_acceptor) {
+      CINATRA_LOG_WARNING
+          << "SO_REUSEPORT unavailable, falling back to single acceptor, "
+             "error: "
+          << ec.message();
+      acceptors_.clear();
+      multi_acceptor = false;
+      acceptors_.push_back(std::make_unique<tcp::acceptor>(executor_at(0)));
+      ec = listen_one(*acceptors_.front(), endpoint, false);
+    }
+#endif
     if (ec) {
       CINATRA_LOG_ERROR << "listen port: " << port_
                         << " error: " << ec.message();
@@ -749,12 +775,11 @@ class coro_http_server {
       tcp::endpoint extra_endpoint(endpoint.address(), port_);
       for (size_t i = 1; i < acceptor_count; ++i) {
         auto acceptor = std::make_unique<tcp::acceptor>(executor_at(i));
-        ec = listen_one(*acceptor, extra_endpoint);
+        ec = listen_one(*acceptor, extra_endpoint, true);
         if (ec) {
           CINATRA_LOG_WARNING
-              << "create extra acceptor failed, fall back to single acceptor, "
-                 "error: "
-              << ec.message();
+              << "create extra acceptor failed, continuing with "
+              << acceptors_.size() << " acceptor(s), error: " << ec.message();
           std::error_code ignore_ec;
           acceptor->close(ignore_ec);
           break;
