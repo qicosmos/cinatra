@@ -3,6 +3,8 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <stdexcept>
+#include <thread>
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
@@ -118,9 +120,8 @@ class coro_http_server {
       for (size_t i = 0; i < acceptors_.size(); ++i) {
         coro_io::ExecutorWrapper<> *fixed_executor =
             acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
-        auto *listener = acceptors_[i].get();
         accept(*acceptors_[i], fixed_executor)
-            .start([promise, listener, state, this](auto &&res) mutable {
+            .start([promise, state, this](auto &&res) mutable {
               std::error_code loop_error =
                   res.hasError() ? std::make_error_code(std::errc::io_error)
                                  : res.value();
@@ -132,10 +133,9 @@ class coro_http_server {
               if (loop_error) {
                 CINATRA_LOG_ERROR << "accept coroutine failed: "
                                   << loop_error.message();
-                // Stop SO_REUSEPORT from routing new connections to a
-                // listener that nobody accepts on anymore.
-                std::error_code ignore_ec;
-                listener->close(ignore_ec);
+                // A failed loop will never accept again, so stop every
+                // listener instead of leaving the server half-alive.
+                close_acceptors_async();
               }
 
               std::error_code final_error;
@@ -163,7 +163,12 @@ class coro_http_server {
               // server synchronously, so wake stop() before completing the
               // future and touch no member of `this` afterwards.
               acceptor_close_waiter_.set_value();
-              promise->setValue(final_error);
+              // Complete on a fresh thread: setValue may run continuations
+              // inline, and a continuation calling stop() on a pool thread
+              // would wait for that same pool to finish.
+              std::thread([promise, final_error] {
+                promise->setValue(final_error);
+              }).detach();
             });
       }
     }
@@ -410,6 +415,30 @@ class coro_http_server {
   void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
 
   void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
+
+  enum class inject_failure {
+    none,
+    resolver_error,
+    resolver_empty,
+    open,
+    reuse_address,
+    reuse_port,
+    bind,
+    listen,
+    local_endpoint,
+    extra_acceptor,
+  };
+
+  void set_inject_failure(inject_failure failure) { inject_failure_ = failure; }
+
+  void set_accept_exception(bool fail, bool first_listener_only = false) {
+    accept_exception_ = fail;
+    accept_exception_first_only_ = first_listener_only;
+  }
+
+  void set_accept_transient_errors(int count) {
+    accept_transient_errors_ = count;
+  }
 #endif
 
   template <typename... Aspects>
@@ -711,6 +740,14 @@ class coro_http_server {
 
     asio::ip::tcp::resolver resolver(executor_at(0));
     auto results = resolver.resolve(address_, std::to_string(port_), ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+    if (!ec && inject_failure_ == inject_failure::resolver_error) {
+      ec = asio::error::host_not_found;
+    }
+    if (!ec && inject_failure_ == inject_failure::resolver_empty) {
+      results = decltype(results)();
+    }
+#endif
 
     if (ec || results.empty()) {
       CINATRA_LOG_ERROR << "bad address: " << address_
@@ -724,15 +761,25 @@ class coro_http_server {
 
     auto endpoint = results.begin()->endpoint();
 
-    auto listen_one = [](tcp::acceptor &acceptor, const tcp::endpoint &ep,
-                         bool use_reuse_port) -> std::error_code {
+    auto listen_one = [this](tcp::acceptor &acceptor, const tcp::endpoint &ep,
+                             bool use_reuse_port) -> std::error_code {
       asio::error_code ec;
       acceptor.open(ep.protocol(), ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (!ec && inject_failure_ == inject_failure::open) {
+        ec = std::make_error_code(std::errc::operation_not_supported);
+      }
+#endif
       if (ec) {
         return ec;
       }
 #ifdef __GNUC__
       acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (!ec && inject_failure_ == inject_failure::reuse_address) {
+        ec = std::make_error_code(std::errc::operation_not_supported);
+      }
+#endif
       if (ec) {
         return ec;
       }
@@ -742,6 +789,11 @@ class coro_http_server {
         acceptor.set_option(
             asio::detail::socket_option::integer<SOL_SOCKET, SO_REUSEPORT>(1),
             ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+        if (!ec && inject_failure_ == inject_failure::reuse_port) {
+          ec = std::make_error_code(std::errc::operation_not_supported);
+        }
+#endif
         if (ec) {
           return ec;
         }
@@ -750,16 +802,31 @@ class coro_http_server {
       (void)use_reuse_port;
 #endif
       acceptor.bind(ep, ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (!ec && inject_failure_ == inject_failure::bind) {
+        ec = std::make_error_code(std::errc::operation_not_supported);
+      }
+#endif
       if (ec) {
         return ec;
       }
 #ifdef _MSC_VER
       acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (!ec && inject_failure_ == inject_failure::reuse_address) {
+        ec = std::make_error_code(std::errc::operation_not_supported);
+      }
+#endif
       if (ec) {
         return ec;
       }
 #endif
       acceptor.listen(asio::socket_base::max_listen_connections, ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (!ec && inject_failure_ == inject_failure::listen) {
+        ec = std::make_error_code(std::errc::operation_not_supported);
+      }
+#endif
       return ec;
     };
 
@@ -784,6 +851,11 @@ class coro_http_server {
     }
 
     auto end_point = acceptors_.front()->local_endpoint(ec);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+    if (!ec && inject_failure_ == inject_failure::local_endpoint) {
+      ec = std::make_error_code(std::errc::operation_not_supported);
+    }
+#endif
     if (ec) {
       CINATRA_LOG_ERROR << "get local endpoint port: " << port_
                         << " error: " << ec.message();
@@ -797,6 +869,11 @@ class coro_http_server {
       for (size_t i = 1; i < acceptor_count; ++i) {
         auto acceptor = std::make_shared<tcp::acceptor>(executor_at(i));
         ec = listen_one(*acceptor, extra_endpoint, true);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+        if (!ec && inject_failure_ == inject_failure::extra_acceptor) {
+          ec = std::make_error_code(std::errc::operation_not_supported);
+        }
+#endif
         if (ec) {
           CINATRA_LOG_WARNING
               << "create extra acceptor failed, continuing with "
@@ -830,7 +907,22 @@ class coro_http_server {
       }
 
       asio::ip::tcp::socket socket(executor->get_asio_executor());
-      auto error = co_await coro_io::async_accept(acceptor, socket);
+      asio::error_code error;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (accept_exception_ && (!accept_exception_first_only_ ||
+                                &acceptor == acceptors_.front().get())) {
+        throw std::runtime_error("injected accept failure");
+      }
+      if (accept_transient_errors_.fetch_sub(1, std::memory_order_relaxed) >
+          0) {
+        error = asio::error::would_block;
+      }
+      else {
+        error = co_await coro_io::async_accept(acceptor, socket);
+      }
+#else
+      error = co_await coro_io::async_accept(acceptor, socket);
+#endif
       if (error) {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
@@ -896,11 +988,7 @@ class coro_http_server {
     co_await conn->start();
   }
 
-  void close_acceptor() {
-    if (acceptors_.empty()) {
-      return;
-    }
-
+  void close_acceptors_async() {
     for (auto &acceptor : acceptors_) {
       // Keep the listener alive until the queued close runs: the server may
       // be destroyed before an external io_context dispatches it.
@@ -910,6 +998,14 @@ class coro_http_server {
         acceptor->close(ec);
       });
     }
+  }
+
+  void close_acceptor() {
+    if (acceptors_.empty()) {
+      return;
+    }
+
+    close_acceptors_async();
     acceptor_close_future_.wait();
   }
 
@@ -1313,6 +1409,10 @@ class coro_http_server {
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
+  inject_failure inject_failure_ = inject_failure::none;
+  bool accept_exception_ = false;
+  bool accept_exception_first_only_ = false;
+  std::atomic<int> accept_transient_errors_{0};
 #endif
 };
 
