@@ -210,6 +210,10 @@ class io_context_pool {
     return ret;
   }
 
+  coro_io::ExecutorWrapper<> *get_executor_at(std::size_t index) {
+    return executors.at(index).get();
+  }
+
   template <typename T>
   friend io_context_pool &g_io_context_pool();
 
@@ -217,8 +221,7 @@ class io_context_pool {
 
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
-  using work_type =
-      asio::executor_work_guard<asio::io_context::executor_type>;
+  using work_type = asio::executor_work_guard<asio::io_context::executor_type>;
 
   std::vector<io_context_ptr> io_contexts_;
   std::vector<std::unique_ptr<coro_io::ExecutorWrapper<>>> executors;
