@@ -1,10 +1,15 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <future>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <thread>
+
+#include <asio/strand.hpp>
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
@@ -26,20 +31,51 @@ enum class file_resp_format_type {
 class coro_http_server {
   using file_cache_type = std::unordered_map<std::string, std::string>;
   using file_cache_ptr = std::shared_ptr<file_cache_type>;
+  using out_strand_type = asio::strand<asio::io_context::executor_type>;
+
+  struct completion_control {
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool ready = false;
+    std::error_code result;
+  };
+
+  struct accept_state {
+    std::mutex mtx;
+    std::error_code first_error;
+    bool finalized = false;
+    size_t remaining = 0;
+    std::shared_ptr<completion_control> control;
+  };
+
+  enum class life_state { idle, starting, running, stopping, stopped };
+
+  // Posted runtime handlers outlive the server when the io_context is owned
+  // by the caller; the token lets them observe destruction without touching
+  // any member. Handlers hold the mutex while running, so marking the server
+  // dead waits for an in-flight handler to finish.
+  struct life_token {
+    std::mutex mtx;
+    bool alive = true;
+  };
 
  public:
   coro_http_server(asio::io_context &ctx, unsigned short port,
                    std::string address = "0.0.0.0")
       : out_ctx_(&ctx),
+        out_strand_(asio::make_strand(ctx)),
         port_(port),
-        check_timer_(ctx),
-        cache_refresh_timer_(ctx) {
+        check_timer_(*out_strand_),
+        cache_refresh_timer_(*out_strand_) {
     init_address(std::move(address));
   }
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx), check_timer_(ctx), cache_refresh_timer_(ctx) {
+      : out_ctx_(&ctx),
+        out_strand_(asio::make_strand(ctx)),
+        check_timer_(*out_strand_),
+        cache_refresh_timer_(*out_strand_) {
     init_address(std::move(address));
   }
 
@@ -48,6 +84,8 @@ class coro_http_server {
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
         port_(port),
+        thread_num_(thread_num),
+        cpu_affinity_(cpu_affinity),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -58,6 +96,8 @@ class coro_http_server {
                    bool cpu_affinity = false)
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
+        thread_num_(thread_num),
+        cpu_affinity_(cpu_affinity),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -66,9 +106,18 @@ class coro_http_server {
   ~coro_http_server() {
     CINATRA_LOG_INFO << "coro_http_server will quit";
     stop();
+    std::scoped_lock lock(life_token_->mtx);
+    life_token_->alive = false;
   }
 
   void set_no_delay(bool r) { no_delay_ = r; }
+
+  // On POSIX platforms that provide SO_REUSEPORT, servers in the same
+  // io_context pool share the listening port by default (one acceptor per
+  // pool thread). This is a behavioral change: a second server bound to the
+  // same port joins the group instead of failing with address_in_use. Call
+  // set_reuse_port(false) before start to keep exclusive binding.
+  void set_reuse_port(bool enable) { reuse_port_ = enable; }
 
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
@@ -88,135 +137,226 @@ class coro_http_server {
   }
 #endif
 
-  // only call once, not thread safe.
   std::error_code sync_start() noexcept {
     auto ret = async_start();
     ret.wait();
     return ret.value();
   }
 
-  // only call once, not thread safe.
+  // Completes with operation_not_permitted if the server is not idle. A
+  // start that fails before any acceptor loop runs rolls back to idle, so
+  // the caller may retry with the same server.
   async_simple::Future<std::error_code> async_start() {
-    errc_ = listen();
-
     auto promise = std::make_shared<async_simple::Promise<std::error_code>>();
     auto future = promise->getFuture();
 
-    if (!errc_) {
-      if (out_ctx_ == nullptr) {
-        thd_ = std::thread([this] {
-          pool_->run();
+    {
+      std::scoped_lock lock(life_mtx_);
+      if (life_ != life_state::idle) {
+        auto ec = std::make_error_code(std::errc::operation_not_permitted);
+        promise->setValue(ec);
+        return future;
+      }
+      life_ = life_state::starting;
+    }
+
+    // A previous start may have failed during pool startup and rolled back to
+    // idle; rebuild the per-run synchronization state so this attempt does not
+    // inherit its result, shutdown flag, or consumed waiter.
+    shutting_down_.store(false, std::memory_order_release);
+    stop_timer_.store(false, std::memory_order_release);
+    set_errc(std::error_code{});
+    acceptor_close_waiter_ = std::promise<void>{};
+    acceptor_close_future_ = acceptor_close_waiter_.get_future();
+
+    std::shared_ptr<accept_state> state;
+    std::shared_ptr<completion_control> control;
+    size_t started = 0;
+    bool state_armed = false;
+
+    try {
+      auto listen_error = listen();
+      if (listen_error) {
+        set_errc(listen_error);
+        // Leave `starting` before the future completes: a continuation may
+        // legitimately start the server again as soon as it observes the
+        // failure.
+        leave_starting(life_state::idle);
+        promise->setValue(listen_error);
+        return future;
+      }
+
+      state = std::make_shared<accept_state>();
+      control = std::make_shared<completion_control>();
+      state->control = control;
+
+      try {
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+        if (inject_completion_failure_) {
+          throw std::runtime_error("injected completion thread failure");
+        }
+#endif
+        std::thread completion_thread([control, promise] {
+          std::error_code result;
+          {
+            std::unique_lock lock(control->mtx);
+            control->cv.wait(lock, [&control] { return control->ready; });
+            result = control->result;
+          }
+          try {
+            promise->setValue(result);
+          } catch (...) {
+            CINATRA_LOG_ERROR << "failed to complete start future";
+          }
         });
+        completion_thread.detach();
+      } catch (...) {
+        auto start_error = std::make_error_code(std::errc::io_error);
+        set_errc(start_error);
+        close_listeners();
+        leave_starting(life_state::idle);
+        promise->setValue(start_error);
+        return future;
       }
 
-      struct accept_state {
-        std::mutex mtx;
-        std::error_code first_error;
-        size_t remaining;
-      };
-      auto state = std::make_shared<accept_state>();
-      state->remaining = acceptors_.size();
+      if (out_ctx_ == nullptr) {
+        try {
+          thd_ = std::thread([this] {
+            try {
+              pool_->run();
+            } catch (...) {
+              CINATRA_LOG_ERROR << "server thread pool run failed";
+            }
+          });
+        } catch (...) {
+          auto start_error = std::make_error_code(std::errc::io_error);
+          set_errc(start_error);
+          close_listeners();
+          leave_starting(life_state::idle);
+          complete_control(control, start_error);
+          return future;
+        }
 
+        if (!pool_->wait_run_started()) {
+          auto start_error = std::make_error_code(std::errc::io_error);
+          set_errc(start_error);
+          close_listeners();
+          if (thd_.joinable()) {
+            thd_.join();
+          }
+          // The failed pool cannot run again, and its executors own the
+          // acceptors that were just closed. Replace it so a later start on
+          // this server gets a working pool instead of a dead one.
+          reset_pool();
+          leave_starting(life_state::idle);
+          complete_control(control, start_error);
+          return future;
+        }
+      }
+
+      // Background timers/coroutines are created only after the listener and
+      // the pool are usable, and only for a start that will proceed.
+      start_background_tasks();
+
+      // The extra unit keeps the future pending until every launched loop
+      // has exited, even if a loop completes synchronously.
+      state->remaining = acceptors_.size() + 1;
+      state_armed = true;
+
+      std::error_code launch_error;
       for (size_t i = 0; i < acceptors_.size(); ++i) {
-        coro_io::ExecutorWrapper<> *fixed_executor =
-            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
-        accept(*acceptors_[i], fixed_executor)
-            .start([promise, state, this](auto &&res) mutable {
-              std::error_code loop_error =
-                  res.hasError() ? std::make_error_code(std::errc::io_error)
-                                 : res.value();
-              if (loop_error == asio::error::operation_aborted ||
-                  loop_error == asio::error::bad_descriptor) {
-                loop_error = {};
-              }
-
-              if (loop_error) {
-                CINATRA_LOG_ERROR << "accept coroutine failed: "
-                                  << loop_error.message();
-                // A failed loop will never accept again, so stop every
-                // listener instead of leaving the server half-alive.
-                close_acceptors_async();
-              }
-
-              std::error_code final_error;
-              bool last;
-              {
-                std::scoped_lock lock(state->mtx);
-                if (loop_error && !state->first_error) {
-                  state->first_error = loop_error;
-                }
-                last = --state->remaining == 0;
-                final_error = state->first_error;
-              }
-              if (!last) {
-                return;
-              }
-
-              if (final_error) {
-                errc_ = final_error;
-              }
-              else {
-                final_error = res.value();
-              }
-
-              // The future continuation may call stop() or destroy the
-              // server synchronously, so wake stop() before completing the
-              // future and touch no member of `this` afterwards.
-              acceptor_close_waiter_.set_value();
-              // Complete on a fresh thread: setValue may run continuations
-              // inline, and a continuation calling stop() on a pool thread
-              // would wait for that same pool to finish.
-              std::thread([promise, final_error] {
-                promise->setValue(final_error);
-              }).detach();
-            });
+        try {
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+          if (inject_launch_failure_index_ == i) {
+            throw std::runtime_error("injected accept launch failure");
+          }
+#endif
+          coro_io::ExecutorWrapper<> *fixed_executor =
+              acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
+          accept(*acceptors_[i], fixed_executor)
+              .start([state, this](auto &&res) mutable {
+                on_accept_loop_exit(state, std::move(res));
+              });
+          ++started;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+          if (inject_launch_delay_.count() > 0) {
+            std::this_thread::sleep_for(inject_launch_delay_);
+          }
+#endif
+        } catch (...) {
+          launch_error = std::make_error_code(std::errc::io_error);
+          break;
+        }
       }
-    }
-    else {
-      promise->setValue(errc_);
-    }
 
-    return future;
+      if (launch_error) {
+        fail_launch(state, acceptors_.size() - started);
+      }
+      else {
+        finish_accept_state(state);
+      }
+
+      leave_starting(life_state::running);
+      return future;
+    } catch (...) {
+      auto start_error = std::make_error_code(std::errc::io_error);
+      if (state_armed) {
+        fail_launch(state, acceptors_.size() - started);
+        leave_starting(life_state::running);
+      }
+      else {
+        set_errc(start_error);
+        // If the failure happened while arming background tasks, tear them
+        // down before the pool goes away.
+        stop_background_tasks();
+        close_listeners();
+        if (out_ctx_ == nullptr && thd_.joinable()) {
+          pool_->stop();
+          thd_.join();
+        }
+        leave_starting(life_state::idle);
+        if (control) {
+          complete_control(control, start_error);
+        }
+        else {
+          promise->setValue(start_error);
+        }
+      }
+      return future;
+    }
   }
 
-  // only call once, not thread safe.
+  // Idempotent and safe to call concurrently. Must not be called on one of
+  // the server's own io_context worker threads (a continuation that calls
+  // stop() runs on the completion thread, which is not a worker).
   void stop() {
-    if (out_ctx_ == nullptr && !thd_.joinable()) {
-      return;
-    }
-
-    stop_timer_ = true;
-    check_timer_.cancel();
-    // Wake up the sleeping cache refresh coroutine so it can exit cleanly.
-    cache_refresh_timer_.cancel();
-    // Wait for the coroutine to fully exit before stopping the pool.
-    // Must happen here while the pool is still running: the coroutine may
-    // need the pool executor to resume after a coro_io::post completes.
-    if (cache_refresh_done_.valid()) {
-      cache_refresh_done_.wait();
-    }
-
-    close_acceptor();
-
-    // close current connections.
-    {
-      std::scoped_lock lock(conn_mtx_);
-      for (auto &conn : connections_) {
-        conn.second->close(false);
+    std::unique_lock lock(life_mtx_);
+    for (;;) {
+      switch (life_) {
+        case life_state::idle:
+        case life_state::stopped:
+          return;
+        case life_state::starting:
+          // The starting thread never waits for stop(), so this converges.
+          life_cv_.wait(lock);
+          break;
+        case life_state::stopping:
+          // Wait for the shutdown already in progress. That path never joins
+          // the completion thread, so waiting from a continuation run by the
+          // completion thread cannot deadlock.
+          life_cv_.wait(lock,
+                        [this] { return life_ == life_state::stopped; });
+          return;
+        case life_state::running:
+          life_ = life_state::stopping;
+          lock.unlock();
+          stop_impl();
+          lock.lock();
+          life_ = life_state::stopped;
+          lock.unlock();
+          life_cv_.notify_all();
+          return;
       }
-      connections_.clear();
-    }
-
-    if (out_ctx_ == nullptr) {
-      CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
-      pool_->stop();
-
-      CINATRA_LOG_INFO << "server's thread-pool finished.";
-      thd_.join();
-      CINATRA_LOG_INFO << "stop coro_http_server ok";
-    }
-    else {
-      out_ctx_ = nullptr;
     }
   }
 
@@ -400,14 +540,41 @@ class coro_http_server {
   // Enable background cache refresh for the static resource directory.
   // The timer checks the directory mtime every `interval`; only when the
   // directory has changed (file added/removed) is the cache rebuilt.
+  // The background task itself is created by async_start(), so a server that
+  // never starts (or fails to listen) holds no live timer referencing it.
+  // Safe to call from any thread while the server runs: the field updates are
+  // mutex-protected and the timer is only touched on its own executor.
   void set_cache_refresh_interval(
       std::chrono::steady_clock::duration interval = std::chrono::seconds(3),
       size_t max_file_size = 3 * 1024 * 1024) {
-    cache_refresh_interval_ = interval;
-    max_cache_file_size_ = max_file_size;
-    cache_refresh_stopped_ = std::promise<void>{};
-    cache_refresh_done_ = cache_refresh_stopped_.get_future();
-    cache_refresh_loop().start([](auto &&) {
+    asio::any_io_executor executor;
+    {
+      std::scoped_lock lock(config_mtx_);
+      cache_refresh_interval_ = interval;
+      max_cache_file_size_ = max_file_size;
+      cache_refresh_enabled_ = true;
+      executor = cache_refresh_timer_.get_executor();
+    }
+    // An idle server only records the config so a failed listen cannot leave
+    // a dangling task. The loop re-reads interval and size every cycle, so an
+    // already active refresh needs no restart; one first enabled at runtime
+    // is started on the timer executor.
+    if (!is_running()) {
+      return;
+    }
+    post_guarded(executor, [this] {
+      {
+        std::scoped_lock lock(config_mtx_);
+        if (cache_refresh_active_ ||
+            stop_timer_.load(std::memory_order_acquire)) {
+          return;
+        }
+        cache_refresh_stopped_ = std::promise<void>{};
+        cache_refresh_done_ = cache_refresh_stopped_.get_future().share();
+        cache_refresh_active_ = true;
+      }
+      cache_refresh_loop().start([](auto &&) {
+      });
     });
   }
 
@@ -431,13 +598,30 @@ class coro_http_server {
 
   void set_inject_failure(inject_failure failure) { inject_failure_ = failure; }
 
-  void set_accept_exception(bool fail, bool first_listener_only = false) {
+  void set_accept_exception(bool fail,
+                            size_t listener_index = static_cast<size_t>(-1)) {
     accept_exception_ = fail;
-    accept_exception_first_only_ = first_listener_only;
+    accept_exception_listener_ = listener_index;
   }
 
-  void set_accept_transient_errors(int count) {
+  void set_accept_transient_errors(
+      int count, asio::error_code error = asio::error::would_block) {
     accept_transient_errors_ = count;
+    accept_transient_error_ = error;
+  }
+
+  void set_inject_launch_failure(size_t listener_index) {
+    inject_launch_failure_index_ = listener_index;
+  }
+
+  void set_inject_completion_failure(bool fail) {
+    inject_completion_failure_ = fail;
+  }
+
+  // Pause between listener launches so a failure of an earlier listener can
+  // race with the remaining launches deterministically.
+  void set_inject_launch_delay(std::chrono::milliseconds delay) {
+    inject_launch_delay_ = delay;
   }
 #endif
 
@@ -678,15 +862,37 @@ class coro_http_server {
     }
   }
 
-  void set_check_duration(auto duration) { check_duration_ = duration; }
+  void set_check_duration(auto duration) {
+    std::scoped_lock lock(config_mtx_);
+    check_duration_ = duration;
+  }
 
+  // Before startup this only records the timeout: arming the timer in an idle
+  // server would leave a handler pointing at this server after a failed
+  // listen and teardown. A running server arms it on the timer executor so a
+  // call from a business thread cannot race the handler running on an IO
+  // thread.
   void set_timeout_duration(
       std::chrono::steady_clock::duration timeout_duration) {
-    if (timeout_duration > std::chrono::steady_clock::duration::zero()) {
+    if (!(timeout_duration > std::chrono::steady_clock::duration::zero())) {
+      return;
+    }
+    asio::any_io_executor executor;
+    {
+      std::scoped_lock lock(config_mtx_);
       need_check_ = true;
       timeout_duration_ = timeout_duration;
-      start_check_timer();
+      executor = check_timer_.get_executor();
     }
+    if (!is_running()) {
+      return;
+    }
+    post_guarded(executor, [this] {
+      if (stop_timer_.load(std::memory_order_acquire) || !is_running()) {
+        return;
+      }
+      start_check_timer();
+    });
   }
 
   void set_shrink_to_fit(bool r) { need_shrink_every_time_ = r; }
@@ -710,26 +916,188 @@ class coro_http_server {
   }
 
   std::string_view address() { return address_; }
-  std::error_code get_errc() { return errc_; }
+  std::error_code get_errc() {
+    std::scoped_lock lock(errc_mtx_);
+    return errc_;
+  }
 
  private:
+  void set_errc(std::error_code ec) {
+    std::scoped_lock lock(errc_mtx_);
+    errc_ = ec;
+  }
+
+  void leave_starting(life_state next) {
+    std::unique_lock lock(life_mtx_);
+    life_ = next;
+    lock.unlock();
+    life_cv_.notify_all();
+  }
+
+  bool is_running() {
+    std::scoped_lock lock(life_mtx_);
+    return life_ == life_state::running;
+  }
+
+  static void complete_control(
+      const std::shared_ptr<completion_control> &control,
+      std::error_code ec) {
+    {
+      std::scoped_lock lock(control->mtx);
+      control->result = ec;
+      control->ready = true;
+    }
+    control->cv.notify_one();
+  }
+
+  void on_accept_loop_exit(const std::shared_ptr<accept_state> &state,
+                           async_simple::Try<std::error_code> res) noexcept {
+    std::error_code error;
+    bool fatal = false;
+    if (res.hasError()) {
+      error = std::make_error_code(std::errc::io_error);
+      fatal = true;
+    }
+    else {
+      error = res.value();
+      bool stopping = shutting_down_.load(std::memory_order_acquire);
+      if (error == asio::error::operation_aborted ||
+          error == asio::error::bad_descriptor) {
+        fatal = !stopping;
+      }
+      else if (!error) {
+        fatal = !stopping;
+        if (fatal) {
+          error = std::make_error_code(std::errc::io_error);
+        }
+      }
+      else {
+        fatal = true;
+      }
+    }
+
+    if (fatal) {
+      try {
+        CINATRA_LOG_ERROR << "accept loop failed: " << error.message();
+      } catch (...) {
+      }
+      {
+        std::scoped_lock lock(state->mtx);
+        if (!state->first_error) {
+          state->first_error = error;
+        }
+      }
+      if (!shutting_down_.exchange(true)) {
+        close_acceptors_async();
+      }
+    }
+
+    finish_accept_state(state);
+  }
+
+  // Called from on_accept_loop_exit (a noexcept completion callback) and from
+  // the startup failure path; it must never let an exception escape.
+  void finish_accept_state(const std::shared_ptr<accept_state> &state) noexcept {
+    try {
+      std::error_code first_error;
+      bool last = false;
+      {
+        std::scoped_lock lock(state->mtx);
+        if (--state->remaining == 0 && !state->finalized) {
+          state->finalized = true;
+          first_error = state->first_error;
+          last = true;
+        }
+      }
+      if (!last) {
+        return;
+      }
+
+      auto final_result =
+          first_error ? first_error : asio::error::operation_aborted;
+      if (first_error) {
+        set_errc(first_error);
+      }
+
+      try {
+        acceptor_close_waiter_.set_value();
+      } catch (...) {
+      }
+
+      auto control = state->control;
+      complete_control(control, final_result);
+    } catch (...) {
+    }
+  }
+
+  void fail_launch(const std::shared_ptr<accept_state> &state,
+                   size_t unstarted) noexcept {
+    try {
+      auto launch_error = std::make_error_code(std::errc::io_error);
+      {
+        std::scoped_lock lock(state->mtx);
+        if (!state->first_error) {
+          state->first_error = launch_error;
+        }
+      }
+      if (!shutting_down_.exchange(true)) {
+        close_acceptors_async();
+      }
+      // Loops that were never started will never decrement `remaining`, and
+      // the launch permit is still held.
+      for (size_t i = 0; i < unstarted + 1; ++i) {
+        finish_accept_state(state);
+      }
+    } catch (...) {
+    }
+  }
+
+  static bool is_backoff_accept_error(const asio::error_code &ec) {
+    if (ec == asio::error::no_descriptors ||
+        ec == asio::error::no_memory ||
+        ec == asio::error::no_buffer_space) {
+      return true;
+    }
+#if defined(ENFILE)
+    return ec.value() == ENFILE;
+#else
+    return false;
+#endif
+  }
+
+  static bool is_retryable_accept_error(const asio::error_code &ec) {
+    return ec == asio::error::connection_aborted ||
+           ec == asio::error::interrupted || ec == asio::error::would_block ||
+           ec == asio::error::try_again || ec == asio::error::network_down ||
+           ec == asio::error::network_reset ||
+           ec == asio::error::network_unreachable ||
+           ec == asio::error::host_unreachable ||
+           ec == asio::error::timed_out;
+  }
+
   std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen " << port_;
     using asio::ip::tcp;
     asio::error_code ec;
 
 #if defined(SO_REUSEPORT)
-    bool multi_acceptor =
-        out_ctx_ == nullptr && pool_ != nullptr && pool_->pool_size() > 1;
+    bool multi_acceptor = reuse_port_ && out_ctx_ == nullptr &&
+                          pool_ != nullptr && pool_->pool_size() > 1;
     const size_t acceptor_count = multi_acceptor ? pool_->pool_size() : 1;
 #else
     constexpr bool multi_acceptor = false;
     constexpr size_t acceptor_count = 1;
+    (void)reuse_port_;
 #endif
 
-    auto executor_at = [this](size_t i) {
+    // The caller may run an external io_context from several threads, so all
+    // acceptor operations in that mode go through one strand. The pool's
+    // contexts are single-threaded, so their plain executors already
+    // serialize.
+    auto executor_at =
+        [this](size_t i) -> asio::ip::tcp::acceptor::executor_type {
       if (out_ctx_ != nullptr) {
-        return out_ctx_->get_executor();
+        return *out_strand_;
       }
       return pool_->get_executor_at(i)->get_asio_executor();
     };
@@ -893,7 +1261,26 @@ class coro_http_server {
   async_simple::coro::Lazy<std::error_code> accept(
       asio::ip::tcp::acceptor &acceptor,
       coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
+    // .start() runs the coroutine body on the starting thread until the first
+    // suspension. Every operation on the acceptor (the first async_accept as
+    // well as the close dispatched by a concurrently failing listener or by
+    // stop()) must be serialized through the acceptor's own executor. That is
+    // the pool executor in pool mode and a strand in external-context mode,
+    // where the caller may run the context on several threads.
+    if (out_ctx_ != nullptr && !out_executor_) {
+      out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
+          out_ctx_->get_executor());
+    }
+    co_await coro_io::post([] {}, acceptor.get_executor());
+
     for (;;) {
+      // Do not start another accept once shutdown has begun: close_acceptors
+      // runs on this same executor, but a new accept could otherwise be
+      // issued between the close and the loop exit.
+      if (shutting_down_.load(std::memory_order_acquire)) {
+        co_return std::error_code{};
+      }
+
       coro_io::ExecutorWrapper<> *executor = fixed_executor;
       if (executor == nullptr && out_ctx_ == nullptr) {
         executor = pool_->get_executor();
@@ -909,13 +1296,15 @@ class coro_http_server {
       asio::ip::tcp::socket socket(executor->get_asio_executor());
       asio::error_code error;
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
-      if (accept_exception_ && (!accept_exception_first_only_ ||
-                                &acceptor == acceptors_.front().get())) {
+      if (accept_exception_ &&
+          (accept_exception_listener_ == static_cast<size_t>(-1) ||
+           (accept_exception_listener_ < acceptors_.size() &&
+            &acceptor == acceptors_[accept_exception_listener_].get()))) {
         throw std::runtime_error("injected accept failure");
       }
       if (accept_transient_errors_.fetch_sub(1, std::memory_order_relaxed) >
           0) {
-        error = asio::error::would_block;
+        error = accept_transient_error_;
       }
       else {
         error = co_await coro_io::async_accept(acceptor, socket);
@@ -927,6 +1316,17 @@ class coro_http_server {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
+          co_return error;
+        }
+        if (is_backoff_accept_error(error)) {
+          // Backoff must resume on the acceptor's executor, not on whichever
+          // connection executor this iteration picked.
+          coro_io::period_timer backoff_timer(acceptor.get_executor());
+          backoff_timer.expires_after(std::chrono::milliseconds(100));
+          co_await backoff_timer.async_await();
+          continue;
+        }
+        if (!is_retryable_accept_error(error)) {
           co_return error;
         }
         continue;
@@ -944,7 +1344,12 @@ class coro_http_server {
       if (need_shrink_every_time_) {
         conn->set_shrink_to_fit(true);
       }
-      if (need_check_) {
+      bool need_check;
+      {
+        std::scoped_lock lock(config_mtx_);
+        need_check = need_check_;
+      }
+      if (need_check) {
         conn->set_check_timeout(true);
       }
       if (default_handler_) {
@@ -988,15 +1393,25 @@ class coro_http_server {
     co_await conn->start();
   }
 
-  void close_acceptors_async() {
+  void close_acceptors_async() noexcept {
     for (auto &acceptor : acceptors_) {
       // Keep the listener alive until the queued close runs: the server may
       // be destroyed before an external io_context dispatches it.
-      asio::dispatch(acceptor->get_executor(), [acceptor]() {
-        asio::error_code ec;
-        acceptor->cancel(ec);
-        acceptor->close(ec);
-      });
+      try {
+        asio::dispatch(acceptor->get_executor(), [acceptor]() {
+          asio::error_code ec;
+          acceptor->cancel(ec);
+          acceptor->close(ec);
+        });
+      } catch (...) {
+        // Dispatching can allocate. Under extreme memory shortage the close
+        // cannot be queued from this thread; with normal memory the promise
+        // and stop() are guaranteed to make progress.
+        try {
+          CINATRA_LOG_ERROR << "failed to dispatch acceptor close";
+        } catch (...) {
+        }
+      }
     }
   }
 
@@ -1009,6 +1424,35 @@ class coro_http_server {
     acceptor_close_future_.wait();
   }
 
+  void stop_impl() {
+    shutting_down_.store(true, std::memory_order_release);
+    stop_background_tasks();
+
+    close_acceptor();
+
+    {
+      std::scoped_lock lock(conn_mtx_);
+      for (auto &conn : connections_) {
+        conn.second->close(false);
+      }
+      connections_.clear();
+    }
+
+    if (out_ctx_ == nullptr) {
+      CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
+      pool_->stop();
+
+      CINATRA_LOG_INFO << "server's thread-pool finished.";
+      if (thd_.joinable()) {
+        thd_.join();
+      }
+      CINATRA_LOG_INFO << "stop coro_http_server ok";
+    }
+    else {
+      out_ctx_ = nullptr;
+    }
+  }
+
   void close_listeners() {
     asio::error_code ec;
     for (auto &acceptor : acceptors_) {
@@ -1016,6 +1460,27 @@ class coro_http_server {
       acceptor->close(ec);
     }
     acceptors_.clear();
+  }
+
+  // After a failed io_context_pool::run() the pool is unusable: contexts are
+  // stopped, work guards cleared and its run promise consumed. Recreate it
+  // (and rebind the timers constructed against its executors) so the server
+  // can be started again from idle.
+  void reset_pool() {
+    auto new_pool = std::make_unique<coro_io::io_context_pool>(thread_num_,
+                                                               cpu_affinity_);
+    auto *executor = new_pool->get_executor_at(0);
+    auto new_check_timer = asio::steady_timer(executor->get_asio_executor());
+    auto new_cache_timer = coro_io::period_timer(executor);
+    {
+      std::scoped_lock lock(config_mtx_);
+      // Moving a timer destroys its previous implementation, which still
+      // references the old context, so this must happen before the old pool
+      // is destroyed.
+      check_timer_ = std::move(new_check_timer);
+      cache_refresh_timer_ = std::move(new_cache_timer);
+    }
+    pool_ = std::move(new_pool);
   }
 
   // Coroutine-based cache refresh loop.
@@ -1027,10 +1492,19 @@ class coro_http_server {
   // thread. After the loop exits, the promise is fulfilled so stop() can
   // safely proceed to pool_->stop() without a use-after-free.
   async_simple::coro::Lazy<void> cache_refresh_loop() {
+    // After the block-executor hop below the coroutine resumes on that
+    // thread; hop back to the timer's executor before touching the timer or
+    // any server member again.
+    auto timer_executor = cache_refresh_timer_.get_executor();
     while (true) {
-      cache_refresh_timer_.expires_after(cache_refresh_interval_);
+      std::chrono::steady_clock::duration interval;
+      {
+        std::scoped_lock lock(config_mtx_);
+        interval = cache_refresh_interval_;
+      }
+      cache_refresh_timer_.expires_after(interval);
       bool timer_ok = co_await cache_refresh_timer_.async_await();
-      if (!timer_ok || stop_timer_) {
+      if (!timer_ok || stop_timer_.load(std::memory_order_acquire)) {
         break;
       }
 
@@ -1049,7 +1523,11 @@ class coro_http_server {
       // The frame stays alive for the entire co_await suspension, so the
       // reference is valid when the block executor reads it.
       std::string static_dir = static_dir_;
-      size_t max_size = max_cache_file_size_;
+      size_t max_size;
+      {
+        std::scoped_lock lock(config_mtx_);
+        max_size = max_cache_file_size_;
+      }
       auto result = co_await coro_io::post([&static_dir, max_size]() {
         using FileMap = std::unordered_map<std::string, std::string>;
         auto new_cache = std::make_shared<FileMap>();
@@ -1072,10 +1550,11 @@ class coro_http_server {
         }
         return new_cache;
       });
+      co_await coro_io::post([] {}, timer_executor);
 
       // Re-check stop flag: stop() may have been called while we were
       // doing file reads on the block executor.
-      if (stop_timer_) {
+      if (stop_timer_.load(std::memory_order_acquire)) {
         break;
       }
 
@@ -1089,10 +1568,120 @@ class coro_http_server {
     cache_refresh_stopped_.set_value();
   }
 
+  // Background tasks are created only from async_start(), once the listener
+  // and the worker pool are known to be usable. An idle or failed server must
+  // never own a timer whose handler references this. Startup runs before any
+  // acceptor loop or runtime setter handler exists, so the timers are armed
+  // directly here; later arms/cancels are delivered to the timer executor.
+  void start_background_tasks() {
+    bool arm_check;
+    bool start_cache;
+    {
+      std::scoped_lock lock(config_mtx_);
+      arm_check = need_check_;
+      start_cache = cache_refresh_enabled_ && !cache_refresh_active_;
+      if (start_cache) {
+        cache_refresh_stopped_ = std::promise<void>{};
+        cache_refresh_done_ = cache_refresh_stopped_.get_future().share();
+        cache_refresh_active_ = true;
+      }
+    }
+    if (arm_check) {
+      start_check_timer();
+    }
+    if (start_cache) {
+      cache_refresh_loop().start([](auto &&) {
+      });
+    }
+  }
+
+  // Runs `func` on the timer executor, but only while the server is alive.
+  // A caller-owned io_context can outlive the server, so a handler left in
+  // its queue must not touch members after destruction.
+  template <typename Func>
+  void post_guarded(const asio::any_io_executor &executor, Func func) {
+    auto token = life_token_;
+    asio::post(executor, [token, func = std::move(func)]() mutable {
+      std::scoped_lock lock(token->mtx);
+      if (!token->alive) {
+        return;
+      }
+      func();
+    });
+  }
+
+  // Cancels the timer on its own executor and waits until its cancellation
+  // completions, and any handler queued behind them, have run. The executor
+  // is single-threaded (pool mode) or a strand (external context), so the
+  // marker posted after cancel() is ordered behind those completions.
+  template <typename Timer>
+  static void cancel_and_drain(const asio::any_io_executor &executor,
+                               Timer &timer) {
+    auto barrier = std::make_shared<std::promise<void>>();
+    auto done = barrier->get_future();
+    bool posted = false;
+    try {
+      asio::post(executor, [&timer, barrier, executor]() {
+        try {
+          timer.cancel();
+        } catch (...) {
+        }
+        bool marker_posted = false;
+        try {
+          asio::post(executor, [barrier]() { barrier->set_value(); });
+          marker_posted = true;
+        } catch (...) {
+        }
+        if (!marker_posted) {
+          barrier->set_value();
+        }
+      });
+      posted = true;
+    } catch (...) {
+    }
+    if (!posted) {
+      // Extreme memory shortage: cancellation could not be queued at all.
+      barrier->set_value();
+    }
+    done.wait();
+  }
+
+  // Cancels background timers and waits for their handlers and the cache
+  // refresh coroutine to exit. Must be called while the owning executors are
+  // still running: the coroutine resumes after the cancellation.
+  void stop_background_tasks() {
+    stop_timer_.store(true, std::memory_order_release);
+
+    asio::any_io_executor check_executor;
+    asio::any_io_executor cache_executor;
+    std::shared_future<void> cache_done;
+    {
+      std::scoped_lock lock(config_mtx_);
+      check_executor = check_timer_.get_executor();
+      cache_executor = cache_refresh_timer_.get_executor();
+      cache_done = cache_refresh_done_;
+      cache_refresh_active_ = false;
+    }
+
+    cancel_and_drain(check_executor, check_timer_);
+    cancel_and_drain(cache_executor, cache_refresh_timer_);
+    if (cache_done.valid()) {
+      cache_done.wait();
+    }
+  }
+
   void start_check_timer() {
-    check_timer_.expires_after(check_duration_);
+    std::chrono::steady_clock::duration duration;
+    {
+      std::scoped_lock lock(config_mtx_);
+      if (!need_check_) {
+        return;
+      }
+      duration = check_duration_;
+    }
+    check_timer_.expires_after(duration);
     check_timer_.async_wait([this](auto ec) {
-      if (ec || stop_timer_) {
+      if (ec || stop_timer_.load(std::memory_order_acquire)) {
         return;
       }
 
@@ -1103,6 +1692,11 @@ class coro_http_server {
 
   void check_timeout() {
     auto cur_time = std::chrono::system_clock::now();
+    std::chrono::steady_clock::duration timeout;
+    {
+      std::scoped_lock lock(config_mtx_);
+      timeout = timeout_duration_;
+    }
 
     std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>> conns;
 
@@ -1111,7 +1705,7 @@ class coro_http_server {
       for (auto it = connections_.begin();
            it != connections_.end();)  // no "++"!
       {
-        if (cur_time - it->second->get_last_rwtime() > timeout_duration_) {
+        if (cur_time - it->second->get_last_rwtime() > timeout) {
           it->second->close(false);
           connections_.erase(it++);
         }
@@ -1353,10 +1947,20 @@ class coro_http_server {
 
   std::unique_ptr<coro_io::io_context_pool> pool_;
   asio::io_context *out_ctx_ = nullptr;
+  std::optional<out_strand_type> out_strand_;
   std::unique_ptr<coro_io::ExecutorWrapper<>> out_executor_ = nullptr;
   uint16_t port_;
   std::string address_;
+  size_t thread_num_ = 1;
+  bool cpu_affinity_ = false;
+  bool reuse_port_ = true;
   std::error_code errc_ = {};
+  mutable std::mutex errc_mtx_;
+  std::mutex life_mtx_;
+  std::condition_variable life_cv_;
+  life_state life_ = life_state::idle;
+  std::shared_ptr<life_token> life_token_ = std::make_shared<life_token>();
+  std::atomic<bool> shutting_down_{false};
   std::vector<std::shared_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
@@ -1368,6 +1972,10 @@ class coro_http_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::mutex conn_mtx_;
+  // Guards the configuration fields read by timer handlers and the cache
+  // refresh coroutine, and the cache refresh bookkeeping below. Not held
+  // while waiting on the refresh coroutine.
+  std::mutex config_mtx_;
   std::chrono::steady_clock::duration check_duration_ =
       std::chrono::seconds(15);
   std::chrono::steady_clock::duration timeout_duration_{};
@@ -1390,8 +1998,10 @@ class coro_http_server {
       std::chrono::seconds(5);
   size_t max_cache_file_size_ = 3 * 1024 * 1024;
   fs::file_time_type last_dir_mtime_{};
+  bool cache_refresh_enabled_ = false;
+  bool cache_refresh_active_ = false;
   std::promise<void> cache_refresh_stopped_;
-  std::future<void> cache_refresh_done_;
+  std::shared_future<void> cache_refresh_done_;
   file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
   std::string cert_file_;
@@ -1411,8 +2021,12 @@ class coro_http_server {
   bool read_failed_forever_ = false;
   inject_failure inject_failure_ = inject_failure::none;
   bool accept_exception_ = false;
-  bool accept_exception_first_only_ = false;
+  size_t accept_exception_listener_ = static_cast<size_t>(-1);
   std::atomic<int> accept_transient_errors_{0};
+  asio::error_code accept_transient_error_ = asio::error::would_block;
+  size_t inject_launch_failure_index_ = static_cast<size_t>(-1);
+  bool inject_completion_failure_ = false;
+  std::chrono::milliseconds inject_launch_delay_{0};
 #endif
 };
 

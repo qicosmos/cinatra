@@ -26,6 +26,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -140,32 +141,80 @@ class io_context_pool {
     }
 
     std::vector<std::shared_ptr<std::thread>> threads;
-    for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
-      threads.emplace_back(std::make_shared<std::thread>(
-          [](io_context_ptr svr) {
-            auto ctx = get_current();
-            *ctx = svr.get();
-            svr->run();
-          },
-          io_contexts_[i]));
+    try {
+      // Reserve before creating any thread: if the vector reallocated after a
+      // thread was constructed, destroying the still-joinable thread during
+      // unwinding would call std::terminate.
+      threads.reserve(io_contexts_.size());
+      for (std::size_t i = 0; i < io_contexts_.size(); ++i) {
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+        if (inject_worker_creation_failure_ > 0) {
+          --inject_worker_creation_failure_;
+          throw std::runtime_error("injected worker creation failure");
+        }
+#endif
+        threads.emplace_back(std::make_shared<std::thread>(
+            [](io_context_ptr svr) {
+              // A handler exception escapes io_context::run() but leaves the
+              // context and its queued handlers intact. Exiting the worker
+              // here would leave nobody to run the accept-exit notifications,
+              // cancellations and close tasks that stop() is waiting on, so
+              // re-enter run() until the context is stopped or drained.
+              auto ctx = get_current();
+              *ctx = svr.get();
+              for (;;) {
+                try {
+                  svr->run();
+                  break;
+                } catch (const std::exception &e) {
+                  std::cerr << "io_context worker exception: " << e.what()
+                            << "\n";
+                } catch (...) {
+                  std::cerr << "io_context worker unknown exception\n";
+                }
+                if (svr->stopped()) {
+                  break;
+                }
+              }
+            },
+            io_contexts_[i]));
 
 #ifdef __linux__
-      if (cpu_affinity_) {
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(i, &cpuset);
+        if (cpu_affinity_) {
+          cpu_set_t cpuset;
+          CPU_ZERO(&cpuset);
+          CPU_SET(i, &cpuset);
 #if defined(__ANDROID__)
-        pid_t tid = pthread_gettid_np(threads.back()->native_handle());
-        int rc = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+          pid_t tid = pthread_gettid_np(threads.back()->native_handle());
+          int rc = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
 #else
-        int rc = pthread_setaffinity_np(threads.back()->native_handle(),
-                                        sizeof(cpu_set_t), &cpuset);
+          int rc = pthread_setaffinity_np(threads.back()->native_handle(),
+                                          sizeof(cpu_set_t), &cpuset);
 #endif
-        if (rc != 0) {
-          std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+          if (rc != 0) {
+            std::cerr << "Error calling pthread_setaffinity_np: " << rc
+                      << "\n";
+          }
+        }
+#endif
+      }
+      run_started_.set_value(true);
+    } catch (...) {
+      // Worker thread creation failed; report it to the owner instead of
+      // letting the exception escape from a detached thread and terminate
+      // the process.
+      run_started_.set_value(false);
+      work_.clear();
+      for (auto &e : io_contexts_) {
+        e->stop();
+      }
+      for (auto &thd : threads) {
+        if (thd->joinable()) {
+          thd->join();
         }
       }
-#endif
+      promise_.set_value();
+      return;
     }
 
     for (std::size_t i = 0; i < threads.size(); ++i) {
@@ -173,6 +222,11 @@ class io_context_pool {
     }
     promise_.set_value();
   }
+
+  // Blocks until run() has started every worker thread (true) or failed to
+  // create them (false). Must be called after starting run() on another
+  // thread.
+  bool wait_run_started() { return run_started_future_.get(); }
 
   void stop() {
     std::call_once(flag_, [this] {
@@ -219,6 +273,14 @@ class io_context_pool {
 
   static size_t get_total_thread_num() { return total_thread_num_; }
 
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  // Fail the next `count` worker creations so tests can exercise the
+  // startup-failure rollback and retry path.
+  static void set_inject_worker_creation_failure(int count) {
+    inject_worker_creation_failure_ = count;
+  }
+#endif
+
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
   using work_type = asio::executor_work_guard<asio::io_context::executor_type>;
@@ -228,10 +290,16 @@ class io_context_pool {
   std::vector<work_type> work_;
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
+  std::promise<bool> run_started_;
+  std::shared_future<bool> run_started_future_ =
+      run_started_.get_future().share();
   std::atomic<bool> has_run_or_stop_ = false;
   std::once_flag flag_;
   bool cpu_affinity_ = false;
   inline static std::atomic<size_t> total_thread_num_ = 0;
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+  inline static std::atomic<int> inject_worker_creation_failure_ = 0;
+#endif
 };
 
 inline size_t get_total_thread_num() {

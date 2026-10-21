@@ -1,6 +1,9 @@
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iostream>
@@ -545,6 +548,43 @@ std::shared_ptr<async_simple::Future<T>> share_future(
     async_simple::Future<T> &&future) {
   return std::make_shared<async_simple::Future<T>>(std::move(future));
 }
+
+// Process-level escape hatch for deadlock-prone cases: if the test body does
+// not finish in time, exit instead of letting a destructor (server stop,
+// thread join) block the whole suite forever.
+class test_watchdog {
+ public:
+  explicit test_watchdog(std::chrono::seconds timeout) {
+    auto state = state_;
+    thread_ = std::thread([state, timeout] {
+      std::unique_lock lock(state->mtx);
+      if (!state->cv.wait_for(lock, timeout,
+                              [&state] { return state->done; })) {
+        std::cerr << "test watchdog expired" << std::endl;
+        std::_Exit(2);
+      }
+    });
+    thread_.detach();
+  }
+
+  ~test_watchdog() {
+    {
+      std::scoped_lock lock(state_->mtx);
+      state_->done = true;
+    }
+    state_->cv.notify_all();
+  }
+
+ private:
+  struct state {
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool done = false;
+  };
+
+  std::shared_ptr<state> state_ = std::make_shared<state>();
+  std::thread thread_;
+};
 }  // namespace
 
 TEST_CASE("listen failures report the error and stop returns") {
@@ -664,6 +704,7 @@ TEST_CASE("transient accept error is retried") {
 }
 
 TEST_CASE("future continuation can stop the server without deadlock") {
+  [[maybe_unused]] test_watchdog watchdog(60s);
   auto server = std::make_shared<coro_http_server>(
       1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
   server->set_accept_exception(true);
@@ -680,11 +721,44 @@ TEST_CASE("future continuation can stop the server without deadlock") {
   CHECK(continued_future.wait_for(5s) == std::future_status::ready);
 }
 
-#if defined(SO_REUSEPORT)
-TEST_CASE("fatal accept loop failure stops every listener") {
+TEST_CASE("stop before start does not consume stop") {
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  CHECK(server->get_errc() == std::error_code{});
+
+  coro_http_client client;
+  auto result =
+      client.get("http://127.0.0.1:" + std::to_string(server->port()) + "/ok");
+  CHECK(result.status == 200);
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+}
+
+TEST_CASE("accept launch failure rolls back and stop returns") {
   auto server = std::make_shared<coro_http_server>(
       3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
-  server->set_accept_exception(true, true);
+#if defined(SO_REUSEPORT)
+  // Multi-acceptor platforms start listener 0 before listener 1 fails.
+  server->set_inject_launch_failure(1);
+#else
+  // Windows keeps a single acceptor, so fail the only listener.
+  server->set_inject_launch_failure(0);
+#endif
   auto started = share_future(server->async_start());
   bool completed = completes_within(5s, [started] {
     started->wait();
@@ -698,6 +772,262 @@ TEST_CASE("fatal accept loop failure stops every listener") {
   CHECK(completes_within(5s, [server] {
     server->stop();
   }));
+}
+
+TEST_CASE("completion thread setup failure rolls back") {
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_inject_completion_failure(true);
+  auto started = share_future(server->async_start());
+  bool completed = completes_within(5s, [started] {
+    started->wait();
+  });
+  CHECK(completed);
+  if (completed) {
+    auto expected = std::make_error_code(std::errc::io_error);
+    CHECK(started->value() == expected);
+    CHECK(server->get_errc() == expected);
+  }
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+}
+
+TEST_CASE("continuous resource errors back off") {
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+#if defined(ENFILE)
+  server->set_accept_transient_errors(
+      3, std::error_code(ENFILE, std::system_category()));
+#else
+  server->set_accept_transient_errors(3, asio::error::no_descriptors);
+#endif
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto begin = std::chrono::steady_clock::now();
+  auto started = share_future(server->async_start());
+  coro_http_client client;
+  auto result =
+      client.get("http://127.0.0.1:" + std::to_string(server->port()) + "/ok");
+  auto elapsed = std::chrono::steady_clock::now() - begin;
+  CHECK(result.status == 200);
+  CHECK(elapsed >= 250ms);
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+}
+
+TEST_CASE("permanent accept error is fatal") {
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  auto expected = asio::error::invalid_argument;
+  server->set_accept_transient_errors(1, expected);
+  auto started = share_future(server->async_start());
+  bool completed = completes_within(5s, [started] {
+    started->wait();
+  });
+  CHECK(completed);
+  if (completed) {
+    CHECK(started->value() == expected);
+    CHECK(server->get_errc() == expected);
+  }
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+}
+
+TEST_CASE("concurrent stop is idempotent") {
+  [[maybe_unused]] test_watchdog watchdog(60s);
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  CHECK(server->get_errc() == std::error_code{});
+
+  std::atomic<int> arrived{0};
+  auto stop_server = [server, &arrived] {
+    arrived.fetch_add(1);
+    while (arrived.load() < 2) {
+      std::this_thread::yield();
+    }
+    return completes_within(5s, [server] {
+      server->stop();
+    });
+  };
+
+  auto first = std::async(std::launch::async, stop_server);
+  auto second = std::async(std::launch::async, stop_server);
+  CHECK(first.get());
+  CHECK(second.get());
+
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+}
+
+TEST_CASE("stop from continuation races explicit stop") {
+  [[maybe_unused]] test_watchdog watchdog(60s);
+  auto server = std::make_shared<coro_http_server>(
+      1, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_accept_exception(true);
+  auto started = std::move(server->async_start());
+
+  auto continued = std::make_shared<std::promise<void>>();
+  auto continued_future = continued->get_future();
+  auto chained = std::make_shared<async_simple::Future<void>>(
+      std::move(started).thenTry([server, continued](auto &&) {
+        server->stop();
+        try {
+          continued->set_value();
+        } catch (...) {
+        }
+      }));
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(continued_future.wait_for(5s) == std::future_status::ready);
+
+  chained.reset();
+  server.reset();
+}
+
+TEST_CASE("server can start again after a pool worker failure") {
+  coro_io::io_context_pool::set_inject_worker_creation_failure(1);
+  auto server = std::make_shared<coro_http_server>(
+      2, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_http_handler<GET>(
+      "/retry", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto first_started = share_future(server->async_start());
+  bool first_completed = completes_within(5s, [first_started] {
+    first_started->wait();
+  });
+  CHECK(first_completed);
+  if (first_completed) {
+    auto expected = std::make_error_code(std::errc::io_error);
+    CHECK(first_started->value() == expected);
+    CHECK(server->get_errc() == expected);
+  }
+
+  // Same server, fresh pool: the retry must listen, accept and stop normally.
+  auto second_started = share_future(server->async_start());
+  CHECK(server->get_errc() == std::error_code{});
+
+  coro_http_client client;
+  auto result = client.get("http://127.0.0.1:" +
+                           std::to_string(server->port()) + "/retry");
+  CHECK(result.status == 200);
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [second_started] {
+    second_started->wait();
+  }));
+  CHECK(second_started->value() == asio::error::operation_aborted);
+}
+
+TEST_CASE("failed listen leaves no background task behind") {
+  using fail = coro_http_server::inject_failure;
+
+  {
+    auto server = std::make_shared<coro_http_server>(
+        2, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+    server->set_cache_refresh_interval(std::chrono::milliseconds(100));
+    server->set_timeout_duration(std::chrono::milliseconds(100));
+    server->set_inject_failure(fail::bind);
+    auto started = share_future(server->async_start());
+    bool completed = completes_within(5s, [started] {
+      started->wait();
+    });
+    CHECK(completed);
+    if (completed) {
+      CHECK(started->value() != std::error_code{});
+    }
+    CHECK(completes_within(5s, [server] {
+      server->stop();
+    }));
+  }
+
+  // External context: the setters above must not have armed any timer that
+  // still points at the destroyed server. Running the context after the
+  // server is gone would dispatch into freed memory otherwise.
+  asio::io_context ctx;
+  {
+    coro_http_server server(ctx, std::string("127.0.0.1:0"));
+    server.set_cache_refresh_interval(std::chrono::milliseconds(100));
+    server.set_timeout_duration(std::chrono::milliseconds(100));
+    server.set_inject_failure(fail::bind);
+    auto started = share_future(server.async_start());
+    bool completed = completes_within(5s, [started] {
+      started->wait();
+    });
+    CHECK(completed);
+    if (completed) {
+      CHECK(started->value() != std::error_code{});
+    }
+  }
+  ctx.run();
+}
+
+#if defined(SO_REUSEPORT)
+TEST_CASE("first listener failure during launch converges") {
+  auto server = std::make_shared<coro_http_server>(
+      3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  // Listener 0 fails while the launch thread is paused before starting
+  // listeners 1 and 2: the shutdown close of every acceptor (including the
+  // not-yet-started ones) races with those later launches.
+  server->set_accept_exception(true, 0);
+  server->set_inject_launch_delay(std::chrono::milliseconds(50));
+  auto started = share_future(server->async_start());
+  bool completed = completes_within(5s, [started] {
+    started->wait();
+  });
+  CHECK(completed);
+  if (completed) {
+    auto expected = std::make_error_code(std::errc::io_error);
+    CHECK(started->value() == expected);
+    CHECK(server->get_errc() == expected);
+  }
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+}
+
+TEST_CASE("fatal result is independent of exit order") {
+  for (size_t failing : {size_t(0), size_t(2)}) {
+    CAPTURE(failing);
+    auto server = std::make_shared<coro_http_server>(
+        3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+    server->set_accept_exception(true, failing);
+    auto started = share_future(server->async_start());
+    bool completed = completes_within(5s, [started] {
+      started->wait();
+    });
+    CHECK(completed);
+    if (completed) {
+      auto expected = std::make_error_code(std::errc::io_error);
+      CHECK(started->value() == expected);
+      CHECK(server->get_errc() == expected);
+    }
+    CHECK(completes_within(5s, [server] {
+      server->stop();
+    }));
+  }
 }
 
 TEST_CASE("reuse port failure falls back to a single acceptor") {
@@ -751,7 +1081,186 @@ TEST_CASE("extra acceptor failure keeps the server running") {
   }));
   CHECK(started->value() == asio::error::operation_aborted);
 }
+
+TEST_CASE("normal stop always reports operation_aborted") {
+  auto server = std::make_shared<coro_http_server>(
+      3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  CHECK(server->get_errc() == std::error_code{});
+
+  for (int i = 0; i < 3; ++i) {
+    CHECK(completes_within(5s, [server] {
+      server->stop();
+    }));
+  }
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+  CHECK(server->get_errc() == std::error_code{});
+}
+
+TEST_CASE("reuse port shares by default and can be disabled") {
+  auto counter = std::make_shared<std::atomic<int>>(0);
+  auto handler = [counter](coro_http_request &, coro_http_response &resp) {
+    counter->fetch_add(1, std::memory_order_relaxed);
+    resp.set_status_and_content(status_type::ok, "ok");
+  };
+
+  auto first = std::make_shared<coro_http_server>(
+      2, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  first->set_http_handler<GET>("/ok", handler);
+  auto first_started = share_future(first->async_start());
+  CHECK(first->get_errc() == std::error_code{});
+  auto port = first->port();
+  REQUIRE(port != 0);
+
+  auto second = std::make_shared<coro_http_server>(
+      2, port, std::string("127.0.0.1"), false);
+  second->set_http_handler<GET>("/ok", handler);
+  auto second_started = share_future(second->async_start());
+  CHECK(second->get_errc() == std::error_code{});
+
+  coro_http_client client;
+  const auto uri = "http://127.0.0.1:" + std::to_string(port) + "/ok";
+  for (int i = 0; i < 40; ++i) {
+    CHECK(client.get(uri).status == 200);
+  }
+  CHECK(counter->load() == 40);
+
+  auto exclusive = std::make_shared<coro_http_server>(
+      2, port, std::string("127.0.0.1"), false);
+  exclusive->set_reuse_port(false);
+  CHECK(exclusive->sync_start() == asio::error::address_in_use);
+  CHECK(exclusive->get_errc() == asio::error::address_in_use);
+
+  CHECK(completes_within(5s, [second] {
+    second->stop();
+  }));
+  CHECK(completes_within(5s, [first] {
+    first->stop();
+  }));
+  CHECK(completes_within(5s, [first_started] {
+    first_started->wait();
+  }));
+  CHECK(completes_within(5s, [second_started] {
+    second_started->wait();
+  }));
+}
+
+TEST_CASE("reuse port injection is ignored when disabled") {
+  auto server = std::make_shared<coro_http_server>(
+      2, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_reuse_port(false);
+  server->set_inject_failure(coro_http_server::inject_failure::reuse_port);
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  CHECK(server->get_errc() == std::error_code{});
+
+  coro_http_client client;
+  auto result =
+      client.get("http://127.0.0.1:" + std::to_string(server->port()) + "/ok");
+  CHECK(result.status == 200);
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+}
 #endif
+
+TEST_CASE("runtime setters are safe while running") {
+  auto server = std::make_shared<coro_http_server>(
+      2, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  auto uri = "http://127.0.0.1:" + std::to_string(server->port()) + "/ok";
+
+  // Reconfigure from ordinary business threads while requests are served:
+  // the timer is armed on its own executor and the config fields are shared
+  // with the handlers under a mutex.
+  std::thread timeout_thread([server] {
+    for (int i = 0; i < 20; ++i) {
+      server->set_timeout_duration(std::chrono::milliseconds(10 + i));
+    }
+  });
+  std::thread cache_thread([server] {
+    for (int i = 0; i < 20; ++i) {
+      server->set_cache_refresh_interval(std::chrono::milliseconds(10 + i));
+    }
+  });
+
+  coro_http_client client;
+  for (int i = 0; i < 5; ++i) {
+    CHECK(client.get(uri).status == 200);
+  }
+  timeout_thread.join();
+  cache_thread.join();
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+}
+
+TEST_CASE("external context with multiple threads serves and stops") {
+  asio::io_context ctx;
+  auto work = asio::make_work_guard(ctx);
+  std::vector<std::thread> threads;
+  threads.reserve(3);
+  for (int i = 0; i < 3; ++i) {
+    threads.emplace_back([&ctx] {
+      ctx.run();
+    });
+  }
+
+  auto server = std::make_shared<coro_http_server>(
+      ctx, std::string("127.0.0.1:0"));
+  server->set_http_handler<GET>(
+      "/ok", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto started = share_future(server->async_start());
+  auto uri = "http://127.0.0.1:" + std::to_string(server->port()) + "/ok";
+
+  // Accept/close are serialized by the external-context strand even though
+  // three threads run the context.
+  server->set_timeout_duration(std::chrono::milliseconds(10));
+  server->set_cache_refresh_interval(std::chrono::milliseconds(10));
+  coro_http_client client;
+  CHECK(client.get(uri).status == 200);
+
+  CHECK(completes_within(5s, [server] {
+    server->stop();
+  }));
+  CHECK(completes_within(5s, [started] {
+    started->wait();
+  }));
+  CHECK(started->value() == asio::error::operation_aborted);
+
+  server.reset();
+  work.reset();
+  ctx.stop();
+  for (auto &thd : threads) {
+    thd.join();
+  }
+}
 #endif
 
 TEST_CASE("get post") {
