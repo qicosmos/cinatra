@@ -32,6 +32,9 @@ if(SKIP_TIME_TEST)
 endif()
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
+# Process-level backstop: a deadlocked case must fail the run instead of
+# hanging CI forever (individual deadlock cases also arm a watchdog).
+set_tests_properties(${project_name} PROPERTIES TIMEOUT 1800)
 
 if (ZLIB_FOUND)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
