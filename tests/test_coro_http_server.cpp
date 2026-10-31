@@ -524,6 +524,36 @@ TEST_CASE("server threads serve concurrent connections") {
   CHECK(started.value() == asio::error::operation_aborted);
 }
 
+TEST_CASE("server shutdown drains accept loops") {
+  for (size_t thread_count : {1, 3, 8}) {
+    for (int iteration = 0; iteration < 10; ++iteration) {
+      coro_http_server server(thread_count, static_cast<unsigned short>(0),
+                              std::string("127.0.0.1"), false);
+      auto started = server.async_start();
+      asio::io_context context;
+      std::vector<asio::ip::tcp::socket> clients;
+      if (iteration % 2 != 0) {
+        for (int i = 0; i < 8; ++i) {
+          clients.emplace_back(context);
+          clients.back().connect(
+              {asio::ip::make_address("127.0.0.1"), server.port()});
+        }
+        auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (server.connection_count() != clients.size() &&
+               std::chrono::steady_clock::now() < deadline) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(server.connection_count() == clients.size());
+      }
+
+      server.stop();
+      started.wait();
+      CHECK(started.value() == asio::error::operation_aborted);
+    }
+  }
+}
+
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
 TEST_CASE("listener failure during launch stops all acceptors") {
   // Fail the first loop before the others start, then fail every loop.
