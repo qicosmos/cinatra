@@ -717,7 +717,7 @@ class coro_http_server {
         const int enabled = 1;
         if (::setsockopt(acceptor.native_handle(), SOL_SOCKET,
                          reuse_port_option, &enabled, sizeof(enabled)) != 0) {
-          return {errno, std::system_category()};
+          return {errno, asio::system_category()};
         }
 #endif
       }
