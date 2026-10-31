@@ -5,11 +5,13 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -484,6 +486,76 @@ TEST_CASE("test server sync_start and stop") {
   CHECK(server.port() > 0);
   CHECK(ec == asio::error::operation_aborted);
 }
+
+TEST_CASE("server threads serve concurrent connections") {
+  coro_http_server server(3, static_cast<unsigned short>(0), "127.0.0.1");
+  std::mutex mutex;
+  std::unordered_set<std::thread::id> threads;
+  server.set_http_handler<GET>(
+      "/multi", [&](coro_http_request &, coro_http_response &resp) {
+        {
+          std::scoped_lock lock(mutex);
+          threads.insert(std::this_thread::get_id());
+        }
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto started = server.async_start();
+  REQUIRE(server.port() != 0);
+  REQUIRE(server.get_errc() == std::error_code{});
+
+  const auto uri =
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
+  std::vector<std::future<int>> requests;
+  for (int i = 0; i < 120; ++i) {
+    requests.push_back(std::async(std::launch::async, [uri] {
+      coro_http_client client;
+      return client.get(uri).status;
+    }));
+  }
+  for (auto &request : requests) {
+    CHECK(request.get() == 200);
+  }
+  CHECK(threads.size() == 3);
+
+  server.stop();
+  started.wait();
+  CHECK(started.value() == asio::error::operation_aborted);
+}
+
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+TEST_CASE("listener failure during launch stops all acceptors") {
+  // Fail the first loop before the others start, then fail every loop.
+  for (bool first_listener_only : {true, false}) {
+    coro_http_server server(3, static_cast<unsigned short>(0), "127.0.0.1");
+    server.set_accept_exception(true, first_listener_only);
+    server.set_inject_launch_delay(std::chrono::milliseconds(50));
+    auto started = server.async_start();
+    started.wait();
+    const auto expected = std::make_error_code(std::errc::io_error);
+    CHECK(started.value() == expected);
+    CHECK(server.get_errc() == expected);
+    server.stop();
+  }
+}
+
+TEST_CASE("accept completion can stop the server") {
+  auto server = std::make_shared<coro_http_server>(
+      3, static_cast<unsigned short>(0), "127.0.0.1");
+  server->set_accept_exception(true, true);
+  auto started = server->async_start();
+  std::promise<void> stopped;
+  auto done = stopped.get_future();
+  auto chained = std::move(started).thenTry([server, &stopped](auto &&result) {
+    CHECK_FALSE(result.hasError());
+    CHECK(result.value() == std::make_error_code(std::errc::io_error));
+    server->stop();
+    stopped.set_value();
+  });
+  CHECK(done.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+  chained.wait();
+}
+#endif
 
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 19001);
