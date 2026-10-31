@@ -463,11 +463,13 @@ TEST_CASE("test server start and stop") {
   cinatra::coro_http_server server(1, 19000);
   auto future = server.async_start();
 
-  cinatra::coro_http_server server2(1, 19000);
-  auto future2 = server2.async_start();
-  future2.wait();
-  auto ec = future2.value();
-  CHECK(ec == asio::error::address_in_use);
+  for (size_t thread_count : {1, 3}) {
+    cinatra::coro_http_server server2(thread_count, 19000);
+    auto future2 = server2.async_start();
+    future2.wait();
+    auto ec = future2.value();
+    CHECK(ec == asio::error::address_in_use);
+  }
 }
 
 TEST_CASE("test server sync_start and stop") {

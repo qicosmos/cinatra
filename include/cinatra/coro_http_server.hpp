@@ -667,8 +667,8 @@ class coro_http_server {
 #else
     constexpr int reuse_port_option = 0;
 #endif
-    bool multi_acceptor = reuse_port_option != 0 && out_ctx_ == nullptr &&
-                          pool_ != nullptr && pool_->pool_size() > 1;
+    const bool multi_acceptor = reuse_port_option != 0 && out_ctx_ == nullptr &&
+                                pool_ != nullptr && pool_->pool_size() > 1;
     const size_t acceptor_count = multi_acceptor ? pool_->pool_size() : 1;
 
     auto executor_at = [this](size_t i) {
@@ -678,17 +678,12 @@ class coro_http_server {
       return pool_->get_executor_at(i)->get_asio_executor();
     };
 
-    acceptors_.clear();
-    acceptors_.reserve(acceptor_count);
-    acceptors_.push_back(std::make_shared<tcp::acceptor>(executor_at(0)));
-
     asio::ip::tcp::resolver resolver(executor_at(0));
     auto results = resolver.resolve(address_, std::to_string(port_), ec);
 
     if (ec || results.empty()) {
       CINATRA_LOG_ERROR << "bad address: " << address_
                         << " error: " << ec.message();
-      acceptors_.clear();
       if (ec) {
         return ec;
       }
@@ -734,49 +729,28 @@ class coro_http_server {
       return ec;
     };
 
-    ec = listen_one(*acceptors_.front(), endpoint, multi_acceptor);
-    if (ec && multi_acceptor) {
-      CINATRA_LOG_WARNING
-          << "SO_REUSEPORT unavailable, falling back to single acceptor, "
-             "error: "
-          << ec.message();
-      acceptors_.clear();
-      multi_acceptor = false;
-      acceptors_.push_back(std::make_shared<tcp::acceptor>(executor_at(0)));
-      ec = listen_one(*acceptors_.front(), endpoint, false);
-    }
-    if (ec) {
-      CINATRA_LOG_ERROR << "listen port: " << port_
-                        << " error: " << ec.message();
-      close_listeners();
-      return ec;
-    }
-
-    auto end_point = acceptors_.front()->local_endpoint(ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "get local endpoint port: " << port_
-                        << " error: " << ec.message();
-      close_listeners();
-      return ec;
-    }
-    port_ = end_point.port();
-
-    if (multi_acceptor) {
-      tcp::endpoint extra_endpoint(endpoint.address(), port_);
-      for (size_t i = 1; i < acceptor_count; ++i) {
-        auto acceptor = std::make_shared<tcp::acceptor>(executor_at(i));
-        ec = listen_one(*acceptor, extra_endpoint, true);
-        if (ec) {
-          CINATRA_LOG_WARNING
-              << "create extra acceptor failed, continuing with "
-              << acceptors_.size() << " acceptor(s), error: " << ec.message();
-          std::error_code ignore_ec;
-          acceptor->close(ignore_ec);
-          break;
-        }
-        acceptors_.push_back(std::move(acceptor));
+    std::vector<std::shared_ptr<tcp::acceptor>> listeners;
+    listeners.reserve(acceptor_count);
+    for (size_t i = 0; i < acceptor_count; ++i) {
+      auto acceptor = std::make_shared<tcp::acceptor>(executor_at(i));
+      ec = listen_one(*acceptor, endpoint, multi_acceptor);
+      if (ec) {
+        CINATRA_LOG_ERROR << "listen port: " << endpoint.port()
+                          << " error: " << ec.message();
+        return ec;
       }
+      if (i == 0) {
+        endpoint = acceptor->local_endpoint(ec);
+        if (ec) {
+          CINATRA_LOG_ERROR << "get local endpoint port: " << port_
+                            << " error: " << ec.message();
+          return ec;
+        }
+      }
+      listeners.push_back(std::move(acceptor));
     }
+    port_ = endpoint.port();
+    acceptors_ = std::move(listeners);
 
     CINATRA_LOG_INFO << "listen port " << port_ << " successfully";
     return {};
@@ -785,7 +759,7 @@ class coro_http_server {
   async_simple::coro::Lazy<std::error_code> accept(
       asio::ip::tcp::acceptor &acceptor,
       coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
-    // Serialize startup with shutdown triggered by another accept loop.
+    // Run the first async_accept on its context, serialized with close.
     if (acceptors_.size() > 1) {
       co_await coro_io::post(
           [] {
@@ -897,15 +871,6 @@ class coro_http_server {
 
     close_acceptors_async();
     acceptor_close_waiter_.get_future().wait();
-  }
-
-  void close_listeners() {
-    asio::error_code ec;
-    for (auto &acceptor : acceptors_) {
-      acceptor->cancel(ec);
-      acceptor->close(ec);
-    }
-    acceptors_.clear();
   }
 
   // Coroutine-based cache refresh loop.
