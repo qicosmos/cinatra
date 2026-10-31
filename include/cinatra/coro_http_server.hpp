@@ -1,10 +1,16 @@
 #pragma once
 
 #include <atomic>
+#include <cerrno>
 #include <future>
 #include <memory>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
+
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/socket.h>
+#endif
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
@@ -693,8 +699,7 @@ class coro_http_server {
 
     auto endpoint = results.begin()->endpoint();
 
-    auto listen_one = [reuse_port_option](
-                          tcp::acceptor &acceptor, const tcp::endpoint &ep,
+    auto listen_one = [=](tcp::acceptor &acceptor, const tcp::endpoint &ep,
                           bool use_reuse_port) -> std::error_code {
       asio::error_code ec;
       acceptor.open(ep.protocol(), ec);
@@ -708,13 +713,13 @@ class coro_http_server {
       }
 #endif
       if (use_reuse_port) {
-        acceptor.set_option(
-            asio::detail::socket_option::integer<SOL_SOCKET, reuse_port_option>(
-                1),
-            ec);
-        if (ec) {
-          return ec;
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
+        const int enabled = 1;
+        if (::setsockopt(acceptor.native_handle(), SOL_SOCKET,
+                         reuse_port_option, &enabled, sizeof(enabled)) != 0) {
+          return {errno, std::system_category()};
         }
+#endif
       }
       acceptor.bind(ep, ec);
       if (ec) {
