@@ -376,9 +376,10 @@ class coro_http_server {
 
   void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
 
-  void set_accept_exception(bool fail, bool first_listener_only = false) {
-    accept_exception_ = fail;
-    accept_exception_first_only_ = first_listener_only;
+  enum class accept_failure_mode { none, first, all };
+
+  void set_accept_exception(accept_failure_mode mode) {
+    accept_failure_ = mode;
   }
 
 #endif
@@ -781,8 +782,9 @@ class coro_http_server {
 
       asio::ip::tcp::socket socket(executor->get_asio_executor());
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
-      if (accept_exception_ && (!accept_exception_first_only_ ||
-                                &acceptor == acceptors_.front().get())) {
+      if (accept_failure_ == accept_failure_mode::all ||
+          (accept_failure_ == accept_failure_mode::first &&
+           &acceptor == acceptors_.front().get())) {
         throw std::runtime_error("injected accept failure");
       }
 #endif
@@ -1264,8 +1266,7 @@ class coro_http_server {
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
-  bool accept_exception_ = false;
-  bool accept_exception_first_only_ = false;
+  accept_failure_mode accept_failure_ = accept_failure_mode::none;
 #endif
 };
 
