@@ -488,7 +488,8 @@ TEST_CASE("test server sync_start and stop") {
 }
 
 TEST_CASE("server threads serve concurrent connections") {
-  coro_http_server server(3, static_cast<unsigned short>(0), "127.0.0.1");
+  coro_http_server server(3, static_cast<unsigned short>(0),
+                          std::string("127.0.0.1"), false);
   std::mutex mutex;
   std::unordered_set<std::thread::id> threads;
   server.set_http_handler<GET>(
@@ -527,7 +528,8 @@ TEST_CASE("server threads serve concurrent connections") {
 TEST_CASE("listener failure during launch stops all acceptors") {
   // Fail the first loop before the others start, then fail every loop.
   for (bool first_listener_only : {true, false}) {
-    coro_http_server server(3, static_cast<unsigned short>(0), "127.0.0.1");
+    coro_http_server server(3, static_cast<unsigned short>(0),
+                            std::string("127.0.0.1"), false);
     server.set_accept_exception(true, first_listener_only);
     server.set_inject_launch_delay(std::chrono::milliseconds(50));
     auto started = server.async_start();
@@ -541,7 +543,7 @@ TEST_CASE("listener failure during launch stops all acceptors") {
 
 TEST_CASE("accept completion can stop the server") {
   auto server = std::make_shared<coro_http_server>(
-      3, static_cast<unsigned short>(0), "127.0.0.1");
+      3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
   server->set_accept_exception(true, true);
   auto started = server->async_start();
   std::promise<void> stopped;
