@@ -5,11 +5,13 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -461,11 +463,13 @@ TEST_CASE("test server start and stop") {
   cinatra::coro_http_server server(1, 19000);
   auto future = server.async_start();
 
-  cinatra::coro_http_server server2(1, 19000);
-  auto future2 = server2.async_start();
-  future2.wait();
-  auto ec = future2.value();
-  CHECK(ec == asio::error::address_in_use);
+  for (size_t thread_count : {1, 3}) {
+    cinatra::coro_http_server server2(thread_count, 19000);
+    auto future2 = server2.async_start();
+    future2.wait();
+    auto ec = future2.value();
+    CHECK(ec == asio::error::address_in_use);
+  }
 }
 
 TEST_CASE("test server sync_start and stop") {
@@ -484,6 +488,92 @@ TEST_CASE("test server sync_start and stop") {
   CHECK(server.port() > 0);
   CHECK(ec == asio::error::operation_aborted);
 }
+
+TEST_CASE("server threads serve concurrent connections") {
+  coro_http_server server(3, static_cast<unsigned short>(0),
+                          std::string("127.0.0.1"), false);
+  std::mutex mutex;
+  std::unordered_set<std::thread::id> threads;
+  server.set_http_handler<GET>(
+      "/multi", [&](coro_http_request &, coro_http_response &resp) {
+        {
+          std::scoped_lock lock(mutex);
+          threads.insert(std::this_thread::get_id());
+        }
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+
+  auto started = server.async_start();
+  REQUIRE(server.port() != 0);
+  REQUIRE(server.get_errc() == std::error_code{});
+
+  const auto uri =
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/multi";
+  std::vector<std::future<int>> requests;
+  for (int i = 0; i < 120; ++i) {
+    requests.push_back(std::async(std::launch::async, [uri] {
+      coro_http_client client;
+      return client.get(uri).status;
+    }));
+  }
+  for (auto &request : requests) {
+    CHECK(request.get() == 200);
+  }
+  CHECK(threads.size() == 3);
+
+  server.stop();
+  started.wait();
+  CHECK(started.value() == asio::error::operation_aborted);
+}
+
+TEST_CASE("server shutdown drains accept loops") {
+  for (size_t thread_count : {1, 3, 8}) {
+    for (int iteration = 0; iteration < 10; ++iteration) {
+      coro_http_server server(thread_count, static_cast<unsigned short>(0),
+                              std::string("127.0.0.1"), false);
+      auto started = server.async_start();
+      asio::io_context context;
+      std::vector<asio::ip::tcp::socket> clients;
+      if (iteration % 2 != 0) {
+        for (int i = 0; i < 8; ++i) {
+          clients.emplace_back(context);
+          clients.back().connect(
+              {asio::ip::make_address("127.0.0.1"), server.port()});
+        }
+        auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (server.connection_count() != clients.size() &&
+               std::chrono::steady_clock::now() < deadline) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(server.connection_count() == clients.size());
+      }
+
+      server.stop();
+      started.wait();
+      CHECK(started.value() == asio::error::operation_aborted);
+    }
+  }
+}
+
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+TEST_CASE("listener failure stops all acceptors") {
+  // Fail only the first loop, then fail every loop.
+  using failure_mode = coro_http_server::accept_failure_mode;
+  for (auto mode : {failure_mode::first, failure_mode::all}) {
+    coro_http_server server(3, static_cast<unsigned short>(0),
+                            std::string("127.0.0.1"), false);
+    server.set_accept_exception(mode);
+    auto started = server.async_start();
+    started.wait();
+    const auto expected = std::make_error_code(std::errc::io_error);
+    CHECK(started.value() == expected);
+    CHECK(server.get_errc() == expected);
+    server.stop();
+  }
+}
+
+#endif
 
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 19001);

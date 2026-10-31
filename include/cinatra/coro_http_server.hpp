@@ -1,7 +1,16 @@
 #pragma once
 
 #include <atomic>
+#include <cerrno>
+#include <future>
 #include <memory>
+#include <stdexcept>
+#include <system_error>
+#include <thread>
+
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/socket.h>
+#endif
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
@@ -29,7 +38,6 @@ class coro_http_server {
                    std::string address = "0.0.0.0")
       : out_ctx_(&ctx),
         port_(port),
-        acceptor_(ctx),
         check_timer_(ctx),
         cache_refresh_timer_(ctx) {
     init_address(std::move(address));
@@ -37,10 +45,7 @@ class coro_http_server {
 
   coro_http_server(asio::io_context &ctx,
                    std::string address /* = "0.0.0.0:9001" */)
-      : out_ctx_(&ctx),
-        acceptor_(ctx),
-        check_timer_(ctx),
-        cache_refresh_timer_(ctx) {
+      : out_ctx_(&ctx), check_timer_(ctx), cache_refresh_timer_(ctx) {
     init_address(std::move(address));
   }
 
@@ -49,7 +54,6 @@ class coro_http_server {
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
         port_(port),
-        acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -60,7 +64,6 @@ class coro_http_server {
                    bool cpu_affinity = false)
       : pool_(std::make_unique<coro_io::io_context_pool>(thread_num,
                                                          cpu_affinity)),
-        acceptor_(pool_->get_executor()->get_asio_executor()),
         check_timer_(pool_->get_executor()->get_asio_executor()),
         cache_refresh_timer_(pool_->get_executor()->get_asio_executor()) {
     init_address(std::move(address));
@@ -102,8 +105,8 @@ class coro_http_server {
   async_simple::Future<std::error_code> async_start() {
     errc_ = listen();
 
-    async_simple::Promise<std::error_code> promise;
-    auto future = promise.getFuture();
+    auto promise = std::make_shared<async_simple::Promise<std::error_code>>();
+    auto future = promise->getFuture();
 
     if (!errc_) {
       if (out_ctx_ == nullptr) {
@@ -112,18 +115,31 @@ class coro_http_server {
         });
       }
 
-      accept().start([p = std::move(promise), this](auto &&res) mutable {
-        if (res.hasError()) {
-          errc_ = std::make_error_code(std::errc::io_error);
-          p.setValue(errc_);
-        }
-        else {
-          p.setValue(res.value());
-        }
-      });
+      accept_pending_ = acceptors_.size();
+      for (size_t i = 0; i < acceptors_.size(); ++i) {
+        coro_io::ExecutorWrapper<> *fixed_executor =
+            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
+        accept(*acceptors_[i], fixed_executor)
+            .start([promise, this](auto &&res) {
+              if (res.hasError()) {
+                accept_failed_ = true;
+                CINATRA_LOG_ERROR << "accept coroutine failed";
+                close_acceptors_async();
+              }
+              if (--accept_pending_ != 0) {
+                return;
+              }
+              if (accept_failed_) {
+                errc_ = std::make_error_code(std::errc::io_error);
+              }
+              auto ec = errc_ ? errc_ : res.value();
+              acceptor_close_waiter_.set_value();
+              promise->setValue(ec);
+            });
+      }
     }
     else {
-      promise.setValue(errc_);
+      promise->setValue(errc_);
     }
 
     return future;
@@ -365,6 +381,13 @@ class coro_http_server {
   void set_write_failed_forever(bool r) { write_failed_forever_ = r; }
 
   void set_read_failed_forever(bool r) { read_failed_forever_ = r; }
+
+  enum class accept_failure_mode { none, first, all };
+
+  void set_accept_exception(accept_failure_mode mode) {
+    accept_failure_ = mode;
+  }
+
 #endif
 
   template <typename... Aspects>
@@ -644,7 +667,25 @@ class coro_http_server {
     using asio::ip::tcp;
     asio::error_code ec;
 
-    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
+#if defined(__FreeBSD__) && defined(SO_REUSEPORT_LB)
+    constexpr int reuse_port_option = SO_REUSEPORT_LB;
+#elif defined(SO_REUSEPORT) && (defined(__linux__) || defined(__DragonFly__))
+    constexpr int reuse_port_option = SO_REUSEPORT;
+#else
+    constexpr int reuse_port_option = 0;
+#endif
+    const bool multi_acceptor = reuse_port_option != 0 && out_ctx_ == nullptr &&
+                                pool_ != nullptr && pool_->pool_size() > 1;
+    const size_t acceptor_count = multi_acceptor ? pool_->pool_size() : 1;
+
+    auto executor_at = [this](size_t i) {
+      if (out_ctx_ != nullptr) {
+        return out_ctx_->get_executor();
+      }
+      return pool_->get_executor_at(i)->get_asio_executor();
+    };
+
+    asio::ip::tcp::resolver resolver(executor_at(0));
     auto results = resolver.resolve(address_, std::to_string(port_), ec);
 
     if (ec || results.empty()) {
@@ -657,69 +698,112 @@ class coro_http_server {
     }
 
     auto endpoint = results.begin()->endpoint();
-    acceptor_.open(endpoint.protocol(), ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "acceptor open failed" << " error: " << ec.message();
-      return ec;
-    }
-#ifdef __GNUC__
-    acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
-#endif
-    acceptor_.bind(endpoint, ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "bind port: " << port_ << " error: " << ec.message();
-      std::error_code ignore_ec;
-      acceptor_.cancel(ignore_ec);
-      acceptor_.close(ignore_ec);
-      return ec;
-    }
-#ifdef _MSC_VER
-    acceptor_.set_option(tcp::acceptor::reuse_address(true));
-#endif
-    acceptor_.listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "get local endpoint port: " << port_
-                        << " listen error: " << ec.message();
-      return ec;
-    }
 
-    auto end_point = acceptor_.local_endpoint(ec);
-    if (ec) {
-      CINATRA_LOG_ERROR << "get local endpoint port: " << port_
-                        << " error: " << ec.message();
+    auto listen_one = [=](tcp::acceptor &acceptor, const tcp::endpoint &ep,
+                          bool use_reuse_port) -> std::error_code {
+      asio::error_code ec;
+      acceptor.open(ep.protocol(), ec);
+      if (ec) {
+        return ec;
+      }
+#ifdef __GNUC__
+      acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+      if (ec) {
+        return ec;
+      }
+#endif
+      if (use_reuse_port) {
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
+        const int enabled = 1;
+        if (::setsockopt(acceptor.native_handle(), SOL_SOCKET,
+                         reuse_port_option, &enabled, sizeof(enabled)) != 0) {
+          return {errno, asio::system_category()};
+        }
+#endif
+      }
+      acceptor.bind(ep, ec);
+      if (ec) {
+        return ec;
+      }
+#ifdef _MSC_VER
+      acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+      if (ec) {
+        return ec;
+      }
+#endif
+      acceptor.listen(asio::socket_base::max_listen_connections, ec);
       return ec;
+    };
+
+    std::vector<std::shared_ptr<tcp::acceptor>> listeners;
+    listeners.reserve(acceptor_count);
+    for (size_t i = 0; i < acceptor_count; ++i) {
+      auto acceptor = std::make_shared<tcp::acceptor>(executor_at(i));
+      ec = listen_one(*acceptor, endpoint, multi_acceptor);
+      if (ec) {
+        CINATRA_LOG_ERROR << "listen port: " << endpoint.port()
+                          << " error: " << ec.message();
+        return ec;
+      }
+      if (i == 0) {
+        endpoint = acceptor->local_endpoint(ec);
+        if (ec) {
+          CINATRA_LOG_ERROR << "get local endpoint port: " << port_
+                            << " error: " << ec.message();
+          return ec;
+        }
+      }
+      listeners.push_back(std::move(acceptor));
     }
-    port_ = end_point.port();
+    port_ = endpoint.port();
+    acceptors_ = std::move(listeners);
 
     CINATRA_LOG_INFO << "listen port " << port_ << " successfully";
     return {};
   }
 
-  async_simple::coro::Lazy<std::error_code> accept() {
+  async_simple::coro::Lazy<std::error_code> accept(
+      asio::ip::tcp::acceptor &acceptor,
+      coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
+    // Run the first async_accept on its context, serialized with close.
+    if (acceptors_.size() > 1) {
+      co_await coro_io::post(
+          [] {
+          },
+          acceptor.get_executor());
+    }
     for (;;) {
-      coro_io::ExecutorWrapper<> *executor;
-      if (out_ctx_ == nullptr) {
+      coro_io::ExecutorWrapper<> *executor = fixed_executor;
+      if (executor == nullptr && out_ctx_ == nullptr) {
         executor = pool_->get_executor();
       }
-      else {
-        out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
-            out_ctx_->get_executor());
+      else if (executor == nullptr) {
+        if (!out_executor_) {
+          out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
+              out_ctx_->get_executor());
+        }
         executor = out_executor_.get();
       }
 
       asio::ip::tcp::socket socket(executor->get_asio_executor());
-      auto error = co_await coro_io::async_accept(acceptor_, socket);
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (accept_failure_ == accept_failure_mode::all ||
+          (accept_failure_ == accept_failure_mode::first &&
+           &acceptor == acceptors_.front().get())) {
+        throw std::runtime_error("injected accept failure");
+      }
+#endif
+      auto error = co_await coro_io::async_accept(acceptor, socket);
       if (error) {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
-          acceptor_close_waiter_.set_value();
           co_return error;
         }
         continue;
       }
 
-      uint64_t conn_id = ++conn_id_;
+      uint64_t conn_id = conn_id_.fetch_add(1, std::memory_order_relaxed) + 1;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
           executor, std::move(socket), router_);
@@ -775,12 +859,24 @@ class coro_http_server {
     co_await conn->start();
   }
 
+  void close_acceptors_async() {
+    for (auto &acceptor : acceptors_) {
+      // Keep the listener alive until the queued close runs: the server may
+      // be destroyed before an external io_context dispatches it.
+      asio::dispatch(acceptor->get_executor(), [acceptor]() {
+        asio::error_code ec;
+        acceptor->cancel(ec);
+        acceptor->close(ec);
+      });
+    }
+  }
+
   void close_acceptor() {
-    asio::dispatch(acceptor_.get_executor(), [this]() {
-      asio::error_code ec;
-      acceptor_.cancel(ec);
-      acceptor_.close(ec);
-    });
+    if (acceptors_.empty()) {
+      return;
+    }
+
+    close_acceptors_async();
     acceptor_close_waiter_.get_future().wait();
   }
 
@@ -1123,12 +1219,14 @@ class coro_http_server {
   uint16_t port_;
   std::string address_;
   std::error_code errc_ = {};
-  asio::ip::tcp::acceptor acceptor_;
+  std::vector<std::shared_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
+  std::atomic<size_t> accept_pending_{0};
+  std::atomic<bool> accept_failed_{false};
   bool no_delay_ = true;
 
-  uint64_t conn_id_ = 0;
+  std::atomic<uint64_t> conn_id_{0};
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::mutex conn_mtx_;
@@ -1173,6 +1271,7 @@ class coro_http_server {
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   bool write_failed_forever_ = false;
   bool read_failed_forever_ = false;
+  accept_failure_mode accept_failure_ = accept_failure_mode::none;
 #endif
 };
 
