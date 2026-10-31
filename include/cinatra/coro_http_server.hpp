@@ -109,66 +109,26 @@ class coro_http_server {
         });
       }
 
-      struct accept_state {
-        std::mutex mtx;
-        std::error_code first_error;
-        size_t remaining;
-      };
-      auto state = std::make_shared<accept_state>();
-      state->remaining = acceptors_.size();
-
+      accept_pending_ = acceptors_.size();
       for (size_t i = 0; i < acceptors_.size(); ++i) {
         coro_io::ExecutorWrapper<> *fixed_executor =
             acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
         accept(*acceptors_[i], fixed_executor)
-            .start([promise, state, this](auto &&res) mutable {
-              std::error_code loop_error =
-                  res.hasError() ? std::make_error_code(std::errc::io_error)
-                                 : res.value();
-              if (loop_error == asio::error::operation_aborted ||
-                  loop_error == asio::error::bad_descriptor) {
-                loop_error = {};
-              }
-
-              if (loop_error) {
-                CINATRA_LOG_ERROR << "accept coroutine failed: "
-                                  << loop_error.message();
-                // A failed loop will never accept again, so stop every
-                // listener instead of leaving the server half-alive.
+            .start([promise, this](auto &&res) {
+              if (res.hasError()) {
+                accept_failed_ = true;
+                CINATRA_LOG_ERROR << "accept coroutine failed";
                 close_acceptors_async();
               }
-
-              std::error_code final_error;
-              bool last;
-              {
-                std::scoped_lock lock(state->mtx);
-                if (loop_error && !state->first_error) {
-                  state->first_error = loop_error;
-                }
-                last = --state->remaining == 0;
-                final_error = state->first_error;
-              }
-              if (!last) {
+              if (--accept_pending_ != 0) {
                 return;
               }
-
-              if (final_error) {
-                errc_ = final_error;
+              if (accept_failed_) {
+                errc_ = std::make_error_code(std::errc::io_error);
               }
-              else {
-                final_error = res.value();
-              }
-
-              // The future continuation may call stop() or destroy the
-              // server synchronously, so wake stop() before completing the
-              // future and touch no member of `this` afterwards.
+              auto ec = errc_ ? errc_ : res.value();
               acceptor_close_waiter_.set_value();
-              // Complete on a fresh thread: setValue may run continuations
-              // inline, and a continuation calling stop() on a pool thread
-              // would wait for that same pool to finish.
-              std::thread([promise, final_error] {
-                promise->setValue(final_error);
-              }).detach();
+              promise->setValue(ec);
             });
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
         if (accept_launch_delay_.count() > 0) {
@@ -944,7 +904,7 @@ class coro_http_server {
     }
 
     close_acceptors_async();
-    acceptor_close_future_.wait();
+    acceptor_close_waiter_.get_future().wait();
   }
 
   void close_listeners() {
@@ -1298,8 +1258,8 @@ class coro_http_server {
   std::vector<std::shared_ptr<asio::ip::tcp::acceptor>> acceptors_;
   std::thread thd_;
   std::promise<void> acceptor_close_waiter_;
-  std::future<void> acceptor_close_future_ =
-      acceptor_close_waiter_.get_future();
+  std::atomic<size_t> accept_pending_{0};
+  std::atomic<bool> accept_failed_{false};
   bool no_delay_ = true;
 
   std::atomic<uint64_t> conn_id_{0};

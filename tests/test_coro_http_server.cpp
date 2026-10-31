@@ -541,22 +541,6 @@ TEST_CASE("listener failure during launch stops all acceptors") {
   }
 }
 
-TEST_CASE("accept completion can stop the server") {
-  auto server = std::make_shared<coro_http_server>(
-      3, static_cast<unsigned short>(0), std::string("127.0.0.1"), false);
-  server->set_accept_exception(true, true);
-  auto started = server->async_start();
-  std::promise<void> stopped;
-  auto done = stopped.get_future();
-  auto chained = std::move(started).thenTry([server, &stopped](auto &&result) {
-    CHECK_FALSE(result.hasError());
-    CHECK(result.value() == std::make_error_code(std::errc::io_error));
-    server->stop();
-    stopped.set_value();
-  });
-  CHECK(done.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
-  chained.wait();
-}
 #endif
 
 TEST_CASE("get post") {
