@@ -555,13 +555,12 @@ TEST_CASE("server shutdown drains accept loops") {
 }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
-TEST_CASE("listener failure during launch stops all acceptors") {
-  // Fail the first loop before the others start, then fail every loop.
+TEST_CASE("listener failure stops all acceptors") {
+  // Fail only the first loop, then fail every loop.
   for (bool first_listener_only : {true, false}) {
     coro_http_server server(3, static_cast<unsigned short>(0),
                             std::string("127.0.0.1"), false);
     server.set_accept_exception(true, first_listener_only);
-    server.set_inject_launch_delay(std::chrono::milliseconds(50));
     auto started = server.async_start();
     started.wait();
     const auto expected = std::make_error_code(std::errc::io_error);

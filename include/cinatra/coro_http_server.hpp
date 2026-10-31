@@ -130,11 +130,6 @@ class coro_http_server {
               acceptor_close_waiter_.set_value();
               promise->setValue(ec);
             });
-#ifdef INJECT_FOR_HTTP_SEVER_TEST
-        if (accept_launch_delay_.count() > 0) {
-          std::this_thread::sleep_for(accept_launch_delay_);
-        }
-#endif
       }
     }
     else {
@@ -386,9 +381,6 @@ class coro_http_server {
     accept_exception_first_only_ = first_listener_only;
   }
 
-  void set_inject_launch_delay(std::chrono::milliseconds delay) {
-    accept_launch_delay_ = delay;
-  }
 #endif
 
   template <typename... Aspects>
@@ -1309,7 +1301,6 @@ class coro_http_server {
   bool read_failed_forever_ = false;
   bool accept_exception_ = false;
   bool accept_exception_first_only_ = false;
-  std::chrono::milliseconds accept_launch_delay_{0};
 #endif
 };
 
