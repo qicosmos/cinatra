@@ -894,14 +894,8 @@ class coro_http_connection
     }
     else {
 #endif
-      // The limit includes every buffer, including HTTP response headers.
-      constexpr size_t optimistic_write_limit = 4 * 1024;
-      auto size = asio::buffer_size(buffer);
-      if (size <= optimistic_write_limit) {
-        return async_write_optimistic<AsioBuffer>(
-            std::forward<AsioBuffer>(buffer), size);
-      }
-      return coro_io::async_write(socket_, buffer);
+      return async_write_optimistic<AsioBuffer>(
+          std::forward<AsioBuffer>(buffer));
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -973,13 +967,24 @@ class coro_http_connection
   // Own temporary buffer sequences while retaining references to lvalues.
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-  async_write_optimistic(AsioBuffer buffer, size_t size) {
+  async_write_optimistic(AsioBuffer buffer) {
+    // Inspect the sequence when the Lazy starts, including response headers.
+    auto size = asio::buffer_size(buffer);
     std::error_code ec;
     if (size == 0) {
       if (!socket_.is_open()) {
         ec = asio::error::bad_descriptor;
       }
       co_return std::pair{ec, size_t{0}};
+    }
+    constexpr size_t optimistic_write_limit = 4 * 1024;
+    if (size > optimistic_write_limit) {
+      coro_io::callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+      co_return co_await awaitor.await_resume([&](auto handler) {
+        asio::async_write(socket_, buffer, [handler](auto ec, auto n) {
+          handler.set_value_then_resume(ec, n);
+        });
+      });
     }
     if (!socket_.non_blocking()) {
       socket_.non_blocking(true, ec);
