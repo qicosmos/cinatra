@@ -1,3 +1,4 @@
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -29,6 +30,291 @@
 using namespace cinatra;
 
 using namespace std::chrono_literals;
+
+namespace {
+struct connection_write_test {
+  asio::io_context context;
+  coro_io::ExecutorWrapper<> executor{context.get_executor()};
+  coro_http_router router;
+  asio::ip::tcp::socket peer{context};
+  std::shared_ptr<coro_http_connection> connection;
+  std::string prefix;
+
+  explicit connection_write_test(bool backpressure = false) {
+    using asio::ip::tcp;
+    tcp::acceptor listener(context, {asio::ip::address_v4::loopback(), 0});
+    peer.open(tcp::v4());
+    if (backpressure) {
+      peer.set_option(tcp::socket::receive_buffer_size(1024));
+    }
+    peer.connect(listener.local_endpoint());
+    connection = std::make_shared<coro_http_connection>(
+        &executor, listener.accept(), router);
+    if (backpressure) {
+      auto &socket = connection->tcp_socket();
+      socket.set_option(tcp::socket::send_buffer_size(1024));
+      socket.non_blocking(true);
+      std::string padding(4096, 'p');
+      std::error_code ec;
+      while (prefix.size() < 1024 * 1024) {
+        auto n = socket.write_some(asio::buffer(padding), ec);
+        prefix.append(padding.data(), n);
+        if (ec) {
+          break;
+        }
+      }
+      CHECK((ec == asio::error::would_block || ec == asio::error::try_again));
+    }
+  }
+
+  ~connection_write_test() {
+    connection->close();
+    std::error_code ec;
+    peer.close(ec);
+    context.restart();
+    context.poll();
+  }
+
+  template <typename Factory>
+  void check(Factory make_write, const std::string &payload,
+             bool completes_inline) {
+    using result_type = std::pair<std::error_code, size_t>;
+    result_type result{std::make_error_code(std::errc::io_error), 0};
+    bool done = false;
+    auto non_blocking = connection->tcp_socket().non_blocking();
+    auto operation = make_write(*connection);
+    CHECK(connection->tcp_socket().non_blocking() == non_blocking);
+    std::move(operation).start([&](auto &&value) {
+      CHECK_FALSE(value.hasError());
+      if (!value.hasError()) {
+        result = value.value();
+      }
+      done = true;
+    });
+    CHECK(done == completes_inline);
+    CHECK(connection->tcp_socket().non_blocking() ==
+          (non_blocking || (!payload.empty() && payload.size() <= 4096)));
+
+    const auto expected = prefix + payload;
+    std::string received(expected.size(), '\0');
+    std::error_code read_ec;
+    size_t read_size = 0;
+    asio::steady_timer deadline(context);
+    deadline.expires_after(10s);
+    deadline.async_wait([&](std::error_code ec) {
+      if (!ec) {
+        connection->close();
+        peer.close(ec);
+      }
+    });
+    asio::async_read(peer, asio::buffer(received),
+                     [&](std::error_code ec, size_t n) {
+                       read_ec = ec;
+                       read_size = n;
+                       deadline.cancel();
+                     });
+    context.run();
+    CHECK(done);
+    CHECK_FALSE(result.first);
+    CHECK(result.second == payload.size());
+    CHECK_FALSE(read_ec);
+    CHECK(read_size == expected.size());
+    CHECK(received == expected);
+  }
+};
+
+std::vector<asio::const_buffer> split_write_buffers(std::string_view data) {
+  std::vector<asio::const_buffer> buffers{asio::const_buffer{}};
+  for (size_t offset = 0; offset < data.size(); offset += 32) {
+    auto part = data.substr(offset, 32);
+    buffers.push_back(asio::buffer(part.data(), part.size()));
+  }
+  buffers.emplace_back();
+  return buffers;
+}
+}  // namespace
+
+TEST_CASE("optimistic write handles buffer sequences") {
+  connection_write_test test;
+  std::string payload(4096, '\0');
+  for (size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<char>('!' + i % 91);
+  }
+
+  SUBCASE("temporary single buffer") {
+    test.check(
+        [&](coro_http_connection &conn) {
+          return conn.async_write(asio::buffer(payload));
+        },
+        payload, true);
+  }
+  SUBCASE("array of buffers") {
+    std::array<asio::const_buffer, 2> buffers{
+        asio::buffer(payload.data(), 123),
+        asio::buffer(payload.data() + 123, payload.size() - 123)};
+    test.check(
+        [&](coro_http_connection &conn) {
+          return conn.async_write(buffers);
+        },
+        payload, true);
+  }
+  SUBCASE("temporary sequence requires partial-write continuation") {
+    // More buffers than one native write accepts forces a short write.
+    test.check(
+        [&](coro_http_connection &conn) {
+          return conn.async_write(split_write_buffers(payload));
+        },
+        payload, false);
+  }
+}
+
+TEST_CASE("optimistic write uses total size and 4KiB limit") {
+  for (size_t size : {0, 4095, 4096, 4097}) {
+    connection_write_test test;
+    std::string payload(size, 'x');
+    std::array<asio::const_buffer, 2> buffers{
+        asio::buffer(payload.data(), size / 2),
+        asio::buffer(payload.data() + size / 2, size - size / 2)};
+    test.check(
+        [&](coro_http_connection &conn) {
+          return conn.async_write(buffers);
+        },
+        payload, size <= 4096);
+  }
+}
+
+TEST_CASE("optimistic write drains socket backpressure") {
+  connection_write_test test(true);
+  std::string payload(4096, 'w');
+  test.check(
+      [&](coro_http_connection &conn) {
+        return conn.async_write(split_write_buffers(payload));
+      },
+      payload, false);
+}
+
+TEST_CASE("optimistic write returns socket errors") {
+  connection_write_test test;
+  test.connection->tcp_socket().close();
+  std::string payload = "closed socket";
+  SUBCASE("empty buffer") { payload.clear(); }
+  SUBCASE("nonempty buffer") {}
+  bool done = false;
+  test.connection->async_write(asio::buffer(payload)).start([&](auto &&value) {
+    CHECK_FALSE(value.hasError());
+    if (!value.hasError()) {
+      CHECK(value.value().first == asio::error::bad_descriptor);
+      CHECK(value.value().second == 0);
+    }
+    done = true;
+  });
+  CHECK(done);
+}
+
+TEST_CASE("optimistic write reports peer reset") {
+  connection_write_test test;
+  test.peer.set_option(asio::socket_base::linger(true, 0));
+  test.peer.close();
+
+  // Wait for the reset through the socket itself instead of a timing delay.
+  char byte;
+  std::error_code ec;
+  test.connection->tcp_socket().read_some(asio::buffer(&byte, 1), ec);
+  REQUIRE(ec);
+
+  bool done = false;
+  std::string payload = "peer reset";
+  test.connection->async_write(asio::buffer(payload)).start([&](auto &&value) {
+    CHECK_FALSE(value.hasError());
+    if (!value.hasError()) {
+      CHECK(value.value().first);
+      CHECK(value.value().second == 0);
+    }
+    done = true;
+  });
+  CHECK(done);
+}
+
+TEST_CASE("optimistic HTTP preserves keep-alive across response sizes") {
+  connection_write_test test;
+  const std::array<size_t, 4> sizes{13, 3072, 8192, 13};
+  bool multi_buf = true;
+  SUBCASE("buffer sequence responses") {}
+  SUBCASE("single buffer responses") { multi_buf = false; }
+  size_t requests = 0;
+  test.router.set_http_handler<GET>(
+      "/", [&](coro_http_request &req, coro_http_response &resp) {
+        req.get_conn()->set_multi_buf(multi_buf);
+        resp.set_status_and_content(
+            status_type::ok,
+            std::string(sizes[requests], static_cast<char>('a' + requests)));
+        ++requests;
+      });
+
+  bool server_done = false;
+  test.connection->start().start([&](auto &&value) {
+    CHECK_FALSE(value.hasError());
+    server_done = true;
+  });
+  asio::steady_timer deadline(test.context);
+  deadline.expires_after(10s);
+  deadline.async_wait([&](std::error_code ec) {
+    if (!ec) {
+      test.connection->close();
+      test.peer.close(ec);
+    }
+  });
+  auto client = [&]() -> async_simple::coro::Lazy<void> {
+    asio::streambuf received;
+    for (size_t i = 0; i < sizes.size(); ++i) {
+      std::string_view request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      // Split a later request to exercise a header spanning multiple reads.
+      if (i == 1) {
+        auto [ec, _] = co_await coro_io::async_write(
+            test.peer, asio::buffer(request.data(), 12));
+        CHECK_FALSE(ec);
+        request.remove_prefix(12);
+      }
+      auto [write_ec, _] = co_await coro_io::async_write(
+          test.peer, asio::buffer(request.data(), request.size()));
+      CHECK_FALSE(write_ec);
+      auto [read_ec, header_size] =
+          co_await coro_io::async_read_until(test.peer, received, TWO_CRCF);
+      CHECK_FALSE(read_ec);
+      if (read_ec) {
+        co_return;
+      }
+      std::string_view header(asio::buffer_cast<const char *>(received.data()),
+                              header_size);
+      CHECK(header.starts_with("HTTP/1.1 200"));
+      CHECK(header.find("Content-Length: " + std::to_string(sizes[i])) !=
+            std::string_view::npos);
+      received.consume(header_size);
+      if (received.size() < sizes[i]) {
+        auto [ec, _] = co_await coro_io::async_read(test.peer, received,
+                                                    sizes[i] - received.size());
+        CHECK_FALSE(ec);
+      }
+      std::string_view body(asio::buffer_cast<const char *>(received.data()),
+                            received.size());
+      CHECK(body == std::string(sizes[i], static_cast<char>('a' + i)));
+      received.consume(sizes[i]);
+    }
+    std::error_code ec;
+    test.peer.shutdown(asio::socket_base::shutdown_both, ec);
+    test.peer.close(ec);
+  };
+  bool client_done = false;
+  client().start([&](auto &&value) {
+    CHECK_FALSE(value.hasError());
+    client_done = true;
+    deadline.cancel();
+  });
+  test.context.run();
+  CHECK(client_done);
+  CHECK(server_done);
+  CHECK(requests == sizes.size());
+}
 
 TEST_CASE("request field limits reject before routing") {
   auto make_fields = [](size_t count) {

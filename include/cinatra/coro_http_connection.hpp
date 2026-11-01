@@ -3,8 +3,10 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/buffer.hpp>
+#include <iterator>
 #include <system_error>
 #include <thread>
+#include <utility>
 
 #include "asio/dispatch.hpp"
 #include "asio/streambuf.hpp"
@@ -892,7 +894,8 @@ class coro_http_connection
     }
     else {
 #endif
-      return coro_io::async_write(socket_, buffer);
+      return async_write_optimistic<AsioBuffer>(
+          std::forward<AsioBuffer>(buffer));
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -961,6 +964,68 @@ class coro_http_connection
   }
 
  private:
+  // Own temporary buffer sequences while retaining references to lvalues.
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_optimistic(AsioBuffer buffer) {
+    // Inspect the sequence when the Lazy starts, including response headers.
+    auto size = asio::buffer_size(buffer);
+    std::error_code ec;
+    if (size == 0) {
+      if (!socket_.is_open()) {
+        ec = asio::error::bad_descriptor;
+      }
+      co_return std::pair{ec, size_t{0}};
+    }
+    constexpr size_t optimistic_write_limit = 4 * 1024;
+    if (size > optimistic_write_limit) {
+      coro_io::callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+      co_return co_await awaitor.await_resume([&](auto handler) {
+        asio::async_write(socket_, buffer, [handler](auto ec, auto n) {
+          handler.set_value_then_resume(ec, n);
+        });
+      });
+    }
+    if (!socket_.non_blocking()) {
+      socket_.non_blocking(true, ec);
+      if (ec) {
+        co_return std::pair{ec, size_t{0}};
+      }
+    }
+
+    auto written = socket_.write_some(buffer, ec);
+    if (ec && ec != asio::error::would_block && ec != asio::error::try_again) {
+      co_return std::pair{ec, written};
+    }
+    if (written == size) {
+      co_return std::pair{std::error_code{}, written};
+    }
+
+    co_return co_await async_write_remaining(buffer, written);
+  }
+
+  // Keep buffer slicing and its allocation off the full-write fast path.
+  template <typename AsioBuffer>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  async_write_remaining(AsioBuffer &buffer, size_t written) {
+    auto it = asio::buffer_sequence_begin(buffer);
+    auto end = asio::buffer_sequence_end(buffer);
+    std::vector<asio::const_buffer> remaining;
+    remaining.reserve(std::distance(it, end));
+    auto skip = written;
+    for (; it != end; ++it) {
+      asio::const_buffer part(*it);
+      if (skip >= part.size()) {
+        skip -= part.size();
+        continue;
+      }
+      remaining.push_back(part + skip);
+      skip = 0;
+    }
+    auto [write_ec, n] = co_await coro_io::async_write(socket_, remaining);
+    co_return std::pair{write_ec, written + n};
+  }
+
   async_simple::coro::Lazy<bool> write_chunked_owned(std::string chunked_data,
                                                      bool eof = false) {
     response_.set_delay(true);
