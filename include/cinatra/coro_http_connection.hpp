@@ -7,6 +7,7 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "asio/dispatch.hpp"
 #include "asio/streambuf.hpp"
@@ -895,11 +896,9 @@ class coro_http_connection
     else {
 #endif
       // The limit includes every buffer, including HTTP response headers.
-      constexpr size_t optimistic_write_limit = 4 * 1024;
-      auto size = asio::buffer_size(buffer);
-      if (size <= optimistic_write_limit) {
+      if (asio::buffer_size(buffer) <= optimistic_write_limit) {
         return async_write_optimistic<AsioBuffer>(
-            std::forward<AsioBuffer>(buffer), size);
+            std::forward<AsioBuffer>(buffer));
       }
       return coro_io::async_write(socket_, buffer);
 #ifdef CINATRA_ENABLE_SSL
@@ -970,10 +969,17 @@ class coro_http_connection
   }
 
  private:
+  static constexpr size_t optimistic_write_limit = 4 * 1024;
+
   // Own temporary buffer sequences while retaining references to lvalues.
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
-  async_write_optimistic(AsioBuffer buffer, size_t size) {
+  async_write_optimistic(AsioBuffer buffer) {
+    // Borrowed sequences may change before the Lazy is started.
+    auto size = asio::buffer_size(buffer);
+    if (size > optimistic_write_limit) {
+      co_return co_await coro_io::async_write(socket_, buffer);
+    }
     std::error_code ec;
     if (size == 0) {
       if (!socket_.is_open()) {
