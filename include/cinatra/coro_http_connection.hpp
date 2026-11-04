@@ -17,6 +17,7 @@
 #include "coro_http_request.hpp"
 #include "coro_http_router.hpp"
 #include "define.h"
+#include "http_header_matcher.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
 #include "session_manager.hpp"
@@ -116,7 +117,8 @@ class coro_http_connection
         has_shake = true;
       }
 #endif
-      auto [ec, size] = co_await async_read_until(head_buf_, TWO_CRCF);
+      auto [ec, size] =
+          co_await async_read_until(head_buf_, detail::http_header_matcher{});
       if (ec == asio::error::not_found) {
         CINATRA_LOG_WARNING << "http header too large (> "
                             << max_http_header_size_ << " bytes)";
@@ -901,9 +903,9 @@ class coro_http_connection
 #endif
   }
 
-  template <typename AsioBuffer>
+  template <typename AsioBuffer, typename Delimiter>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
-      AsioBuffer &buffer, asio::string_view delim) noexcept {
+      AsioBuffer &buffer, const Delimiter &delim) noexcept {
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {

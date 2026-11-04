@@ -32,7 +32,13 @@ inline uint64_t sip_hash_2_4(std::string_view value, uint64_t key0,
   uint64_t v2 = UINT64_C(0x6c7967656e657261) ^ key0;
   uint64_t v3 = UINT64_C(0x7465646279746573) ^ key1;
 
-  auto sip_round = [&]() {
+  auto sip_round = [&]()
+#if defined(__GNUC__) || defined(__clang__)
+                       __attribute__((always_inline))
+#elif defined(_MSC_VER)
+                       [[msvc::forceinline]]
+#endif
+  {
     v0 += v1;
     v1 = rotate_left(v1, 13);
     v1 ^= v0;

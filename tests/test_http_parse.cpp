@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "cinatra/coro_http_server.hpp"
+#include "cinatra/http_header_matcher.hpp"
 #include "cinatra/secure_string_hash.hpp"
 #include "doctest/doctest.h"
 
@@ -344,6 +345,49 @@ TEST_CASE("client supplied session ids cannot create sessions") {
   replacement_session->invalidate();
   manager.remove_expire_session();
   CHECK_FALSE(manager.check_session_existence(generated_session_id));
+}
+
+TEST_CASE("http header matcher handles delimiters and split reads") {
+  struct {
+    std::string_view input;
+    size_t offset;
+    bool matched;
+  } cases[] = {
+      {"", 0, false},
+      {"plain", 5, false},
+      {"header\r", 6, false},
+      {"header\r\n", 6, false},
+      {"header\r\n\r", 6, false},
+      {"header\r\n\r\nbody", 10, true},
+      {"\r\r\n\r\nnext", 5, true},
+      {"\r\nx\r", 3, false},
+      {"\r\n\rx", 4, false},
+      {"\r\n\r\n\r\n", 4, true},
+      {std::string_view{"a\0\r\n\r\nbody", 10}, 6, true},
+  };
+  detail::http_header_matcher matcher;
+  for (const auto &test : cases) {
+    auto buffer = asio::buffer(test.input);
+    auto begin = asio::buffers_begin(buffer);
+    auto [next, matched] = matcher(begin, asio::buffers_end(buffer));
+    CHECK(matched == test.matched);
+    CHECK(static_cast<size_t>(next - begin) == test.offset);
+  }
+
+  constexpr std::string_view input = "GET / HTTP/1.1\r\nHost: x\r\n\r\nbody";
+  const size_t header_size = input.find("\r\n\r\n") + 4;
+  for (size_t split = header_size - 3; split < header_size; ++split) {
+    auto partial = asio::buffer(input.substr(0, split));
+    auto begin = asio::buffers_begin(partial);
+    auto [resume, matched] = matcher(begin, asio::buffers_end(partial));
+    REQUIRE_FALSE(matched);
+    auto complete = asio::buffer(input);
+    auto full_begin = asio::buffers_begin(complete);
+    auto [next, found] =
+        matcher(full_begin + (resume - begin), asio::buffers_end(complete));
+    CHECK(found);
+    CHECK(static_cast<size_t>(next - full_begin) == header_size);
+  }
 }
 
 TEST_CASE("siphash matches the reference vectors") {

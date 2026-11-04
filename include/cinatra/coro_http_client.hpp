@@ -30,6 +30,7 @@
 #include "brzip.hpp"
 #endif
 #include "cinatra_log_wrapper.hpp"
+#include "http_header_matcher.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
 #include "picohttpparser.h"
@@ -1832,7 +1833,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       req_context<String> ctx, http_method method, BodyTarget out_buf = {}) {
     resp_data data{};
     do {
-      if (std::tie(ec, size) = co_await async_read_until(head_buf_, TWO_CRCF);
+      if (std::tie(ec, size) = co_await async_read_until(
+              head_buf_, detail::http_header_matcher{});
           ec) {
         break;
       }
@@ -2403,7 +2405,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
           // Read proxy response until end of headers
           if (auto [ec, _] = co_await coro_io::async_read_until(
-                  socket_->impl_, head_buf_, "\r\n\r\n");
+                  socket_->impl_, head_buf_, detail::http_header_matcher{});
               ec) {
             co_return resp_data{ec, 404};
           }
@@ -2720,9 +2722,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #endif
   }
 
-  template <typename AsioBuffer>
+  template <typename AsioBuffer, typename Delimiter>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
-      AsioBuffer &buffer, asio::string_view delim) noexcept {
+      AsioBuffer &buffer, const Delimiter &delim) noexcept {
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
     if (read_failed_forever_) {
       return async_read_failed();
