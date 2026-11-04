@@ -386,7 +386,12 @@ post(Func func, Executor executor) {
 
   callback_awaitor<R> awaitor;
   post_helper<R, Func, Executor> helper{executor, std::move(func)};
-  co_return co_await awaitor.await_resume(helper);
+  auto result = co_await awaitor.await_resume(helper);
+  // The callback resumes on the worker; restore the caller before further I/O.
+  if (co_await async_simple::CurrentExecutor{}) {
+    co_await async_simple::coro::Yield{};
+  }
+  co_return result;
 }
 
 template <typename Func>

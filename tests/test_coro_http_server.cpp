@@ -861,6 +861,110 @@ TEST_CASE("listener failure stops all acceptors") {
 
 #endif
 
+TEST_CASE("shutdown drains handlers awaiting off-thread work") {
+  bool external = false;
+  bool tls = false;
+  SUBCASE("owned context") {}
+  SUBCASE("external context") { external = true; }
+#ifdef CINATRA_ENABLE_SSL
+  SUBCASE("owned context with TLS") { tls = true; }
+  SUBCASE("external context with TLS") {
+    external = true;
+    tls = true;
+  }
+#endif
+
+  asio::io_context context(1);
+  auto work = asio::make_work_guard(context);
+  std::thread io_thread([&] {
+    context.run();
+  });
+  auto server =
+      external ? std::make_unique<coro_http_server>(context, 0, "127.0.0.1")
+               : std::make_unique<coro_http_server>(1, 0, "127.0.0.1");
+  std::promise<void> entered, release, worker_finished;
+  auto entered_future = entered.get_future();
+  auto release_future = release.get_future().share();
+  auto worker_future = worker_finished.get_future();
+  auto *worker = coro_io::get_global_block_executor();
+  std::weak_ptr<coro_http_connection> connection;
+  std::atomic<bool> resumed_on_socket_executor{false};
+  server->set_http_handler<GET>(
+      "/test/{}/{}",
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        connection = req.get_conn()->shared_from_this();
+        co_await coro_io::post(
+            [&] {
+              entered.set_value();
+              release_future.wait();
+            },
+            worker);
+        resumed_on_socket_executor = req.get_conn()
+                                         ->get_executor()
+                                         ->context()
+                                         .get_executor()
+                                         .running_in_this_thread();
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+#ifdef CINATRA_ENABLE_SSL
+  const auto cert_dir =
+      fs::path(__FILE__).parent_path().parent_path() / "include/cinatra";
+  if (tls) {
+    server->init_ssl((cert_dir / "server.crt").string(),
+                     (cert_dir / "server.key").string(), "test");
+  }
+#endif
+  auto started = server->async_start();
+  asio::io_context client_context;
+  asio::ip::tcp::socket peer(client_context);
+  peer.connect({asio::ip::address_v4::loopback(), server->port()});
+  std::string request = "GET /test/a/b HTTP/1.1\r\nHost: localhost\r\n\r\n";
+#ifdef CINATRA_ENABLE_SSL
+  asio::ssl::context ssl_context(asio::ssl::context::tls_client);
+  asio::ssl::stream<asio::ip::tcp::socket &> ssl_peer(peer, ssl_context);
+  if (tls) {
+    ssl_peer.handshake(asio::ssl::stream_base::client);
+    asio::write(ssl_peer, asio::buffer(request));
+  }
+  else
+#endif
+  {
+    asio::write(peer, asio::buffer(request));
+  }
+  entered_future.wait();
+  auto stopped = std::async(std::launch::async, [&] {
+    server->stop();
+  });
+
+  // Observe socket closure while the handler is held at an explicit barrier.
+  char byte;
+  std::error_code ec;
+#ifdef CINATRA_ENABLE_SSL
+  if (tls) {
+    ssl_peer.read_some(asio::buffer(&byte, 1), ec);
+  }
+  else
+#endif
+  {
+    peer.read_some(asio::buffer(&byte, 1), ec);
+  }
+  CHECK(ec);
+  auto stopped_early = stopped.wait_for(100ms) == std::future_status::ready;
+  work.reset();
+  release.set_value();
+  // This marker runs after the blocked worker callback has returned.
+  asio::post(worker->get_asio_executor(), [&] {
+    worker_finished.set_value();
+  });
+  worker_future.wait();
+  stopped.get();
+  io_thread.join();
+  CHECK((external || !stopped_early));
+  CHECK(resumed_on_socket_executor);
+  CHECK(connection.expired());
+}
+
 TEST_CASE("get post") {
   cinatra::coro_http_server server(1, 19001);
   server.set_shrink_to_fit(true);
