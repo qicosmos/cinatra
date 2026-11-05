@@ -9,6 +9,20 @@
 #include <string>
 #include <string_view>
 namespace code_utils {
+// Percent escapes use ASCII hex digits regardless of locale or char signedness.
+inline int hex_digit_value(char ch) noexcept {
+  if (ch >= '0' && ch <= '9') {
+    return ch - '0';
+  }
+  if (ch >= 'a' && ch <= 'f') {
+    return ch - 'a' + 10;
+  }
+  if (ch >= 'A' && ch <= 'F') {
+    return ch - 'A' + 10;
+  }
+  return -1;
+}
+
 inline static std::string url_encode(const std::string &value) noexcept {
   static auto hex_chars = "0123456789ABCDEF";
 
@@ -36,23 +50,21 @@ inline static std::string url_decode(std::string_view str) noexcept {
   for (size_t i = 0; i < str.size(); ++i) {
     char ch = str[i];
     if (ch == '%') {
-      constexpr char hex[] = "0123456789ABCDEF";
+      if (++i == str.size()) {
+        result.push_back('?');
+        break;
+      }
+
+      int hi = hex_digit_value(str[i]);
 
       if (++i == str.size()) {
         result.push_back('?');
         break;
       }
 
-      int hi = (int)(std::find(hex, hex + 16, toupper(str[i])) - hex);
+      int lo = hex_digit_value(str[i]);
 
-      if (++i == str.size()) {
-        result.push_back('?');
-        break;
-      }
-
-      int lo = (int)(std::find(hex, hex + 16, toupper(str[i])) - hex);
-
-      if ((hi >= 16) || (lo >= 16)) {
+      if ((hi < 0) || (lo < 0)) {
         result.push_back('?');
         break;
       }

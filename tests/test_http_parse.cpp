@@ -434,6 +434,34 @@ TEST_CASE("siphash matches the reference vectors") {
   }
 }
 
+TEST_CASE("url decode handles hex case and invalid escape bytes") {
+  using code_utils::get_string_by_urldecode;
+  using code_utils::url_decode;
+  using code_utils::url_encode;
+
+  CHECK(url_decode("%aF%Fa%0f%F0") == std::string("\xAF\xFA\x0F\xF0", 4));
+  CHECK(url_decode("%c0") == std::string("\xC0"));
+  CHECK(url_decode("%D6%D0%CE%C4") == std::string("\xD6\xD0\xCE\xC4", 4));
+  CHECK(url_decode("").empty());
+  CHECK(url_decode("%") == "?");
+  CHECK(url_decode("%0") == "?");
+  CHECK(url_decode("ok%0Gtail") == "ok?");
+  CHECK(url_decode("a+b%2Bc") == "a b+c");
+
+  constexpr std::string_view digits = "0123456789abcdefABCDEF";
+  for (int value = 0; value < 256; ++value) {
+    const std::string byte(1, static_cast<char>(value));
+    const auto encoded = url_encode(byte);
+    CHECK(url_decode(encoded) == byte);
+    CHECK(get_string_by_urldecode(encoded) == byte);
+    if (digits.find(byte[0]) == std::string_view::npos) {
+      // Include NUL and high-bit bytes in both hex-digit positions.
+      CHECK(url_decode("%" + byte + "0") == "?");
+      CHECK(url_decode("%0" + byte) == "?");
+    }
+  }
+}
+
 TEST_CASE("uri test") {
   std::string uri = "https://example.com?name=tom";
   uri_t u;
