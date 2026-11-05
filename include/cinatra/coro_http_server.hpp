@@ -856,6 +856,8 @@ class coro_http_server {
 
   async_simple::coro::Lazy<void> start_one(
       std::shared_ptr<coro_http_connection> conn) noexcept {
+    // A handler awaiting off-thread work must keep the socket executor running.
+    auto work = asio::make_work_guard(conn->tcp_socket().get_executor());
     co_await conn->start();
   }
 

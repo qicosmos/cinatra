@@ -199,6 +199,20 @@ async_read_until(Socket &socket, AsioBuffer &buffer,
   });
 }
 
+template <typename Socket, typename AsioBuffer, typename MatchCondition>
+  requires(asio::is_match_condition<MatchCondition>::value != 0)
+inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+async_read_until(Socket &socket, AsioBuffer &buffer,
+                 MatchCondition match_condition) noexcept {
+  callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+  co_return co_await awaitor.await_resume([&](auto handler) {
+    asio::async_read_until(socket, buffer, match_condition,
+                           [&, handler](const auto &ec, auto size) {
+                             handler.set_value_then_resume(ec, size);
+                           });
+  });
+}
+
 template <typename Socket, typename AsioBuffer>
 inline async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
     Socket &socket, AsioBuffer &&buffer) noexcept {
@@ -372,7 +386,12 @@ post(Func func, Executor executor) {
 
   callback_awaitor<R> awaitor;
   post_helper<R, Func, Executor> helper{executor, std::move(func)};
-  co_return co_await awaitor.await_resume(helper);
+  auto result = co_await awaitor.await_resume(helper);
+  // The callback resumes on the worker; restore the caller before further I/O.
+  if (co_await async_simple::CurrentExecutor{}) {
+    co_await async_simple::coro::Yield{};
+  }
+  co_return result;
 }
 
 template <typename Func>
