@@ -42,6 +42,7 @@ if (ZLIB_FOUND)
     target_link_libraries(test_http_pipeline PRIVATE ${ZLIB_LIBRARIES})
 endif ()
 add_test(NAME test_http_pipeline COMMAND test_http_pipeline)
+set_tests_properties(test_http_pipeline PROPERTIES TIMEOUT 30)
 
 if (ZLIB_FOUND)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})

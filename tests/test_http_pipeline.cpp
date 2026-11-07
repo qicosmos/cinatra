@@ -1,8 +1,52 @@
+#include <asio/streambuf.hpp>
 #include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "cinatra/http_header_matcher.hpp"
+#include "cinatra/ylt/coro_io/coro_io.hpp"
+
+namespace pipeline_test_io {
+struct read_control {
+  std::string initial_data;
+  asio::streambuf *buffer = nullptr;
+
+  std::string_view buffered() const {
+    return {static_cast<const char *>(buffer->data().data()), buffer->size()};
+  }
+};
+inline thread_local read_control *current = nullptr;
+
+struct scoped_control {
+  explicit scoped_control(read_control &control) { current = &control; }
+  ~scoped_control() { current = nullptr; }
+};
+}  // namespace pipeline_test_io
+
+// Select this overload only in this test translation unit. It supplies one
+// controlled header read; subsequent reads use the real TCP/TLS stream.
+namespace coro_io {
+template <typename Socket>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+    Socket &socket, asio::streambuf &buffer,
+    cinatra::detail::http_header_matcher matcher) {
+  auto *control = pipeline_test_io::current;
+  if (control) {
+    control->buffer = &buffer;
+    if (!control->initial_data.empty()) {
+      buffer.sputn(control->initial_data.data(), control->initial_data.size());
+      auto size = control->initial_data.find("\r\n\r\n") + 4;
+      control->initial_data.clear();
+      co_return std::make_pair(std::error_code{}, size);
+    }
+  }
+  co_return co_await coro_io::async_read_until<
+      Socket, asio::streambuf, cinatra::detail::http_header_matcher>(
+      socket, buffer, matcher);
+}
+}  // namespace coro_io
 
 #include "cinatra/coro_http_server.hpp"
 #include "doctest/doctest.h"
@@ -18,7 +62,8 @@ std::string request_for(std::string_view value) {
 
 template <typename Stream>
 async_simple::coro::Lazy<std::string> read_response(Stream &stream,
-                                                    asio::streambuf &buffer) {
+                                                    asio::streambuf &buffer,
+                                                    int expected_status) {
   auto [ec, size] =
       co_await coro_io::async_read_until(stream, buffer, TWO_CRCF);
   if (ec) {
@@ -27,7 +72,7 @@ async_simple::coro::Lazy<std::string> read_response(Stream &stream,
   http_parser parser;
   auto data = asio::buffer_cast<const char *>(buffer.data());
   REQUIRE(parser.parse_response(data, size, 0) > 0);
-  CHECK(parser.status() == 200);
+  CHECK(parser.status() == expected_status);
   auto body_size = static_cast<size_t>(parser.body_len());
   buffer.consume(size);
   if (buffer.size() < body_size) {
@@ -93,24 +138,34 @@ struct pipeline_test {
   template <typename Stream>
   void run(Stream &stream, const std::string &prefix, const std::string &suffix,
            const std::vector<std::string> &expected,
-           size_t replies_before_suffix) {
-    // Queue the entire first fragment before starting any TCP reads. Its size
-    // in the split-header cases is below the initial 512-byte read buffer.
-    if (!tls) {
-      asio::write(peer, asio::buffer(prefix));
-    }
-    bool server_done = false;
-    connection->start().via(&executor).start([&](auto &&result) {
-      CHECK_FALSE(result.hasError());
-      server_done = true;
-    });
+           size_t replies_before_suffix, int expected_status) {
+    // Fix the first read's contents independently of TCP/TLS packet boundaries.
+    const auto seeded_size = std::min<size_t>(prefix.size(), 512);
+    pipeline_test_io::read_control reads{prefix.substr(0, seeded_size)};
+    pipeline_test_io::scoped_control controlled_read(reads);
+    auto wire_prefix = prefix.substr(seeded_size);
     asio::steady_timer deadline(context);
+    bool client_done = false;
+    bool server_done = false;
+    bool timed_out = false;
+    auto cancel_deadline_if_done = [&] {
+      if (client_done && server_done) {
+        deadline.cancel();
+      }
+    };
     deadline.expires_after(10s);
     deadline.async_wait([&](std::error_code ec) {
       if (!ec) {
+        timed_out = true;
         connection->close();
         peer.close(ec);
+        context.stop();
       }
+    });
+    connection->start().via(&executor).start([&](auto &&result) {
+      CHECK_FALSE(result.hasError());
+      server_done = true;
+      cancel_deadline_if_done();
     });
     auto client = [&]() -> async_simple::coro::Lazy<void> {
 #ifdef CINATRA_ENABLE_SSL
@@ -121,29 +176,45 @@ struct pipeline_test {
         if (ec) {
           throw std::system_error(ec);
         }
+      }
+#endif
+      if (!wire_prefix.empty()) {
         auto [write_ec, _] =
-            co_await coro_io::async_write(stream, asio::buffer(prefix));
+            co_await coro_io::async_write(stream, asio::buffer(wire_prefix));
         if (write_ec) {
           throw std::system_error(write_ec);
         }
       }
-#endif
       asio::streambuf received;
       for (size_t i = 0; i < expected.size(); ++i) {
         if (i == replies_before_suffix && !suffix.empty()) {
-          // The preceding replies synchronize with the server's pipeline
-          // drain. Deliver the unfinished request only after both arrive.
+          size_t consumed = 0;
+          for (size_t j = 0; j < replies_before_suffix; ++j) {
+            consumed = prefix.find(TWO_CRCF, consumed) + TWO_CRCF.size();
+          }
+          REQUIRE(reads.buffer != nullptr);
+          CHECK(reads.buffered() == prefix.substr(consumed));
+          // Only release the suffix after checking the exact buffered tail.
           auto [ec, _] =
               co_await coro_io::async_write(stream, asio::buffer(suffix));
           if (ec) {
             throw std::system_error(ec);
           }
         }
-        auto body = co_await read_response(stream, received);
+        auto body = co_await read_response(stream, received, expected_status);
         CHECK(body == expected[i]);
       }
+      if (expected_status == 200) {
+        REQUIRE(reads.buffer != nullptr);
+        CHECK(reads.buffered().empty());
+      }
+      else {
+        char byte;
+        auto buffer = asio::buffer(&byte, 1);
+        auto [ec, _] = co_await coro_io::async_read(stream, buffer, 1);
+        CHECK(ec == asio::error::eof);
+      }
     };
-    bool client_done = false;
     client().via(&executor).start([&](auto &&result) {
       if (result.hasError()) {
         try {
@@ -153,14 +224,22 @@ struct pipeline_test {
         }
       }
       client_done = true;
-      deadline.cancel();
       std::error_code ec;
       peer.close(ec);
+      cancel_deadline_if_done();
     });
     context.run();
+    CHECK_FALSE(timed_out);
     CHECK(client_done);
     CHECK(server_done);
     CHECK(handled == expected.size());
+    if (expected_status != 200) {
+      CHECK(connection->has_closed());
+      // The valid request was consumed; the malformed tail was not replayed.
+      REQUIRE(reads.buffer != nullptr);
+      CHECK(reads.buffered() ==
+            prefix.substr(prefix.find(TWO_CRCF) + TWO_CRCF.size()));
+    }
     connection->close();
     context.restart();
     context.poll();
@@ -168,16 +247,17 @@ struct pipeline_test {
 
   void check(const std::string &prefix, const std::string &suffix,
              const std::vector<std::string> &expected,
-             size_t replies_before_suffix) {
+             size_t replies_before_suffix, int expected_status = 200) {
 #ifdef CINATRA_ENABLE_SSL
     if (tls) {
       asio::ssl::context ssl_context(asio::ssl::context::tls_client);
       asio::ssl::stream<asio::ip::tcp::socket &> stream(peer, ssl_context);
-      run(stream, prefix, suffix, expected, replies_before_suffix);
+      run(stream, prefix, suffix, expected, replies_before_suffix,
+          expected_status);
       return;
     }
 #endif
-    run(peer, prefix, suffix, expected, replies_before_suffix);
+    run(peer, prefix, suffix, expected, replies_before_suffix, expected_status);
   }
 };
 }  // namespace
@@ -214,4 +294,12 @@ TEST_CASE("pipeline handles batches spanning read buffers") {
     batch += request_for(expected.back());
   }
   test.check(batch, "", expected, expected.size());
+}
+
+TEST_CASE("pipeline closes after malformed buffered headers") {
+  pipeline_test test(false, false);
+  test.check(request_for("first") +
+                 "GET /bad HTTP/1.x\r\nHost: localhost\r\n\r\n" +
+                 request_for("must-not-run"),
+             "", {"invalid http protocol"}, 1, 400);
 }
