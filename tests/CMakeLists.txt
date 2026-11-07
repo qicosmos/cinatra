@@ -33,6 +33,17 @@ endif()
 
 add_test(NAME ${project_name} COMMAND test_cinatra)
 
+add_executable(test_http_pipeline test_http_pipeline.cpp main.cpp)
+target_compile_definitions(test_http_pipeline PRIVATE ASYNC_SIMPLE_HAS_NOT_AIO)
+if (ENABLE_SSL)
+    target_link_libraries(test_http_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()
+if (ZLIB_FOUND)
+    target_link_libraries(test_http_pipeline PRIVATE ${ZLIB_LIBRARIES})
+endif ()
+add_test(NAME test_http_pipeline COMMAND test_http_pipeline)
+set_tests_properties(test_http_pipeline PROPERTIES TIMEOUT 30)
+
 if (ZLIB_FOUND)
 	target_link_libraries(${project_name} ${ZLIB_LIBRARIES})
 endif()

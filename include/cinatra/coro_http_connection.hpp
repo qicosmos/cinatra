@@ -350,6 +350,7 @@ class coro_http_connection
             response_.set_status_and_content(status_type::method_not_allowed,
                                              "method not allowed");
             co_await reply();
+            head_buf_.consume(head_buf_.size());
           }
           else {
             resp_str_.reserve(512);
@@ -362,6 +363,7 @@ class coro_http_connection
               std::string_view left_content{next_data_ptr, left_size};
               size_t pos = left_content.find(TWO_CRCF);
               if (pos == std::string_view::npos) {
+                // Keep an incomplete next request for the next read.
                 break;
               }
               http_parser parser;
@@ -407,7 +409,6 @@ class coro_http_connection
               co_return;
             }
           }
-          head_buf_.consume(head_buf_.size());
         }
         else {
           handle_session_for_response();
@@ -622,8 +623,15 @@ class coro_http_connection
     std::error_code ec{};
     size_t size = 0;
 
-    if (std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
-        ec) {
+    auto buffered = asio::buffer_cast<const char *>(chunked_buf_.data());
+    auto line_end = std::string_view(buffered, chunked_buf_.size()).find(CRCF);
+    if (line_end != std::string_view::npos) {
+      size = line_end + CRCF.size();
+    }
+    else {
+      std::tie(ec, size) = co_await async_read_until(chunked_buf_, CRCF);
+    }
+    if (ec) {
       result.ec = ec;
       close();
       co_return result;
