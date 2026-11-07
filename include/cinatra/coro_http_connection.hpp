@@ -350,6 +350,7 @@ class coro_http_connection
             response_.set_status_and_content(status_type::method_not_allowed,
                                              "method not allowed");
             co_await reply();
+            head_buf_.consume(head_buf_.size());
           }
           else {
             resp_str_.reserve(512);
@@ -362,6 +363,7 @@ class coro_http_connection
               std::string_view left_content{next_data_ptr, left_size};
               size_t pos = left_content.find(TWO_CRCF);
               if (pos == std::string_view::npos) {
+                // Keep an incomplete next request for the next read.
                 break;
               }
               http_parser parser;
@@ -407,7 +409,6 @@ class coro_http_connection
               co_return;
             }
           }
-          head_buf_.consume(head_buf_.size());
         }
         else {
           handle_session_for_response();
