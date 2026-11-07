@@ -437,8 +437,14 @@ class coro_http_server {
             coro_http_response &resp) -> async_simple::coro::Lazy<void> {
           std::string rel = req.matches_.str(1);
           replace_all(rel, "\\", "/");
-          std::string file_name =
-              (fs::path(base_dir) / rel).make_preferred().string();
+          std::string file_name;
+          try {
+            // Windows path conversion can throw before an error_code is used.
+            file_name = (fs::path(base_dir) / rel).make_preferred().string();
+          } catch (const std::system_error &) {
+            resp.set_status(status_type::bad_request);
+            co_return;
+          }
 
           std::error_code path_ec;
           auto abs = fs::weakly_canonical(file_name, path_ec);
