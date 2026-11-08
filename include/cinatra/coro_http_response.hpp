@@ -181,6 +181,7 @@ class coro_http_response {
 
   void need_date_head(bool r) { need_date_ = r; }
   bool need_date() { return need_date_; }
+  void need_server_head(bool r) { need_server_ = r; }
 
   void set_boundary(std::string_view boundary) { boundary_ = boundary; }
 
@@ -207,7 +208,7 @@ class coro_http_response {
       check_header(resp_header_span_, has_len, has_host);
     }
 
-    if (!has_host) {
+    if (need_server_ && !has_host) {
       resp_str.append(CINATRA_HOST_SV);
     }
 
@@ -220,7 +221,7 @@ class coro_http_response {
       resp_str.append(TRANSFER_ENCODING_SV);
     }
     else {
-      if (!content_.empty() || !content_view_.empty()) {
+      if (!has_len && (!content_.empty() || !content_view_.empty())) {
         size_t content_size =
             content_.empty() ? content_view_.size() : content_.size();
         auto [ptr, ec] = std::to_chars(buf_, buf_ + 32, content_size);
@@ -292,7 +293,7 @@ class coro_http_response {
       check_header(resp_header_span_, has_len, has_host);
     }
 
-    if (!has_host) {
+    if (need_server_ && !has_host) {
       buffers.emplace_back(asio::buffer(CINATRA_HOST_SV));
     }
 
@@ -377,6 +378,7 @@ class coro_http_response {
     has_set_content_ = false;
     cookies_.clear();
     need_date_ = true;
+    need_server_ = true;
     content_type_ = {};
     content_view_ = {};
   }
@@ -427,6 +429,7 @@ class coro_http_response {
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
   bool need_date_ = true;
+  bool need_server_ = true;
   std::unordered_map<std::string, cookie> cookies_;
   std::string_view content_type_;
   std::string_view content_view_;
