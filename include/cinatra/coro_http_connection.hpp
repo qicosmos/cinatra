@@ -1015,6 +1015,9 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
   async_write_optimistic(AsioBuffer buffer) {
+#if defined(ASIO_HAS_IO_URING_AS_DEFAULT)
+    co_return co_await coro_io::async_write(socket_, buffer);
+#else
     // Inspect the sequence when the Lazy starts, including response headers.
     auto size = asio::buffer_size(buffer);
     std::error_code ec;
@@ -1049,6 +1052,7 @@ class coro_http_connection
     }
 
     co_return co_await async_write_remaining(buffer, written);
+#endif
   }
 
   // Keep buffer slicing and its allocation off the full-write fast path.
