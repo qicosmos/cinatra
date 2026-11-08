@@ -76,6 +76,20 @@ class coro_http_server {
 
   void set_no_delay(bool r) { no_delay_ = r; }
 
+  // Queue HTTP header-read completions. Configure before starting the server;
+  // every io_context must be run by one thread. Disabled by default.
+  void set_io_queue(bool enabled, size_t capacity = 64) {
+    if (!acceptors_.empty()) {
+      throw std::logic_error("set_io_queue must be called before server start");
+    }
+    if (enabled &&
+        (capacity == 0 || capacity > detail::http_io_queue::max_capacity)) {
+      throw std::invalid_argument(
+          "io queue capacity must be between 1 and 256");
+    }
+    io_queue_capacity_ = enabled ? capacity : 0;
+  }
+
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
   }
@@ -109,6 +123,20 @@ class coro_http_server {
     auto future = promise->getFuture();
 
     if (!errc_) {
+      if (io_queue_capacity_ != 0) {
+        auto add_queue = [this](asio::io_context &ctx) {
+          io_queues_.emplace(&ctx, std::make_shared<detail::http_io_queue>(
+                                       ctx.get_executor(), io_queue_capacity_));
+        };
+        if (out_ctx_) {
+          add_queue(*out_ctx_);
+        }
+        else {
+          for (size_t i = 0; i < pool_->pool_size(); ++i) {
+            add_queue(pool_->get_executor_at(i)->context());
+          }
+        }
+      }
       if (out_ctx_ == nullptr) {
         thd_ = std::thread([this] {
           pool_->run();
@@ -812,7 +840,9 @@ class coro_http_server {
       uint64_t conn_id = conn_id_.fetch_add(1, std::memory_order_relaxed) + 1;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
-          executor, std::move(socket), router_);
+          executor, std::move(socket), router_,
+          io_queue_capacity_ == 0 ? nullptr
+                                  : io_queues_.at(&executor->context()));
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -1222,6 +1252,9 @@ class coro_http_server {
   }
 
   std::unique_ptr<coro_io::io_context_pool> pool_;
+  size_t io_queue_capacity_ = 0;
+  std::unordered_map<asio::io_context *, std::shared_ptr<detail::http_io_queue>>
+      io_queues_;
   asio::io_context *out_ctx_ = nullptr;
   std::unique_ptr<coro_io::ExecutorWrapper<>> out_executor_ = nullptr;
   uint16_t port_;

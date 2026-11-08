@@ -91,9 +91,14 @@ struct connection_write_test {
       }
       done = true;
     });
+#if defined(ASIO_HAS_IO_URING_AS_DEFAULT)
+    CHECK_FALSE(done);
+    CHECK(connection->tcp_socket().non_blocking() == non_blocking);
+#else
     CHECK(done == completes_inline);
     CHECK(connection->tcp_socket().non_blocking() ==
           (non_blocking || (!payload.empty() && payload.size() <= 4096)));
+#endif
 
     const auto expected = prefix + payload;
     std::string received(expected.size(), '\0');
@@ -208,6 +213,7 @@ TEST_CASE("optimistic write returns socket errors") {
     }
     done = true;
   });
+  test.context.run();
   CHECK(done);
 }
 
@@ -232,6 +238,7 @@ TEST_CASE("optimistic write reports peer reset") {
     }
     done = true;
   });
+  test.context.run();
   CHECK(done);
 }
 

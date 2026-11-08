@@ -6,6 +6,7 @@
 #include <iterator>
 #include <system_error>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include "asio/dispatch.hpp"
@@ -18,6 +19,7 @@
 #include "coro_http_router.hpp"
 #include "define.h"
 #include "http_header_matcher.hpp"
+#include "http_io_queue.hpp"
 #include "http_parser.hpp"
 #include "multipart.hpp"
 #include "session_manager.hpp"
@@ -42,11 +44,14 @@ class coro_http_connection
     : public std::enable_shared_from_this<coro_http_connection> {
  public:
   template <typename executor_t>
-  coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
-                       coro_http_router &router)
+  coro_http_connection(
+      executor_t *executor, asio::ip::tcp::socket socket,
+      coro_http_router &router,
+      std::shared_ptr<detail::http_io_queue> io_queue = nullptr)
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
+        io_queue_(std::move(io_queue)),
         max_http_header_size_(8 * 1024),
         head_buf_(max_http_header_size_),
         request_(parser_, this),
@@ -119,6 +124,11 @@ class coro_http_connection
 #endif
       auto [ec, size] =
           co_await async_read_until(head_buf_, detail::http_header_matcher{});
+      if (io_queue_ && io_queue_cancelled_.load(std::memory_order_acquire)) {
+        // close() may have been posted from another thread while this completed
+        // read was still queued. Do not route it or invoke the quit callback.
+        break;
+      }
       if (ec == asio::error::not_found) {
         CINATRA_LOG_WARNING << "http header too large (> "
                             << max_http_header_size_ << " bytes)";
@@ -915,6 +925,16 @@ class coro_http_connection
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, const Delimiter &delim) noexcept {
     set_last_time();
+    if constexpr (std::is_same_v<Delimiter, detail::http_header_matcher>) {
+      if (io_queue_) {
+#ifdef CINATRA_ENABLE_SSL
+        if (use_ssl_) {
+          return queued_read_until(*ssl_stream_, buffer, delim);
+        }
+#endif
+        return queued_read_until(socket_, buffer, delim);
+      }
+    }
 #ifdef CINATRA_ENABLE_SSL
     if (use_ssl_) {
       return coro_io::async_read_until(*ssl_stream_, buffer, delim);
@@ -942,6 +962,9 @@ class coro_http_connection
   void close(bool need_cb = true) {
     if (has_closed_) {
       return;
+    }
+    if (io_queue_) {
+      io_queue_cancelled_.store(true, std::memory_order_release);
     }
 
     asio::dispatch(socket_.get_executor(),
@@ -974,10 +997,27 @@ class coro_http_connection
   }
 
  private:
+  template <typename Stream, typename Buffer, typename Delimiter>
+  async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+  queued_read_until(Stream &stream, Buffer &buffer, Delimiter delim) {
+    coro_io::callback_awaitor<std::pair<std::error_code, size_t>> awaitor;
+    auto *queue = io_queue_.get();
+    co_return co_await awaitor.await_resume([&](auto handler) {
+      asio::async_read_until(stream, buffer, delim,
+                             [handler, queue](const auto &ec, auto size) {
+                               handler.set_value(ec, size);
+                               queue->enqueue(handler);
+                             });
+    });
+  }
+
   // Own temporary buffer sequences while retaining references to lvalues.
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
   async_write_optimistic(AsioBuffer buffer) {
+#if defined(ASIO_HAS_IO_URING_AS_DEFAULT)
+    co_return co_await coro_io::async_write(socket_, buffer);
+#else
     // Inspect the sequence when the Lazy starts, including response headers.
     auto size = asio::buffer_size(buffer);
     std::error_code ec;
@@ -1012,6 +1052,7 @@ class coro_http_connection
     }
 
     co_return co_await async_write_remaining(buffer, written);
+#endif
   }
 
   // Keep buffer slicing and its allocation off the full-write fast path.
@@ -1120,6 +1161,8 @@ class coro_http_connection
   coro_io::ExecutorWrapper<> *executor_;
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
+  std::shared_ptr<detail::http_io_queue> io_queue_;
+  std::atomic<bool> io_queue_cancelled_{false};
   size_t max_http_header_size_ = 8 * 1024;
   asio::streambuf head_buf_;
   std::string body_;
