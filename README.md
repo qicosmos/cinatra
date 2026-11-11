@@ -95,6 +95,23 @@ cmake -DENABLE_SIMD=AARCH64 .. # arm环境下,启用neon指令集
 
 5行代码就可以实现一个简单http服务器了，用户不需要关注多少细节，直接写业务逻辑就行了。
 
+## 流式 gzip JSON 响应
+
+启用 `CINATRA_ENABLE_GZIP` 并链接 zlib 后，可以通过原有接口传入同步写入回调：
+
+```cpp
+#include "iguana/json_writer.hpp"
+
+// data 是 iguana 支持序列化的对象。
+resp.set_status_and_content(
+    status_type::ok,
+    [&](auto &stream) { iguana::to_json(data, stream); },
+    content_encoding::gzip, req.get_accept_encoding());
+resp.add_header("Content-Type", "application/json");
+```
+
+JSON 在序列化时分批压缩，不再构造完整的未压缩 JSON 字符串。回调在函数返回前执行完毕，响应持有压缩后的内容。客户端不接受 gzip 或未启用 gzip 时，回调写入响应拥有的普通字符串。使用 iguana 时需将其头文件目录加入 include 路径。
+
 ## 示例2：基本用法
 ```c++
 #include "cinatra.hpp"

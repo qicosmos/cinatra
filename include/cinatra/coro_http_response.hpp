@@ -5,7 +5,9 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "async_simple/coro/Lazy.h"
@@ -53,8 +55,11 @@ class coro_http_response {
     content_ = std::move(content);
     has_set_content_ = true;
   }
+  // Content can also be a synchronous writer, e.g.
+  // [&](auto &stream) { iguana::to_json(value, stream); }.
+  template <typename Content = std::string>
   void set_status_and_content(
-      status_type status, std::string content,
+      status_type status, Content content,
       content_encoding encoding = content_encoding::none,
       std::string_view client_encoding_type = "") {
     set_status_and_content_view(status, std::move(content), encoding, false,
@@ -68,37 +73,44 @@ class coro_http_response {
       std::string_view client_encoding_type = "") {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
-    if (encoding == content_encoding::gzip) {
-      if (client_encoding_type.empty() ||
-          client_encoding_type.find("gzip") != std::string_view::npos) {
-        std::string encode_str;
-        bool r = gzip_codec::compress(content, encode_str);
-        if (!r) {
-          set_status_and_content(status_type::internal_server_error,
-                                 "gzip compress error");
-        }
-        else {
-          add_header("Content-Encoding", "gzip");
-          set_content(std::move(encode_str));
-        }
+    if (encoding == content_encoding::gzip &&
+        (client_encoding_type.empty() ||
+         client_encoding_type.find("gzip") != std::string_view::npos)) {
+      std::string encode_str;
+      bool r = gzip_codec::compress(content, encode_str);
+      if (!r) {
+        set_status_and_content(status_type::internal_server_error,
+                               "gzip compress error");
       }
       else {
-        if (is_view) {
-          content_view_ = content;
-        }
-        else {
-          content_ = std::move(content);
-        }
+        add_header("Content-Encoding", "gzip");
+        content_view_ = {};
+        set_content(std::move(encode_str));
       }
       has_set_content_ = true;
       return;
     }
+#endif
 
+    auto body = [&] {
+      if constexpr (std::is_invocable_v<String &, std::string &>) {
+        std::string serialized;
+        content(serialized);
+        is_view = false;
+        content_view_ = {};
+        return serialized;
+      }
+      else {
+        return std::move(content);
+      }
+    }();
+
+#ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::deflate) {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("deflate") != std::string_view::npos) {
         std::string deflate_str;
-        bool r = gzip_codec::deflate(content, deflate_str);
+        bool r = gzip_codec::deflate(body, deflate_str);
         if (!r) {
           set_status_and_content(status_type::internal_server_error,
                                  "deflate compress error");
@@ -110,10 +122,10 @@ class coro_http_response {
       }
       else {
         if (is_view) {
-          content_view_ = content;
+          content_view_ = body;
         }
         else {
-          content_ = std::move(content);
+          content_ = std::move(body);
         }
       }
       has_set_content_ = true;
@@ -126,7 +138,7 @@ class coro_http_response {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("br") != std::string_view::npos) {
         std::string br_str;
-        bool r = br_codec::brotli_compress(content, br_str);
+        bool r = br_codec::brotli_compress(body, br_str);
         if (!r) {
           set_status_and_content(status_type::internal_server_error,
                                  "br compress error");
@@ -138,10 +150,10 @@ class coro_http_response {
       }
       else {
         if (is_view) {
-          content_view_ = content;
+          content_view_ = body;
         }
         else {
-          content_ = std::move(content);
+          content_ = std::move(body);
         }
       }
       has_set_content_ = true;
@@ -150,10 +162,10 @@ class coro_http_response {
 #endif
 
     if (is_view) {
-      content_view_ = content;
+      content_view_ = body;
     }
     else {
-      content_ = std::move(content);
+      content_ = std::move(body);
     }
     has_set_content_ = true;
   }

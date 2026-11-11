@@ -1,13 +1,145 @@
 #pragma once
 #include <zlib.h>
 
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <fstream>
+#include <limits>
+#include <string>
 #include <string_view>
+#include <type_traits>
 namespace cinatra::gzip_codec {
 // from https://github.com/chafey/GZipCodec
 
 #define CHUNK 16384
 #define windowBits 15
 #define GZIP_ENCODING 16
+
+// A buffered output stream for serializers with append/push_back interfaces.
+// Input is consumed synchronously; only the compressed output is retained.
+class compress_stream {
+ public:
+  explicit compress_stream(std::string &output, int level = -1)
+      : output_(output),
+        initialized_(deflateInit2(&stream_, level, Z_DEFLATED,
+                                  windowBits | GZIP_ENCODING, 8,
+                                  Z_DEFAULT_STRATEGY) == Z_OK) {}
+
+  compress_stream(const compress_stream &) = delete;
+  compress_stream &operator=(const compress_stream &) = delete;
+
+  ~compress_stream() {
+    if (initialized_) {
+      deflateEnd(&stream_);
+    }
+  }
+
+  bool good() const { return initialized_ && !failed_; }
+
+  void push_back(char value) {
+    if (!writable()) {
+      return;
+    }
+    input_[buffered_++] = value;
+    if (buffered_ == input_.size()) {
+      flush_input();
+    }
+  }
+
+  void append(const char *data, size_t size) {
+    if (!writable()) {
+      return;
+    }
+    while (size != 0 && good()) {
+      // Large spans can be passed to zlib without copying into input_.
+      if (buffered_ == 0 && size >= input_.size()) {
+        write(data, size);
+        return;
+      }
+      auto count = (std::min)(size, input_.size() - buffered_);
+      std::memcpy(input_.data() + buffered_, data, count);
+      buffered_ += count;
+      data += count;
+      size -= count;
+      if (buffered_ == input_.size()) {
+        flush_input();
+      }
+    }
+  }
+
+  void append(std::string_view data) { append(data.data(), data.size()); }
+
+  // Must be called after serialization to emit the gzip trailer.
+  bool finish() {
+    if (!good() || finished_) {
+      return good();
+    }
+    flush_input();
+    if (!good()) {
+      return false;
+    }
+    int result;
+    do {
+      result = pump(Z_FINISH);
+    } while (result == Z_OK);
+    finished_ = result == Z_STREAM_END;
+    return good() && finished_;
+  }
+
+ private:
+  bool writable() {
+    if (finished_) {
+      failed_ = true;
+    }
+    return good();
+  }
+
+  void flush_input() {
+    if (buffered_ != 0) {
+      write(input_.data(), buffered_);
+      buffered_ = 0;
+    }
+  }
+
+  void write(const char *data, size_t size) {
+    while (size != 0 && good()) {
+      auto count = static_cast<uInt>((std::min)(
+          size, static_cast<size_t>((std::numeric_limits<uInt>::max)())));
+      stream_.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(data));
+      stream_.avail_in = count;
+      do {
+        pump(Z_NO_FLUSH);
+      } while (stream_.avail_in != 0 && good());
+      data += count;
+      size -= count;
+    }
+    stream_.next_in = Z_NULL;
+  }
+
+  int pump(int flush) {
+    auto offset = output_.size();
+    auto size = (std::min)(size_t{CHUNK},
+                           (std::max)(output_.capacity() - offset, size_t{64}));
+    output_.resize(offset + size);
+    stream_.next_out = reinterpret_cast<Bytef *>(output_.data() + offset);
+    stream_.avail_out = static_cast<uInt>(size);
+    int result = ::deflate(&stream_, flush);
+    output_.resize(offset + size - stream_.avail_out);
+    if (result != Z_OK && result != Z_STREAM_END) {
+      failed_ = true;
+    }
+    return result;
+  }
+
+  std::string &output_;
+  z_stream stream_{};
+  std::array<char, CHUNK> input_;
+  size_t buffered_ = 0;
+  bool initialized_;
+  bool failed_ = false;
+  bool finished_ = false;
+};
 
 // GZip Compression
 // @param data - the data to compress (does not have to be string, can be binary
@@ -16,33 +148,20 @@ namespace cinatra::gzip_codec {
 // @param level - the gzip compress level -1 = default, 0 = no compression, 1=
 // worst/fastest compression, 9 = best/slowest compression
 // @return - true on success, false on failure
-inline bool compress(std::string_view data, std::string &compressed_data,
+template <typename Input = std::string_view>
+inline bool compress(Input &&data, std::string &compressed_data,
                      int level = -1) {
-  unsigned char out[CHUNK];
-  z_stream strm;
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
-  if (deflateInit2(&strm, level, Z_DEFLATED, windowBits | GZIP_ENCODING, 8,
-                   Z_DEFAULT_STRATEGY) != Z_OK) {
+  compress_stream stream(compressed_data, level);
+  if (!stream.good()) {
     return false;
   }
-  strm.next_in = (unsigned char *)data.data();
-  strm.avail_in = (uInt)data.length();
-  do {
-    int have;
-    strm.avail_out = CHUNK;
-    strm.next_out = out;
-    if (deflate(&strm, Z_FINISH) == Z_STREAM_ERROR) {
-      return false;
-    }
-    have = CHUNK - strm.avail_out;
-    compressed_data.append((char *)out, have);
-  } while (strm.avail_out == 0);
-  if (deflateEnd(&strm) != Z_OK) {
-    return false;
+  if constexpr (std::is_invocable_v<Input &, compress_stream &>) {
+    data(stream);
   }
-  return true;
+  else {
+    stream.append(data);
+  }
+  return stream.finish();
 }
 
 // GZip Decompression
