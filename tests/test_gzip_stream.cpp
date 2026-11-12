@@ -44,6 +44,14 @@ struct string_writer {
 
 static_assert(response_accepts_content<std::string>);
 static_assert(response_accepts_content<std::string_view>);
+template <typename Content>
+concept response_accepts_explicit_lvalue =
+    requires(coro_http_response &response, Content &content) {
+      response.set_status_and_content_view<Content>(status_type::ok, content);
+    };
+static_assert(response_accepts_explicit_lvalue<std::string>);
+static_assert(response_accepts_explicit_lvalue<const std::string>);
+static_assert(response_accepts_explicit_lvalue<std::string_view>);
 #ifdef CINATRA_ENABLE_GZIP
 struct gzip_writer {
   void operator()(gzip_codec::compress_stream &) const {}
@@ -250,7 +258,8 @@ TEST_CASE("response views borrow lvalues and retain temporary strings") {
 }
 
 TEST_CASE("serialization exceptions preserve the previous response") {
-  for (auto encoding : {content_encoding::none, content_encoding::gzip}) {
+  for (auto encoding : {content_encoding::none, content_encoding::gzip,
+                        content_encoding::deflate, content_encoding::br}) {
     for (auto accept : {"gzip", "br"}) {
       coro_http_response response(nullptr);
       response.need_date_head(false);
@@ -265,6 +274,44 @@ TEST_CASE("serialization exceptions preserve the previous response") {
                            "serialization failed", std::runtime_error);
       CHECK(response.status() == status_type::accepted);
       CHECK(response_wire(response) == previous);
+    }
+  }
+}
+
+TEST_CASE("explicit content template arguments retain by-value compatibility") {
+  for (bool is_view : {false, true}) {
+    for (size_t size : {2u, 8192u}) {
+      CAPTURE(is_view);
+      CAPTURE(size);
+      std::string source(size, 'v');
+      const auto expected = source;
+      coro_http_response response(nullptr);
+      response.set_status_and_content_view<std::string>(
+          status_type::ok, source, content_encoding::none, is_view);
+      CHECK(source == expected);
+      source.front() = 'x';
+      CHECK(response.content() == expected);
+      CHECK(response_wire(response).ends_with(expected));
+
+      response.clear();
+      const auto &constant = expected;
+      response.set_status_and_content_view<std::string>(
+          status_type::ok, constant, content_encoding::none, is_view);
+      CHECK(response.content() == expected);
+
+      response.clear();
+      response.set_status_and_content_view<std::string_view>(status_type::ok,
+                                                             constant);
+      std::vector<asio::const_buffer> buffers;
+      std::string chunk_size;
+      response.to_buffers(buffers, chunk_size);
+      REQUIRE_FALSE(buffers.empty());
+      CHECK(buffers.back().data() == constant.data());
+
+      response.clear();
+      response.set_status_and_content_view<std::string>(status_type::ok,
+                                                        std::string(expected));
+      CHECK(response.content() == expected);
     }
   }
 }
@@ -313,6 +360,89 @@ TEST_CASE("response serializes through the existing content APIs") {
     }
   }
 }
+
+#ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("response encoding negotiation honors tokens and quality values") {
+  struct encoding_case {
+    std::string_view accept;
+    bool accepted;
+  };
+  for (auto encoding : {content_encoding::gzip, content_encoding::deflate}) {
+    const auto name = encoding == content_encoding::gzip ? "gzip" : "deflate";
+    const std::vector<encoding_case> cases{
+        {"", true},
+        {name, true},
+        {"gzip, deflate", true},
+        {"GZIP, DEFLATE", true},
+        {"gzip;q=0, deflate;q=0", false},
+        {"gzip;q=0.000, deflate;q=0.000", false},
+        {"gzip;q=0.001, deflate;q=0.001", true},
+        {"gzip;Q=1.000, deflate;Q=1.000", true},
+        {" \t gzip ; q=0.5 , deflate ; q=0.5 \t", true},
+        {"gzip;q=0., deflate;q=0.", false},
+        {"gzip;q=1., deflate;q=1.", true},
+        {"xgzip, xdeflate", false},
+        {"x-gzip", encoding == content_encoding::gzip},
+        {"X-GZIP;q=0", false},
+        {"gzip2, deflate2", false},
+        {"br", false},
+        {"*;q=0.5", true},
+        {"*;q=0", false},
+        {"*;q=1, gzip;q=0, deflate;q=0", false},
+        {"gzip;q=0, deflate;q=0, *;q=1", false},
+        {"*;q=0, gzip;q=0.1, deflate;q=0.1", true},
+        {"gzip;q=1, deflate;q=1, gzip;q=0, deflate;q=0", false},
+        {"gzip;q=0, deflate;q=0, gzip;q=1, deflate;q=1", false},
+        {"gzip;q=, deflate;q=", false},
+        {"gzip;q=2, deflate;q=2", false},
+        {"gzip;q=1.001, deflate;q=1.001", false},
+        {"gzip;q=0.0001, deflate;q=0.0001", false},
+        {"gzip;q=nan, deflate;q=nan", false},
+        {"gzip;q=0;foo=1, deflate;q=0;foo=1", false},
+        {"gzip;foo=1, deflate;foo=1", false},
+        {" , \t, ", false},
+    };
+    for (const auto &[accept, accepted] : cases) {
+      for (bool writer_api : {false, true}) {
+        CAPTURE(name);
+        CAPTURE(accept);
+        CAPTURE(writer_api);
+        coro_http_response response(nullptr);
+        int calls = 0;
+        if (writer_api) {
+          response.set_status_and_content(
+              status_type::ok,
+              [&](auto &stream) {
+                ++calls;
+                stream.append("{\"answer\":42}");
+              },
+              encoding, accept);
+          CHECK(calls == 1);
+        }
+        else {
+          response.set_status_and_content(status_type::ok, "{\"answer\":42}",
+                                          encoding, accept);
+        }
+        CHECK(response.status() == status_type::ok);
+        const auto wire = response_wire(response);
+        CHECK((wire.find(std::string("Content-Encoding: ") + name + "\r\n") !=
+               std::string::npos) == accepted);
+        if (!accepted) {
+          CHECK(response.content() == "{\"answer\":42}");
+        }
+        else if (encoding == content_encoding::gzip) {
+          CHECK(decode_gzip(response.content()) == "{\"answer\":42}");
+        }
+        else {
+          std::string decoded;
+          REQUIRE(gzip_codec::inflate(response.content(), decoded));
+          CHECK(decoded == "{\"answer\":42}");
+        }
+      }
+    }
+  }
+}
+#endif
 
 #ifdef CINATRA_TEST_IGUANA
 TEST_CASE("iguana writes escaped and unescaped JSON directly to gzip") {

@@ -92,7 +92,9 @@ resp.add_header("Content-Type", "application/json");
 
 JSON is compressed as it is serialized, without building a complete uncompressed JSON string. The writer finishes before the call returns, and the response owns the compressed body. When gzip is disabled or rejected by the client, the writer produces a plain response string instead. Add iguana's header directory to your include path when using it.
 
-When gzip is enabled, writers must accept both `std::string &` and `gzip_codec::compress_stream &`; the generic lambda above supports both. Serialization exceptions propagate while preserving the previous response status and body. The view API borrows lvalue strings, whose storage must remain valid until sending completes; temporary `std::string` arguments are owned by the response.
+When gzip is enabled, writers must accept both `std::string &` and `gzip_codec::compress_stream &`; the generic lambda above supports both. Exceptions that propagate during serialization or response commit preserve the previous status, body, and headers. The view API borrows lvalue strings, whose storage must remain valid until sending completes; temporary `std::string` arguments are owned by the response. Legacy calls that explicitly specify `<std::string>` retain their by-value copying semantics, with the copy owned by the response.
+
+Compression negotiation matches coding tokens and `q` weights, including wildcard `*`; `gzip;q=0` falls back to a plain response. Omitting the client encoding argument or passing an empty string preserves the API's default of allowing compression.
 
 ### Example 2: Access to request header, query parameter, and response
 

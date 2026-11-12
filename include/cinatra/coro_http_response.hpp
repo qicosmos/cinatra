@@ -51,6 +51,84 @@ concept response_content =
      && std::invocable<Content &, gzip_codec::compress_stream &>
 #endif
     );
+
+// The empty argument keeps the response API's default (no client preference).
+// Explicit coding tokens override '*'; a zero weight wins over duplicates.
+inline bool accepts_content_encoding(std::string_view header,
+                                     std::string_view encoding) {
+  if (header.empty()) {
+    return true;
+  }
+  auto trim = [](std::string_view value) {
+    auto start = value.find_first_not_of(" \t");
+    if (start == std::string_view::npos) {
+      return std::string_view{};
+    }
+    return value.substr(start, value.find_last_not_of(" \t") - start + 1);
+  };
+  auto equal = [](std::string_view left, std::string_view right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < left.size(); ++i) {
+      auto lower = [](unsigned char value) {
+        return value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value;
+      };
+      if (lower(left[i]) != lower(right[i])) {
+        return false;
+      }
+    }
+    return true;
+  };
+  int quality = -1;
+  int wildcard = -1;
+  while (!header.empty()) {
+    auto comma = header.find(',');
+    auto entry = trim(header.substr(0, comma));
+    header = comma == std::string_view::npos ? std::string_view{}
+                                             : header.substr(comma + 1);
+    auto semicolon = entry.find(';');
+    auto coding = trim(entry.substr(0, semicolon));
+    bool matches = equal(coding, encoding) ||
+                   (encoding == "gzip" && equal(coding, "x-gzip"));
+    if (!matches && coding != "*") {
+      continue;
+    }
+    int weight = 1000;
+    if (semicolon != std::string_view::npos) {
+      auto parameter = trim(entry.substr(semicolon + 1));
+      auto equals = parameter.find('=');
+      if (equals == std::string_view::npos ||
+          !equal(trim(parameter.substr(0, equals)), "q")) {
+        weight = 0;
+      }
+      else {
+        auto value = trim(parameter.substr(equals + 1));
+        if (value.empty() || (value[0] != '0' && value[0] != '1') ||
+            value.size() > 5 || (value.size() > 1 && value[1] != '.')) {
+          weight = 0;
+        }
+        else {
+          weight = value[0] == '1' ? 1000 : 0;
+          int place = 100;
+          for (size_t i = 2; i < value.size(); ++i, place /= 10) {
+            if (value[i] < '0' || value[i] > '9' ||
+                (value[0] == '1' && value[i] != '0')) {
+              weight = 0;
+              break;
+            }
+            weight += (value[i] - '0') * place;
+          }
+        }
+      }
+    }
+    auto &selected = matches ? quality : wildcard;
+    if (selected == -1 || weight < selected) {
+      selected = weight;
+    }
+  }
+  return (quality == -1 ? wildcard : quality) > 0;
+}
 }  // namespace detail
 
 class coro_http_connection;
@@ -72,12 +150,22 @@ class coro_http_response {
   // [&](auto &stream) { iguana::to_json(value, stream); }.
   // With gzip enabled, writers must accept both std::string & and
   // gzip_codec::compress_stream & so that uncompressed fallbacks work.
-  // Serialization exceptions propagate without replacing the previous body.
+  // Exceptions propagate without replacing the previous response.
   template <detail::response_content Content = std::string>
   void set_status_and_content(
       status_type status, Content content,
       content_encoding encoding = content_encoding::none,
       std::string_view client_encoding_type = "") {
+    // Keep ordinary owned responses independent of codec dispatch/inlining.
+    if constexpr (!std::is_invocable_v<Content &, std::string &>) {
+      if (encoding == content_encoding::none) {
+        content_ = std::move(content);
+        content_view_ = {};
+        status_ = status;
+        has_set_content_ = true;
+        return;
+      }
+    }
     set_status_and_content_view(status, std::move(content), encoding, false,
                                 client_encoding_type);
   }
@@ -89,8 +177,7 @@ class coro_http_response {
       std::string_view client_encoding_type = "") {
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip &&
-        (client_encoding_type.empty() ||
-         client_encoding_type.find("gzip") != std::string_view::npos)) {
+        detail::accepts_content_encoding(client_encoding_type, "gzip")) {
       std::string encode_str;
       bool r = [&] {
         if constexpr (std::is_invocable_v<String &, std::string &>) {
@@ -105,9 +192,9 @@ class coro_http_response {
                                "gzip compress error");
       }
       else {
-        status_ = status;
         add_header("Content-Encoding", "gzip");
         set_content(std::move(encode_str));
+        status_ = status;
       }
       has_set_content_ = true;
       return;
@@ -119,7 +206,6 @@ class coro_http_response {
         std::string serialized;
         content(serialized);
         is_view = false;
-        content_view_ = {};
         return serialized;
       }
       else {
@@ -131,31 +217,19 @@ class coro_http_response {
                   !std::is_lvalue_reference_v<String>) {
       is_view = false;
     }
-    status_ = status;
-
 #ifdef CINATRA_ENABLE_GZIP
-    if (encoding == content_encoding::deflate) {
-      if (client_encoding_type.empty() ||
-          client_encoding_type.find("deflate") != std::string_view::npos) {
-        std::string deflate_str;
-        bool r = gzip_codec::deflate(body, deflate_str);
-        if (!r) {
-          set_status_and_content(status_type::internal_server_error,
-                                 "deflate compress error");
-        }
-        else {
-          add_header("Content-Encoding", "deflate");
-          set_content(std::move(deflate_str));
-        }
+    if (encoding == content_encoding::deflate &&
+        detail::accepts_content_encoding(client_encoding_type, "deflate")) {
+      std::string deflate_str;
+      bool r = gzip_codec::deflate(body, deflate_str);
+      if (!r) {
+        set_status_and_content(status_type::internal_server_error,
+                               "deflate compress error");
       }
       else {
-        if (is_view) {
-          content_view_ = body;
-        }
-        else {
-          content_view_ = {};
-          content_ = std::forward<decltype(body)>(body);
-        }
+        add_header("Content-Encoding", "deflate");
+        set_content(std::move(deflate_str));
+        status_ = status;
       }
       has_set_content_ = true;
       return;
@@ -163,28 +237,18 @@ class coro_http_response {
 #endif
 
 #ifdef CINATRA_ENABLE_BROTLI
-    if (encoding == content_encoding::br) {
-      if (client_encoding_type.empty() ||
-          client_encoding_type.find("br") != std::string_view::npos) {
-        std::string br_str;
-        bool r = br_codec::brotli_compress(body, br_str);
-        if (!r) {
-          set_status_and_content(status_type::internal_server_error,
-                                 "br compress error");
-        }
-        else {
-          add_header("Content-Encoding", "br");
-          set_content(std::move(br_str));
-        }
+    if (encoding == content_encoding::br &&
+        detail::accepts_content_encoding(client_encoding_type, "br")) {
+      std::string br_str;
+      bool r = br_codec::brotli_compress(body, br_str);
+      if (!r) {
+        set_status_and_content(status_type::internal_server_error,
+                               "br compress error");
       }
       else {
-        if (is_view) {
-          content_view_ = body;
-        }
-        else {
-          content_view_ = {};
-          content_ = std::forward<decltype(body)>(body);
-        }
+        add_header("Content-Encoding", "br");
+        set_content(std::move(br_str));
+        status_ = status;
       }
       has_set_content_ = true;
       return;
@@ -192,13 +256,28 @@ class coro_http_response {
 #endif
 
     if (is_view) {
-      content_view_ = body;
+      std::string_view view(body);
+      status_ = status;
+      content_view_ = view;
     }
     else {
-      content_view_ = {};
       content_ = std::forward<decltype(body)>(body);
+      content_view_ = {};
+      status_ = status;
     }
     has_set_content_ = true;
+  }
+
+  // Only explicit template arguments select this compatibility overload.
+  // Retain their former by-value semantics without borrowing a local string.
+  template <detail::response_content String>
+    requires(!std::is_reference_v<String>)
+  void set_status_and_content_view(
+      status_type status, const std::type_identity_t<String> &content,
+      content_encoding encoding = content_encoding::none, bool is_view = true,
+      std::string_view client_encoding_type = "") {
+    set_status_and_content_view(status, String(content), encoding, is_view,
+                                client_encoding_type);
   }
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
