@@ -1,5 +1,6 @@
 #pragma once
 #include <charconv>
+#include <concepts>
 #include <functional>
 #include <optional>
 #include <string>
@@ -41,6 +42,17 @@ enum class format_type {
   chunked,
 };
 
+namespace detail {
+template <typename Content>
+concept response_content =
+    std::convertible_to<Content, std::string_view> ||
+    (std::invocable<Content &, std::string &>
+#ifdef CINATRA_ENABLE_GZIP
+     && std::invocable<Content &, gzip_codec::compress_stream &>
+#endif
+    );
+}  // namespace detail
+
 class coro_http_connection;
 class coro_http_response {
  public:
@@ -53,11 +65,15 @@ class coro_http_response {
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) {
     content_ = std::move(content);
+    content_view_ = {};
     has_set_content_ = true;
   }
   // Content can also be a synchronous writer, e.g.
   // [&](auto &stream) { iguana::to_json(value, stream); }.
-  template <typename Content = std::string>
+  // With gzip enabled, writers must accept both std::string & and
+  // gzip_codec::compress_stream & so that uncompressed fallbacks work.
+  // Serialization exceptions propagate without replacing the previous body.
+  template <detail::response_content Content = std::string>
   void set_status_and_content(
       status_type status, Content content,
       content_encoding encoding = content_encoding::none,
@@ -66,25 +82,31 @@ class coro_http_response {
                                 client_encoding_type);
   }
 
-  template <typename String>
+  template <detail::response_content String = std::string_view>
   void set_status_and_content_view(
-      status_type status, String content = "",
+      status_type status, String &&content = "",
       content_encoding encoding = content_encoding::none, bool is_view = true,
       std::string_view client_encoding_type = "") {
-    status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip &&
         (client_encoding_type.empty() ||
          client_encoding_type.find("gzip") != std::string_view::npos)) {
       std::string encode_str;
-      bool r = gzip_codec::compress(content, encode_str);
+      bool r = [&] {
+        if constexpr (std::is_invocable_v<String &, std::string &>) {
+          return gzip_codec::compress(content, encode_str);
+        }
+        else {
+          return gzip_codec::compress(std::string_view(content), encode_str);
+        }
+      }();
       if (!r) {
         set_status_and_content(status_type::internal_server_error,
                                "gzip compress error");
       }
       else {
+        status_ = status;
         add_header("Content-Encoding", "gzip");
-        content_view_ = {};
         set_content(std::move(encode_str));
       }
       has_set_content_ = true;
@@ -92,7 +114,7 @@ class coro_http_response {
     }
 #endif
 
-    auto body = [&] {
+    decltype(auto) body = [&]() -> decltype(auto) {
       if constexpr (std::is_invocable_v<String &, std::string &>) {
         std::string serialized;
         content(serialized);
@@ -101,9 +123,15 @@ class coro_http_response {
         return serialized;
       }
       else {
-        return std::move(content);
+        return std::forward<String>(content);
       }
     }();
+    // Borrow lvalue strings, but retain temporary strings in the response.
+    if constexpr (std::same_as<std::remove_cvref_t<String>, std::string> &&
+                  !std::is_lvalue_reference_v<String>) {
+      is_view = false;
+    }
+    status_ = status;
 
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::deflate) {
@@ -125,7 +153,8 @@ class coro_http_response {
           content_view_ = body;
         }
         else {
-          content_ = std::move(body);
+          content_view_ = {};
+          content_ = std::forward<decltype(body)>(body);
         }
       }
       has_set_content_ = true;
@@ -153,7 +182,8 @@ class coro_http_response {
           content_view_ = body;
         }
         else {
-          content_ = std::move(body);
+          content_view_ = {};
+          content_ = std::forward<decltype(body)>(body);
         }
       }
       has_set_content_ = true;
@@ -165,7 +195,8 @@ class coro_http_response {
       content_view_ = body;
     }
     else {
-      content_ = std::move(body);
+      content_view_ = {};
+      content_ = std::forward<decltype(body)>(body);
     }
     has_set_content_ = true;
   }

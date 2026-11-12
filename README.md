@@ -112,6 +112,8 @@ resp.add_header("Content-Type", "application/json");
 
 JSON 在序列化时分批压缩，不再构造完整的未压缩 JSON 字符串。回调在函数返回前执行完毕，响应持有压缩后的内容。客户端不接受 gzip 或未启用 gzip 时，回调写入响应拥有的普通字符串。使用 iguana 时需将其头文件目录加入 include 路径。
 
+启用 gzip 时，写入回调需要同时支持 `std::string &` 和 `gzip_codec::compress_stream &`，上面的泛型 lambda 满足这一要求。序列化异常会向上传递，保留此前的响应状态和内容。视图接口借用传入的左值字符串，其存储应保持有效直到发送完成；传入临时 `std::string` 时，响应会接管其内容。
+
 ## 示例2：基本用法
 ```c++
 #include "cinatra.hpp"

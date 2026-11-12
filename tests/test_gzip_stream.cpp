@@ -31,6 +31,29 @@ using namespace cinatra;
 using namespace std::chrono_literals;
 
 namespace {
+template <typename Content>
+concept response_accepts_content =
+    requires(coro_http_response &response, Content content) {
+      response.set_status_and_content(status_type::ok, content);
+      response.set_status_and_content_view(status_type::ok, content);
+    };
+
+struct string_writer {
+  void operator()(std::string &) const {}
+};
+
+static_assert(response_accepts_content<std::string>);
+static_assert(response_accepts_content<std::string_view>);
+#ifdef CINATRA_ENABLE_GZIP
+struct gzip_writer {
+  void operator()(gzip_codec::compress_stream &) const {}
+};
+static_assert(!response_accepts_content<gzip_writer>);
+static_assert(!response_accepts_content<string_writer>);
+#else
+static_assert(response_accepts_content<string_writer>);
+#endif
+
 std::string make_payload(size_t size) {
   std::mt19937 random(42);
   std::string data(size, '\0');
@@ -147,7 +170,104 @@ TEST_CASE(
   REQUIRE(gzip_codec::compress("after exception", encoded));
   CHECK(decode_gzip(encoded) == "after exception");
 }
+
+TEST_CASE("gzip stream preserves overlapping input across output growth") {
+  for (size_t size : {0u, 1u, 16383u, 16384u, 262144u}) {
+    CAPTURE(size);
+    auto data = make_payload(size);
+    if (!data.empty()) {
+      // The next output write must grow the allocation, independently of the
+      // string implementation's initial spare capacity.
+      data.resize(data.capacity(), 'x');
+    }
+    const auto expected = data;
+    const auto prefix_size = data.size();
+    REQUIRE(gzip_codec::compress(data, data));
+    CHECK(data.substr(0, prefix_size) == expected);
+    CHECK(decode_gzip(std::string_view(data).substr(prefix_size)) == expected);
+  }
+
+  std::string data = "prefix:" + make_payload(65536);
+  const auto prefix = data;
+  auto input = std::string_view(data).substr(7);
+  const std::string expected(input);
+  REQUIRE(gzip_codec::compress(input, data));
+  CHECK(data.substr(0, prefix.size()) == prefix);
+  CHECK(decode_gzip(std::string_view(data).substr(prefix.size())) == expected);
+
+  data = prefix;
+  {
+    gzip_codec::compress_stream stream(data);
+    stream.push_back('[');
+    stream.append(std::string_view(data));
+    stream.push_back(']');
+    REQUIRE(stream.finish());
+  }
+  CHECK(data.substr(0, prefix.size()) == prefix);
+  CHECK(decode_gzip(std::string_view(data).substr(prefix.size())) ==
+        "[" + prefix + "]");
+}
 #endif
+
+TEST_CASE("response views borrow lvalues and retain temporary strings") {
+  for (size_t size : {2u, 8192u}) {
+    for (auto encoding : {content_encoding::none, content_encoding::gzip,
+                          content_encoding::deflate}) {
+      CAPTURE(size);
+      CAPTURE(static_cast<int>(encoding));
+      coro_http_response response(nullptr);
+      std::string source(size, 'v');
+      response.set_status_and_content_view(status_type::ok, source, encoding,
+                                           true, "br");
+      source.front() = 'z';
+      std::vector<asio::const_buffer> buffers;
+      std::string chunk_size;
+      response.to_buffers(buffers, chunk_size);
+      REQUIRE_FALSE(buffers.empty());
+      CHECK(buffers.back().data() == source.data());
+      CHECK(buffers.back().size() == source.size());
+      CHECK(response_wire(response).ends_with(source));
+
+      response.clear();
+      const auto &const_source = source;
+      response.set_status_and_content_view(status_type::ok, const_source);
+      CHECK(response_wire(response).ends_with(source));
+
+      response.clear();
+      const auto expected = source;
+      response.set_status_and_content_view(status_type::ok, source,
+                                           content_encoding::none, false);
+      CHECK(source == expected);  // Owning an lvalue must copy, not move it.
+      CHECK(response.content() == expected);
+
+      response.clear();
+      response.set_status_and_content_view(status_type::ok,
+                                           std::string(expected));
+      CHECK(response.content() == expected);
+      CHECK(response_wire(response).ends_with(expected));
+    }
+  }
+}
+
+TEST_CASE("serialization exceptions preserve the previous response") {
+  for (auto encoding : {content_encoding::none, content_encoding::gzip}) {
+    for (auto accept : {"gzip", "br"}) {
+      coro_http_response response(nullptr);
+      response.need_date_head(false);
+      response.set_status_and_content(status_type::accepted, "previous body");
+      const auto previous = response_wire(response);
+      auto writer = [](auto &stream) {
+        stream.append(std::string(65536, 'x'));
+        throw std::runtime_error("serialization failed");
+      };
+      CHECK_THROWS_WITH_AS(response.set_status_and_content(
+                               status_type::ok, writer, encoding, accept),
+                           "serialization failed", std::runtime_error);
+      CHECK(response.status() == status_type::accepted);
+      CHECK(response_wire(response) == previous);
+    }
+  }
+}
 
 TEST_CASE("response serializes through the existing content APIs") {
   for (bool view_api : {false, true}) {
@@ -220,6 +340,8 @@ TEST_CASE("iguana writes escaped and unescaped JSON directly to gzip") {
   };
   check.template operator()<true>();
   check.template operator()<false>();
+  records.clear();
+  check.template operator()<true>();
 }
 #endif
 

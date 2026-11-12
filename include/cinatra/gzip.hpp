@@ -5,6 +5,7 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -49,6 +50,15 @@ class compress_stream {
 
   void append(const char *data, size_t size) {
     if (!writable()) {
+      return;
+    }
+    // Growing output_ must not invalidate input that aliases its storage.
+    // Only overlapping spans need a copy; ordinary serializer writes do not.
+    auto less = std::less<const char *>{};
+    if (size != 0 && less(data, output_.data() + output_.size() + 1) &&
+        less(output_.data(), data + size)) {
+      std::string input(data, size);
+      append(input.data(), input.size());
       return;
     }
     while (size != 0 && good()) {
@@ -118,14 +128,12 @@ class compress_stream {
   }
 
   int pump(int flush) {
-    auto offset = output_.size();
-    auto size = (std::min)(size_t{CHUNK},
-                           (std::max)(output_.capacity() - offset, size_t{64}));
-    output_.resize(offset + size);
-    stream_.next_out = reinterpret_cast<Bytef *>(output_.data() + offset);
-    stream_.avail_out = static_cast<uInt>(size);
+    std::array<Bytef, CHUNK> output;
+    stream_.next_out = output.data();
+    stream_.avail_out = output.size();
     int result = ::deflate(&stream_, flush);
-    output_.resize(offset + size - stream_.avail_out);
+    output_.append(reinterpret_cast<const char *>(output.data()),
+                   output.size() - stream_.avail_out);
     if (result != Z_OK && result != Z_STREAM_END) {
       failed_ = true;
     }
