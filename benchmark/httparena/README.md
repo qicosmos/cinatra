@@ -1,9 +1,11 @@
 # cinatra HttpArena benchmark
 
-cinatra's C++20 coroutine server on standalone Asio and async_simple. The
-Dockerfile pins the framework and its bundled iguana submodule to reproducible
-revisions, builds with GCC 14, Release optimization and LTO, and targets
-x86-64-v3 on x86-64, as the dusty entry does. The entry is marked `tuned`
+cinatra's C++20 coroutine server on standalone Asio and async_simple. The local
+Dockerfile builds the framework and cases from the current checkout, using
+GCC 14, Release optimization and LTO. The upstream HttpArena entry pins a complete
+cinatra revision and explicitly enables x86-64-v3 for its benchmark host.
+Local CMake and Docker builds leave that CPU requirement disabled by default.
+The entry is marked `tuned`
 because the typed payload uses request-local PMR storage, and small baseline
 replies and TLS responses use the contiguous-buffer option. Compression retains
 cinatra's response API defaults.
@@ -70,6 +72,11 @@ more space. All fields, JSON escaping, arithmetic and compression run afresh.
 The implementation lives here in cinatra. The HttpArena entry should fetch a
 fixed cinatra commit and build this directory instead of copying the cases.
 
+This target always enables SSL and GZIP because the subscribed profiles require
+both. OpenSSL and zlib are required even when the parent project is configured
+with `CINATRA_ENABLE_SSL=OFF`. An SSL=OFF label in the parent CI matrix therefore
+does not describe this benchmark target's TLS and gzip coverage.
+
 Build through the main project (disabled by default):
 
 ```sh
@@ -90,11 +97,17 @@ cmake -S benchmark/httparena -B build-httparena -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-httparena -j
 ```
 
-Build the container with this directory as its context:
+Build the container from the repository root, including the iguana submodule:
 
 ```sh
-docker build -t httparena-cinatra benchmark/httparena
+git submodule update --init iguana
+docker build -f benchmark/httparena/Dockerfile -t httparena-cinatra .
 ```
+
+For a CPU that supports x86-64-v3, opt in with
+`-DHTTPARENA_X86_64_V3=ON` in CMake or
+`--build-arg HTTPARENA_X86_64_V3=ON` in Docker. A binary built with this option
+requires that CPU feature level at runtime.
 
 From a checkout of HttpArena with the cinatra entry installed:
 

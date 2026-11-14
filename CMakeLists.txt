@@ -10,7 +10,7 @@ include(cmake/find_openssl.cmake)
 include(cmake/build.cmake)
 include(cmake/develop.cmake)
 
-option(BUILD_HTTPARENA "Build the HttpArena benchmark server" OFF)
+option(BUILD_HTTPARENA "Build the HttpArena benchmark server with SSL and GZIP (requires OpenSSL and zlib)" OFF)
 if (BUILD_HTTPARENA)
     add_subdirectory(benchmark/httparena)
 endif ()

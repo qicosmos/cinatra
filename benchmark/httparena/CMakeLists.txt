@@ -3,6 +3,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(httparena_cinatra LANGUAGES CXX)
 endif()
 
+option(HTTPARENA_X86_64_V3 "Target x86-64-v3 CPUs on compatible benchmark hosts" OFF)
+
 get_filename_component(CINATRA_DEFAULT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(CINATRA_SOURCE_DIR "${CINATRA_DEFAULT_SOURCE_DIR}" CACHE PATH "cinatra checkout, including its iguana submodule")
 if(NOT EXISTS "${CINATRA_SOURCE_DIR}/include/cinatra/coro_http_server.hpp")
@@ -10,6 +12,8 @@ if(NOT EXISTS "${CINATRA_SOURCE_DIR}/include/cinatra/coro_http_server.hpp")
 endif()
 
 find_package(Threads REQUIRED)
+# The subscribed HttpArena profiles require TLS and gzip in every build.
+message(STATUS "httparena_server: SSL and GZIP always enabled, independent of CINATRA_ENABLE_SSL")
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -30,6 +34,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(httparena_server PRIVATE -fno-tree-slp-vectorize)
 endif()
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+if(HTTPARENA_X86_64_V3 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
     target_compile_options(httparena_server PRIVATE -march=x86-64-v3)
 endif()
