@@ -12,7 +12,6 @@
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
 #include "cookie.hpp"
-#include "coro_http_request.hpp"
 #include "define.h"
 #ifdef CINATRA_ENABLE_GZIP
 #include "gzip.hpp"
@@ -54,13 +53,11 @@ concept response_writer =
 class coro_http_connection;
 class coro_http_response {
  public:
-  coro_http_response(coro_http_connection *conn,
-                     coro_http_request *request = nullptr)
+  coro_http_response(coro_http_connection *conn)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
         delay_(false),
-        conn_(conn),
-        request_(request) {}
+        conn_(conn) {}
 
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) {
@@ -174,8 +171,10 @@ class coro_http_response {
   // Writers run synchronously and always produce response-owned content.
   template <detail::response_writer Writer>
   void set_content(Writer writer,
-                   content_encoding encoding = content_encoding::none) {
-    set_status_and_content(status_type::ok, std::move(writer), encoding);
+                   content_encoding encoding = content_encoding::none,
+                   std::string_view client_encoding_type = "") {
+    set_status_and_content(status_type::ok, std::move(writer), encoding,
+                           client_encoding_type);
   }
 
   template <detail::response_writer Writer>
@@ -192,10 +191,6 @@ class coro_http_response {
       status_type status, Writer writer,
       content_encoding encoding = content_encoding::none, bool = true,
       std::string_view client_encoding_type = "") {
-    if (client_encoding_type.empty() && request_ &&
-        encoding != content_encoding::none) {
-      client_encoding_type = request_->get_accept_encoding();
-    }
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip &&
         (client_encoding_type.empty() ||
@@ -498,6 +493,5 @@ class coro_http_response {
   std::unordered_map<std::string, cookie> cookies_;
   std::string_view content_type_;
   std::string_view content_view_;
-  coro_http_request *request_;
 };
 }  // namespace cinatra

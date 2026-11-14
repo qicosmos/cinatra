@@ -109,7 +109,7 @@ resp.set_content(
 resp.add_header("Content-Type", "application/json");
 ```
 
-默认返回 200，自动读取当前请求的 `Accept-Encoding`；需要其他状态码时仍可使用 `set_status_and_content(status, writer, encoding)`。JSON 在序列化时分批压缩，不再构造完整的未压缩 JSON 字符串。回调在函数返回前执行完毕，响应持有压缩后的内容。客户端不接受 gzip 或未启用 gzip 时，回调写入响应拥有的普通字符串。使用 iguana 时需将其头文件目录加入 include 路径。
+默认返回 200，客户端编码参数默认为空，按指定编码压缩。需要根据请求头选择是否压缩时，可传入第三个参数：`resp.set_content(writer, content_encoding::gzip, req.get_accept_encoding())`。其他状态码仍使用 `set_status_and_content(status, writer, encoding)`。JSON 在序列化时分批压缩，不再构造完整的未压缩 JSON 字符串。回调在函数返回前执行完毕，响应持有压缩后的内容。客户端不接受 gzip 或未启用 gzip 时，回调写入响应拥有的普通字符串。使用 iguana 时需将其头文件目录加入 include 路径。
 
 启用 gzip 时，写入回调需要同时支持 `std::string &` 和 `gzip_codec::compress_stream &`，上面的泛型 lambda 满足这一要求。只有 gzip 使用流式压缩，其他编码沿用原有压缩路径。
 

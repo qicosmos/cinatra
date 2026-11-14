@@ -61,9 +61,9 @@ std::string request_for(std::string_view value) {
 }
 
 template <typename Stream>
-async_simple::coro::Lazy<std::string> read_response(
-    Stream &stream, asio::streambuf &buffer, int expected_status,
-    const std::string_view *encoding = nullptr) {
+async_simple::coro::Lazy<std::string> read_response(Stream &stream,
+                                                    asio::streambuf &buffer,
+                                                    int expected_status) {
   auto [ec, size] =
       co_await coro_io::async_read_until(stream, buffer, TWO_CRCF);
   if (ec) {
@@ -73,10 +73,6 @@ async_simple::coro::Lazy<std::string> read_response(
   auto data = asio::buffer_cast<const char *>(buffer.data());
   REQUIRE(parser.parse_response(data, size, 0) > 0);
   CHECK(parser.status() == expected_status);
-  const bool compressed = parser.get_header_value("Content-Encoding") == "gzip";
-  if (encoding) {
-    CHECK(parser.get_header_value("Content-Encoding") == *encoding);
-  }
   auto body_size = static_cast<size_t>(parser.body_len());
   buffer.consume(size);
   if (buffer.size() < body_size) {
@@ -88,13 +84,6 @@ async_simple::coro::Lazy<std::string> read_response(
   }
   std::string body(asio::buffer_cast<const char *>(buffer.data()), body_size);
   buffer.consume(body_size);
-#ifdef CINATRA_ENABLE_GZIP
-  if (compressed) {
-    std::string decoded;
-    REQUIRE(gzip_codec::uncompress(body, decoded));
-    co_return decoded;
-  }
-#endif
   co_return body;
 }
 
@@ -105,12 +94,9 @@ struct pipeline_test {
   asio::ip::tcp::socket peer{context};
   std::shared_ptr<coro_http_connection> connection;
   bool tls;
-  bool stream_writer;
-  std::vector<std::string_view> encodings;
   size_t handled = 0;
 
-  pipeline_test(bool use_tls, bool suspend_handler, bool use_writer = false)
-      : tls(use_tls), stream_writer(use_writer) {
+  pipeline_test(bool use_tls, bool suspend_handler) : tls(use_tls) {
     using asio::ip::tcp;
     tcp::acceptor listener(context, {asio::ip::address_v4::loopback(), 0});
     peer.connect(listener.local_endpoint());
@@ -134,30 +120,19 @@ struct pipeline_test {
             co_await coro_io::post([] {
             });
             CHECK(context.get_executor().running_in_this_thread());
-            respond(resp, value);
+            resp.set_status_and_content(status_type::ok, std::string(value));
+            ++handled;
           });
     }
     else {
       router.set_http_handler<GET>(
           "/pipeline",
           [this](coro_http_request &req, coro_http_response &resp) {
-            respond(resp, req.get_query_value("n"));
+            resp.set_status_and_content(status_type::ok,
+                                        std::string(req.get_query_value("n")));
+            ++handled;
           });
     }
-  }
-
-  void respond(coro_http_response &response, std::string_view value) {
-    if (stream_writer) {
-      response.set_content(
-          [&](auto &stream) {
-            stream.append(value);
-          },
-          content_encoding::gzip);
-    }
-    else {
-      response.set_status_and_content(status_type::ok, std::string(value));
-    }
-    ++handled;
   }
 
   template <typename Stream>
@@ -226,9 +201,7 @@ struct pipeline_test {
             throw std::system_error(ec);
           }
         }
-        auto body =
-            co_await read_response(stream, received, expected_status,
-                                   encodings.empty() ? nullptr : &encodings[i]);
+        auto body = co_await read_response(stream, received, expected_status);
         CHECK(body == expected[i]);
       }
       if (expected_status == 200) {
@@ -329,38 +302,4 @@ TEST_CASE("pipeline closes after malformed buffered headers") {
                  "GET /bad HTTP/1.x\r\nHost: localhost\r\n\r\n" +
                  request_for("must-not-run"),
              "", {"invalid http protocol"}, 1, 400);
-}
-
-TEST_CASE("pipeline writers negotiate against each individual request") {
-  bool tls = false;
-  bool suspend_handler = false;
-  SUBCASE("TCP") {}
-  SUBCASE("TCP with suspended handlers") { suspend_handler = true; }
-#ifdef CINATRA_ENABLE_SSL
-  SUBCASE("TLS") { tls = true; }
-  SUBCASE("TLS with suspended handlers") {
-    tls = true;
-    suspend_handler = true;
-  }
-#endif
-  for (bool first_gzip : {false, true}) {
-    pipeline_test test(tls, suspend_handler, true);
-    std::string batch;
-    const std::vector<std::string> expected{"first", "second", "third",
-                                            "fourth"};
-    for (size_t i = 0; i < expected.size(); ++i) {
-      const bool gzip = (i % 2 == 0) == first_gzip;
-      auto request = request_for(expected[i]);
-      request.insert(request.size() - 2, std::string("Accept-Encoding: ") +
-                                             (gzip ? "gzip" : "br") + "\r\n");
-      batch += request;
-#ifdef CINATRA_ENABLE_GZIP
-      test.encodings.push_back(gzip ? "gzip" : "");
-#else
-      test.encodings.push_back("");
-#endif
-    }
-    REQUIRE(batch.size() <= 512);
-    test.check(batch, "", expected, expected.size());
-  }
 }

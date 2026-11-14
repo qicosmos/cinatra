@@ -50,7 +50,7 @@ class coro_http_connection
         max_http_header_size_(8 * 1024),
         head_buf_(max_http_header_size_),
         request_(parser_, this),
-        response_(this, &request_) {
+        response_(this) {
     buffers_.reserve(3);
   }
 
@@ -384,7 +384,7 @@ class coro_http_connection
                   parser.method().length() + 1 + parser.url().length()};
 
               coro_http_request req(parser, this);
-              coro_http_response resp(this, &req);
+              coro_http_response resp(this);
               resp.need_date_head(response_.need_date());
               if (auto handler = router_.get_handler(next_key); handler) {
                 router_.route(handler, req, resp, key);

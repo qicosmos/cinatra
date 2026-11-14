@@ -260,19 +260,19 @@ TEST_CASE("serialization exceptions preserve the previous response") {
   }
 }
 
-TEST_CASE("writer content defaults to OK and uses the associated request") {
+TEST_CASE("writer content defaults to OK with optional client encoding") {
   for (auto accept : {"gzip", "br", ""}) {
     CAPTURE(accept);
-    const auto header = std::string("GET / HTTP/1.1\r\nHost: localhost\r\n") +
-                        "Accept-Encoding: " + accept + "\r\n\r\n";
-    http_parser parser;
-    REQUIRE(parser.parse_request(header.data(), header.size(), 0) > 0);
-    coro_http_request request(parser, nullptr);
-    coro_http_response response(nullptr, &request);
+    coro_http_response response(nullptr);
     auto writer = [](auto &stream) {
       stream.append("{\"answer\":42}");
     };
-    response.set_content(writer, content_encoding::gzip);
+    if (std::string_view(accept).empty()) {
+      response.set_content(writer, content_encoding::gzip);
+    }
+    else {
+      response.set_content(writer, content_encoding::gzip, accept);
+    }
     CHECK(response.status() == status_type::ok);
 #ifdef CINATRA_ENABLE_GZIP
     if (std::string_view(accept) != "br") {
@@ -284,7 +284,7 @@ TEST_CASE("writer content defaults to OK and uses the associated request") {
       CHECK(response.content() == "{\"answer\":42}");
     }
     response.clear();
-    // An explicit client encoding still overrides the associated request.
+    // The existing explicit-status API remains available.
     response.set_status_and_content(status_type::created, writer,
                                     content_encoding::gzip, "br");
     CHECK(response.status() == status_type::created);
@@ -418,7 +418,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
                 stream.append(source.value());
                 stream.append("\"}");
               },
-              content_encoding::gzip);
+              content_encoding::gzip, request.get_accept_encoding());
         }
         // The source and writer have been destroyed before another suspension
         // and before the connection starts sending the response.
