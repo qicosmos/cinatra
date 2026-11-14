@@ -103,6 +103,36 @@ std::string decode_gzip(std::string_view data) {
 }  // namespace
 
 #ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("response writer forwards the requested gzip level") {
+  const auto data = make_payload(8192);
+  auto writer = [&](auto &stream) {
+    stream.append(data);
+  };
+  for (int level : {0, 3, 9}) {
+    CAPTURE(level);
+    std::string expected;
+    REQUIRE(gzip_codec::compress(data, expected, level));
+    for (int api : {0, 1, 2}) {
+      CAPTURE(api);
+      coro_http_response response(nullptr);
+      if (api == 0) {
+        response.set_content(writer, content_encoding::gzip, "gzip", level);
+      }
+      else if (api == 1) {
+        response.set_status_and_content(status_type::ok, writer,
+                                        content_encoding::gzip, "gzip", level);
+      }
+      else {
+        response.set_status_and_content_view(status_type::ok, writer,
+                                             content_encoding::gzip, true,
+                                             "gzip", level);
+      }
+      CHECK(response.content() == expected);
+      CHECK(decode_gzip(response.content()) == data);
+    }
+  }
+}
+
 TEST_CASE("gzip stream handles input and output boundaries") {
   for (size_t size : {0u, 1u, 63u, 64u, 16383u, 16384u, 16385u, 262144u}) {
     CAPTURE(size);
@@ -238,6 +268,26 @@ TEST_CASE("legacy string calls retain their existing signatures") {
   response.to_buffers(buffers, chunk_size);
   REQUIRE_FALSE(buffers.empty());
   CHECK(buffers.back().data() == source.data());
+}
+
+TEST_CASE("response header defaults survive reuse and upgrades omit length") {
+  coro_http_response response(nullptr, false);
+  for (int request = 0; request < 2; ++request) {
+    response.set_status_and_content(status_type::ok, "ok");
+    CHECK_FALSE(response.need_date());
+    auto wire = response_wire(response);
+    CHECK(wire.find("Date:") == std::string::npos);
+    CHECK(wire.find("Server:") == std::string::npos);
+    response.clear();
+  }
+  response.set_status_and_content(status_type::switching_protocols, "");
+  auto wire = response_wire(response);
+  CHECK(wire.find("Content-Length:") == std::string::npos);
+  wire.clear();
+  response.build_resp_str(wire);
+  CHECK(wire.find("Content-Length:") == std::string::npos);
+  CHECK(wire.find("Date:") == std::string::npos);
+  CHECK(wire.find("Server:") == std::string::npos);
 }
 
 TEST_CASE("serialization exceptions preserve the previous response") {
@@ -392,6 +442,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   asio::io_context context(1);
   coro_io::ExecutorWrapper<> executor(context.get_executor());
   coro_http_server server(context, 0, "127.0.0.1");
+  server.set_default_response_headers(false);
 #ifdef CINATRA_ENABLE_SSL
   if (tls) {
     const auto dir =
@@ -481,6 +532,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       int json_content_types = 0;
       int json_vary = 0;
       for (const auto &[key, value] : result.resp_headers) {
+        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
         if (iequal0(key, "Content-Type")) {
           ++json_content_types;
           CHECK(value == "application/json");
@@ -509,6 +561,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       int echo_content_types = 0;
       int echo_vary = 0;
       for (const auto &[key, value] : echo.resp_headers) {
+        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
         if (iequal0(key, "Content-Type")) {
           ++echo_content_types;
           CHECK(value == "application/octet-stream");

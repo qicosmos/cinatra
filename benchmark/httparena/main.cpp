@@ -72,21 +72,10 @@ using async_simple::coro::Lazy;
 namespace {
 // Header spans are shared read-only. cinatra emits them in both buffer modes.
 constinit std::array<http_header, 1> text_headers{
-    {{"Content-Type", "text/plain"}}};
+    {{"Content-Type", "text/plain; charset=UTF-8"}}};
 constinit std::array<http_header, 2> json_headers{
-    {{"Content-Type", "application/json"}, {"Vary", "Accept-Encoding"}}};
-
-struct benchmark_response_headers {
-  bool before(coro_http_request &request, coro_http_response &response) {
-    response.need_server_head(false);
-    response.add_header("Server", "HttpArena/1");
-    const auto connection = request.get_header_value("Connection");
-    response.add_header("Connection", connection.empty()
-                                          ? std::string("keep-alive")
-                                          : std::string(connection));
-    return true;
-  }
-};
+    {{"Content-Type", "application/json; charset=UTF-8"},
+     {"Vary", "Accept-Encoding"}}};
 
 int64_t number(std::string_view value) {
   if (value.empty()) {
@@ -145,36 +134,32 @@ Lazy<std::string> read_chunked_body(coro_http_request &request) {
 
 void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                      bool multi_buffer = true) {
+  server.set_default_response_headers(false);
+  server.set_http_handler<GET>("/baseline11", [](coro_http_request &request,
+                                                 coro_http_response &response) {
+    request.get_conn()->set_multi_buf(false);
+    text(response, query_sum(request));
+  });
+  server.set_http_handler<POST>("/baseline11",
+                                [](coro_http_request &request,
+                                   coro_http_response &response) -> Lazy<void> {
+                                  request.get_conn()->set_multi_buf(false);
+                                  auto sum = query_sum(request);
+                                  if (request.is_chunked()) {
+                                    auto body =
+                                        co_await read_chunked_body(request);
+                                    sum += number(body);
+                                  }
+                                  else {
+                                    sum += number(request.get_body());
+                                  }
+                                  text(response, sum);
+                                });
   server.set_http_handler<GET>(
-      "/baseline11",
-      [](coro_http_request &request, coro_http_response &response) {
-        request.get_conn()->set_multi_buf(false);
-        text(response, query_sum(request));
-      },
-      benchmark_response_headers{});
-  server.set_http_handler<POST>(
-      "/baseline11",
-      [](coro_http_request &request,
-         coro_http_response &response) -> Lazy<void> {
-        request.get_conn()->set_multi_buf(false);
-        auto sum = query_sum(request);
-        if (request.is_chunked()) {
-          auto body = co_await read_chunked_body(request);
-          sum += number(body);
-        }
-        else {
-          sum += number(request.get_body());
-        }
-        text(response, sum);
-      },
-      benchmark_response_headers{});
-  server.set_http_handler<GET>(
-      "/pipeline",
-      [](coro_http_request &, coro_http_response &response) {
+      "/pipeline", [](coro_http_request &, coro_http_response &response) {
         response.add_header_span(text_headers);
         response.set_status_and_content_view(status_type::ok, "ok");
-      },
-      benchmark_response_headers{});
+      });
   server.set_http_handler<GET>(
       "/delay/:ms",
       [](coro_http_request &request,
@@ -186,12 +171,10 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                                       request.get_conn()->get_executor());
         }
         text(response, ms);
-      },
-      benchmark_response_headers{});
+      });
   server.set_http_handler<GET>(
-      "/json/:count",
-      [&dataset, multi_buffer](coro_http_request &request,
-                               coro_http_response &response) {
+      "/json/:count", [&dataset, multi_buffer](coro_http_request &request,
+                                               coro_http_response &response) {
         request.get_conn()->set_multi_buf(multi_buffer);
         const auto count = std::clamp<int64_t>(
             number(request.params_.at("count")), 0, dataset.size());
@@ -227,9 +210,8 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
             [&](auto &stream) {
               iguana::to_json(result, stream);
             },
-            encoding, accept);
-      },
-      benchmark_response_headers{});
+            encoding, accept, 3);
+      });
   server.set_http_handler<POST>(
       "/echo",
       [multi_buffer](coro_http_request &request,
@@ -244,8 +226,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
         }
         auto body = co_await read_chunked_body(request);
         response.set_status_and_content(status_type::ok, std::move(body));
-      },
-      benchmark_response_headers{});
+      });
   server.set_http_handler<GET>(
       "/ws",
       [](coro_http_request &request,
@@ -271,8 +252,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
             }
           }
         }
-      },
-      benchmark_response_headers{});
+      });
   server.set_max_http_body_size(30 * 1024 * 1024);
 }
 }  // namespace

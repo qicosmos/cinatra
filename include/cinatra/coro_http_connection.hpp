@@ -43,14 +43,14 @@ class coro_http_connection
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
-                       coro_http_router &router)
+                       coro_http_router &router, bool default_headers = true)
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
         max_http_header_size_(8 * 1024),
         head_buf_(max_http_header_size_),
         request_(parser_, this),
-        response_(this) {
+        response_(this, default_headers) {
     buffers_.reserve(3);
   }
 
@@ -386,6 +386,7 @@ class coro_http_connection
               coro_http_request req(parser, this);
               coro_http_response resp(this);
               resp.need_date_head(response_.need_date());
+              resp.need_server_head(response_.need_server());
               if (auto handler = router_.get_handler(next_key); handler) {
                 router_.route(handler, req, resp, key);
               }

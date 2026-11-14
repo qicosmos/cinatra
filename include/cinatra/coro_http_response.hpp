@@ -53,11 +53,14 @@ concept response_writer =
 class coro_http_connection;
 class coro_http_response {
  public:
-  coro_http_response(coro_http_connection *conn)
+  coro_http_response(coro_http_connection *conn, bool default_headers = true)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
         delay_(false),
-        conn_(conn) {}
+        conn_(conn),
+        default_headers_(default_headers),
+        need_date_(default_headers),
+        need_server_(default_headers) {}
 
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) {
@@ -67,23 +70,23 @@ class coro_http_response {
   void set_status_and_content(
       status_type status, std::string content,
       content_encoding encoding = content_encoding::none,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     set_status_and_content_view(status, std::move(content), encoding, false,
-                                client_encoding_type);
+                                client_encoding_type, gzip_level);
   }
 
   template <typename String>
   void set_status_and_content_view(
       status_type status, String content = "",
       content_encoding encoding = content_encoding::none, bool is_view = true,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip) {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("gzip") != std::string_view::npos) {
         std::string encode_str;
-        bool r = gzip_codec::compress(content, encode_str);
+        bool r = gzip_codec::compress(content, encode_str, gzip_level);
         if (!r) {
           set_status_and_content(status_type::internal_server_error,
                                  "gzip compress error");
@@ -172,31 +175,32 @@ class coro_http_response {
   template <detail::response_writer Writer>
   void set_content(Writer writer,
                    content_encoding encoding = content_encoding::none,
-                   std::string_view client_encoding_type = "") {
+                   std::string_view client_encoding_type = "",
+                   int gzip_level = -1) {
     set_status_and_content(status_type::ok, std::move(writer), encoding,
-                           client_encoding_type);
+                           client_encoding_type, gzip_level);
   }
 
   template <detail::response_writer Writer>
   void set_status_and_content(
       status_type status, Writer writer,
       content_encoding encoding = content_encoding::none,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     set_status_and_content_view(status, std::move(writer), encoding, false,
-                                client_encoding_type);
+                                client_encoding_type, gzip_level);
   }
 
   template <detail::response_writer Writer>
   void set_status_and_content_view(
       status_type status, Writer writer,
       content_encoding encoding = content_encoding::none, bool = true,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip &&
         (client_encoding_type.empty() ||
          client_encoding_type.find("gzip") != std::string_view::npos)) {
       std::string encoded;
-      if (!gzip_codec::compress(writer, encoded)) {
+      if (!gzip_codec::compress(writer, encoded, gzip_level)) {
         set_status_and_content(status_type::internal_server_error,
                                "gzip compress error");
       }
@@ -242,6 +246,8 @@ class coro_http_response {
   void need_date_head(bool r) { need_date_ = r; }
   bool need_date() { return need_date_; }
   void need_server_head(bool r) { need_server_ = r; }
+
+  bool need_server() const { return need_server_; }
 
   void set_boundary(std::string_view boundary) { boundary_ = boundary; }
 
@@ -290,7 +296,8 @@ class coro_http_response {
         resp_str.append(CRCF);
       }
       else {
-        if (!has_len && boundary_.empty())
+        if (!has_len && boundary_.empty() &&
+            status_ != status_type::switching_protocols)
           resp_str.append(ZERO_LENGTH_SV);
       }
     }
@@ -382,7 +389,8 @@ class coro_http_response {
           handle_content_len(buffers, content_view_);
       }
       else {
-        if (!has_len && boundary_.empty())
+        if (!has_len && boundary_.empty() &&
+            status_ != status_type::switching_protocols)
           buffers.emplace_back(asio::buffer(ZERO_LENGTH_SV));
       }
     }
@@ -438,8 +446,8 @@ class coro_http_response {
     boundary_.clear();
     has_set_content_ = false;
     cookies_.clear();
-    need_date_ = true;
-    need_server_ = true;
+    need_date_ = default_headers_;
+    need_server_ = default_headers_;
     content_type_ = {};
     content_view_ = {};
   }
@@ -489,6 +497,7 @@ class coro_http_response {
   std::string boundary_;
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
+  bool default_headers_ = true;
   bool need_date_ = true;
   bool need_server_ = true;
   std::unordered_map<std::string, cookie> cookies_;

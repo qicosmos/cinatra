@@ -7,18 +7,19 @@ cinatra revision and explicitly enables x86-64-v3 for its benchmark host.
 Local CMake and Docker builds leave that CPU requirement disabled by default.
 The entry is marked `tuned`
 because the typed payload uses request-local PMR storage, and small baseline
-replies and TLS responses use the contiguous-buffer option. Compression retains
-cinatra's response API defaults.
+replies and TLS responses use the contiguous-buffer option. Gzip uses level 3,
+matching dusty's native benchmark configuration.
 
 The entry requests the `flagship` maturity tier based on existing downstream use:
 [yalantinglibs documents cinatra as its coro_http implementation](https://github.com/alibaba/yalantinglibs/blob/54f9c0642386e7860e8e11ada698c484dc562d7d/README.md#standalone-sublibraries),
 and [Mooncake uses coro_http for its HTTP metadata service](https://github.com/kvcache-ai/Mooncake/blob/504f2ae4a307abe095d3baa75d40ed2661b6481b/mooncake-store/src/http_metadata_server.cpp).
 The `tuned` mode describes the benchmark configuration independently of maturity.
 
-Responses include Date, an eleven-byte Server value, Connection and Content-Type;
-JSON also includes Vary: Accept-Encoding. These headers use cinatra's response
-APIs. For local comparisons, align the other entries' headers, JSON field order
-and gzip settings (level 6, window 15, memLevel 8) before measuring. Check both
+The server disables automatic Date and Server headers with
+`set_default_response_headers(false)`, including WebSocket handshakes. Ordinary
+HTTP replies carry no extra Connection header. Content-Type matches dusty's
+native values, including `charset=UTF-8` for text and JSON; JSON also includes
+Vary: Accept-Encoding. Comparisons use the unmodified dusty entry. Check both
 body bytes and complete HTTP response lengths, including TLS responses after
 decryption; equal decoded JSON alone does not establish equal transfer sizes.
 
@@ -35,7 +36,7 @@ decryption; equal decoded JSON alone does not establish equal transfer sizes.
   `total = price * quantity * N` on each request. String views and request-local
   PMR vectors avoid copying source strings or sharing mutable state. Every
   field is serialized by iguana on each request, with normal escaping enabled.
-- JSON uses `response.set_content(writer, encoding, accept_encoding)`, with
+- JSON uses `response.set_content(writer, encoding, accept_encoding, 3)`, with
   `iguana::to_json` as its writer. The response API handles compression and its
   headers. The case selects `none` when Accept-Encoding is absent, as Arena
   requires; otherwise the header is passed to cinatra. There is no custom
