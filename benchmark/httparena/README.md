@@ -46,6 +46,15 @@ decryption; equal decoded JSON alone does not establish equal transfer sizes.
   reply. Chunked bodies are collected into response-owned storage.
 - `/ws` uses cinatra's WebSocket handshake, reader and writer. Text and binary
   opcodes are preserved; control frames are handled by the framework.
+  `set_websocket_auto_flush(false)` enables native bounded write batching.
+  The reader drains prefetched frames and flushes pending output before waiting
+  for more input, so a single-message client never waits for a fixed batch size.
+  Headers and payloads are copied into connection-owned storage, capped at
+  64 KiB of queued frame bytes; larger frames and control frames flush directly.
+  Applications that send without reading can await `flush_websocket()` explicitly.
+  The default writer still sends immediately. Reads, writes and flushes must be
+  serialized on the connection's executor, and a read result remains valid until
+  the next read.
 
 The listeners are HTTP on `:8080` and optional HTTP/1.1 TLS on `:8081`, using
 the mounted `/certs/server.crt` and `/certs/server.key`. The dataset defaults to

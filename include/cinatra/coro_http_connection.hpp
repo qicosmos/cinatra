@@ -2,6 +2,7 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <array>
 #include <asio/buffer.hpp>
 #include <iterator>
 #include <system_error>
@@ -678,10 +679,23 @@ class coro_http_connection
     co_return result;
   }
 
+  // Disable to batch data frames already in the read buffer. Reads flush before
+  // waiting for more input; control frames and full buffers also flush. As with
+  // immediate writes, serialize reads/writes on the connection's executor.
+  void set_websocket_auto_flush(bool enabled) { ws_auto_flush_ = enabled; }
+
+  async_simple::coro::Lazy<std::error_code> flush_websocket() {
+    if (ws_write_buffer_.empty()) {
+      co_return std::error_code{};
+    }
+    auto [ec, size] = co_await async_write(asio::buffer(ws_write_buffer_));
+    ws_write_buffer_.clear();
+    co_return ec;
+  }
+
   async_simple::coro::Lazy<std::error_code> write_websocket(
       std::string_view msg, opcode op = opcode::text, bool eof = true) {
-    std::vector<asio::const_buffer> buffers;
-    std::string_view header;
+    bool compressed = false;
 #ifdef CINATRA_ENABLE_GZIP
     std::string dest_buf;
     if (is_client_ws_compressed_ && msg.size() > 0) {
@@ -690,24 +704,36 @@ class coro_http_connection
         co_return std::make_error_code(std::errc::protocol_error);
       }
 
-      header = ws_.encode_ws_header(dest_buf.length(), op, eof, true, false);
-      buffers.push_back(asio::buffer(header));
-      buffers.push_back(asio::buffer(dest_buf));
-    }
-    else {
-#endif
-      header = ws_.encode_ws_header(msg.length(), op, eof, false, false);
-      buffers.push_back(asio::buffer(header));
-      buffers.push_back(asio::buffer(msg));
-#ifdef CINATRA_ENABLE_GZIP
+      msg = dest_buf;
+      compressed = true;
     }
 #endif
+    auto header = ws_.encode_ws_header(msg.size(), op, eof, compressed, false);
+    auto frame_size = header.size() + msg.size();
+    bool buffer_frame = !ws_auto_flush_ && static_cast<uint8_t>(op) < 0x8 &&
+                        msg.size() <= websocket_write_size - header.size();
+    if (!ws_write_buffer_.empty() &&
+        (!buffer_frame ||
+         ws_write_buffer_.size() + frame_size > websocket_write_size)) {
+      if (auto ec = co_await flush_websocket(); ec) {
+        co_return ec;
+      }
+    }
+    if (buffer_frame) {
+      // Both the encoder's reused header and the caller's payload may change
+      // before flush. Keep their bytes in bounded, connection-owned storage.
+      ws_write_buffer_.append(header);
+      ws_write_buffer_.append(msg);
+      co_return std::error_code{};
+    }
+    std::array<asio::const_buffer, 2> buffers{asio::buffer(header),
+                                              asio::buffer(msg)};
     auto [ec, sz] = co_await async_write(buffers);
     co_return ec;
   }
 
   async_simple::coro::Lazy<websocket_result> read_websocket() {
-    auto [ec, ws_hd_size] = co_await async_read(head_buf_, SHORT_HEADER);
+    auto ec = co_await read_websocket_buffer(SHORT_HEADER);
     websocket_result result{ec};
     if (ec) {
       close();
@@ -718,8 +744,8 @@ class coro_http_connection
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
       if (status == ws_header_status::complete) {
+        head_buf_.consume(ws_.len_bytes());
         ws_.reset_len_bytes();
-        head_buf_.consume(head_buf_.size());
         std::span<char> payload{};
         auto payload_length = ws_.payload_length();
 
@@ -735,13 +761,37 @@ class coro_http_connection
         }
 
         if (payload_length > 0) {
+          // Prefetch small frames, but read large payloads directly into their
+          // owner rather than growing the bounded read-ahead buffer.
+          if (payload_length <= websocket_read_size &&
+              payload_length <= head_buf_.max_size()) {
+            if (auto ec = co_await read_websocket_buffer(payload_length); ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
+          }
           detail::resize(body_, payload_length);
-          auto [ec, read_sz] =
-              co_await async_read(asio::buffer(body_), payload_length);
-          if (ec) {
-            close();
-            result.ec = ec;
-            break;
+          auto buffered = std::min(payload_length, head_buf_.size());
+          if (buffered > 0) {
+            asio::buffer_copy(asio::buffer(body_.data(), buffered),
+                              head_buf_.data(), buffered);
+            head_buf_.consume(buffered);
+          }
+          if (buffered < payload_length) {
+            if (auto ec = co_await flush_websocket(); ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
+            auto remaining = payload_length - buffered;
+            auto [ec, read_sz] = co_await async_read(
+                asio::buffer(body_.data() + buffered, remaining), remaining);
+            if (ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
           }
           payload = body_;
         }
@@ -808,7 +858,7 @@ class coro_http_connection
         co_return result;
       }
       else if (status == ws_header_status::incomplete) {
-        auto [ec, sz] = co_await async_read(head_buf_, ws_.left_header_len());
+        auto ec = co_await read_websocket_buffer(ws_.len_bytes());
         if (ec) {
           close();
           result.ec = ec;
@@ -975,6 +1025,41 @@ class coro_http_connection
   }
 
  private:
+  static constexpr size_t websocket_read_size = 4096;
+  static constexpr size_t websocket_write_size = 64 * 1024;
+
+  async_simple::coro::Lazy<std::error_code> read_websocket_buffer(size_t size) {
+    while (head_buf_.size() < size) {
+      if (auto ec = co_await flush_websocket(); ec) {
+        co_return ec;
+      }
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (read_failed_forever_) {
+        co_return std::make_error_code(std::errc::io_error);
+      }
+#endif
+      set_last_time();
+      auto buffer = head_buf_.prepare(std::min(
+          websocket_read_size, head_buf_.max_size() - head_buf_.size()));
+      std::pair<std::error_code, size_t> read;
+#ifdef CINATRA_ENABLE_SSL
+      if (use_ssl_) {
+        read = co_await coro_io::async_read_some(*ssl_stream_, buffer);
+      }
+      else {
+#endif
+        read = co_await coro_io::async_read_some(socket_, buffer);
+#ifdef CINATRA_ENABLE_SSL
+      }
+#endif
+      head_buf_.commit(read.second);
+      if (read.first) {
+        co_return read.first;
+      }
+    }
+    co_return std::error_code{};
+  }
+
   // Own temporary buffer sequences while retaining references to lvalues.
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
@@ -1146,6 +1231,8 @@ class coro_http_connection
 #endif
 
   websocket ws_;
+  bool ws_auto_flush_ = true;
+  std::string ws_write_buffer_;
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;

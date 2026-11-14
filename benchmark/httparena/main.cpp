@@ -236,6 +236,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                                           "WebSocket upgrade required");
           co_return;
         }
+        request.get_conn()->set_websocket_auto_flush(false);
         while (true) {
           auto message = co_await request.get_conn()->read_websocket();
           if (message.ec || message.type == ws_frame_type::WS_CLOSE_FRAME) {
