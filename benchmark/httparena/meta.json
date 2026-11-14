@@ -1,7 +1,7 @@
 {
   "display_name": "cinatra",
   "language": "C++",
-  "type": "emerging",
+  "type": "flagship",
   "mode": "tuned",
   "completeness": {
     "routing": true,

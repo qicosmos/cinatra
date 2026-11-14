@@ -8,6 +8,11 @@ because the typed payload uses request-local PMR storage, and small baseline
 replies and TLS responses use the contiguous-buffer option. Compression retains
 cinatra's response API defaults.
 
+The entry requests the `flagship` maturity tier based on existing downstream use:
+[yalantinglibs documents cinatra as its coro_http implementation](https://github.com/alibaba/yalantinglibs/blob/54f9c0642386e7860e8e11ada698c484dc562d7d/README.md#standalone-sublibraries),
+and [Mooncake uses coro_http for its HTTP metadata service](https://github.com/kvcache-ai/Mooncake/blob/504f2ae4a307abe095d3baa75d40ed2661b6481b/mooncake-store/src/http_metadata_server.cpp).
+The `tuned` mode describes the benchmark configuration independently of maturity.
+
 Responses include Date, an eleven-byte Server value, Connection and Content-Type;
 JSON also includes Vary: Accept-Encoding. These headers use cinatra's response
 APIs. For local comparisons, align the other entries' headers, JSON field order
