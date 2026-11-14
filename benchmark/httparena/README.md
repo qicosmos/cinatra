@@ -7,6 +7,13 @@ x86-64-v3 on x86-64, as the dusty entry does. The entry is marked `tuned`
 because the typed payload uses request-local PMR storage and TLS responses use
 the contiguous-buffer option. Compression retains cinatra's response API defaults.
 
+Responses include Date, an eleven-byte Server value, Connection and Content-Type;
+JSON also includes Vary: Accept-Encoding. These headers use cinatra's response
+APIs. For local comparisons, align the other entries' headers, JSON field order
+and gzip settings (level 6, window 15, memLevel 8) before measuring. Check both
+body bytes and complete HTTP response lengths, including TLS responses after
+decryption; equal decoded JSON alone does not establish equal transfer sizes.
+
 ## Implementation
 
 - Routes and path/query parameters use cinatra's router and request APIs.
