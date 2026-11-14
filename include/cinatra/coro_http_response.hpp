@@ -430,6 +430,7 @@ class coro_http_response {
     }
 
     resp_headers_.clear();
+    resp_header_span_ = {};
     keepalive_ = {};
     delay_ = false;
     status_ = status_type::init;

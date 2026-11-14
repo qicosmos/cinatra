@@ -402,11 +402,19 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   }
 #endif
   int handled = 0;
+  coro_http_connection *first_connection = nullptr;
+  std::array<http_header, 2> json_headers{
+      {{"Content-Type", "application/json"}, {"Vary", "Accept-Encoding"}}};
   server.set_http_handler<GET>(
       "/json",
       [&](coro_http_request &request,
           coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        if (first_connection == nullptr) {
+          first_connection = request.get_conn();
+        }
+        CHECK(request.get_conn() == first_connection);
         request.get_conn()->set_multi_buf(multi_buffer);
+        response.add_header_span(json_headers);
         {
           auto source = co_await coro_io::post([] {
             return make_payload(256 * 1024);
@@ -427,11 +435,28 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
         CHECK(context.get_executor().running_in_this_thread());
         ++handled;
       });
+  server.set_http_handler<POST>(
+      "/echo",
+      [&](coro_http_request &request,
+          coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        CHECK(request.get_conn() == first_connection);
+        request.get_conn()->set_multi_buf(multi_buffer);
+        co_await coro_io::post([] {
+        });
+        CHECK(context.get_executor().running_in_this_thread());
+        response.add_header("Content-Type", "application/octet-stream");
+        response.set_status_and_content_view(status_type::ok,
+                                             request.get_body());
+        ++handled;
+      });
   auto serving = server.async_start();
   REQUIRE(server.port() != 0);
   coro_http_client client(context.get_executor());
-  const auto uri = std::string(tls ? "https" : "http") +
-                   "://127.0.0.1:" + std::to_string(server.port()) + "/json";
+  const auto base_uri = std::string(tls ? "https" : "http") +
+                        "://127.0.0.1:" + std::to_string(server.port());
+  const auto uri = base_uri + "/json";
+  const auto echo_uri = base_uri + "/echo";
+  const std::string echo_body("echo\0payload", 12);
   const auto expected = "{\"data\":\"" + make_payload(256 * 1024) + "\"}";
   bool completed = false;
   bool timed_out = false;
@@ -453,6 +478,20 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       REQUIRE_FALSE(result.net_err);
       CHECK(result.status == 200);
       CHECK(result.resp_body == expected);
+      int json_content_types = 0;
+      int json_vary = 0;
+      for (const auto &[key, value] : result.resp_headers) {
+        if (iequal0(key, "Content-Type")) {
+          ++json_content_types;
+          CHECK(value == "application/json");
+        }
+        if (iequal0(key, "Vary")) {
+          ++json_vary;
+          CHECK(value == "Accept-Encoding");
+        }
+      }
+      CHECK(json_content_types == 1);
+      CHECK(json_vary == 1);
 #ifdef CINATRA_ENABLE_GZIP
       bool compressed = false;
       for (const auto &[key, value] : result.resp_headers) {
@@ -462,6 +501,24 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       }
       CHECK(compressed == (std::string_view(accept) == "gzip"));
 #endif
+      auto echo = co_await client.async_post(echo_uri, echo_body,
+                                             req_content_type::string);
+      REQUIRE_FALSE(echo.net_err);
+      CHECK(echo.status == 200);
+      CHECK(echo.resp_body == echo_body);
+      int echo_content_types = 0;
+      int echo_vary = 0;
+      for (const auto &[key, value] : echo.resp_headers) {
+        if (iequal0(key, "Content-Type")) {
+          ++echo_content_types;
+          CHECK(value == "application/octet-stream");
+        }
+        if (iequal0(key, "Vary")) {
+          ++echo_vary;
+        }
+      }
+      CHECK(echo_content_types == 1);
+      CHECK(echo_vary == 0);
     }
   };
   requests().via(&executor).start([&](auto &&result) {
@@ -482,7 +539,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   runner.join();
   CHECK_FALSE(timed_out);
   CHECK(completed);
-  CHECK(handled == 3);
+  CHECK(handled == 6);
   if (error) {
     std::rethrow_exception(error);
   }
