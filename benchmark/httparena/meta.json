@@ -1,0 +1,23 @@
+{
+  "display_name": "cinatra",
+  "language": "C++",
+  "type": "flagship",
+  "mode": "tuned",
+  "completeness": {
+    "routing": true,
+    "middleware": true,
+    "request": true,
+    "response": true
+  },
+  "engine": "Asio / async_simple",
+  "description": "cinatra C++20 coroutine HTTP server, one event loop per available CPU and native SO_REUSEPORT acceptors. JSON through bundled iguana and cinatra's streaming response API with built-in gzip. Request-local PMR storage avoids copying immutable dataset strings. Native HTTP/1.1 TLS and WebSocket listeners.",
+  "repo": "https://github.com/qicosmos/cinatra",
+  "enabled": true,
+  "tests": [
+    "baseline", "pipelined", "limited-conn", "async",
+    "latency-1m", "latency-10k", "latency-500k-8cpu",
+    "json-comp", "json-tls", "8gbit",
+    "echo-ws", "echo-ws-pipeline", "echo-ws-limited"
+  ],
+  "maintainers": ["qicosmos"]
+}

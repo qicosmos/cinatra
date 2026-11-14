@@ -1,0 +1,9 @@
+**
+!include/
+!include/**
+!iguana/
+!iguana/**
+!benchmark/
+!benchmark/httparena/
+!benchmark/httparena/**
+**/.git

@@ -103,8 +103,40 @@ std::string decode_gzip(std::string_view data) {
 }  // namespace
 
 #ifdef CINATRA_ENABLE_GZIP
+TEST_CASE("response writer forwards the requested gzip level") {
+  const auto data = make_payload(8192);
+  auto writer = [&](auto &stream) {
+    stream.append(data);
+  };
+  for (int level : {0, 3, 9}) {
+    CAPTURE(level);
+    std::string expected;
+    // The streaming codec can use a smaller workspace than the string API.
+    REQUIRE(gzip_codec::compress(writer, expected, level));
+    for (int api : {0, 1, 2}) {
+      CAPTURE(api);
+      coro_http_response response(nullptr);
+      if (api == 0) {
+        response.set_content(writer, content_encoding::gzip, "gzip", level);
+      }
+      else if (api == 1) {
+        response.set_status_and_content(status_type::ok, writer,
+                                        content_encoding::gzip, "gzip", level);
+      }
+      else {
+        response.set_status_and_content_view(status_type::ok, writer,
+                                             content_encoding::gzip, true,
+                                             "gzip", level);
+      }
+      CHECK(response.content() == expected);
+      CHECK(decode_gzip(response.content()) == data);
+    }
+  }
+}
+
 TEST_CASE("gzip stream handles input and output boundaries") {
-  for (size_t size : {0u, 1u, 63u, 64u, 16383u, 16384u, 16385u, 262144u}) {
+  for (size_t size : {0u, 1u, 63u, 64u, 511u, 512u, 513u, 4095u, 4096u, 4097u,
+                      8191u, 8192u, 8193u, 16383u, 16384u, 16385u, 262144u}) {
     CAPTURE(size);
     auto data = make_payload(size);
     for (int level : {-1, 0, 1, 9}) {
@@ -160,8 +192,16 @@ TEST_CASE(
     stream.append(std::string(65536, 'x'));
     throw std::runtime_error("serialization failed");
   };
-  CHECK_FALSE(gzip_codec::compress(writer, encoded, 10));
-  CHECK(calls == 0);
+  for (int level : {-2, 10}) {
+    CHECK_FALSE(gzip_codec::compress(writer, encoded, level));
+    CHECK(calls == 0);
+    CHECK(encoded.empty());
+  }
+  auto before_input = [](auto &) {
+    throw std::runtime_error("serialization failed");
+  };
+  CHECK_THROWS_WITH_AS(gzip_codec::compress(before_input, encoded),
+                       "serialization failed", std::runtime_error);
   CHECK(encoded.empty());
   CHECK_THROWS_WITH_AS(gzip_codec::compress(writer, encoded),
                        "serialization failed", std::runtime_error);
@@ -238,6 +278,26 @@ TEST_CASE("legacy string calls retain their existing signatures") {
   response.to_buffers(buffers, chunk_size);
   REQUIRE_FALSE(buffers.empty());
   CHECK(buffers.back().data() == source.data());
+}
+
+TEST_CASE("response header defaults survive reuse and upgrades omit length") {
+  coro_http_response response(nullptr, false);
+  for (int request = 0; request < 2; ++request) {
+    response.set_status_and_content(status_type::ok, "ok");
+    CHECK_FALSE(response.need_date());
+    auto wire = response_wire(response);
+    CHECK(wire.find("Date:") == std::string::npos);
+    CHECK(wire.find("Server:") == std::string::npos);
+    response.clear();
+  }
+  response.set_status_and_content(status_type::switching_protocols, "");
+  auto wire = response_wire(response);
+  CHECK(wire.find("Content-Length:") == std::string::npos);
+  wire.clear();
+  response.build_resp_str(wire);
+  CHECK(wire.find("Content-Length:") == std::string::npos);
+  CHECK(wire.find("Date:") == std::string::npos);
+  CHECK(wire.find("Server:") == std::string::npos);
 }
 
 TEST_CASE("serialization exceptions preserve the previous response") {
@@ -392,6 +452,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   asio::io_context context(1);
   coro_io::ExecutorWrapper<> executor(context.get_executor());
   coro_http_server server(context, 0, "127.0.0.1");
+  server.set_default_response_headers(false);
 #ifdef CINATRA_ENABLE_SSL
   if (tls) {
     const auto dir =
@@ -402,11 +463,19 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   }
 #endif
   int handled = 0;
+  coro_http_connection *first_connection = nullptr;
+  std::array<http_header, 2> json_headers{
+      {{"Content-Type", "application/json"}, {"Vary", "Accept-Encoding"}}};
   server.set_http_handler<GET>(
       "/json",
       [&](coro_http_request &request,
           coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        if (first_connection == nullptr) {
+          first_connection = request.get_conn();
+        }
+        CHECK(request.get_conn() == first_connection);
         request.get_conn()->set_multi_buf(multi_buffer);
+        response.add_header_span(json_headers);
         {
           auto source = co_await coro_io::post([] {
             return make_payload(256 * 1024);
@@ -427,11 +496,28 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
         CHECK(context.get_executor().running_in_this_thread());
         ++handled;
       });
+  server.set_http_handler<POST>(
+      "/echo",
+      [&](coro_http_request &request,
+          coro_http_response &response) -> async_simple::coro::Lazy<void> {
+        CHECK(request.get_conn() == first_connection);
+        request.get_conn()->set_multi_buf(multi_buffer);
+        co_await coro_io::post([] {
+        });
+        CHECK(context.get_executor().running_in_this_thread());
+        response.add_header("Content-Type", "application/octet-stream");
+        response.set_status_and_content_view(status_type::ok,
+                                             request.get_body());
+        ++handled;
+      });
   auto serving = server.async_start();
   REQUIRE(server.port() != 0);
   coro_http_client client(context.get_executor());
-  const auto uri = std::string(tls ? "https" : "http") +
-                   "://127.0.0.1:" + std::to_string(server.port()) + "/json";
+  const auto base_uri = std::string(tls ? "https" : "http") +
+                        "://127.0.0.1:" + std::to_string(server.port());
+  const auto uri = base_uri + "/json";
+  const auto echo_uri = base_uri + "/echo";
+  const std::string echo_body("echo\0payload", 12);
   const auto expected = "{\"data\":\"" + make_payload(256 * 1024) + "\"}";
   bool completed = false;
   bool timed_out = false;
@@ -453,6 +539,21 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       REQUIRE_FALSE(result.net_err);
       CHECK(result.status == 200);
       CHECK(result.resp_body == expected);
+      int json_content_types = 0;
+      int json_vary = 0;
+      for (const auto &[key, value] : result.resp_headers) {
+        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
+        if (iequal0(key, "Content-Type")) {
+          ++json_content_types;
+          CHECK(value == "application/json");
+        }
+        if (iequal0(key, "Vary")) {
+          ++json_vary;
+          CHECK(value == "Accept-Encoding");
+        }
+      }
+      CHECK(json_content_types == 1);
+      CHECK(json_vary == 1);
 #ifdef CINATRA_ENABLE_GZIP
       bool compressed = false;
       for (const auto &[key, value] : result.resp_headers) {
@@ -462,6 +563,25 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       }
       CHECK(compressed == (std::string_view(accept) == "gzip"));
 #endif
+      auto echo = co_await client.async_post(echo_uri, echo_body,
+                                             req_content_type::string);
+      REQUIRE_FALSE(echo.net_err);
+      CHECK(echo.status == 200);
+      CHECK(echo.resp_body == echo_body);
+      int echo_content_types = 0;
+      int echo_vary = 0;
+      for (const auto &[key, value] : echo.resp_headers) {
+        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
+        if (iequal0(key, "Content-Type")) {
+          ++echo_content_types;
+          CHECK(value == "application/octet-stream");
+        }
+        if (iequal0(key, "Vary")) {
+          ++echo_vary;
+        }
+      }
+      CHECK(echo_content_types == 1);
+      CHECK(echo_vary == 0);
     }
   };
   requests().via(&executor).start([&](auto &&result) {
@@ -482,7 +602,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   runner.join();
   CHECK_FALSE(timed_out);
   CHECK(completed);
-  CHECK(handled == 3);
+  CHECK(handled == 6);
   if (error) {
     std::rethrow_exception(error);
   }
