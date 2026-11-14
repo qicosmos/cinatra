@@ -111,7 +111,8 @@ TEST_CASE("response writer forwards the requested gzip level") {
   for (int level : {0, 3, 9}) {
     CAPTURE(level);
     std::string expected;
-    REQUIRE(gzip_codec::compress(data, expected, level));
+    // The streaming codec can use a smaller workspace than the string API.
+    REQUIRE(gzip_codec::compress(writer, expected, level));
     for (int api : {0, 1, 2}) {
       CAPTURE(api);
       coro_http_response response(nullptr);
@@ -134,7 +135,8 @@ TEST_CASE("response writer forwards the requested gzip level") {
 }
 
 TEST_CASE("gzip stream handles input and output boundaries") {
-  for (size_t size : {0u, 1u, 63u, 64u, 16383u, 16384u, 16385u, 262144u}) {
+  for (size_t size : {0u, 1u, 63u, 64u, 511u, 512u, 513u, 4095u, 4096u, 4097u,
+                      8191u, 8192u, 8193u, 16383u, 16384u, 16385u, 262144u}) {
     CAPTURE(size);
     auto data = make_payload(size);
     for (int level : {-1, 0, 1, 9}) {
@@ -190,8 +192,16 @@ TEST_CASE(
     stream.append(std::string(65536, 'x'));
     throw std::runtime_error("serialization failed");
   };
-  CHECK_FALSE(gzip_codec::compress(writer, encoded, 10));
-  CHECK(calls == 0);
+  for (int level : {-2, 10}) {
+    CHECK_FALSE(gzip_codec::compress(writer, encoded, level));
+    CHECK(calls == 0);
+    CHECK(encoded.empty());
+  }
+  auto before_input = [](auto &) {
+    throw std::runtime_error("serialization failed");
+  };
+  CHECK_THROWS_WITH_AS(gzip_codec::compress(before_input, encoded),
+                       "serialization failed", std::runtime_error);
   CHECK(encoded.empty());
   CHECK_THROWS_WITH_AS(gzip_codec::compress(writer, encoded),
                        "serialization failed", std::runtime_error);
