@@ -31,7 +31,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get install openssl
-          sudo apt-get install libssl-dev
+          sudo apt-get install libssl-dev zlib1g-dev
 
       - name: Install newer Clang
         run: |
@@ -42,7 +42,7 @@ jobs:
           sudo ./llvm.sh 17
 
       - name: Configure CMake
-        run: CXX=clang++-17 CC=clang-17 cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DCINATRA_ENABLE_SSL=${{matrix.ssl}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}}
+        run: CXX=clang++-17 CC=clang-17 cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DCINATRA_ENABLE_SSL=${{matrix.ssl}} -DBUILD_WITH_LIBCXX=${{matrix.libcxx}} -DBUILD_HTTPARENA=ON
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}

@@ -27,10 +27,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get install openssl
-          sudo apt-get install libssl-dev
+          sudo apt-get install libssl-dev zlib1g-dev
 
       - name: Configure CMake
-        run: CXX=g++ CC=gcc cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DCINATRA_ENABLE_SSL=${{matrix.ssl}}
+        run: CXX=g++ CC=gcc cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DCINATRA_ENABLE_SSL=${{matrix.ssl}} -DBUILD_HTTPARENA=ON
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
