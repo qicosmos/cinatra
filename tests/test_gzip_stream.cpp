@@ -260,6 +260,44 @@ TEST_CASE("serialization exceptions preserve the previous response") {
   }
 }
 
+TEST_CASE("writer content defaults to OK and uses the associated request") {
+  for (auto accept : {"gzip", "br", ""}) {
+    CAPTURE(accept);
+    const auto header = std::string("GET / HTTP/1.1\r\nHost: localhost\r\n") +
+                        "Accept-Encoding: " + accept + "\r\n\r\n";
+    http_parser parser;
+    REQUIRE(parser.parse_request(header.data(), header.size(), 0) > 0);
+    coro_http_request request(parser, nullptr);
+    coro_http_response response(nullptr, &request);
+    auto writer = [](auto &stream) {
+      stream.append("{\"answer\":42}");
+    };
+    response.set_content(writer, content_encoding::gzip);
+    CHECK(response.status() == status_type::ok);
+#ifdef CINATRA_ENABLE_GZIP
+    if (std::string_view(accept) != "br") {
+      CHECK(decode_gzip(response.content()) == "{\"answer\":42}");
+    }
+    else
+#endif
+    {
+      CHECK(response.content() == "{\"answer\":42}");
+    }
+    response.clear();
+    // An explicit client encoding still overrides the associated request.
+    response.set_status_and_content(status_type::created, writer,
+                                    content_encoding::gzip, "br");
+    CHECK(response.status() == status_type::created);
+    CHECK(response.content() == "{\"answer\":42}");
+  }
+  coro_http_response standalone(nullptr);
+  standalone.set_content([](auto &stream) {
+    stream.append("plain");
+  });
+  CHECK(standalone.status() == status_type::ok);
+  CHECK(standalone.content() == "plain");
+}
+
 TEST_CASE("response serializes through the existing content APIs") {
   for (bool view_api : {false, true}) {
     for (auto accept : {"gzip", "br"}) {
@@ -321,8 +359,7 @@ TEST_CASE("iguana writes escaped and unescaped JSON directly to gzip") {
     std::string expected;
     iguana::to_json<escape>(records, expected);
     coro_http_response response(nullptr);
-    response.set_status_and_content(
-        status_type::ok,
+    response.set_content(
         [&](auto &stream) {
           iguana::to_json<escape>(records, stream);
         },
@@ -375,14 +412,13 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
             return make_payload(256 * 1024);
           });
           CHECK(context.get_executor().running_in_this_thread());
-          response.set_status_and_content(
-              status_type::ok,
+          response.set_content(
               [&](auto &stream) {
                 stream.append("{\"data\":\"");
                 stream.append(source.value());
                 stream.append("\"}");
               },
-              content_encoding::gzip, request.get_accept_encoding());
+              content_encoding::gzip);
         }
         // The source and writer have been destroyed before another suspension
         // and before the connection starts sending the response.
@@ -411,12 +447,21 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
     }
   });
   auto requests = [&]() -> async_simple::coro::Lazy<void> {
-    for (auto accept : {"gzip", "br"}) {
+    for (auto accept : {"gzip", "br", "gzip"}) {
       client.add_header("Accept-Encoding", accept);
       auto result = co_await client.async_get(uri);
       REQUIRE_FALSE(result.net_err);
       CHECK(result.status == 200);
       CHECK(result.resp_body == expected);
+#ifdef CINATRA_ENABLE_GZIP
+      bool compressed = false;
+      for (const auto &[key, value] : result.resp_headers) {
+        if (iequal0(key, "Content-Encoding")) {
+          compressed = value == "gzip";
+        }
+      }
+      CHECK(compressed == (std::string_view(accept) == "gzip"));
+#endif
     }
   };
   requests().via(&executor).start([&](auto &&result) {
@@ -437,7 +482,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   runner.join();
   CHECK_FALSE(timed_out);
   CHECK(completed);
-  CHECK(handled == 2);
+  CHECK(handled == 3);
   if (error) {
     std::rethrow_exception(error);
   }

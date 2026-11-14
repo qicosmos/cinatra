@@ -83,14 +83,13 @@ With `CINATRA_ENABLE_GZIP` enabled and zlib linked, pass a synchronous writer to
 ```cpp
 #include "iguana/json_writer.hpp"
 
-resp.set_status_and_content(
-    status_type::ok,
+resp.set_content(
     [&](auto &stream) { iguana::to_json(data, stream); },
-    content_encoding::gzip, req.get_accept_encoding());
+    content_encoding::gzip);
 resp.add_header("Content-Type", "application/json");
 ```
 
-JSON is compressed as it is serialized, without building a complete uncompressed JSON string. The writer finishes before the call returns, and the response owns the compressed body. When gzip is disabled or rejected by the client, the writer produces a plain response string instead. Add iguana's header directory to your include path when using it.
+The status defaults to 200, and `Accept-Encoding` is read from the current request automatically. Use `set_status_and_content(status, writer, encoding)` for another status. JSON is compressed as it is serialized, without building a complete uncompressed JSON string. The writer finishes before the call returns, and the response owns the compressed body. When gzip is disabled or rejected by the client, the writer produces a plain response string instead. Add iguana's header directory to your include path when using it.
 
 When gzip is enabled, writers must accept both `std::string &` and `gzip_codec::compress_stream &`; the generic lambda above supports both. Streaming compression applies to gzip; other encodings use the existing compression paths.
 
