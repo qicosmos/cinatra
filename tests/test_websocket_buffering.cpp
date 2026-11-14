@@ -1,7 +1,65 @@
 #include <asio/streambuf.hpp>
+#include <asio/write.hpp>
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <string>
+
+namespace websocket_test_io {
+struct write_control {
+  bool armed = false;
+  bool intercepted = false;
+  bool release_requested = false;
+  std::function<void()> continuation;
+
+  void release() {
+    release_requested = true;
+    if (continuation) {
+      auto resume = std::move(continuation);
+      resume();
+    }
+  }
+};
+inline thread_local write_control *writes = nullptr;
+}  // namespace websocket_test_io
+
+// Force a partial flush independently of how much an OS send buffer accepts.
+// This overload is visible only in this test translation unit.
+namespace asio {
+template <typename Socket, typename Handler>
+void async_write(Socket &socket, asio::mutable_buffer &buffer,
+                 Handler &&handler) {
+  auto *control = websocket_test_io::writes;
+  if (!control || !control->armed) {
+    asio::async_write(socket, static_cast<const asio::mutable_buffer &>(buffer),
+                      std::forward<Handler>(handler));
+    return;
+  }
+  control->armed = false;
+  control->intercepted = true;
+  auto tail = asio::const_buffer(buffer) + 7;
+  asio::async_write(
+      socket, asio::const_buffer(buffer.data(), 7),
+      [control, &socket, tail, handler = std::forward<Handler>(handler)](
+          std::error_code ec, size_t size) mutable {
+        if (ec) {
+          handler(ec, size);
+          return;
+        }
+        control->continuation = [control, &socket, tail,
+                                 handler = std::move(handler)]() mutable {
+          asio::async_write(socket, tail,
+                            [handler = std::move(handler)](
+                                std::error_code ec, size_t size) mutable {
+                              handler(ec, size + 7);
+                            });
+        };
+        if (control->release_requested) {
+          control->release();
+        }
+      });
+}
+}  // namespace asio
 
 #include "cinatra/http_header_matcher.hpp"
 #include "cinatra/ylt/coro_io/coro_io.hpp"
@@ -81,18 +139,16 @@ struct websocket_test {
   coro_http_router router;
   asio::ip::tcp::socket peer{context};
   std::shared_ptr<coro_http_connection> connection;
+  websocket_test_io::write_control writes;
   bool tls;
 
   explicit websocket_test(bool use_tls) : tls(use_tls) {
     using asio::ip::tcp;
     tcp::acceptor listener(context, {asio::ip::address_v4::loopback(), 0});
     peer.open(tcp::v4());
-    peer.set_option(asio::socket_base::receive_buffer_size(1024));
     peer.connect(listener.local_endpoint());
     connection = std::make_shared<coro_http_connection>(
         &executor, listener.accept(), router);
-    connection->tcp_socket().set_option(
-        asio::socket_base::send_buffer_size(1024));
 #ifdef CINATRA_ENABLE_SSL
     if (tls) {
       const auto dir =
@@ -112,8 +168,12 @@ struct websocket_test {
         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n" +
         frames;
     websocket_test_io::initial_read = &initial;
+    websocket_test_io::writes = &writes;
     struct reset_read {
-      ~reset_read() { websocket_test_io::initial_read = nullptr; }
+      ~reset_read() {
+        websocket_test_io::initial_read = nullptr;
+        websocket_test_io::writes = nullptr;
+      }
     } reset;
     bool client_done = false;
     bool server_done = false;
@@ -130,6 +190,7 @@ struct websocket_test {
         timed_out = true;
         connection->close();
         peer.close(ec);
+        writes.release();
       }
     });
     connection->start().via(&executor).start([&](auto &&result) {
@@ -172,6 +233,7 @@ struct websocket_test {
       std::error_code ec;
       peer.close(ec);
       connection->close();
+      writes.release();
       finish();
     });
     context.run();
@@ -273,6 +335,7 @@ TEST_CASE(
         });
         CHECK(test.context.get_executor().running_in_this_thread());
         flush_started = true;
+        test.writes.armed = true;
         auto ec = co_await conn->flush_websocket();
         flush_done = true;
         CHECK(test.context.get_executor().running_in_this_thread());
@@ -285,15 +348,17 @@ TEST_CASE(
         CHECK(result.type == ws_frame_type::WS_CLOSE_FRAME);
       });
   test.check({}, [&](auto &stream, asio::streambuf &input) -> Lazy<void> {
-    // The receive window and send buffer force flow control. Release it only
-    // after observing a prefix while the owning flush is still suspended.
+    // The controlled write holds the tail until the peer receives its prefix.
     auto prefix = co_await take_bytes(stream, input, 7);
     CHECK(flush_started);
+    CHECK(test.writes.intercepted);
     CHECK_FALSE(flush_done);
     if (cancel) {
       test.connection->close();
+      test.writes.release();
       co_return;
     }
+    test.writes.release();
     CHECK(prefix.substr(0, 4) == std::string("\x81\x7e\x75\x30", 4));
     auto first = prefix.substr(4);
     first += co_await take_bytes(stream, input, 30000 - first.size());
