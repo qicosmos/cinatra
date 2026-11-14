@@ -1,5 +1,6 @@
 #pragma once
 #include <charconv>
+#include <concepts>
 #include <functional>
 #include <optional>
 #include <string>
@@ -38,6 +39,16 @@ enum class format_type {
   normal,
   chunked,
 };
+
+namespace detail {
+template <typename Writer>
+concept response_writer =
+    std::invocable<Writer &, std::string &>
+#ifdef CINATRA_ENABLE_GZIP
+    && std::invocable<Writer &, gzip_codec::compress_stream &>
+#endif
+    ;
+}  // namespace detail
 
 class coro_http_connection;
 class coro_http_response {
@@ -157,6 +168,55 @@ class coro_http_response {
     }
     has_set_content_ = true;
   }
+  // Writers run synchronously and always produce response-owned content.
+  template <detail::response_writer Writer>
+  void set_content(Writer writer,
+                   content_encoding encoding = content_encoding::none,
+                   std::string_view client_encoding_type = "") {
+    set_status_and_content(status_type::ok, std::move(writer), encoding,
+                           client_encoding_type);
+  }
+
+  template <detail::response_writer Writer>
+  void set_status_and_content(
+      status_type status, Writer writer,
+      content_encoding encoding = content_encoding::none,
+      std::string_view client_encoding_type = "") {
+    set_status_and_content_view(status, std::move(writer), encoding, false,
+                                client_encoding_type);
+  }
+
+  template <detail::response_writer Writer>
+  void set_status_and_content_view(
+      status_type status, Writer writer,
+      content_encoding encoding = content_encoding::none, bool = true,
+      std::string_view client_encoding_type = "") {
+#ifdef CINATRA_ENABLE_GZIP
+    if (encoding == content_encoding::gzip &&
+        (client_encoding_type.empty() ||
+         client_encoding_type.find("gzip") != std::string_view::npos)) {
+      std::string encoded;
+      if (!gzip_codec::compress(writer, encoded)) {
+        set_status_and_content(status_type::internal_server_error,
+                               "gzip compress error");
+      }
+      else {
+        add_header("Content-Encoding", "gzip");
+        set_content(std::move(encoded));
+        status_ = status;
+      }
+    }
+    else
+#endif
+    {
+      std::string serialized;
+      writer(serialized);
+      set_status_and_content(status, std::move(serialized), encoding,
+                             client_encoding_type);
+    }
+    content_view_ = {};
+  }
+
   void set_delay(bool r) { delay_ = r; }
   bool get_delay() const { return delay_; }
   void set_format_type(format_type type) { fmt_type_ = type; }
