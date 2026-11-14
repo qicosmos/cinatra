@@ -148,6 +148,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
   server.set_http_handler<GET>(
       "/baseline11",
       [](coro_http_request &request, coro_http_response &response) {
+        request.get_conn()->set_multi_buf(false);
         text(response, query_sum(request));
       },
       benchmark_response_headers{});
@@ -155,6 +156,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
       "/baseline11",
       [](coro_http_request &request,
          coro_http_response &response) -> Lazy<void> {
+        request.get_conn()->set_multi_buf(false);
         auto sum = query_sum(request);
         if (request.is_chunked()) {
           auto body = co_await read_chunked_body(request);

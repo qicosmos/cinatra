@@ -4,8 +4,9 @@ cinatra's C++20 coroutine server on standalone Asio and async_simple. The
 Dockerfile pins the framework and its bundled iguana submodule to reproducible
 revisions, builds with GCC 14, Release optimization and LTO, and targets
 x86-64-v3 on x86-64, as the dusty entry does. The entry is marked `tuned`
-because the typed payload uses request-local PMR storage and TLS responses use
-the contiguous-buffer option. Compression retains cinatra's response API defaults.
+because the typed payload uses request-local PMR storage, and small baseline
+replies and TLS responses use the contiguous-buffer option. Compression retains
+cinatra's response API defaults.
 
 Responses include Date, an eleven-byte Server value, Connection and Content-Type;
 JSON also includes Vary: Accept-Encoding. These headers use cinatra's response
@@ -18,7 +19,8 @@ decryption; equal decoded JSON alone does not establish equal transfer sizes.
 
 - Routes and path/query parameters use cinatra's router and request APIs.
 - `/baseline11` sums all query values; POST also consumes and adds the body.
-  Chunked requests use cinatra's chunk reader.
+  Chunked requests use cinatra's chunk reader. Both methods use a contiguous
+  response buffer for their small replies.
 - `/pipeline` returns `ok` through cinatra's response API. Only this constant
   endpoint borrows a static string literal.
 - `/delay/{ms}` uses `coro_io::sleep_for` on the connection's executor.
@@ -46,9 +48,10 @@ Each listener uses cinatra's normal pool with one event loop per available
 CPU. On Linux the count comes from `sched_getaffinity`, so a container cpuset
 is respected, including non-contiguous masks. `CINATRA_THREADS` can override
 the count for local comparisons. The framework creates its own SO_REUSEPORT
-acceptors and retains its default TCP_NODELAY. Plain HTTP retains the default
-buffer sequence path. TLS JSON and echo use a contiguous response buffer;
-`CINATRA_TLS_MULTI_BUFFER=1` selects the buffer sequence path for comparisons.
+acceptors and retains its default TCP_NODELAY. Baseline replies and TLS JSON/echo
+use a contiguous response buffer. Other plain HTTP replies retain the default
+buffer sequence path. `CINATRA_TLS_MULTI_BUFFER=1` selects the buffer sequence
+path for TLS JSON/echo comparisons.
 No custom CPU pinning, socket implementation, timeouts or replacement allocator
 are added.
 SIGINT/SIGTERM stop both listeners before the dataset is destroyed.
