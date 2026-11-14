@@ -116,6 +116,10 @@ add_test(NAME test_corofile COMMAND test_corofile)
 add_executable(test_time_util
         test_time_util.cpp
         )
+target_link_libraries(test_time_util PRIVATE Threads::Threads)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(test_time_util PRIVATE "-Wl,--wrap=gmtime" "-Wl,--wrap=gmtime_r")
+endif()
 add_test(NAME test_time_util COMMAND test_time_util)
 
 add_executable(test_rlimiter test_token_bucket_rlimiter.cpp)
