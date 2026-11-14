@@ -3,13 +3,12 @@
 
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <cstring>
-#include <fstream>
 #include <functional>
 #include <limits>
 #include <string>
 #include <string_view>
-#include <type_traits>
 namespace cinatra::gzip_codec {
 // from https://github.com/chafey/GZipCodec
 
@@ -156,19 +155,45 @@ class compress_stream {
 // @param level - the gzip compress level -1 = default, 0 = no compression, 1=
 // worst/fastest compression, 9 = best/slowest compression
 // @return - true on success, false on failure
-template <typename Input = std::string_view>
-inline bool compress(Input &&data, std::string &compressed_data,
+inline bool compress(std::string_view data, std::string &compressed_data,
+                     int level = -1) {
+  unsigned char out[CHUNK];
+  z_stream strm;
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.opaque = Z_NULL;
+  if (deflateInit2(&strm, level, Z_DEFLATED, windowBits | GZIP_ENCODING, 8,
+                   Z_DEFAULT_STRATEGY) != Z_OK) {
+    return false;
+  }
+  strm.next_in = (unsigned char *)data.data();
+  strm.avail_in = (uInt)data.length();
+  do {
+    int have;
+    strm.avail_out = CHUNK;
+    strm.next_out = out;
+    if (deflate(&strm, Z_FINISH) == Z_STREAM_ERROR) {
+      return false;
+    }
+    have = CHUNK - strm.avail_out;
+    compressed_data.append((char *)out, have);
+  } while (strm.avail_out == 0);
+  if (deflateEnd(&strm) != Z_OK) {
+    return false;
+  }
+  return true;
+}
+
+// Serialize directly into gzip without an intermediate uncompressed string.
+template <typename Writer>
+  requires std::invocable<Writer &, compress_stream &>
+inline bool compress(Writer &&writer, std::string &compressed_data,
                      int level = -1) {
   compress_stream stream(compressed_data, level);
   if (!stream.good()) {
     return false;
   }
-  if constexpr (std::is_invocable_v<Input &, compress_stream &>) {
-    data(stream);
-  }
-  else {
-    stream.append(data);
-  }
+  writer(stream);
   return stream.finish();
 }
 
