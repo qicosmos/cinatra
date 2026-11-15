@@ -79,7 +79,10 @@ class coro_http_server {
   // Configure automatic Date and Server headers before starting the server.
   void set_default_response_headers(bool enabled) {
     default_response_headers_ = enabled;
+    server_header_ = enabled;
   }
+
+  void set_server_header(bool enabled) { server_header_ = enabled; }
 
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
@@ -818,6 +821,9 @@ class coro_http_server {
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
           executor, std::move(socket), router_, default_response_headers_);
+      if (server_header_ != default_response_headers_) {
+        conn->set_server_header(server_header_);
+      }
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -1239,6 +1245,7 @@ class coro_http_server {
   std::atomic<bool> accept_failed_{false};
   bool no_delay_ = true;
   bool default_response_headers_ = true;
+  bool server_header_ = true;
 
   std::atomic<uint64_t> conn_id_{0};
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>

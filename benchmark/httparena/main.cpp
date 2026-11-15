@@ -134,7 +134,7 @@ Lazy<std::string> read_chunked_body(coro_http_request &request) {
 
 void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                      bool multi_buffer = true) {
-  server.set_default_response_headers(false);
+  server.set_server_header(false);
   server.set_http_handler<GET>("/baseline11", [](coro_http_request &request,
                                                  coro_http_response &response) {
     request.get_conn()->set_multi_buf(false);

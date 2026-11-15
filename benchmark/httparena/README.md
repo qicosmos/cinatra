@@ -15,11 +15,15 @@ The entry requests the `flagship` maturity tier based on existing downstream use
 and [Mooncake uses coro_http for its HTTP metadata service](https://github.com/kvcache-ai/Mooncake/blob/504f2ae4a307abe095d3baa75d40ed2661b6481b/mooncake-store/src/http_metadata_server.cpp).
 The `tuned` mode describes the benchmark configuration independently of maturity.
 
-The server disables automatic Date and Server headers with
-`set_default_response_headers(false)`, including WebSocket handshakes. Ordinary
+The server keeps the automatic Date header and disables only Server with
+`set_server_header(false)`, including WebSocket handshakes. This matches
+[dusty's native Date behavior](https://github.com/lalinsky/dusty/commit/ba2236da78ff120618550703e0d2fa59ba78b9ba),
+included in v0.6.0. HttpArena's historical dusty v0.5.0 entry omits Date, so its
+recorded response lengths describe a different configuration. Ordinary
 HTTP replies carry no extra Connection header. Content-Type matches dusty's
 native values, including `charset=UTF-8` for text and JSON; JSON also includes
-Vary: Accept-Encoding. Comparisons use the unmodified dusty entry. Check both
+Vary: Accept-Encoding. Date-header checks use dusty's upstream implementation
+without added header overlays. Check both
 body bytes and complete HTTP response lengths, including TLS responses after
 decryption; equal decoded JSON alone does not establish equal transfer sizes.
 

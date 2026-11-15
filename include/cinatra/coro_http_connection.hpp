@@ -907,6 +907,10 @@ class coro_http_connection
     response_.set_shrink_to_fit(r);
   }
 
+  void set_server_header(bool enabled) {
+    response_.set_default_server_header(enabled);
+  }
+
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
   async_write_failed() {

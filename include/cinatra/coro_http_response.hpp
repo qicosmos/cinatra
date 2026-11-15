@@ -59,6 +59,7 @@ class coro_http_response {
         delay_(false),
         conn_(conn),
         default_headers_(default_headers),
+        default_server_header_(default_headers),
         need_date_(default_headers),
         need_server_(default_headers) {}
 
@@ -246,6 +247,9 @@ class coro_http_response {
   void need_date_head(bool r) { need_date_ = r; }
   bool need_date() { return need_date_; }
   void need_server_head(bool r) { need_server_ = r; }
+  void set_default_server_header(bool enabled) {
+    default_server_header_ = need_server_ = enabled;
+  }
 
   bool need_server() const { return need_server_; }
 
@@ -447,7 +451,7 @@ class coro_http_response {
     has_set_content_ = false;
     cookies_.clear();
     need_date_ = default_headers_;
-    need_server_ = default_headers_;
+    need_server_ = default_server_header_;
     content_type_ = {};
     content_view_ = {};
   }
@@ -498,6 +502,7 @@ class coro_http_response {
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
   bool default_headers_ = true;
+  bool default_server_header_ = true;
   bool need_date_ = true;
   bool need_server_ = true;
   std::unordered_map<std::string, cookie> cookies_;

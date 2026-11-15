@@ -298,6 +298,23 @@ TEST_CASE("response header defaults survive reuse and upgrades omit length") {
   CHECK(wire.find("Content-Length:") == std::string::npos);
   CHECK(wire.find("Date:") == std::string::npos);
   CHECK(wire.find("Server:") == std::string::npos);
+
+  coro_http_response dated(nullptr);
+  dated.set_default_server_header(false);
+  for (auto status :
+       {status_type::ok, status_type::switching_protocols, status_type::ok}) {
+    dated.set_status_and_content(status, "");
+    CHECK(dated.need_date());
+    CHECK_FALSE(dated.need_server());
+    auto buffers = response_wire(dated);
+    CHECK(buffers.find("Date: ") != std::string::npos);
+    CHECK(buffers.find("Server:") == std::string::npos);
+    std::string contiguous;
+    dated.build_resp_str(contiguous);
+    CHECK(contiguous.find("Date: ") != std::string::npos);
+    CHECK(contiguous.find("Server:") == std::string::npos);
+    dated.clear();
+  }
 }
 
 TEST_CASE("serialization exceptions preserve the previous response") {
@@ -452,7 +469,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   asio::io_context context(1);
   coro_io::ExecutorWrapper<> executor(context.get_executor());
   coro_http_server server(context, 0, "127.0.0.1");
-  server.set_default_response_headers(false);
+  server.set_server_header(false);
 #ifdef CINATRA_ENABLE_SSL
   if (tls) {
     const auto dir =
@@ -541,8 +558,12 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       CHECK(result.resp_body == expected);
       int json_content_types = 0;
       int json_vary = 0;
+      int json_dates = 0;
       for (const auto &[key, value] : result.resp_headers) {
-        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
+        CHECK_FALSE(iequal0(key, "Server"));
+        if (iequal0(key, "Date")) {
+          ++json_dates;
+        }
         if (iequal0(key, "Content-Type")) {
           ++json_content_types;
           CHECK(value == "application/json");
@@ -554,6 +575,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       }
       CHECK(json_content_types == 1);
       CHECK(json_vary == 1);
+      CHECK(json_dates == 1);
 #ifdef CINATRA_ENABLE_GZIP
       bool compressed = false;
       for (const auto &[key, value] : result.resp_headers) {
@@ -570,8 +592,12 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       CHECK(echo.resp_body == echo_body);
       int echo_content_types = 0;
       int echo_vary = 0;
+      int echo_dates = 0;
       for (const auto &[key, value] : echo.resp_headers) {
-        CHECK_FALSE((iequal0(key, "Date") || iequal0(key, "Server")));
+        CHECK_FALSE(iequal0(key, "Server"));
+        if (iequal0(key, "Date")) {
+          ++echo_dates;
+        }
         if (iequal0(key, "Content-Type")) {
           ++echo_content_types;
           CHECK(value == "application/octet-stream");
@@ -582,6 +608,7 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
       }
       CHECK(echo_content_types == 1);
       CHECK(echo_vary == 0);
+      CHECK(echo_dates == 1);
     }
   };
   requests().via(&executor).start([&](auto &&result) {
