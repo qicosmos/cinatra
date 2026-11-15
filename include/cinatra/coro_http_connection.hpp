@@ -733,7 +733,10 @@ class coro_http_connection
   }
 
   async_simple::coro::Lazy<websocket_result> read_websocket() {
-    auto ec = co_await read_websocket_buffer(SHORT_HEADER);
+    std::error_code ec;
+    if (head_buf_.size() < SHORT_HEADER) {
+      ec = co_await read_websocket_buffer(SHORT_HEADER);
+    }
     websocket_result result{ec};
     if (ec) {
       close();
@@ -763,7 +766,8 @@ class coro_http_connection
         if (payload_length > 0) {
           // Prefetch small frames, but read large payloads directly into their
           // owner rather than growing the bounded read-ahead buffer.
-          if (payload_length <= websocket_read_size &&
+          if (head_buf_.size() < payload_length &&
+              payload_length <= websocket_read_size &&
               payload_length <= head_buf_.max_size()) {
             if (auto ec = co_await read_websocket_buffer(payload_length); ec) {
               close();
@@ -858,11 +862,13 @@ class coro_http_connection
         co_return result;
       }
       else if (status == ws_header_status::incomplete) {
-        auto ec = co_await read_websocket_buffer(ws_.len_bytes());
-        if (ec) {
-          close();
-          result.ec = ec;
-          break;
+        if (head_buf_.size() < size_t(ws_.len_bytes())) {
+          auto ec = co_await read_websocket_buffer(ws_.len_bytes());
+          if (ec) {
+            close();
+            result.ec = ec;
+            break;
+          }
         }
         continue;
       }
