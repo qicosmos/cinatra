@@ -24,7 +24,7 @@ struct gzip_json_record {
   std::map<std::string, std::string> labels;
   bool active;
 };
-REFLECTION(gzip_json_record, id, text, values, labels, active);
+YLT_REFL(gzip_json_record, id, text, values, labels, active);
 #endif
 
 using namespace cinatra;

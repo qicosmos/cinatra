@@ -30,7 +30,7 @@ struct Rating {
   int64_t score;
   int64_t count;
 };
-REFLECTION(Rating, score, count);
+YLT_REFL(Rating, score, count);
 
 struct Item {
   int64_t id;
@@ -42,7 +42,7 @@ struct Item {
   std::vector<std::string> tags;
   Rating rating;
 };
-REFLECTION(Item, id, name, category, price, quantity, active, tags, rating);
+YLT_REFL(Item, id, name, category, price, quantity, active, tags, rating);
 
 // The dataset outlives both servers. Borrow immutable fields while computing
 // totals anew; the synchronous writer produces response-owned bytes.
@@ -57,14 +57,14 @@ struct ResponseItem {
   Rating rating;
   int64_t total;
 };
-REFLECTION(ResponseItem, id, name, category, price, quantity, active, tags,
-           rating, total);
+YLT_REFL(ResponseItem, id, name, category, price, quantity, active, tags,
+         rating, total);
 
 struct JsonResponse {
   std::pmr::vector<ResponseItem> items;
   size_t count;
 };
-REFLECTION(JsonResponse, items, count);
+YLT_REFL(JsonResponse, items, count);
 
 using namespace cinatra;
 using async_simple::coro::Lazy;
