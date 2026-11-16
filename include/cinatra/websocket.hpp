@@ -76,7 +76,9 @@ class websocket {
         // The frame length field or mask field was not received completely
         return ws_header_status::incomplete;
       }
-      payload_length_ = ntohs(*(uint16_t *)&inp[2]);  // (inp[2] << 8) + inp[3];
+      uint16_t length;
+      std::memcpy(&length, inp + 2, sizeof(length));
+      payload_length_ = ntohs(length);
       pos += 2;
     }
     else if (length_field == 127)  // msglen is 64bit!
@@ -88,7 +90,9 @@ class websocket {
         // The frame length field or mask field was not received completely
         return ws_header_status::incomplete;
       }
-      payload_length_ = (size_t)be64toh(*(uint64_t *)&inp[2]);
+      uint64_t length;
+      std::memcpy(&length, inp + 2, sizeof(length));
+      payload_length_ = (size_t)be64toh(length);
       pos += 8;
     }
     else {

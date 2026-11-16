@@ -4,10 +4,72 @@
 #include <string_view>
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <iostream>
+#ifdef __linux__
+#include <future>
+#include <thread>
+#endif
 
 #include "cinatra/time_util.hpp"
 #include "doctest/doctest.h"
 using namespace std::chrono_literals;
+
+#ifdef __linux__
+namespace {
+struct utc_conversion_hook {
+  std::promise<void> converted;
+  std::shared_future<void> resume;
+};
+thread_local utc_conversion_hook *conversion_hook = nullptr;
+
+void after_utc_conversion() {
+  if (auto *hook = conversion_hook) {
+    conversion_hook = nullptr;
+    hook->converted.set_value();
+    hook->resume.wait();
+  }
+}
+}  // namespace
+
+extern "C" std::tm *__real_gmtime(const std::time_t *);
+extern "C" std::tm *__real_gmtime_r(const std::time_t *, std::tm *);
+
+extern "C" std::tm *__wrap_gmtime(const std::time_t *time) {
+  auto *result = __real_gmtime(time);
+  after_utc_conversion();
+  return result;
+}
+
+extern "C" std::tm *__wrap_gmtime_r(const std::time_t *time, std::tm *buffer) {
+  auto *result = __real_gmtime_r(time, buffer);
+  after_utc_conversion();
+  return result;
+}
+
+TEST_CASE("UTC conversion retains its own calendar fields") {
+  std::promise<void> resume;
+  utc_conversion_hook hook{{}, resume.get_future().share()};
+  auto converted = hook.converted.get_future();
+  std::string first;
+  std::thread worker([&] {
+    conversion_hook = &hook;
+    char buffer[32];
+    first =
+        cinatra::get_local_time_str<0>(buffer, 946684800, "%Y-%m-%d %H:%M:%S");
+  });
+  const auto status = converted.wait_for(5s);
+  std::string second;
+  if (status == std::future_status::ready) {
+    char buffer[32];
+    second =
+        cinatra::get_local_time_str<0>(buffer, 1609459200, "%Y-%m-%d %H:%M:%S");
+  }
+  resume.set_value();
+  worker.join();
+  REQUIRE(status == std::future_status::ready);
+  CHECK(first == "2000-01-01 00:00:00");
+  CHECK(second == "2021-01-01 00:00:00");
+}
+#endif
 
 class ScopedTimer {
  public:

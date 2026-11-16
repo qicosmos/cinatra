@@ -1888,12 +1888,14 @@ TEST_CASE("test response standalone") {
   resp.add_header_span(v);
   resp.build_resp_str(str);
   CHECK(str.find("200") != std::string::npos);
+  CHECK(str.find("hello: world\r\n") != std::string::npos);
   resp.clear();
   str.clear();
 
   resp.set_keepalive(true);
   resp.build_resp_str(str);
   CHECK(str.find("501") != std::string::npos);
+  CHECK(str.find("hello: world\r\n") == std::string::npos);
   resp.set_format_type(format_type::chunked);
   resp.build_resp_str(str);
   CHECK(str.find("501") != std::string::npos);
@@ -1908,7 +1910,7 @@ TEST_CASE("test response standalone") {
   std::vector<asio::const_buffer> buffers;
   resp.set_content_type<4>();
   resp.build_resp_head(buffers);
-  CHECK(buffers.size() == 13);
+  CHECK(buffers.size() == 9);
 }
 
 TEST_CASE("test radix tree restful api") {
