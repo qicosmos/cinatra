@@ -86,6 +86,41 @@ int64_t number(std::string_view value) {
   return result;
 }
 
+double encoding_quality(std::string_view header, std::string_view encoding) {
+  double wildcard = 0;
+  while (!header.empty()) {
+    const auto comma = header.find(',');
+    auto entry = trim_sv(header.substr(0, comma));
+    const auto semicolon = entry.find(';');
+    const auto name = trim_sv(entry.substr(0, semicolon));
+    double quality = 1;
+    if (semicolon != std::string_view::npos) {
+      auto parameter = trim_sv(entry.substr(semicolon + 1));
+      if (parameter.starts_with("q=")) {
+        parameter.remove_prefix(2);
+        const auto [end, error] = std::from_chars(
+            parameter.data(), parameter.data() + parameter.size(), quality);
+        if (error != std::errc{} ||
+            end != parameter.data() + parameter.size() ||
+            !(quality >= 0 && quality <= 1)) {
+          quality = 0;
+        }
+      }
+    }
+    if (name == encoding) {
+      return quality;
+    }
+    if (name == "*") {
+      wildcard = quality;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    header.remove_prefix(comma + 1);
+  }
+  return wildcard;
+}
+
 size_t worker_count() {
   if (const auto *env = std::getenv("CINATRA_THREADS")) {
     if (auto count = number(env); count > 0) {
@@ -135,6 +170,79 @@ Lazy<std::string> read_chunked_body(coro_http_request &request) {
 void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                      bool multi_buffer = true) {
   server.set_server_header(false);
+  server.set_http_handler<GET>(
+      "/static/:file",
+      [multi_buffer](coro_http_request &request,
+                     coro_http_response &response) -> Lazy<void> {
+        request.get_conn()->set_multi_buf(multi_buffer);
+        const auto &name = request.params_.at("file");
+        if (name == "." || name == ".." ||
+            name.find_first_of("/\\") != std::string::npos) {
+          response.set_status(status_type::not_found);
+          co_return;
+        }
+        const auto *directory = std::getenv("STATIC_DIR");
+        auto path =
+            std::filesystem::path(directory ? directory : "/data/static") /
+            name;
+        const auto extension = get_extension(name);
+        auto mime = get_mime_type(extension);
+        if (extension == ".js") {
+          mime = "application/javascript";
+        }
+        else if (extension == ".woff2") {
+          mime = "font/woff2";
+        }
+        else if (extension == ".webp") {
+          mime = "image/webp";
+        }
+        const auto accept = request.get_accept_encoding();
+        const auto br = encoding_quality(accept, "br");
+        const auto gzip = encoding_quality(accept, "gzip");
+        std::string_view selected_encoding;
+        std::error_code error;
+        for (const auto encoding :
+             br >= gzip ? std::array{"br", "gzip"} : std::array{"gzip", "br"}) {
+          if ((std::string_view(encoding) == "br" ? br : gzip) <= 0) {
+            continue;
+          }
+          auto variant = path;
+          variant += std::string_view(encoding) == "br" ? ".br" : ".gz";
+          if (std::filesystem::is_regular_file(variant, error)) {
+            path = std::move(variant);
+            selected_encoding = encoding;
+            break;
+          }
+        }
+        const auto size = std::filesystem::file_size(path, error);
+#ifdef ENABLE_FILE_IO_URING
+        coro_io::coro_file file(
+            request.get_conn()->get_executor()->get_asio_executor());
+#else
+        coro_io::coro_file file;
+#endif
+        if (error || !file.open(path.string(), std::ios::in)) {
+          response.set_status(status_type::not_found);
+          co_return;
+        }
+        // The coroutine owns the buffer until the read completes; the response
+        // then owns it through the socket write. coro_file restores our
+        // executor.
+        std::string body(size, '\0');
+        const auto [ec, read] =
+            co_await file.async_read(body.data(), body.size());
+        if (ec || read != size) {
+          response.set_status(status_type::internal_server_error);
+          co_return;
+        }
+        if (!selected_encoding.empty()) {
+          response.add_header("Content-Encoding",
+                              std::string(selected_encoding));
+        }
+        response.add_header("Content-Type", std::string(mime));
+        response.add_header("Vary", "Accept-Encoding");
+        response.set_status_and_content(status_type::ok, std::move(body));
+      });
   server.set_http_handler<GET>("/baseline11", [](coro_http_request &request,
                                                  coro_http_response &response) {
     request.get_conn()->set_multi_buf(false);

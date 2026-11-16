@@ -48,6 +48,17 @@ decryption; equal decoded JSON alone does not establish equal transfer sizes.
   No JSON, compressed bodies or full responses are cached.
 - `/echo` borrows an ordinary request's body until the framework completes its
   reply. Chunked bodies are collected into response-owned storage.
+- `/static/{file}` reads the mounted `/data/static` directory (`STATIC_DIR`
+  overrides it locally) through `coro_io::coro_file` and moves the bytes into
+  cinatra's response. It selects on-disk `.br`/`.gz` variants by the client's
+  encoding preference, retaining the original MIME type. Files are read per
+  request, including replacements of the same size; no entry-level cache or
+  compression implementation is added. With `HTTPARENA_FILE_IO_URING=ON`, the
+  file uses native io_uring on the connection's executor, so completion and
+  subsequent socket I/O stay on that executor. The portable build retains the
+  framework's file thread-pool fallback. TLS static replies use the native
+  contiguous response buffer; `CINATRA_TLS_MULTI_BUFFER=1` selects the buffer
+  sequence path for local comparisons.
 - `/ws` uses cinatra's WebSocket handshake, reader and writer. Text and binary
   opcodes are preserved; control frames are handled by the framework.
   `set_websocket_auto_flush(false)` enables native bounded write batching.
@@ -69,10 +80,10 @@ Each listener uses cinatra's normal pool with one event loop per available
 CPU. On Linux the count comes from `sched_getaffinity`, so a container cpuset
 is respected, including non-contiguous masks. `CINATRA_THREADS` can override
 the count for local comparisons. The framework creates its own SO_REUSEPORT
-acceptors and retains its default TCP_NODELAY. Baseline replies and TLS JSON/echo
-use a contiguous response buffer. Other plain HTTP replies retain the default
-buffer sequence path. `CINATRA_TLS_MULTI_BUFFER=1` selects the buffer sequence
-path for TLS JSON/echo comparisons.
+acceptors and retains its default TCP_NODELAY. Baseline replies and TLS JSON,
+echo and static-file replies use a contiguous response buffer. Other plain HTTP
+replies retain the default buffer sequence path. `CINATRA_TLS_MULTI_BUFFER=1`
+selects the buffer sequence path for TLS JSON/echo/static-file comparisons.
 No custom CPU pinning, socket implementation, timeouts or replacement allocator
 are added.
 SIGINT/SIGTERM stop both listeners before the dataset is destroyed.
@@ -123,6 +134,13 @@ For a CPU that supports x86-64-v3, opt in with
 `--build-arg HTTPARENA_X86_64_V3=ON` in Docker. A binary built with this option
 requires that CPU feature level at runtime.
 
+The Linux Docker build enables `HTTPARENA_FILE_IO_URING` by default and installs
+liburing. It requires a kernel supporting io_uring (5.10 or later) and a container
+policy permitting it; the Arena harness uses `--security-opt seccomp=unconfined`.
+Use `--build-arg HTTPARENA_FILE_IO_URING=OFF` for the portable file-I/O fallback.
+Standalone CMake leaves this option off; enable it with
+`-DHTTPARENA_FILE_IO_URING=ON` after installing the liburing development package.
+
 From a checkout of HttpArena with the cinatra entry installed:
 
 ```sh
@@ -131,5 +149,6 @@ From a checkout of HttpArena with the cinatra entry installed:
 ./scripts/benchmark.sh cinatra json-comp
 ```
 
-This entry subscribes to HTTP/1.1 and WebSocket profiles. Static-file,
-database, template, HTTP/2, HTTP/3 and gRPC profiles are not included.
+The local case also implements `static-tls` on the existing TLS listener.
+The upstream Arena subscription can be updated after local review. Database,
+template, HTTP/2, HTTP/3 and gRPC profiles are not included.

@@ -4,6 +4,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 option(HTTPARENA_X86_64_V3 "Target x86-64-v3 CPUs on compatible benchmark hosts" OFF)
+option(HTTPARENA_FILE_IO_URING "Use native io_uring for benchmark file reads on Linux" OFF)
 
 get_filename_component(CINATRA_DEFAULT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(CINATRA_SOURCE_DIR "${CINATRA_DEFAULT_SOURCE_DIR}" CACHE PATH "cinatra checkout, including its iguana submodule")
@@ -28,6 +29,21 @@ target_include_directories(httparena_server PRIVATE
     "${CINATRA_SOURCE_DIR}/include/cinatra"
     "${CINATRA_SOURCE_DIR}/iguana")
 target_link_libraries(httparena_server PRIVATE Threads::Threads OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+
+if(HTTPARENA_FILE_IO_URING)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "HTTPARENA_FILE_IO_URING requires Linux")
+    endif()
+    find_path(HTTPARENA_URING_INCLUDE_DIR liburing.h)
+    find_library(HTTPARENA_URING_LIBRARY uring)
+    if(NOT HTTPARENA_URING_INCLUDE_DIR OR NOT HTTPARENA_URING_LIBRARY)
+        message(FATAL_ERROR "HTTPARENA_FILE_IO_URING requires liburing headers and library")
+    endif()
+    target_include_directories(httparena_server PRIVATE "${HTTPARENA_URING_INCLUDE_DIR}")
+    target_link_libraries(httparena_server PRIVATE "${HTTPARENA_URING_LIBRARY}")
+    target_compile_definitions(httparena_server PRIVATE
+        ENABLE_FILE_IO_URING ASIO_HAS_FILE ASIO_HAS_IO_URING)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Match cinatra's workaround for GCC's coroutine SLP code generation.
