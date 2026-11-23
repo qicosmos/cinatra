@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -182,6 +183,38 @@ class coro_http_response {
                            client_encoding_type, gzip_level);
   }
 
+  // Use a contiguous serializer for plain and compressed responses.
+  template <typename Writer>
+    requires std::invocable<Writer &, std::string &>
+  void set_buffered_content(Writer writer,
+                            content_encoding encoding = content_encoding::none,
+                            int gzip_level = -1) {
+    set_content(
+        [&](auto &stream) {
+#ifdef CINATRA_ENABLE_GZIP
+          if constexpr (!std::is_same_v<std::remove_reference_t<decltype(stream)>,
+                                        std::string>) {
+            thread_local std::string scratch;
+            // Keep the bytes in a local string while the callback runs so
+            // another buffered writer on this thread can run recursively.
+            std::string serialized;
+            serialized.swap(scratch);
+            std::invoke(writer, serialized);
+            stream.append(serialized);
+            if (serialized.capacity() <= CHUNK) {
+              serialized.clear();
+              serialized.swap(scratch);
+            }
+          }
+          else
+#endif
+          {
+            std::invoke(writer, stream);
+          }
+        },
+        encoding, "", gzip_level);
+  }
+
   template <detail::response_writer Writer>
   void set_status_and_content(
       status_type status, Writer writer,
@@ -215,6 +248,11 @@ class coro_http_response {
 #endif
     {
       std::string serialized;
+      // Reuse capacity after clear(), while keeping an existing response
+      // untouched if the writer throws before producing its replacement.
+      if (content_.empty()) {
+        serialized.swap(content_);
+      }
       writer(serialized);
       set_status_and_content(status, std::move(serialized), encoding,
                              client_encoding_type);
@@ -470,6 +508,30 @@ class coro_http_response {
   }
 
  private:
+  friend class coro_http_connection;
+
+  void to_buffers_for_write(std::vector<asio::const_buffer> &buffers,
+                            std::string &storage) {
+    const auto first = buffers.size();
+    to_buffers(buffers, storage);
+    // Asio prepares at most16 descriptors per composed write. Keep a normal
+    // response's header and body in one batch when its header fills that batch.
+    if (fmt_type_ != format_type::normal || buffers.size() - first <= 16) {
+      return;
+    }
+    const bool has_body = !content_.empty() || !content_view_.empty();
+    const auto body = has_body ? buffers.back() : asio::const_buffer{};
+    auto headers = std::span<const asio::const_buffer>(buffers).subspan(
+        first, buffers.size() - first - size_t(has_body));
+    storage.resize(asio::buffer_size(headers));
+    asio::buffer_copy(asio::buffer(storage), headers);
+    buffers.resize(first);
+    buffers.emplace_back(asio::buffer(storage));
+    if (has_body) {
+      buffers.push_back(body);
+    }
+  }
+
   void handle_content(std::vector<asio::const_buffer> &buffers,
                       std::string &size_str, std::string_view content) {
     if (fmt_type_ == format_type::chunked) {

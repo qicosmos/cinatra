@@ -152,3 +152,45 @@ From a checkout of HttpArena with the cinatra entry installed:
 The local case also implements `static-tls` on the existing TLS listener.
 The upstream Arena subscription can be updated after local review. Database,
 template, HTTP/2, HTTP/3 and gRPC profiles are not included.
+
+### Gzip and TLS buffering options
+
+The socket backend uses the bundled Asio defaults. The Docker build continues
+to enable the existing io_uring option for file reads.
+
+`HTTPARENA_LIBDEFLATE=ON` links the optional libdeflate backend. Serializers still
+run for every request. A complete payload buffered below 16 KiB is compressed
+synchronously with libdeflate; larger streaming payloads retain the zlib path.
+Only a thread-local compressor is reused, and no input, compressed response or
+application dictionary is cached. Compressed bytes and sizes can differ from
+zlib, so performance comparisons must include actual response sizes.
+
+`CINATRA_GZIP_LEVEL` configures the handler's native gzip level in the range
+-1 through 9. Both standalone builds and the Docker image default to 1.
+Compression-ratio weighting must be included when comparing these settings.
+
+Each TLS listener loads its credentials once when it starts and shares that
+initialized context across its connections. Recreate the server with the new
+configuration to load replaced credential files.
+
+The root CMake option `CINATRA_ENABLE_LIBDEFLATE` enables this compression
+backend for applications and tests and defaults to OFF. The Linux workflow
+checks Release, ASan and TSan separately, including TLS on a shared executor.
+
+`HTTPARENA_TLS_BUFFERING` enables a 16 KiB TLS request read window and allows
+the handler to borrow a body that arrived in that window. Its standalone default
+follows `HTTPARENA_FILE_IO_URING`. Root project builds can enable
+`CINATRA_TLS_BUFFERING` for all targets. The header-size limit is independent of
+read capacity. The connection owns the borrowed body until the handler and
+response finish.
+
+On Linux with OpenSSL 3.0 or later, `HTTPARENA_OPENSSL_SOCKET_BIO=ON`
+lets the benchmark TLS server read and write through a socket BIO, with
+Asio handling socket readiness. The option defaults to OFF.
+
+The JSON dataset owns its decoded strings. The HttpArena response writer
+computes each item's total as it writes the item with Iguana.
+`iguana::to_json_buffered` writes the JSON for both response modes.
+Cinatra reuses response string capacity for plain JSON. For gzip it serializes
+into a temporary string and passes the complete bytes to the gzip writer in
+one append.

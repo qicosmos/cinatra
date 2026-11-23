@@ -123,27 +123,39 @@ class coro_http_server {
         });
       }
 
-      accept_pending_ = acceptors_.size();
+      // Prearm several accepts on an owned, plaintext listener so a
+      // readiness event can dispatch more than one new connection.
+      bool prearm_accepts = out_ctx_ == nullptr;
+#ifdef CINATRA_ENABLE_SSL
+      prearm_accepts = prearm_accepts && !use_ssl_;
+#endif
+      const size_t accept_depth = prearm_accepts ? 8 : 1;
+      accept_pending_ = acceptors_.size() * accept_depth;
+      auto on_accept_done = [promise, this](auto &&res) {
+        if (res.hasError()) {
+          accept_failed_ = true;
+          CINATRA_LOG_ERROR << "accept coroutine failed";
+          close_acceptors_async();
+        }
+        if (--accept_pending_ != 0) {
+          return;
+        }
+        if (accept_failed_) {
+          errc_ = std::make_error_code(std::errc::io_error);
+        }
+        auto ec = errc_ ? errc_ : res.value();
+        acceptor_close_waiter_.set_value();
+        promise->setValue(ec);
+      };
       for (size_t i = 0; i < acceptors_.size(); ++i) {
-        coro_io::ExecutorWrapper<> *fixed_executor =
-            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
-        accept(*acceptors_[i], fixed_executor)
-            .start([promise, this](auto &&res) {
-              if (res.hasError()) {
-                accept_failed_ = true;
-                CINATRA_LOG_ERROR << "accept coroutine failed";
-                close_acceptors_async();
-              }
-              if (--accept_pending_ != 0) {
-                return;
-              }
-              if (accept_failed_) {
-                errc_ = std::make_error_code(std::errc::io_error);
-              }
-              auto ec = errc_ ? errc_ : res.value();
-              acceptor_close_waiter_.set_value();
-              promise->setValue(ec);
-            });
+        auto *fixed_executor =
+            acceptors_.size() > 1 || (prearm_accepts && pool_->pool_size() == 1)
+                ? pool_->get_executor_at(i)
+                : nullptr;
+        for (size_t slot = 0; slot < accept_depth; ++slot) {
+          accept(*acceptors_[i], fixed_executor, prearm_accepts)
+              .start(on_accept_done);
+        }
       }
     }
     else {
@@ -678,6 +690,14 @@ class coro_http_server {
  private:
   std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen " << port_;
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      // Fully configure the context before any accept loop or TLS operation.
+      // Connections retain it until their SSL streams have been destroyed.
+      ssl_ctx_ = coro_http_connection::make_ssl_context(cert_file_, key_file_,
+                                                        passwd_);
+    }
+#endif
     using asio::ip::tcp;
     asio::error_code ec;
 
@@ -778,9 +798,9 @@ class coro_http_server {
 
   async_simple::coro::Lazy<std::error_code> accept(
       asio::ip::tcp::acceptor &acceptor,
-      coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
-    // Run the first async_accept on its context, serialized with close.
-    if (acceptors_.size() > 1) {
+      coro_io::ExecutorWrapper<> *fixed_executor, bool prearmed) {
+    // Initiate the queued accepts and close on the listener's executor.
+    if (prearmed || acceptors_.size() > 1) {
       co_await coro_io::post(
           [] {
           },
@@ -850,7 +870,7 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
-        conn->init_ssl(cert_file_, key_file_, passwd_);
+        conn->init_ssl(ssl_ctx_);
       }
 #endif
 
@@ -1277,6 +1297,7 @@ class coro_http_server {
   std::future<void> cache_refresh_done_;
   file_resp_format_type format_type_ = file_resp_format_type::range;
 #ifdef CINATRA_ENABLE_SSL
+  std::shared_ptr<asio::ssl::context> ssl_ctx_;
   std::string cert_file_;
   std::string key_file_;
   std::string passwd_;

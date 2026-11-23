@@ -70,20 +70,35 @@ inline thread_local std::string *initial_read = nullptr;
 
 // Fix the upgrade read's contents without depending on packet boundaries.
 namespace coro_io {
+template <typename Socket, typename Match>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+controlled_upgrade_read(Socket &socket, asio::streambuf &buffer,
+                        Match matcher) {
+  auto *initial = websocket_test_io::initial_read;
+  if (initial && !initial->empty()) {
+    buffer.sputn(initial->data(), initial->size());
+    initial->clear();
+    auto buffers = buffer.data();
+    auto begin = asio::buffers_begin(buffers);
+    auto match = matcher(begin, asio::buffers_end(buffers));
+    if (match.second) {
+      co_return std::make_pair(std::error_code{}, size_t(match.first - begin));
+    }
+  }
+  co_return co_await coro_io::async_read_until<Socket, asio::streambuf, Match>(
+      socket, buffer, matcher);
+}
 template <typename Socket>
 async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
     Socket &socket, asio::streambuf &buffer,
     cinatra::detail::http_header_matcher matcher) {
-  auto *initial = websocket_test_io::initial_read;
-  if (initial && !initial->empty()) {
-    auto size = initial->find("\r\n\r\n") + 4;
-    buffer.sputn(initial->data(), initial->size());
-    initial->clear();
-    co_return std::make_pair(std::error_code{}, size);
-  }
-  co_return co_await coro_io::async_read_until<
-      Socket, asio::streambuf, cinatra::detail::http_header_matcher>(
-      socket, buffer, matcher);
+  return controlled_upgrade_read(socket, buffer, matcher);
+}
+template <typename Socket>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+    Socket &socket, asio::streambuf &buffer,
+    cinatra::detail::bounded_http_header_matcher matcher) {
+  return controlled_upgrade_read(socket, buffer, matcher);
 }
 }  // namespace coro_io
 
@@ -237,6 +252,7 @@ struct websocket_test {
       finish();
     });
     context.run();
+    CHECK(initial.empty());
     CHECK_FALSE(timed_out);
     CHECK(client_done);
     CHECK(server_done);

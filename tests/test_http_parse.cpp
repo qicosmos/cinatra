@@ -219,6 +219,29 @@ TEST_CASE("http_request test") {
   CHECK(req.get_encoding_type() == content_encoding::none);
 }
 
+TEST_CASE("request content type follows header order and chunked precedence") {
+  http_parser parser{};
+  coro_http_request request(parser, nullptr);
+  auto parse_headers = [&](std::string_view headers) {
+    REQUIRE(parser.parse_request(headers.data(), headers.size(), 0) > 0);
+    return request.get_content_type();
+  };
+
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "cOnTeNt-TyPe: application/x-www-form-urlencoded\r\n"
+                      "tRaNsFeR-EnCoDiNg: chunked\r\n\r\n") ==
+        content_type::chunked);
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "Transfer-Encoding: identity\r\n"
+                      "Content-Type: application/octet-stream\r\n"
+                      "Transfer-Encoding: chunked\r\n\r\n") ==
+        content_type::octet_stream);
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "Content-Type:\r\n"
+                      "content-type: multipart/form-data\r\n\r\n") ==
+        content_type::unknown);
+}
+
 TEST_CASE("query and form fields are bounded") {
   auto make_fields = [](size_t count, bool unique) {
     std::string fields;

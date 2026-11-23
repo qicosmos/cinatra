@@ -31,6 +31,17 @@ inline bool iequal0(std::string_view a, std::string_view b) {
   });
 }
 
+namespace detail {
+inline bool http_header_name_equal(std::string_view lhs,
+                                  std::string_view rhs) noexcept {
+  const auto lower = [](unsigned char ch) {
+    return ch >= 'A' && ch <= 'Z' ? ch + ('a' - 'A') : ch;
+  };
+  return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+                    [&](char a, char b) { return lower(a) == lower(b); });
+}
+}  // namespace detail
+
 class http_parser {
  public:
   void parse_body_len() {
@@ -130,7 +141,7 @@ class http_parser {
 
   std::string_view get_header_value(std::string_view key) const {
     for (size_t i = 0; i < num_headers_; i++) {
-      if (iequal0(headers_[i].name, key))
+      if (detail::http_header_name_equal(headers_[i].name, key))
         return headers_[i].value;
     }
     return {};

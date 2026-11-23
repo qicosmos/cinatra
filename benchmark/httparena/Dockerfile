@@ -12,12 +12,14 @@ COPY iguana/ iguana/
 COPY benchmark/httparena/ benchmark/httparena/
 ARG HTTPARENA_X86_64_V3=OFF
 ARG HTTPARENA_FILE_IO_URING=ON
+ARG HTTPARENA_LIBDEFLATE=ON
 RUN cmake -S benchmark/httparena -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_COMPILER=g++-14 \
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
         -DHTTPARENA_X86_64_V3=${HTTPARENA_X86_64_V3} \
         -DHTTPARENA_FILE_IO_URING=${HTTPARENA_FILE_IO_URING} \
+        -DHTTPARENA_LIBDEFLATE=${HTTPARENA_LIBDEFLATE} \
     && cmake --build build -j$(nproc) \
     && strip build/bin/httparena_server
 
@@ -29,4 +31,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends liburing2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/cinatra/build/bin/httparena_server /server
 EXPOSE 8080 8081
+ENV CINATRA_GZIP_LEVEL=1
 ENTRYPOINT ["/server"]

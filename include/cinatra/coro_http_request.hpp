@@ -100,14 +100,7 @@ class coro_http_request {
       : parser_(parser), conn_(conn) {}
 
   std::string_view get_header_value(std::string_view key) {
-    auto headers = parser_.get_headers();
-    for (auto &header : headers) {
-      if (iequal0(header.name, key)) {
-        return header.value;
-      }
-    }
-
-    return {};
+    return parser_.get_header_value(key);
   }
 
   std::string_view get_query_value(std::string_view key) {
@@ -129,13 +122,7 @@ class coro_http_request {
 
   std::string_view full_url() { return parser_.full_url(); }
 
-  void set_body(std::string &body) {
-    body_ = body;
-    auto type = get_content_type();
-    if (type == content_type::urlencoded) {
-      parser_.parse_query(body_);
-    }
-  }
+  void set_body(std::string &body) { set_body_view(body); }
 
   std::string_view get_body() const { return body_; }
 
@@ -163,10 +150,28 @@ class coro_http_request {
   }
 
   content_type get_content_type() {
-    if (is_chunked())
-      return content_type::chunked;
+    constexpr auto transfer_encoding = "transfer-encoding"sv;
+    constexpr auto content_type_header = "content-type"sv;
+    std::optional<std::string_view> type;
+    bool found_transfer_encoding = false;
+    for (const auto &header : parser_.get_headers()) {
+      if (!found_transfer_encoding &&
+          detail::http_header_name_equal(header.name, transfer_encoding)) {
+        if (header.value == "chunked"sv) {
+          return content_type::chunked;
+        }
+        found_transfer_encoding = true;
+      }
+      else if (!type &&
+               detail::http_header_name_equal(header.name, content_type_header)) {
+        type = header.value;
+      }
+      if (type && found_transfer_encoding) {
+        break;
+      }
+    }
 
-    auto content_type = get_header_value("content-type");
+    auto content_type = type.value_or(std::string_view{});
     if (!content_type.empty()) {
       if (content_type.find("application/x-www-form-urlencoded") !=
           std::string_view::npos) {
@@ -315,6 +320,18 @@ class coro_http_request {
   std::smatch matches_;
 
  private:
+  friend class coro_http_connection;
+  void set_body_view(std::string_view body) {
+    set_body_view(body, get_content_type());
+  }
+
+  void set_body_view(std::string_view body, content_type type) {
+    body_ = body;
+    if (type == content_type::urlencoded) {
+      parser_.parse_query(body_);
+    }
+  }
+
   http_parser &parser_;
   std::string_view body_;
   coro_http_connection *conn_;

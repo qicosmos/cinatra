@@ -2,6 +2,7 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <functional>
 #include <map>
 #include <random>
 #include <stdexcept>
@@ -132,6 +133,31 @@ TEST_CASE("response writer forwards the requested gzip level") {
       CHECK(decode_gzip(response.content()) == data);
     }
   }
+}
+
+TEST_CASE("buffered response writers may run recursively on a worker") {
+  coro_http_response outer(nullptr);
+  coro_http_response inner(nullptr);
+  std::function<void(std::string &)> writer;
+  bool nested = false;
+  writer = [&](std::string &output) {
+    if (nested) {
+      output.append("inner");
+      return;
+    }
+    output.append("outer ");
+    nested = true;
+    inner.set_buffered_content(writer, content_encoding::gzip, 1);
+    output.append("content");
+  };
+  outer.set_buffered_content(writer, content_encoding::gzip, 1);
+  CHECK(decode_gzip(outer.content()) == "outer content");
+  CHECK(decode_gzip(inner.content()) == "inner");
+
+  outer.clear();
+  outer.set_buffered_content(
+      [](std::string &output) { output.append("plain"); });
+  CHECK(outer.content() == "plain");
 }
 
 TEST_CASE("gzip stream handles input and output boundaries") {

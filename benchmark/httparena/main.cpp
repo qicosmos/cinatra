@@ -9,7 +9,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <memory_resource>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -26,45 +26,10 @@
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 
-struct Rating {
-  int64_t score;
-  int64_t count;
-};
-YLT_REFL(Rating, score, count);
+#include "json_response.hpp"
 
-struct Item {
-  int64_t id;
-  std::string name;
-  std::string category;
-  int64_t price;
-  int64_t quantity;
-  bool active;
-  std::vector<std::string> tags;
-  Rating rating;
-};
-YLT_REFL(Item, id, name, category, price, quantity, active, tags, rating);
-
-// The dataset outlives both servers. Borrow immutable fields while computing
-// totals anew; the synchronous writer produces response-owned bytes.
-struct ResponseItem {
-  int64_t id;
-  std::string_view name;
-  std::string_view category;
-  int64_t price;
-  int64_t quantity;
-  bool active;
-  std::pmr::vector<std::string_view> tags;
-  Rating rating;
-  int64_t total;
-};
-YLT_REFL(ResponseItem, id, name, category, price, quantity, active, tags,
-         rating, total);
-
-struct JsonResponse {
-  std::pmr::vector<ResponseItem> items;
-  size_t count;
-};
-YLT_REFL(JsonResponse, items, count);
+using httparena::Item;
+using httparena::JsonResponse;
 
 using namespace cinatra;
 using async_simple::coro::Lazy;
@@ -74,7 +39,7 @@ namespace {
 constinit std::array<http_header, 1> text_headers{
     {{"Content-Type", "text/plain; charset=UTF-8"}}};
 constinit std::array<http_header, 2> json_headers{
-    {{"Content-Type", "application/json; charset=UTF-8"},
+    {{"Content-Type", "application/json"},
      {"Vary", "Accept-Encoding"}}};
 
 int64_t number(std::string_view value) {
@@ -169,6 +134,13 @@ Lazy<std::string> read_chunked_body(coro_http_request &request) {
 
 void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
                      bool multi_buffer = true) {
+  int gzip_level = 1;
+  if (const auto *configured = std::getenv("CINATRA_GZIP_LEVEL")) {
+    gzip_level = static_cast<int>(number(configured));
+    if (gzip_level < -1 || gzip_level > 9) {
+      throw std::runtime_error("CINATRA_GZIP_LEVEL must be between -1 and 9");
+    }
+  }
   server.set_server_header(false);
   server.set_http_handler<GET>(
       "/static/:file",
@@ -281,44 +253,27 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
         text(response, ms);
       });
   server.set_http_handler<GET>(
-      "/json/:count", [&dataset, multi_buffer](coro_http_request &request,
-                                               coro_http_response &response) {
+      "/json/:count",
+      [&dataset, multi_buffer, gzip_level](coro_http_request &request,
+                                           coro_http_response &response) {
         request.get_conn()->set_multi_buf(multi_buffer);
         const auto count = std::clamp<int64_t>(
             number(request.params_.at("count")), 0, dataset.size());
         const auto query = request.get_query_value("m");
         const auto multiplier = query.empty() ? 1 : number(query);
-        // Rebuild the typed payload in request-local storage. This retains no
-        // serialized data and has no shared reference counts between workers.
-        std::array<std::byte, 16 * 1024> storage;
-        std::pmr::monotonic_buffer_resource arena(storage.data(),
-                                                  storage.size());
-        JsonResponse result{std::pmr::vector<ResponseItem>(&arena),
-                            static_cast<size_t>(count)};
-        result.items.reserve(count);
-        for (size_t i = 0; i < count; ++i) {
-          const auto &item = dataset[i];
-          std::pmr::vector<std::string_view> tags(&arena);
-          tags.reserve(item.tags.size());
-          for (const auto &tag : item.tags) {
-            tags.push_back(tag);
-          }
-          result.items.push_back({item.id, item.name, item.category, item.price,
-                                  item.quantity, item.active, std::move(tags),
-                                  item.rating,
-                                  item.price * item.quantity * multiplier});
-        }
+        const auto items =
+            std::span<const Item>(dataset).first(static_cast<size_t>(count));
+        const JsonResponse body{{items, multiplier}, items.size()};
         response.add_header_span(json_headers);
-        const auto accept = request.get_accept_encoding();
-        // Empty client encoding permits forced gzip in the response API;
-        // Arena requires an ordinary body when the request omits the header.
         const auto encoding =
-            accept.empty() ? content_encoding::none : content_encoding::gzip;
-        response.set_content(
-            [&](auto &stream) {
-              iguana::to_json(result, stream);
+            encoding_quality(request.get_accept_encoding(), "gzip") > 0
+                ? content_encoding::gzip
+                : content_encoding::none;
+        response.set_buffered_content(
+            [&](std::string &output) {
+              iguana::to_json_buffered(body, output);
             },
-            encoding, accept, 3);
+            encoding, gzip_level);
       });
   server.set_http_handler<POST>(
       "/echo",

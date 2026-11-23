@@ -208,6 +208,7 @@ TEST_CASE("optimistic write returns socket errors") {
     }
     done = true;
   });
+  test.context.run();
   CHECK(done);
 }
 
@@ -232,6 +233,7 @@ TEST_CASE("optimistic write reports peer reset") {
     }
     done = true;
   });
+  test.context.run();
   CHECK(done);
 }
 
@@ -759,16 +761,45 @@ TEST_CASE("test server start and stop") {
 }
 
 TEST_CASE("test server sync_start and stop") {
-  cinatra::coro_http_server server(1, 0);
+  asio::io_context client_context;
+  asio::ip::tcp::acceptor reservation(client_context,
+                                      {asio::ip::address_v4::loopback(), 0});
+  const auto port = reservation.local_endpoint().port();
+  reservation.close();
+  cinatra::coro_http_server server(1, port, "127.0.0.1");
 
-  std::promise<void> promise;
+  std::promise<void> ready;
+  auto readiness = ready.get_future();
+  server.set_http_handler<GET>(
+      "/ready", [&](coro_http_request &, coro_http_response &response) {
+        response.set_status_and_content(status_type::ok, "ready");
+        // The accept operation was initiated after async_start initialized
+        // the server's thread and accept state. Publish that initialization
+        // before the other thread calls the non-thread-safe stop API.
+        ready.set_value();
+      });
   std::error_code ec;
+  std::atomic<bool> finished{false};
   std::thread thd([&] {
-    promise.set_value();
     ec = server.sync_start();
+    finished.store(true, std::memory_order_release);
   });
-  promise.get_future().wait();
-  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  asio::ip::tcp::socket peer(client_context);
+  std::error_code connect_error;
+  do {
+    peer.connect({asio::ip::address_v4::loopback(), port}, connect_error);
+    if (connect_error) {
+      peer.close();
+      std::this_thread::yield();
+    }
+  } while (connect_error && !finished.load(std::memory_order_acquire));
+  if (connect_error) {
+    thd.join();
+    REQUIRE_FALSE(connect_error);
+  }
+  const std::string request = "GET /ready HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  asio::write(peer, asio::buffer(request));
+  readiness.wait();
   server.stop();
   thd.join();
   CHECK(server.port() > 0);
