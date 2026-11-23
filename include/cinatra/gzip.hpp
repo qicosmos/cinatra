@@ -11,6 +11,12 @@
 #include <string_view>
 #ifdef CINATRA_ENABLE_LIBDEFLATE
 #include "gzip_libdeflate.hpp"
+#else
+namespace cinatra::gzip_codec::detail {
+inline bool compress_small(std::string_view, std::string &, int) {
+  return false;
+}
+}  // namespace cinatra::gzip_codec::detail
 #endif
 namespace cinatra::gzip_codec {
 // from https://github.com/chafey/GZipCodec
@@ -86,7 +92,6 @@ class compress_stream {
     if (!good() || finished_) {
       return good();
     }
-#ifdef CINATRA_ENABLE_LIBDEFLATE
     if (!initialized_ &&
         detail::compress_small(std::string_view(input_.data(), buffered_),
                                output_, level_)) {
@@ -94,7 +99,6 @@ class compress_stream {
       finished_ = true;
       return true;
     }
-#endif
     flush_input();
     if (!good()) {
       return false;
@@ -195,12 +199,10 @@ class compress_stream {
 // @return - true on success, false on failure
 inline bool compress(std::string_view data, std::string &compressed_data,
                      int level = -1) {
-#ifdef CINATRA_ENABLE_LIBDEFLATE
   if (data.size() < CHUNK &&
       detail::compress_small(data, compressed_data, level)) {
     return true;
   }
-#endif
   unsigned char out[CHUNK];
   z_stream strm;
   strm.zalloc = Z_NULL;

@@ -158,8 +158,7 @@ TEST_CASE("buffered request body survives shutdown and off-thread work") {
   CHECK((external || !stopped_early));
   CHECK(resumed_on_socket_executor);
   CHECK(body_kept);
-#if defined(CINATRA_TLS_HEADER_WINDOW) && CINATRA_TLS_HEADER_WINDOW > 0 && \
-    defined(CINATRA_TLS_HEADER_BODY_VIEW) && CINATRA_TLS_HEADER_BODY_VIEW
+#ifdef CINATRA_TLS_BUFFERING
   CHECK(borrowed_body == tls);
   if (tls) {
     CHECK(fully_prefetched);

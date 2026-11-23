@@ -116,14 +116,16 @@ class coro_http_connection
 #endif
     std::chrono::system_clock::time_point start{};
     std::chrono::system_clock::time_point mid{};
-#if defined(CINATRA_ENABLE_SSL) && defined(CINATRA_TLS_HEADER_WINDOW) && \
-    CINATRA_TLS_HEADER_WINDOW > 0
-    if (use_ssl_) {
-      head_buf_.prepare(
-          (std::min)(size_t{CINATRA_TLS_HEADER_WINDOW}, size_t{16 * 1024}));
+#if defined(CINATRA_ENABLE_SSL) && defined(CINATRA_TLS_BUFFERING)
+    const bool use_tls_buffering = use_ssl_;
+#else
+    constexpr bool use_tls_buffering = false;
+#endif
+    if (use_tls_buffering) {
+      constexpr size_t tls_record_size = 16 * 1024;
+      head_buf_.prepare(tls_record_size);
       head_buf_.commit(0);
     }
-#endif
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -215,15 +217,12 @@ class coro_http_connection
         else if (body_len <= head_buf_.size()) {
           if (body_len > 0) {
             auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-#if defined(CINATRA_ENABLE_SSL) && defined(CINATRA_TLS_HEADER_BODY_VIEW)
-            if (use_ssl_) {
+            if (use_tls_buffering) {
               // The connection owns this storage until routing and reply
               // finish.
               buffered_body = {data_ptr, body_len};
             }
-            else
-#endif
-            {
+            else {
               detail::resize(body_, body_len);
               memcpy(body_.data(), data_ptr, body_len);
             }

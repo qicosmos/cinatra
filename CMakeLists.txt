@@ -24,7 +24,7 @@ endif()
 
 option(CINATRA_TLS_BUFFERING "Use a record-sized TLS request read window and prefetched-body view" OFF)
 if(CINATRA_TLS_BUFFERING)
-    add_compile_definitions(CINATRA_TLS_HEADER_WINDOW=16384 CINATRA_TLS_HEADER_BODY_VIEW=1)
+    add_compile_definitions(CINATRA_TLS_BUFFERING)
 endif()
 
 option(BUILD_HTTPARENA "Build the HttpArena benchmark server with SSL and GZIP (requires OpenSSL and zlib)" OFF)
