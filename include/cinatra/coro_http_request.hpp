@@ -162,8 +162,8 @@ class coro_http_request {
         }
         found_transfer_encoding = true;
       }
-      else if (!type &&
-               detail::http_header_name_equal(header.name, content_type_header)) {
+      else if (!type && detail::http_header_name_equal(header.name,
+                                                       content_type_header)) {
         type = header.value;
       }
       if (type && found_transfer_encoding) {

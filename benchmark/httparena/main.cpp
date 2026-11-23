@@ -25,7 +25,6 @@
 #include "cinatra/coro_http_server.hpp"
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
-
 #include "json_response.hpp"
 
 using httparena::Item;
@@ -39,8 +38,7 @@ namespace {
 constinit std::array<http_header, 1> text_headers{
     {{"Content-Type", "text/plain; charset=UTF-8"}}};
 constinit std::array<http_header, 2> json_headers{
-    {{"Content-Type", "application/json"},
-     {"Vary", "Accept-Encoding"}}};
+    {{"Content-Type", "application/json"}, {"Vary", "Accept-Encoding"}}};
 
 int64_t number(std::string_view value) {
   if (value.empty()) {

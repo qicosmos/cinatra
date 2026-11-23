@@ -1,5 +1,8 @@
 #pragma once
 
+#include <openssl/err.h>
+#include <sys/socket.h>
+
 #include <array>
 #include <asio/compose.hpp>
 #include <asio/defer.hpp>
@@ -8,8 +11,6 @@
 #include <asio/ssl.hpp>
 #include <cerrno>
 #include <memory>
-#include <openssl/err.h>
-#include <sys/socket.h>
 #include <system_error>
 #include <type_traits>
 
@@ -63,9 +64,8 @@ class socket_tls_stream {
 
  private:
   [[noreturn]] static void throw_ssl_error() {
-    throw std::system_error(
-        std::error_code(static_cast<int>(ERR_get_error()),
-                        asio::error::get_ssl_category()));
+    throw std::system_error(std::error_code(static_cast<int>(ERR_get_error()),
+                                            asio::error::get_ssl_category()));
   }
 
   static const BIO_METHOD *socket_bio_method() {

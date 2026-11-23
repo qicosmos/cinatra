@@ -33,12 +33,14 @@ inline bool iequal0(std::string_view a, std::string_view b) {
 
 namespace detail {
 inline bool http_header_name_equal(std::string_view lhs,
-                                  std::string_view rhs) noexcept {
+                                   std::string_view rhs) noexcept {
   const auto lower = [](unsigned char ch) {
     return ch >= 'A' && ch <= 'Z' ? ch + ('a' - 'A') : ch;
   };
   return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
-                    [&](char a, char b) { return lower(a) == lower(b); });
+                    [&](char a, char b) {
+                      return lower(a) == lower(b);
+                    });
 }
 }  // namespace detail
 

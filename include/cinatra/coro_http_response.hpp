@@ -192,8 +192,9 @@ class coro_http_response {
     set_content(
         [&](auto &stream) {
 #ifdef CINATRA_ENABLE_GZIP
-          if constexpr (!std::is_same_v<std::remove_reference_t<decltype(stream)>,
-                                        std::string>) {
+          if constexpr (!std::is_same_v<
+                            std::remove_reference_t<decltype(stream)>,
+                            std::string>) {
             thread_local std::string scratch;
             // Keep the bytes in a local string while the callback runs so
             // another buffered writer on this thread can run recursively.

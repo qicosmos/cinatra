@@ -1,8 +1,8 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
-#include <future>
 #include <functional>
+#include <future>
 #include <map>
 #include <random>
 #include <stdexcept>
@@ -155,8 +155,9 @@ TEST_CASE("buffered response writers may run recursively on a worker") {
   CHECK(decode_gzip(inner.content()) == "inner");
 
   outer.clear();
-  outer.set_buffered_content(
-      [](std::string &output) { output.append("plain"); });
+  outer.set_buffered_content([](std::string &output) {
+    output.append("plain");
+  });
   CHECK(outer.content() == "plain");
 }
 
