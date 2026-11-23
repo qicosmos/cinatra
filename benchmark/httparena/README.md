@@ -5,10 +5,8 @@ Dockerfile builds the framework and cases from the current checkout, using
 GCC 14, Release optimization and LTO. The upstream HttpArena entry pins a complete
 cinatra revision and explicitly enables x86-64-v3 for its benchmark host.
 Local CMake and Docker builds leave that CPU requirement disabled by default.
-The entry is marked `tuned`
-because the typed payload uses request-local PMR storage, and small baseline
-replies and TLS responses use the contiguous-buffer option. Gzip uses level 3,
-matching dusty's native benchmark configuration.
+The entry is marked `tuned`. It uses contiguous buffers for small baseline
+replies and by default for TLS responses, and gzip level 1 for compressed JSON.
 
 The entry requests the `flagship` maturity tier based on existing downstream use:
 [yalantinglibs documents cinatra as its coro_http implementation](https://github.com/alibaba/yalantinglibs/blob/54f9c0642386e7860e8e11ada698c484dc562d7d/README.md#standalone-sublibraries),
@@ -20,9 +18,9 @@ The server keeps the automatic Date header and disables only Server with
 [dusty's native Date behavior](https://github.com/lalinsky/dusty/commit/ba2236da78ff120618550703e0d2fa59ba78b9ba),
 included in v0.6.0. HttpArena's historical dusty v0.5.0 entry omits Date, so its
 recorded response lengths describe a different configuration. Ordinary
-HTTP replies carry no extra Connection header. Content-Type matches dusty's
-native values, including `charset=UTF-8` for text and JSON; JSON also includes
-Vary: Accept-Encoding. Date-header checks use dusty's upstream implementation
+HTTP replies carry no extra Connection header. Text uses
+`text/plain; charset=UTF-8`. JSON uses `application/json` and includes
+`Vary: Accept-Encoding`. Date-header checks use dusty's upstream implementation
 without added header overlays. Check both
 body bytes and complete HTTP response lengths, including TLS responses after
 decryption; equal decoded JSON alone does not establish equal transfer sizes.
@@ -32,20 +30,17 @@ decryption; equal decoded JSON alone does not establish equal transfer sizes.
 - Routes and path/query parameters use cinatra's router and request APIs.
 - `/baseline11` sums all query values; POST also consumes and adds the body.
   Chunked requests use cinatra's chunk reader. Both methods use a contiguous
-  response buffer for their small replies.
+  response buffer for their small replies. `CON-1M` and `CON-1M-TLS` use
+  the existing GET route on their respective plain and TLS listeners.
 - `/pipeline` returns `ok` through cinatra's response API. Only this constant
   endpoint borrows a static string literal.
 - `/delay/{ms}` uses `coro_io::sleep_for` on the connection's executor.
 - `/json/{count}?m=N` selects the first `count` dataset items and computes every
-  `total = price * quantity * N` on each request. String views and request-local
-  PMR vectors avoid copying source strings or sharing mutable state. Every
-  field is serialized by iguana on each request, with normal escaping enabled.
-- JSON uses `response.set_content(writer, encoding, accept_encoding, 3)`, with
-  `iguana::to_json` as its writer. The response API handles compression and its
-  headers. The case selects `none` when Accept-Encoding is absent, as Arena
-  requires; otherwise the header is passed to cinatra. There is no custom
-  negotiation parser, gzip wrapper or response encoder in the case.
-  No JSON, compressed bodies or full responses are cached.
+  `total = price * quantity * N` on each request. The dataset owns the decoded
+  strings and each row refers to them through views. Iguana serializes every
+  field through `to_json_buffered` with normal escaping.
+  The case selects gzip when allowed by `Accept-Encoding` and uses
+  `response.set_buffered_content` for serialization and compression.
 - `/echo` borrows an ordinary request's body until the framework completes its
   reply. Chunked bodies are collected into response-owned storage.
 - `/static/{file}` reads the mounted `/data/static` directory (`STATIC_DIR`
@@ -84,13 +79,9 @@ acceptors and retains its default TCP_NODELAY. Baseline replies and TLS JSON,
 echo and static-file replies use a contiguous response buffer. Other plain HTTP
 replies retain the default buffer sequence path. `CINATRA_TLS_MULTI_BUFFER=1`
 selects the buffer sequence path for TLS JSON/echo/static-file comparisons.
-No custom CPU pinning, socket implementation, timeouts or replacement allocator
-are added.
+The socket BIO and Asio TLS backends use the same cinatra listener and Asio
+executor.
 SIGINT/SIGTERM stop both listeners before the dataset is destroyed.
-
-The 16 KiB PMR buffer is temporary typed application data, not an HTTP buffer or a
-response cache; it falls back to the standard allocator if a dataset requires
-more space. All fields, JSON escaping, arithmetic and compression run afresh.
 
 ## Local checks
 
@@ -149,14 +140,15 @@ From a checkout of HttpArena with the cinatra entry installed:
 ./scripts/benchmark.sh cinatra json-comp
 ```
 
-The local case also implements `static-tls` on the existing TLS listener.
-The upstream Arena subscription can be updated after local review. Database,
-template, HTTP/2, HTTP/3 and gRPC profiles are not included.
+On a benchmark host provisioned for one million simultaneous sockets and
+250,000 requests per second, run the two full-scale profiles.
+
+```sh
+./scripts/benchmark.sh cinatra connections-1m
+./scripts/benchmark.sh cinatra connections-1m-tls
+```
 
 ### Gzip and TLS buffering options
-
-The socket backend uses the bundled Asio defaults. The Docker build continues
-to enable the existing io_uring option for file reads.
 
 `HTTPARENA_LIBDEFLATE=ON` links the optional libdeflate backend. Serializers still
 run for every request. A complete payload buffered below 16 KiB is compressed
@@ -179,14 +171,18 @@ checks Release, ASan and TSan separately, including TLS on a shared executor.
 
 `HTTPARENA_TLS_BUFFERING` enables a 16 KiB TLS request read window and allows
 the handler to borrow a body that arrived in that window. Its standalone default
-follows `HTTPARENA_FILE_IO_URING`. Root project builds can enable
+follows `HTTPARENA_FILE_IO_URING`. The benchmark Docker image leaves the window
+disabled to reduce memory per held connection. Root project builds can enable
 `CINATRA_TLS_BUFFERING` for all targets. The header-size limit is independent of
 read capacity. The connection owns the borrowed body until the handler and
 response finish.
 
 On Linux with OpenSSL 3.0 or later, `HTTPARENA_OPENSSL_SOCKET_BIO=ON`
 lets the benchmark TLS server read and write through a socket BIO, with
-Asio handling socket readiness. The option defaults to OFF.
+Asio handling socket readiness. The benchmark Docker image enables this
+option. Standalone CMake builds default to Asio TLS. The Docker
+`HTTPARENA_OPENSSL_SOCKET_BIO` and `HTTPARENA_TLS_BUFFERING` build arguments
+can select either backend and enable the larger read window.
 
 The JSON dataset owns its decoded strings. The HttpArena response writer
 computes each item's total as it writes the item with Iguana.

@@ -66,3 +66,24 @@ jobs:
             -R '^(test_http_pipeline|test_tls_context|test_websocket_buffering|test_gzip_stream|test_time_util|test_http_parse|test_tls_header_body)$'
           "${native_prefix[@]}" ./test_cinatra \
             --test-case='server threads serve concurrent connections,server shutdown drains accept loops,listener failure stops all acceptors,shutdown drains handlers awaiting off-thread work,optimistic*,test server start and stop,test server sync_start and stop,test multipart early return keeps server valid,test max http header size,request field limits reject before routing'
+      - name: Run TLS regressions with the socket BIO and default read buffer
+        shell: bash
+        run: |
+          native_flags="-O1 -g1 -fno-omit-frame-pointer"
+          native_prefix=()
+          if [ "${{ matrix.sanitizer }}" != none ]; then
+            native_flags="$native_flags -fsanitize=${{ matrix.sanitizer }}"
+          fi
+          if [ "${{ matrix.sanitizer }}" = thread ]; then
+            native_prefix=(setarch x86_64 -R)
+          fi
+          cmake -B build-socket-bio -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
+            -DCMAKE_CXX_FLAGS=-DCINATRA_OPENSSL_SOCKET_BIO \
+            -DCMAKE_CXX_FLAGS_DEBUG="$native_flags" \
+            -DENABLE_SANITIZER=OFF -DBUILD_EXAMPLES=OFF -DBUILD_PRESS_TOOL=OFF \
+            -DENABLE_SSL=ON -DCINATRA_TLS_BUFFERING=OFF
+          cmake --build build-socket-bio -j2 --target test_tls_context test_tls_header_body
+          "${native_prefix[@]}" ctest --test-dir build-socket-bio --output-on-failure -j1 \
+            -R '^(test_tls_context|test_tls_header_body)$'

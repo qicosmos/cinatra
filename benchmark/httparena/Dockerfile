@@ -13,6 +13,8 @@ COPY benchmark/httparena/ benchmark/httparena/
 ARG HTTPARENA_X86_64_V3=OFF
 ARG HTTPARENA_FILE_IO_URING=ON
 ARG HTTPARENA_LIBDEFLATE=ON
+ARG HTTPARENA_OPENSSL_SOCKET_BIO=ON
+ARG HTTPARENA_TLS_BUFFERING=OFF
 RUN cmake -S benchmark/httparena -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_COMPILER=g++-14 \
@@ -20,6 +22,8 @@ RUN cmake -S benchmark/httparena -B build -G Ninja \
         -DHTTPARENA_X86_64_V3=${HTTPARENA_X86_64_V3} \
         -DHTTPARENA_FILE_IO_URING=${HTTPARENA_FILE_IO_URING} \
         -DHTTPARENA_LIBDEFLATE=${HTTPARENA_LIBDEFLATE} \
+        -DHTTPARENA_OPENSSL_SOCKET_BIO=${HTTPARENA_OPENSSL_SOCKET_BIO} \
+        -DHTTPARENA_TLS_BUFFERING=${HTTPARENA_TLS_BUFFERING} \
     && cmake --build build -j$(nproc) \
     && strip build/bin/httparena_server
 
