@@ -2,7 +2,10 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <system_error>
+#include <thread>
 
 #include "cinatra.hpp"
 #include "cinatra/websocket.hpp"
@@ -139,7 +142,8 @@ TEST_CASE("test websocket") {
     client.set_req_timeout(50ms);
     client.set_ws_sec_key("s//GYHa/XO7Hd2F2eOGfyA==");
 
-    auto r = co_await client.connect("ws://localhost:18090/test_client_timeout");
+    auto r =
+        co_await client.connect("ws://localhost:18090/test_client_timeout");
     if (r.net_err) {
       co_return;
     }
@@ -273,6 +277,63 @@ TEST_CASE("test send after server stop") {
   async_simple::coro::syncAwait(client.write_websocket(""));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
   CHECK(data.net_err);
+}
+
+TEST_CASE("websocket client preserves frames buffered during upgrade") {
+  auto encode_frame = [](std::string_view payload) {
+    websocket ws;
+    std::string frame{ws.encode_ws_header(payload.size(), opcode::binary, true,
+                                          false, false)};
+    frame.append(payload);
+    return frame;
+  };
+  const std::string_view first_payload = "first frame";
+  const std::string extended_payload(200, 'x');
+  const auto extended_frame = encode_frame(extended_payload);
+  constexpr size_t split = 3;  // Split the two-byte extended length field.
+  const auto initial_frames = encode_frame(first_payload) + encode_frame({}) +
+                              extended_frame.substr(0, split);
+  const auto remaining_frame = std::string_view(extended_frame).substr(split);
+
+  coro_http_server server(1, "127.0.0.1:0");
+  // An ordinary GET lets the handler write the upgrade and frames together.
+  server.set_http_handler<GET>(
+      "/upgrade",
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content(status_type::switching_protocols, "");
+        resp.add_header("Upgrade", "websocket");
+        resp.add_header("Connection", "Upgrade");
+        resp.add_header("Sec-WebSocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+
+        std::string reply;
+        resp.build_resp_str(reply);
+        reply.append(initial_frames);
+        auto *conn = req.get_conn();
+        if (co_await conn->write_data(reply)) {
+          co_await coro_io::sleep_for(50ms);
+          co_await conn->write_data(remaining_frame);
+        }
+      });
+  server.async_start();
+  REQUIRE_FALSE(server.get_errc());
+
+  coro_http_client client;
+  client.set_conn_timeout(2s);
+  client.set_req_timeout(2s);
+  auto upgrade = client.get(
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/upgrade");
+  REQUIRE_FALSE(upgrade.net_err);
+  REQUIRE(upgrade.status == 101);
+
+  for (auto expected : {first_payload, std::string_view{},
+                        std::string_view(extended_payload)}) {
+    CAPTURE(expected.size());
+    auto frame = async_simple::coro::syncAwait(client.read_websocket());
+    REQUIRE_FALSE(frame.net_err);
+    CHECK(frame.resp_body == expected);
+  }
 }
 
 TEST_CASE("test read write in different threads") {
