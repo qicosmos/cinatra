@@ -7,15 +7,6 @@
 #include <system_error>
 #include <thread>
 
-#include "asio/co_spawn.hpp"
-#include "asio/io_context.hpp"
-#include "asio/ip/tcp.hpp"
-#include "asio/read_until.hpp"
-#include "asio/steady_timer.hpp"
-#include "asio/streambuf.hpp"
-#include "asio/use_awaitable.hpp"
-#include "asio/use_future.hpp"
-#include "asio/write.hpp"
 #include "cinatra.hpp"
 #include "cinatra/websocket.hpp"
 #include "doctest/doctest.h"
@@ -289,12 +280,6 @@ TEST_CASE("test send after server stop") {
 }
 
 TEST_CASE("websocket client preserves frames buffered during upgrade") {
-  using asio::ip::tcp;
-  asio::io_context io;
-  tcp::acceptor acceptor(io, {asio::ip::address_v4::loopback(), 0});
-  tcp::socket peer(io);
-  const auto port = acceptor.local_endpoint().port();
-
   auto encode_frame = [](std::string_view payload) {
     websocket ws;
     std::string frame{ws.encode_ws_header(payload.size(), opcode::binary, true,
@@ -306,37 +291,39 @@ TEST_CASE("websocket client preserves frames buffered during upgrade") {
   const std::string extended_payload(200, 'x');
   const auto extended_frame = encode_frame(extended_payload);
   constexpr size_t split = 3;  // Split the two-byte extended length field.
-  const std::string upgrade_and_frames =
-      "HTTP/1.1 101 Switching Protocols\r\n"
-      "Upgrade: websocket\r\nConnection: Upgrade\r\n"
-      "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n" +
-      encode_frame(first_payload) + encode_frame({}) +
-      extended_frame.substr(0, split);
+  const auto initial_frames = encode_frame(first_payload) + encode_frame({}) +
+                              extended_frame.substr(0, split);
+  const auto remaining_frame = std::string_view(extended_frame).substr(split);
 
-  auto serve = [&]() -> asio::awaitable<void> {
-    co_await acceptor.async_accept(peer, asio::use_awaitable);
-    asio::streambuf request;
-    co_await asio::async_read_until(peer, request, "\r\n\r\n",
-                                    asio::use_awaitable);
-    co_await asio::async_write(peer, asio::buffer(upgrade_and_frames),
-                               asio::use_awaitable);
-    asio::steady_timer delay(io, 50ms);
-    co_await delay.async_wait(asio::use_awaitable);
-    co_await asio::async_write(
-        peer, asio::buffer(std::string_view(extended_frame).substr(split)),
-        asio::use_awaitable);
-  };
-  auto served = asio::co_spawn(io, serve, asio::use_future);
-  std::jthread server([&] {
-    io.run_for(5s);
-  });
+  coro_http_server server(1, "127.0.0.1:0");
+  // An ordinary GET lets the handler write the upgrade and frames together.
+  server.set_http_handler<GET>(
+      "/upgrade",
+      [&](coro_http_request &req,
+          coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+        resp.set_delay(true);
+        resp.set_status_and_content(status_type::switching_protocols, "");
+        resp.add_header("Upgrade", "websocket");
+        resp.add_header("Connection", "Upgrade");
+        resp.add_header("Sec-WebSocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+
+        std::string reply;
+        resp.build_resp_str(reply);
+        reply.append(initial_frames);
+        auto *conn = req.get_conn();
+        if (co_await conn->write_data(reply)) {
+          co_await coro_io::sleep_for(50ms);
+          co_await conn->write_data(remaining_frame);
+        }
+      });
+  server.async_start();
+  REQUIRE_FALSE(server.get_errc());
 
   coro_http_client client;
-  client.set_ws_sec_key("dGhlIHNhbXBsZSBub25jZQ==");
   client.set_conn_timeout(2s);
   client.set_req_timeout(2s);
-  auto upgrade = async_simple::coro::syncAwait(
-      client.connect("ws://127.0.0.1:" + std::to_string(port)));
+  auto upgrade = client.get(
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/upgrade");
   REQUIRE_FALSE(upgrade.net_err);
   REQUIRE(upgrade.status == 101);
 
@@ -347,10 +334,6 @@ TEST_CASE("websocket client preserves frames buffered during upgrade") {
     REQUIRE_FALSE(frame.net_err);
     CHECK(frame.resp_body == expected);
   }
-
-  server.join();
-  REQUIRE(served.wait_for(0s) == std::future_status::ready);
-  CHECK_NOTHROW(served.get());
 }
 
 TEST_CASE("test read write in different threads") {
