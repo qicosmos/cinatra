@@ -2536,107 +2536,92 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<resp_data> async_read_ws() {
-    resp_data data{};
-
-    head_buf_.consume(head_buf_.size());
     std::shared_ptr sock = socket_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
 #ifdef CINATRA_ENABLE_SSL
     has_init_ssl = has_init_ssl_;
 #endif
+
+    // The HTTP upgrade read can leave frame bytes in the same buffer.
     websocket ws{};
-    while (true) {
-      if (auto [ec, _] = co_await async_read_ws(
-              sock, read_buf, ws.left_header_len(), has_init_ssl);
-          ec) {
-        if (socket_->is_timeout_) {
-          co_return resp_data{std::make_error_code(std::errc::timed_out), 404};
+    size_t header_size = 0;
+    ws_header_status header_status;
+    do {
+      header_size += ws.left_header_len();
+      if (const auto buffered = read_buf.size(); buffered < header_size) {
+        auto [ec, _] = co_await async_read_ws(
+            sock, read_buf, header_size - buffered, has_init_ssl);
+        if (ec) {
+          read_buf.consume(read_buf.size());
+          if (sock->is_timeout_) {
+            co_return resp_data{std::make_error_code(std::errc::timed_out),
+                                404};
+          }
+          if (!sock->has_closed_) {
+            close_socket(*sock);
+          }
+          co_return resp_data{ec, 404};
         }
-        data.net_err = ec;
-        data.status = 404;
-
-        if (sock->has_closed_) {
-          co_return data;
-        }
-
-        close_socket(*sock);
-        co_return data;
       }
 
-      const char *data_ptr = asio::buffer_cast<const char *>(read_buf.data());
-      auto ret = ws.parse_header(data_ptr, read_buf.size(), false);
-      if (ret == ws_header_status::incomplete) {
-        continue;
-      }
-      else if (ret == ws_header_status::error) {
-        data.net_err = std::make_error_code(std::errc::protocol_error);
-        data.status = 404;
-        close_socket(*sock);
-        co_return data;
-      }
-
-      frame_header *header = (frame_header *)data_ptr;
-      bool is_close_frame = header->opcode == opcode::close;
-
+      const auto *header = asio::buffer_cast<const char *>(read_buf.data());
+      // The parser computes the missing header length from the supplied size.
+      header_status = ws.parse_header(header, header_size, false);
+    } while (header_status == ws_header_status::incomplete);
+    if (header_status == ws_header_status::error) {
       read_buf.consume(read_buf.size());
-
-      size_t payload_len = ws.payload_length();
-
-      if (auto [ec, size] =
-              co_await async_read_ws(sock, read_buf, payload_len, has_init_ssl);
-          ec) {
-        data.net_err = ec;
-        data.status = 404;
-        close_socket(*sock);
-        co_return data;
-      }
-
-      data_ptr = asio::buffer_cast<const char *>(read_buf.data());
-#ifdef CINATRA_ENABLE_GZIP
-      if (is_server_support_ws_deflate_ && enable_ws_deflate_) {
-        inflate_str_.clear();
-        if (!cinatra::gzip_codec::inflate({data_ptr, payload_len},
-                                          inflate_str_)) {
-          CINATRA_LOG_ERROR << "uncompuress data error";
-          data.status = 404;
-          data.net_err = std::make_error_code(std::errc::protocol_error);
-          co_return data;
-        }
-        data_ptr = inflate_str_.data();
-        payload_len = inflate_str_.length();
-      }
-#endif
-      if (is_close_frame) {
-        if (payload_len >= 2) {
-          payload_len -= 2;
-          data_ptr += sizeof(uint16_t);
-        }
-      }
-      data.status = 200;
-      data.resp_body = {data_ptr, payload_len};
-
-      read_buf.consume(read_buf.size());
-
-      if (is_close_frame) {
-        std::string reason = "close";
-        auto close_str = ws.format_close_payload(close_code::normal,
-                                                 reason.data(), reason.size());
-        auto span = std::span<char>(close_str);
-        auto encode_header = ws.encode_frame(span, opcode::close, true);
-        std::vector<asio::const_buffer> buffers{asio::buffer(encode_header),
-                                                asio::buffer(reason)};
-
-        co_await async_write_ws(sock, buffers, has_init_ssl);
-
-        close_socket(*sock);
-
-        data.net_err = asio::error::eof;
-        data.status = 404;
-        co_return data;
-      }
-      co_return data;
+      close_socket(*sock);
+      co_return resp_data{std::make_error_code(std::errc::protocol_error), 404};
     }
+    read_buf.consume(header_size);
+
+    const size_t payload_size = ws.payload_length();
+    if (const auto buffered = read_buf.size(); buffered < payload_size) {
+      auto [ec, _] = co_await async_read_ws(
+          sock, read_buf, payload_size - buffered, has_init_ssl);
+      if (ec) {
+        read_buf.consume(read_buf.size());
+        close_socket(*sock);
+        co_return resp_data{ec, 404};
+      }
+    }
+
+    std::string_view payload{asio::buffer_cast<const char *>(read_buf.data()),
+                             payload_size};
+#ifdef CINATRA_ENABLE_GZIP
+    if (is_server_support_ws_deflate_ && enable_ws_deflate_) {
+      inflate_str_.clear();
+      if (!cinatra::gzip_codec::inflate(payload, inflate_str_)) {
+        CINATRA_LOG_ERROR << "uncompuress data error";
+        read_buf.consume(payload_size);
+        co_return resp_data{std::make_error_code(std::errc::protocol_error),
+                            404};
+      }
+      payload = inflate_str_;
+    }
+#endif
+    read_buf.consume(payload_size);
+    if (ws.get_opcode() != opcode::close) {
+      co_return resp_data{{}, 200, false, payload};
+    }
+    if (payload.size() >= sizeof(uint16_t)) {
+      payload.remove_prefix(sizeof(uint16_t));
+    }
+
+    std::string reason = "close";
+    auto close_str = ws.format_close_payload(close_code::normal, reason.data(),
+                                             reason.size());
+    auto span = std::span<char>(close_str);
+    auto encode_header = ws.encode_frame(span, opcode::close, true);
+    std::vector<asio::const_buffer> buffers{asio::buffer(encode_header),
+                                            asio::buffer(reason)};
+
+    co_await async_write_ws(sock, buffers, has_init_ssl);
+
+    close_socket(*sock);
+
+    co_return resp_data{asio::error::eof, 404, false, payload};
   }
 
   template <typename AsioBuffer>
