@@ -166,5 +166,15 @@ TEST_CASE("client keeps TLS verification across new connections") {
                             "server.crt", ""));
     check_hostname_rejected();
   }
+
+  SUBCASE("invalid SNI stops the TLS handshake") {
+    REQUIRE(client.init_ssl(asio::ssl::verify_none, "", std::string(256, 'a')));
+    const auto result = get();
+    CHECK(result.net_err.category() == asio::error::get_ssl_category());
+    CHECK(ERR_GET_REASON(result.net_err.value()) ==
+          SSL_R_SSL3_EXT_INVALID_SERVERNAME);
+    CHECK(result.status != 200);
+    CHECK(client.has_closed());
+  }
 }
 #endif

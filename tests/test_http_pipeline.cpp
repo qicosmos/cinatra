@@ -2,6 +2,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -498,6 +499,8 @@ TEST_CASE("SSE awaits the event handler on the shared executor") {
   });
 
   coro_http_client client(context.get_executor());
+  client.set_req_timeout(2s);
+  bool callback_throws = true;
   std::vector<std::string> events;
   auto handler = [&](const sse_event &event) -> Lazy<bool> {
     // Posting suspends the handler even when all events arrived in one chunk.
@@ -506,14 +509,23 @@ TEST_CASE("SSE awaits the event handler on the shared executor") {
         },
         &client.get_executor());
     CHECK(context.get_executor().running_in_this_thread());
+    if (callback_throws) {
+      throw std::runtime_error("SSE callback failed");
+    }
     events.push_back(event.data);
     co_return event.data != "stop";
   };
   const auto url = (tls ? "https://" : "http://") + std::string("127.0.0.1:") +
                    std::to_string(server.port()) + "/";
-  auto result = async_simple::coro::syncAwait(
-      client.async_post_sse(url, "prompt", req_content_type::text, handler)
-          .via(&client.get_executor()));
+  const auto request = [&] {
+    return async_simple::coro::syncAwait(
+        client.async_post_sse(url, "prompt", req_content_type::text, handler)
+            .via(&client.get_executor()));
+  };
+  CHECK_THROWS_WITH_AS(request(), "SSE callback failed", std::runtime_error);
+  CHECK(client.has_closed());
+  callback_throws = false;
+  const auto result = request();
   client.close();
   server.stop();
   io.join();

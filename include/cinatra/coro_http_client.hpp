@@ -1454,8 +1454,19 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
       if constexpr (is_sse_event_handler_v<BodyTarget>) {
-        data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
-                                    method, out_buf);
+        auto response = co_await handle_read(ec, size, is_keep_alive,
+                                             std::move(ctx), method, out_buf)
+                            .coAwaitTry();
+        if (response.hasError()) {
+          // Close the incomplete response on the socket executor before the
+          // caller observes the callback exception and can reuse the client.
+          co_await coro_io::post(
+              [this] {
+                close_socket(*socket_);
+              },
+              &executor_wrapper_);
+        }
+        data = std::move(response).value();
       }
       else {
         data = co_await handle_read(ec, size, is_keep_alive, std::move(ctx),
@@ -2312,7 +2323,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         stream->set_verify_callback(
             asio::ssl::host_name_verification(hostname));
         if (need_set_sni_host_) {
-          SSL_set_tlsext_host_name(stream->native_handle(), hostname.c_str());
+          ERR_clear_error();
+          if (SSL_set_tlsext_host_name(stream->native_handle(),
+                                       hostname.c_str()) != 1) {
+            if (const auto error = ERR_get_error(); error != 0) {
+              co_return std::error_code(static_cast<int>(error),
+                                        asio::error::get_ssl_category());
+            }
+            co_return std::make_error_code(std::errc::invalid_argument);
+          }
         }
       }
       socket_->ssl_stream_ = std::move(stream);
