@@ -150,6 +150,7 @@ TEST_CASE("client keeps TLS verification across new connections") {
 
   const auto check_hostname_rejected = [&] {
     const auto ec = get().net_err;
+    CHECK(client.has_closed());
     CHECK(ec.category() == asio::error::get_ssl_category());
     CHECK(ERR_GET_REASON(ec.value()) == SSL_R_CERTIFICATE_VERIFY_FAILED);
   };
@@ -165,6 +166,20 @@ TEST_CASE("client keeps TLS verification across new connections") {
     REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
                             "server.crt", ""));
     check_hostname_rejected();
+  }
+
+  SUBCASE("automatic HTTPS verifies the peer") { check_hostname_rejected(); }
+
+  SUBCASE("init_ssl verifies the peer by default") {
+    REQUIRE(client.init_ssl());
+    check_hostname_rejected();
+  }
+
+  SUBCASE("verification can be disabled explicitly") {
+    REQUIRE(client.init_ssl(asio::ssl::verify_none));
+    const auto result = get();
+    CHECK_FALSE(result.net_err);
+    CHECK(result.status == 200);
   }
 
   SUBCASE("invalid SNI stops the TLS handshake") {

@@ -247,7 +247,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     return true;
   }
 
-  [[nodiscard]] bool init_ssl(int verify_mode = asio::ssl::verify_none,
+  [[nodiscard]] bool init_ssl(int verify_mode = asio::ssl::verify_peer,
                               std::string full_path = "",
                               const std::string &sni_hostname = "") {
     std::string base_path;
@@ -2307,7 +2307,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<std::error_code> handshake_tls(
       std::string_view host) {
 #ifdef CINATRA_ENABLE_SSL
-    if (!ssl_ctx_ && !init_ssl(asio::ssl::verify_none)) {
+    if (!ssl_ctx_ && !init_ssl()) {
       co_return std::make_error_code(std::errc::invalid_argument);
     }
 

@@ -1809,7 +1809,8 @@ TEST_CASE("test ssl server") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
-  [[maybe_unused]] auto r = client.init_ssl();
+  REQUIRE(client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                          "server.crt", "localhost"));
 
   auto result = client.get("https://127.0.0.1:19001/ssl");
   CHECK(result.status == 200);

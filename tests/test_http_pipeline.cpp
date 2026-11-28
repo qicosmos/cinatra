@@ -474,10 +474,9 @@ TEST_CASE("SSE awaits the event handler on the shared executor") {
   asio::io_context context;
   coro_http_server server(context, 0, "127.0.0.1");
 #ifdef CINATRA_ENABLE_SSL
+  const auto dir = std::filesystem::path(__FILE__).parent_path().parent_path() /
+                   "include/cinatra";
   if (tls) {
-    const auto dir =
-        std::filesystem::path(__FILE__).parent_path().parent_path() /
-        "include/cinatra";
     server.init_ssl((dir / "server.crt").string(),
                     (dir / "server.key").string(), "test");
   }
@@ -494,11 +493,17 @@ TEST_CASE("SSE awaits the event handler on the shared executor") {
       });
   auto serving = server.async_start();
   REQUIRE_FALSE(server.get_errc());
+  coro_http_client client(context.get_executor());
+#ifdef CINATRA_ENABLE_SSL
+  if (tls) {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, dir.string(), "server.crt",
+                            "localhost"));
+  }
+#endif
   std::jthread io([&] {
     context.run();
   });
 
-  coro_http_client client(context.get_executor());
   client.set_req_timeout(2s);
   bool callback_throws = true;
   std::vector<std::string> events;

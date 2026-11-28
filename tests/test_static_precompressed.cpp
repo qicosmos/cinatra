@@ -72,10 +72,10 @@ TEST_CASE("static files can opt in to serving precompressed variants") {
     server->set_max_size_of_cache_files();
   }
 #ifdef CINATRA_ENABLE_SSL
+  const auto cert_dir =
+      std::filesystem::path(__FILE__).parent_path().parent_path() /
+      "include/cinatra";
   if (tls) {
-    const auto cert_dir =
-        std::filesystem::path(__FILE__).parent_path().parent_path() /
-        "include/cinatra";
     server->init_ssl((cert_dir / "server.crt").string(),
                      (cert_dir / "server.key").string(), "test");
   }
@@ -96,6 +96,12 @@ TEST_CASE("static files can opt in to serving precompressed variants") {
   auto check = [&](const char *name, std::string accept,
                    std::string_view coding, std::string_view body) {
     coro_http_client client(context.get_executor());
+#ifdef CINATRA_ENABLE_SSL
+    if (tls) {
+      REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                              "server.crt", "localhost"));
+    }
+#endif
     const auto result = client.get(base + name, {{"Accept-Encoding", accept}});
     REQUIRE_FALSE(result.net_err);
     CHECK(result.status == 200);
@@ -125,6 +131,12 @@ TEST_CASE("static files can opt in to serving precompressed variants") {
     check("fallback.js", "gzip;q=0, *;q=1", "", asset);
 
     coro_http_client client(context.get_executor());
+#ifdef CINATRA_ENABLE_SSL
+    if (tls) {
+      REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                              "server.crt", "localhost"));
+    }
+#endif
     const auto result = client.get(
         base + "asset.js", {{"Accept-Encoding", "br"}, {"Range", "bytes=1-3"}});
     REQUIRE_FALSE(result.net_err);
