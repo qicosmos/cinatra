@@ -1,0 +1,316 @@
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <csignal>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <thread>
+#include <vector>
+
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#endif
+
+#include "cinatra/coro_http_server.hpp"
+#include "cinatra/http_parser.hpp"
+#include "iguana/json_reader.hpp"
+#include "iguana/json_writer.hpp"
+#include "json_response.hpp"
+
+using httparena::Item;
+using httparena::JsonResponse;
+
+using namespace cinatra;
+using async_simple::coro::Lazy;
+
+namespace {
+// Header spans are shared read-only. cinatra emits them in both buffer modes.
+constinit std::array<http_header, 1> text_headers{
+    {{"Content-Type", "text/plain; charset=UTF-8"}}};
+constinit std::array<http_header, 2> json_headers{
+    {{"Content-Type", "application/json"}, {"Vary", "Accept-Encoding"}}};
+
+int64_t number(std::string_view value) {
+  if (value.empty()) {
+    return 0;
+  }
+  int64_t result = 0;
+  std::from_chars(value.data(), value.data() + value.size(), result);
+  return result;
+}
+
+size_t worker_count() {
+  if (const auto *env = std::getenv("CINATRA_THREADS")) {
+    if (auto count = number(env); count > 0) {
+      return static_cast<size_t>(count);
+    }
+    throw std::runtime_error("CINATRA_THREADS must be positive");
+  }
+#ifdef __linux__
+  cpu_set_t available;
+  if (sched_getaffinity(0, sizeof(available), &available) == 0) {
+    return static_cast<size_t>(CPU_COUNT(&available));
+  }
+#endif
+  return std::max(1u, std::thread::hardware_concurrency());
+}
+
+int64_t query_sum(coro_http_request &request) {
+  int64_t sum = 0;
+  for (const auto &[name, value] : request.get_queries()) {
+    sum += number(value);
+  }
+  return sum;
+}
+
+void text(coro_http_response &response, int64_t value) {
+  response.add_header_span(text_headers);
+  response.set_status_and_content(status_type::ok, std::to_string(value));
+}
+
+// cinatra exposes chunked bodies as a stream. Consume them through that API,
+// owning each chunk before the next read invalidates its borrowed buffer.
+Lazy<std::string> read_chunked_body(coro_http_request &request) {
+  std::string body;
+  while (true) {
+    auto chunk = co_await request.get_conn()->read_chunked();
+    if (chunk.ec) {
+      throw std::system_error(chunk.ec);
+    }
+    if (chunk.eof) {
+      break;
+    }
+    body.append(chunk.data);
+  }
+  co_return body;
+}
+
+void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
+                     bool multi_buffer = true) {
+  int gzip_level = 1;
+  if (const auto *configured = std::getenv("CINATRA_GZIP_LEVEL")) {
+    gzip_level = static_cast<int>(number(configured));
+    if (gzip_level < -1 || gzip_level > 9) {
+      throw std::runtime_error("CINATRA_GZIP_LEVEL must be between -1 and 9");
+    }
+  }
+  server.set_server_header(false);
+  server.set_http_handler<GET>(
+      "/static/:file",
+      [multi_buffer](coro_http_request &request,
+                     coro_http_response &response) -> Lazy<void> {
+        request.get_conn()->set_multi_buf(multi_buffer);
+        const auto &name = request.params_.at("file");
+        if (name == "." || name == ".." ||
+            name.find_first_of("/\\") != std::string::npos) {
+          response.set_status(status_type::not_found);
+          co_return;
+        }
+        const auto *directory = std::getenv("STATIC_DIR");
+        auto path =
+            std::filesystem::path(directory ? directory : "/data/static") /
+            name;
+        const auto mime = get_mime_type(get_extension(name));
+        const auto selected_encoding =
+            select_precompressed_file(path, request.get_accept_encoding());
+        std::error_code error;
+        const auto size = std::filesystem::file_size(path, error);
+#ifdef ENABLE_FILE_IO_URING
+        coro_io::coro_file file(
+            request.get_conn()->get_executor()->get_asio_executor());
+#else
+        coro_io::coro_file file;
+#endif
+        if (error || !file.open(path.string(), std::ios::in)) {
+          response.set_status(status_type::not_found);
+          co_return;
+        }
+        // The coroutine owns the buffer until the read completes; the response
+        // then owns it through the socket write. coro_file restores our
+        // executor.
+        std::string body(size, '\0');
+        const auto [ec, read] =
+            co_await file.async_read(body.data(), body.size());
+        if (ec || read != size) {
+          response.set_status(status_type::internal_server_error);
+          co_return;
+        }
+        if (!selected_encoding.empty()) {
+          response.add_header("Content-Encoding",
+                              std::string(selected_encoding));
+        }
+        response.add_header("Content-Type", std::string(mime));
+        response.add_header("Vary", "Accept-Encoding");
+        response.set_status_and_content(status_type::ok, std::move(body));
+      });
+  server.set_http_handler<GET>("/baseline11", [](coro_http_request &request,
+                                                 coro_http_response &response) {
+    request.get_conn()->set_multi_buf(false);
+    text(response, query_sum(request));
+  });
+  server.set_http_handler<POST>("/baseline11",
+                                [](coro_http_request &request,
+                                   coro_http_response &response) -> Lazy<void> {
+                                  request.get_conn()->set_multi_buf(false);
+                                  auto sum = query_sum(request);
+                                  if (request.is_chunked()) {
+                                    auto body =
+                                        co_await read_chunked_body(request);
+                                    sum += number(body);
+                                  }
+                                  else {
+                                    sum += number(request.get_body());
+                                  }
+                                  text(response, sum);
+                                });
+  server.set_http_handler<GET>(
+      "/pipeline", [](coro_http_request &, coro_http_response &response) {
+        response.add_header_span(text_headers);
+        response.set_status_and_content_view(status_type::ok, "ok");
+      });
+  server.set_http_handler<GET>(
+      "/delay/:ms",
+      [](coro_http_request &request,
+         coro_http_response &response) -> Lazy<void> {
+        const auto ms = number(request.params_.at("ms"));
+        if (ms > 0) {
+          const auto duration = std::chrono::milliseconds(ms);
+          co_await coro_io::sleep_for(duration,
+                                      request.get_conn()->get_executor());
+        }
+        text(response, ms);
+      });
+  server.set_http_handler<GET>(
+      "/json/:count",
+      [&dataset, multi_buffer, gzip_level](coro_http_request &request,
+                                           coro_http_response &response) {
+        request.get_conn()->set_multi_buf(multi_buffer);
+        const auto count = std::clamp<int64_t>(
+            number(request.params_.at("count")), 0, dataset.size());
+        const auto query = request.get_query_value("m");
+        const auto multiplier = query.empty() ? 1 : number(query);
+        const auto items =
+            std::span<const Item>(dataset).first(static_cast<size_t>(count));
+        const JsonResponse body{{items, multiplier}, items.size()};
+        response.add_header_span(json_headers);
+        const auto encoding =
+            accept_encoding_quality(request.get_accept_encoding(), "gzip") > 0
+                ? content_encoding::gzip
+                : content_encoding::none;
+        response.set_buffered_content(
+            [&](std::string &output) {
+              iguana::to_json_buffered(body, output);
+            },
+            encoding, gzip_level);
+      });
+  server.set_http_handler<POST>(
+      "/echo",
+      [multi_buffer](coro_http_request &request,
+                     coro_http_response &response) -> Lazy<void> {
+        request.get_conn()->set_multi_buf(multi_buffer);
+        response.add_header("Content-Type", "application/octet-stream");
+        if (!request.is_chunked()) {
+          // The connection retains the request body until its reply completes.
+          response.set_status_and_content_view(status_type::ok,
+                                               request.get_body());
+          co_return;
+        }
+        auto body = co_await read_chunked_body(request);
+        response.set_status_and_content(status_type::ok, std::move(body));
+      });
+  server.set_http_handler<GET>(
+      "/ws",
+      [](coro_http_request &request,
+         coro_http_response &response) -> Lazy<void> {
+        if (request.get_content_type() != content_type::websocket) {
+          response.set_status_and_content(status_type::bad_request,
+                                          "WebSocket upgrade required");
+          co_return;
+        }
+        request.get_conn()->set_websocket_auto_flush(false);
+        while (true) {
+          auto message = co_await request.get_conn()->read_websocket();
+          if (message.ec || message.type == ws_frame_type::WS_CLOSE_FRAME) {
+            co_return;
+          }
+          if (message.type == ws_frame_type::WS_TEXT_FRAME ||
+              message.type == ws_frame_type::WS_BINARY_FRAME) {
+            const auto op = message.type == ws_frame_type::WS_BINARY_FRAME
+                                ? opcode::binary
+                                : opcode::text;
+            if (co_await request.get_conn()->write_websocket(message.data,
+                                                             op)) {
+              co_return;
+            }
+          }
+        }
+      });
+  server.set_max_http_body_size(30 * 1024 * 1024);
+}
+}  // namespace
+
+int main() {
+  try {
+    const auto *path = std::getenv("DATASET_PATH");
+    std::ifstream input(path ? path : "/data/dataset.json");
+    if (!input) {
+      throw std::runtime_error("Cannot open dataset.json");
+    }
+    std::string json((std::istreambuf_iterator<char>(input)), {});
+    std::vector<Item> dataset;
+    iguana::from_json(dataset, json);
+    sigset_t signals;
+    sigemptyset(&signals);
+    sigaddset(&signals, SIGINT);
+    sigaddset(&signals, SIGTERM);
+    if (const auto error = pthread_sigmask(SIG_BLOCK, &signals, nullptr)) {
+      throw std::system_error(error, std::generic_category());
+    }
+    const auto threads = worker_count();
+    coro_http_server server(threads, 8080);
+    register_routes(server, dataset);
+    std::unique_ptr<coro_http_server> tls;
+    const auto *cert_env = std::getenv("TLS_CERT");
+    const auto *key_env = std::getenv("TLS_KEY");
+    const auto *cert = cert_env ? cert_env : "/certs/server.crt";
+    const auto *key = key_env ? key_env : "/certs/server.key";
+    if (std::filesystem::exists(cert) && std::filesystem::exists(key)) {
+      tls = std::make_unique<coro_http_server>(threads, 8081);
+      const auto *multi = std::getenv("CINATRA_TLS_MULTI_BUFFER");
+      register_routes(*tls, dataset, multi && number(multi) != 0);
+      tls->init_ssl(cert, key);
+      tls->async_start();
+      if (const auto error = tls->get_errc()) {
+        throw std::system_error(error);
+      }
+    }
+    std::cout << "cinatra: " << threads << " workers per listener, "
+              << dataset.size() << " dataset items" << std::endl;
+    server.async_start();
+    if (const auto error = server.get_errc()) {
+      throw std::system_error(error);
+    }
+    int signal = 0;
+    if (const auto error = sigwait(&signals, &signal)) {
+      throw std::system_error(error, std::generic_category());
+    }
+    if (tls) {
+      tls->stop();
+    }
+    server.stop();
+  } catch (const std::exception &error) {
+    std::cerr << error.what() << '\n';
+    return 1;
+  }
+}

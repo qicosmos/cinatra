@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -53,11 +54,15 @@ concept response_writer =
 class coro_http_connection;
 class coro_http_response {
  public:
-  coro_http_response(coro_http_connection *conn)
+  coro_http_response(coro_http_connection *conn, bool default_headers = true)
       : status_(status_type::not_implemented),
         fmt_type_(format_type::normal),
         delay_(false),
-        conn_(conn) {}
+        conn_(conn),
+        default_headers_(default_headers),
+        default_server_header_(default_headers),
+        need_date_(default_headers),
+        need_server_(default_headers) {}
 
   void set_status(cinatra::status_type status) { status_ = status; }
   void set_content(std::string content) {
@@ -67,23 +72,23 @@ class coro_http_response {
   void set_status_and_content(
       status_type status, std::string content,
       content_encoding encoding = content_encoding::none,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     set_status_and_content_view(status, std::move(content), encoding, false,
-                                client_encoding_type);
+                                client_encoding_type, gzip_level);
   }
 
   template <typename String>
   void set_status_and_content_view(
       status_type status, String content = "",
       content_encoding encoding = content_encoding::none, bool is_view = true,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     status_ = status;
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip) {
       if (client_encoding_type.empty() ||
           client_encoding_type.find("gzip") != std::string_view::npos) {
         std::string encode_str;
-        bool r = gzip_codec::compress(content, encode_str);
+        bool r = gzip_codec::compress(content, encode_str, gzip_level);
         if (!r) {
           set_status_and_content(status_type::internal_server_error,
                                  "gzip compress error");
@@ -172,31 +177,65 @@ class coro_http_response {
   template <detail::response_writer Writer>
   void set_content(Writer writer,
                    content_encoding encoding = content_encoding::none,
-                   std::string_view client_encoding_type = "") {
+                   std::string_view client_encoding_type = "",
+                   int gzip_level = -1) {
     set_status_and_content(status_type::ok, std::move(writer), encoding,
-                           client_encoding_type);
+                           client_encoding_type, gzip_level);
+  }
+
+  // Use a contiguous serializer for plain and compressed responses.
+  template <typename Writer>
+    requires std::invocable<Writer &, std::string &>
+  void set_buffered_content(Writer writer,
+                            content_encoding encoding = content_encoding::none,
+                            int gzip_level = -1) {
+    set_content(
+        [&](auto &stream) {
+#ifdef CINATRA_ENABLE_GZIP
+          if constexpr (!std::is_same_v<
+                            std::remove_reference_t<decltype(stream)>,
+                            std::string>) {
+            thread_local std::string scratch;
+            // Keep the bytes in a local string while the callback runs so
+            // another buffered writer on this thread can run recursively.
+            std::string serialized;
+            serialized.swap(scratch);
+            std::invoke(writer, serialized);
+            stream.append(serialized);
+            if (serialized.capacity() <= CHUNK) {
+              serialized.clear();
+              serialized.swap(scratch);
+            }
+          }
+          else
+#endif
+          {
+            std::invoke(writer, stream);
+          }
+        },
+        encoding, "", gzip_level);
   }
 
   template <detail::response_writer Writer>
   void set_status_and_content(
       status_type status, Writer writer,
       content_encoding encoding = content_encoding::none,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
     set_status_and_content_view(status, std::move(writer), encoding, false,
-                                client_encoding_type);
+                                client_encoding_type, gzip_level);
   }
 
   template <detail::response_writer Writer>
   void set_status_and_content_view(
       status_type status, Writer writer,
       content_encoding encoding = content_encoding::none, bool = true,
-      std::string_view client_encoding_type = "") {
+      std::string_view client_encoding_type = "", int gzip_level = -1) {
 #ifdef CINATRA_ENABLE_GZIP
     if (encoding == content_encoding::gzip &&
         (client_encoding_type.empty() ||
          client_encoding_type.find("gzip") != std::string_view::npos)) {
       std::string encoded;
-      if (!gzip_codec::compress(writer, encoded)) {
+      if (!gzip_codec::compress(writer, encoded, gzip_level)) {
         set_status_and_content(status_type::internal_server_error,
                                "gzip compress error");
       }
@@ -210,6 +249,11 @@ class coro_http_response {
 #endif
     {
       std::string serialized;
+      // Reuse capacity after clear(), while keeping an existing response
+      // untouched if the writer throws before producing its replacement.
+      if (content_.empty()) {
+        serialized.swap(content_);
+      }
       writer(serialized);
       set_status_and_content(status, std::move(serialized), encoding,
                              client_encoding_type);
@@ -242,6 +286,11 @@ class coro_http_response {
   void need_date_head(bool r) { need_date_ = r; }
   bool need_date() { return need_date_; }
   void need_server_head(bool r) { need_server_ = r; }
+  void set_default_server_header(bool enabled) {
+    default_server_header_ = need_server_ = enabled;
+  }
+
+  bool need_server() const { return need_server_; }
 
   void set_boundary(std::string_view boundary) { boundary_ = boundary; }
 
@@ -290,7 +339,8 @@ class coro_http_response {
         resp_str.append(CRCF);
       }
       else {
-        if (!has_len && boundary_.empty())
+        if (!has_len && boundary_.empty() &&
+            status_ != status_type::switching_protocols)
           resp_str.append(ZERO_LENGTH_SV);
       }
     }
@@ -382,7 +432,8 @@ class coro_http_response {
           handle_content_len(buffers, content_view_);
       }
       else {
-        if (!has_len && boundary_.empty())
+        if (!has_len && boundary_.empty() &&
+            status_ != status_type::switching_protocols)
           buffers.emplace_back(asio::buffer(ZERO_LENGTH_SV));
       }
     }
@@ -430,6 +481,7 @@ class coro_http_response {
     }
 
     resp_headers_.clear();
+    resp_header_span_ = {};
     keepalive_ = {};
     delay_ = false;
     status_ = status_type::init;
@@ -437,8 +489,8 @@ class coro_http_response {
     boundary_.clear();
     has_set_content_ = false;
     cookies_.clear();
-    need_date_ = true;
-    need_server_ = true;
+    need_date_ = default_headers_;
+    need_server_ = default_server_header_;
     content_type_ = {};
     content_view_ = {};
   }
@@ -457,6 +509,30 @@ class coro_http_response {
   }
 
  private:
+  friend class coro_http_connection;
+
+  void to_buffers_for_write(std::vector<asio::const_buffer> &buffers,
+                            std::string &storage) {
+    const auto first = buffers.size();
+    to_buffers(buffers, storage);
+    // Asio prepares at most16 descriptors per composed write. Keep a normal
+    // response's header and body in one batch when its header fills that batch.
+    if (fmt_type_ != format_type::normal || buffers.size() - first <= 16) {
+      return;
+    }
+    const bool has_body = !content_.empty() || !content_view_.empty();
+    const auto body = has_body ? buffers.back() : asio::const_buffer{};
+    auto headers = std::span<const asio::const_buffer>(buffers).subspan(
+        first, buffers.size() - first - size_t(has_body));
+    storage.resize(asio::buffer_size(headers));
+    asio::buffer_copy(asio::buffer(storage), headers);
+    buffers.resize(first);
+    buffers.emplace_back(asio::buffer(storage));
+    if (has_body) {
+      buffers.push_back(body);
+    }
+  }
+
   void handle_content(std::vector<asio::const_buffer> &buffers,
                       std::string &size_str, std::string_view content) {
     if (fmt_type_ == format_type::chunked) {
@@ -488,6 +564,8 @@ class coro_http_response {
   std::string boundary_;
   bool has_set_content_ = false;
   bool need_shrink_every_time_ = false;
+  bool default_headers_ = true;
+  bool default_server_header_ = true;
   bool need_date_ = true;
   bool need_server_ = true;
   std::unordered_map<std::string, cookie> cookies_;

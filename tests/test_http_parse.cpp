@@ -219,6 +219,47 @@ TEST_CASE("http_request test") {
   CHECK(req.get_encoding_type() == content_encoding::none);
 }
 
+TEST_CASE("Accept-Encoding quality uses explicit weights before wildcard") {
+  CHECK(accept_encoding_quality("", "gzip") == 0);
+  CHECK(accept_encoding_quality("x-gzip", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip", "gzip") == 1);
+  CHECK(accept_encoding_quality("*;q=1, gzip;q=0", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip;q=0, *;q=1", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip;q=0, *;q=0.125", "br") == 0.125);
+  CHECK(accept_encoding_quality("gzip;q=1.000", "gzip") == 1);
+  const auto weighted = "\tBr ;\tQ=0.4\t, gzip;q=0.800";
+  CHECK(accept_encoding_quality(weighted, "br") == 0.4);
+  CHECK(accept_encoding_quality(weighted, "gzip") == 0.8);
+
+  for (const auto header : {"gzip;q=", "gzip;q=nan", "gzip;q=1.001",
+                            "gzip;q=0.1234", "gzip;q=0.1e0"}) {
+    CHECK(accept_encoding_quality(header, "gzip") == 0);
+  }
+}
+
+TEST_CASE("request content type follows header order and chunked precedence") {
+  http_parser parser{};
+  coro_http_request request(parser, nullptr);
+  auto parse_headers = [&](std::string_view headers) {
+    REQUIRE(parser.parse_request(headers.data(), headers.size(), 0) > 0);
+    return request.get_content_type();
+  };
+
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "cOnTeNt-TyPe: application/x-www-form-urlencoded\r\n"
+                      "tRaNsFeR-EnCoDiNg: chunked\r\n\r\n") ==
+        content_type::chunked);
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "Transfer-Encoding: identity\r\n"
+                      "Content-Type: application/octet-stream\r\n"
+                      "Transfer-Encoding: chunked\r\n\r\n") ==
+        content_type::octet_stream);
+  CHECK(parse_headers("POST / HTTP/1.1\r\n"
+                      "Content-Type:\r\n"
+                      "content-type: multipart/form-data\r\n\r\n") ==
+        content_type::unknown);
+}
+
 TEST_CASE("query and form fields are bounded") {
   auto make_fields = [](size_t count, bool unique) {
     std::string fields;

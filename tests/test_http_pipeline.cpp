@@ -28,23 +28,38 @@ struct scoped_control {
 // Select this overload only in this test translation unit. It supplies one
 // controlled header read; subsequent reads use the real TCP/TLS stream.
 namespace coro_io {
-template <typename Socket>
-async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
-    Socket &socket, asio::streambuf &buffer,
-    cinatra::detail::http_header_matcher matcher) {
+template <typename Socket, typename Match>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
+controlled_header_read(Socket &socket, asio::streambuf &buffer, Match matcher) {
   auto *control = pipeline_test_io::current;
   if (control) {
     control->buffer = &buffer;
     if (!control->initial_data.empty()) {
       buffer.sputn(control->initial_data.data(), control->initial_data.size());
-      auto size = control->initial_data.find("\r\n\r\n") + 4;
       control->initial_data.clear();
-      co_return std::make_pair(std::error_code{}, size);
+      auto buffers = buffer.data();
+      auto begin = asio::buffers_begin(buffers);
+      auto match = matcher(begin, asio::buffers_end(buffers));
+      if (match.second) {
+        co_return std::make_pair(std::error_code{},
+                                 size_t(match.first - begin));
+      }
     }
   }
-  co_return co_await coro_io::async_read_until<
-      Socket, asio::streambuf, cinatra::detail::http_header_matcher>(
+  co_return co_await coro_io::async_read_until<Socket, asio::streambuf, Match>(
       socket, buffer, matcher);
+}
+template <typename Socket>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+    Socket &socket, asio::streambuf &buffer,
+    cinatra::detail::http_header_matcher matcher) {
+  return controlled_header_read(socket, buffer, matcher);
+}
+template <typename Socket>
+async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
+    Socket &socket, asio::streambuf &buffer,
+    cinatra::detail::bounded_http_header_matcher matcher) {
+  return controlled_header_read(socket, buffer, matcher);
 }
 }  // namespace coro_io
 
@@ -95,6 +110,17 @@ struct pipeline_test {
   std::shared_ptr<coro_http_connection> connection;
   bool tls;
   size_t handled = 0;
+  bool extra_headers = false;
+  bool count_records = false;
+  size_t application_records = 0;
+
+  void add_test_headers(coro_http_response &response) {
+    if (extra_headers) {
+      count_records = true;
+      response.add_header("Content-Type", "text/plain; charset=UTF-8");
+      response.add_header("Vary", "Accept-Encoding");
+    }
+  }
 
   pipeline_test(bool use_tls, bool suspend_handler) : tls(use_tls) {
     using asio::ip::tcp;
@@ -107,8 +133,24 @@ struct pipeline_test {
       const auto dir =
           std::filesystem::path(__FILE__).parent_path().parent_path() /
           "include/cinatra";
-      REQUIRE(connection->init_ssl((dir / "server.crt").string(),
-                                   (dir / "server.key").string(), "test"));
+      auto ssl_context = coro_http_connection::make_ssl_context(
+          (dir / "server.crt").string(), (dir / "server.key").string(), "test");
+#ifdef TLS1_3_VERSION
+      SSL_CTX_set_num_tickets(ssl_context->native_handle(), 0);
+#endif
+      SSL_CTX_set_msg_callback_arg(ssl_context->native_handle(), this);
+      SSL_CTX_set_msg_callback(
+          ssl_context->native_handle(),
+          [](int write, int, int type, const void *data, size_t size, ::SSL *,
+             void *state) {
+            auto *test = static_cast<pipeline_test *>(state);
+            if (test->count_records && write && type == SSL3_RT_HEADER &&
+                size == 5 &&
+                static_cast<const unsigned char *>(data)[0] == 23) {
+              ++test->application_records;
+            }
+          });
+      REQUIRE(connection->init_ssl(std::move(ssl_context)));
     }
 #endif
     if (suspend_handler) {
@@ -120,6 +162,7 @@ struct pipeline_test {
             co_await coro_io::post([] {
             });
             CHECK(context.get_executor().running_in_this_thread());
+            add_test_headers(resp);
             resp.set_status_and_content(status_type::ok, std::string(value));
             ++handled;
           });
@@ -128,6 +171,7 @@ struct pipeline_test {
       router.set_http_handler<GET>(
           "/pipeline",
           [this](coro_http_request &req, coro_http_response &resp) {
+            add_test_headers(resp);
             resp.set_status_and_content(status_type::ok,
                                         std::string(req.get_query_value("n")));
             ++handled;
@@ -138,7 +182,9 @@ struct pipeline_test {
   template <typename Stream>
   void run(Stream &stream, const std::string &prefix, const std::string &suffix,
            const std::vector<std::string> &expected,
-           size_t replies_before_suffix, int expected_status) {
+           size_t replies_before_suffix, int expected_status,
+           const std::vector<int> &statuses = {},
+           size_t expected_handled = static_cast<size_t>(-1)) {
     // Fix the first read's contents independently of TCP/TLS packet boundaries.
     const auto seeded_size = std::min<size_t>(prefix.size(), 512);
     pipeline_test_io::read_control reads{prefix.substr(0, seeded_size)};
@@ -201,10 +247,11 @@ struct pipeline_test {
             throw std::system_error(ec);
           }
         }
-        auto body = co_await read_response(stream, received, expected_status);
+        const auto status = statuses.empty() ? expected_status : statuses[i];
+        auto body = co_await read_response(stream, received, status);
         CHECK(body == expected[i]);
       }
-      if (expected_status == 200) {
+      if ((statuses.empty() ? expected_status : statuses.back()) == 200) {
         REQUIRE(reads.buffer != nullptr);
         CHECK(reads.buffered().empty());
       }
@@ -212,7 +259,12 @@ struct pipeline_test {
         char byte;
         auto buffer = asio::buffer(&byte, 1);
         auto [ec, _] = co_await coro_io::async_read(stream, buffer, 1);
+#ifdef CINATRA_ENABLE_SSL
+        CHECK((ec == asio::error::eof ||
+               ec == asio::ssl::error::stream_truncated));
+#else
         CHECK(ec == asio::error::eof);
+#endif
       }
     };
     client().via(&executor).start([&](auto &&result) {
@@ -232,13 +284,21 @@ struct pipeline_test {
     CHECK_FALSE(timed_out);
     CHECK(client_done);
     CHECK(server_done);
-    CHECK(handled == expected.size());
-    if (expected_status != 200) {
+    CHECK(handled == (expected_handled == static_cast<size_t>(-1)
+                          ? expected.size()
+                          : expected_handled));
+    if (expected_status != 200 ||
+        (!statuses.empty() && statuses.back() != 200)) {
       CHECK(connection->has_closed());
       // The valid request was consumed; the malformed tail was not replayed.
       REQUIRE(reads.buffer != nullptr);
-      CHECK(reads.buffered() ==
-            prefix.substr(prefix.find(TWO_CRCF) + TWO_CRCF.size()));
+      if (statuses.empty()) {
+        CHECK(reads.buffered() ==
+              prefix.substr(prefix.find(TWO_CRCF) + TWO_CRCF.size()));
+      }
+      else {
+        CHECK(reads.buffered().empty());
+      }
     }
     connection->close();
     context.restart();
@@ -247,17 +307,20 @@ struct pipeline_test {
 
   void check(const std::string &prefix, const std::string &suffix,
              const std::vector<std::string> &expected,
-             size_t replies_before_suffix, int expected_status = 200) {
+             size_t replies_before_suffix, int expected_status = 200,
+             const std::vector<int> &statuses = {},
+             size_t expected_handled = static_cast<size_t>(-1)) {
 #ifdef CINATRA_ENABLE_SSL
     if (tls) {
       asio::ssl::context ssl_context(asio::ssl::context::tls_client);
       asio::ssl::stream<asio::ip::tcp::socket &> stream(peer, ssl_context);
       run(stream, prefix, suffix, expected, replies_before_suffix,
-          expected_status);
+          expected_status, statuses, expected_handled);
       return;
     }
 #endif
-    run(peer, prefix, suffix, expected, replies_before_suffix, expected_status);
+    run(peer, prefix, suffix, expected, replies_before_suffix, expected_status,
+        statuses, expected_handled);
   }
 };
 }  // namespace
@@ -303,3 +366,99 @@ TEST_CASE("pipeline closes after malformed buffered headers") {
                  request_for("must-not-run"),
              "", {"invalid http protocol"}, 1, 400);
 }
+
+TEST_CASE(
+    "bounded header matcher ignores body bytes at an exact header limit") {
+  const std::string eol{char(13), char(10)};
+  const auto header =
+      "POST / HTTP/1.1" + eol + "Content-Length: 10240" + eol + eol;
+  asio::streambuf buffer;
+  buffer.sputn(header.data(), header.size());
+  const std::string body(10240, 'x');
+  buffer.sputn(body.data(), body.size());
+  bool exceeded = false;
+  detail::bounded_http_header_matcher matcher{&buffer, header.size(),
+                                              &exceeded};
+  auto data = buffer.data();
+  auto begin = asio::buffers_begin(data);
+  auto result = matcher(begin, asio::buffers_end(data));
+  CHECK(result.second);
+  CHECK_FALSE(exceeded);
+  CHECK(size_t(result.first - begin) == header.size());
+  detail::bounded_http_header_matcher smaller{&buffer, header.size() - 1,
+                                              &exceeded};
+  result = smaller(begin, asio::buffers_end(data));
+  CHECK(result.second);
+  CHECK(exceeded);
+}
+
+TEST_CASE(
+    "bounded header matcher preserves limits across incremental searches") {
+  const std::string eol{char(13), char(10)};
+  const auto header = "GET / HTTP/1.1" + eol + "Host: localhost" + eol + eol;
+  asio::streambuf buffer;
+  const auto first = header.size() - 3;
+  buffer.sputn(header.data(), first);
+  bool exceeded = false;
+  detail::bounded_http_header_matcher matcher{&buffer, header.size(),
+                                              &exceeded};
+  auto data = buffer.data();
+  auto begin = asio::buffers_begin(data);
+  auto result = matcher(begin, asio::buffers_end(data));
+  REQUIRE_FALSE(result.second);
+  CHECK_FALSE(exceeded);
+  const auto position = size_t(result.first - begin);
+  buffer.sputn(header.data() + first, header.size() - first);
+  const std::string body(4096, 'b');
+  buffer.sputn(body.data(), body.size());
+  data = buffer.data();
+  begin = asio::buffers_begin(data);
+  result = matcher(begin + position, asio::buffers_end(data));
+  CHECK(result.second);
+  CHECK_FALSE(exceeded);
+  CHECK(size_t(result.first - begin) == header.size());
+
+  asio::streambuf invalid;
+  invalid.sputn(body.data(), 64);
+  detail::bounded_http_header_matcher limit{&invalid, 96, &exceeded};
+  data = invalid.data();
+  begin = asio::buffers_begin(data);
+  result = limit(begin, asio::buffers_end(data));
+  REQUIRE_FALSE(result.second);
+  invalid.sputn(body.data(), 32);
+  data = invalid.data();
+  begin = asio::buffers_begin(data);
+  result = limit(begin + 64, asio::buffers_end(data));
+  CHECK(result.second);
+  CHECK(exceeded);
+  CHECK(size_t(result.first - begin) == 96);
+}
+
+TEST_CASE(
+    "pipeline keeps prior response before rejecting a large next header") {
+  bool tls = false;
+  SUBCASE("TCP") {}
+#ifdef CINATRA_ENABLE_SSL
+  SUBCASE("TLS") { tls = true; }
+#endif
+  pipeline_test test(tls, false);
+  test.connection->set_max_http_header_size(128);
+  const std::string eol{char(13), char(10)};
+  const auto oversized = "GET /pipeline?n=must-not-run HTTP/1.1" + eol +
+                         "Host: localhost" + eol +
+                         "X-Pad: " + std::string(200, 'x') + eol + eol;
+  test.check(request_for("first") + oversized, "",
+             {"first", "request header too large"}, 2, 200, {200, 431}, 1);
+}
+
+#ifdef CINATRA_ENABLE_SSL
+TEST_CASE("native response headers share one TLS application record") {
+  bool suspend = false;
+  SUBCASE("direct handler") {}
+  SUBCASE("after worker work") { suspend = true; }
+  pipeline_test test(true, suspend);
+  test.extra_headers = true;
+  test.check(request_for("body"), "", {"body"}, 1);
+  CHECK(test.application_records == 1);
+}
+#endif

@@ -1,0 +1,89 @@
+name: Linux gzip and TLS buffering
+
+on:
+  push:
+    branches: [main, master, bench/httparena]
+  pull_request:
+    branches: [main, master, coro_http_server]
+
+jobs:
+  native_backends:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: g++-14
+            mode: Release
+            sanitizer: none
+          - compiler: clang++-18
+            mode: Debug
+            sanitizer: address
+          - compiler: clang++-18
+            mode: Debug
+            sanitizer: thread
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 clang-18 ninja-build cmake libssl-dev zlib1g-dev libdeflate-dev
+      - name: Configure separate sanitizer build
+        shell: bash
+        run: |
+          native_flags="-O1 -g1 -fno-omit-frame-pointer"
+          if [ "${{ matrix.sanitizer }}" != none ]; then
+            native_flags="$native_flags -fsanitize=${{ matrix.sanitizer }}"
+          fi
+          cmake -B build-native -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
+            -DCMAKE_CXX_FLAGS_DEBUG="$native_flags" \
+            -DENABLE_SANITIZER=OFF -DBUILD_EXAMPLES=OFF -DBUILD_PRESS_TOOL=OFF \
+            -DBUILD_HTTPARENA=ON \
+            -DCINATRA_ENABLE_LIBDEFLATE=ON -DCINATRA_TLS_BUFFERING=ON
+      - name: Build affected targets
+        run: |
+          cmake --build build-native -j2 --target \
+            test_http_pipeline test_static_precompressed test_tls_context test_websocket_buffering \
+            test_gzip_stream test_time_util test_http_parse \
+            test_tls_header_body \
+            test_cinatra httparena_server
+      - name: Run TLS, buffer, timer and shutdown regressions
+        shell: bash
+        working-directory: build-native/tests
+        run: |
+          native_prefix=()
+          if [ "${{ matrix.sanitizer }}" = thread ]; then
+            native_prefix=(setarch x86_64 -R)
+          fi
+          "${native_prefix[@]}" ctest --test-dir .. --output-on-failure -j1 \
+            -R '^(test_http_pipeline|test_static_precompressed|test_tls_context|test_websocket_buffering|test_gzip_stream|test_time_util|test_http_parse|test_tls_header_body)$'
+          "${native_prefix[@]}" ./test_cinatra \
+            --test-case='server threads serve concurrent connections,server shutdown drains accept loops,listener failure stops all acceptors,shutdown drains handlers awaiting off-thread work,optimistic*,test server start and stop,test server sync_start and stop,test multipart early return keeps server valid,test max http header size,request field limits reject before routing'
+      - name: Run TLS regressions with the socket BIO and default read buffer
+        shell: bash
+        run: |
+          native_flags="-O1 -g1 -fno-omit-frame-pointer"
+          native_prefix=()
+          if [ "${{ matrix.sanitizer }}" != none ]; then
+            native_flags="$native_flags -fsanitize=${{ matrix.sanitizer }}"
+          fi
+          if [ "${{ matrix.sanitizer }}" = thread ]; then
+            native_prefix=(setarch x86_64 -R)
+          fi
+          cmake -B build-socket-bio -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
+            -DCMAKE_CXX_FLAGS=-DCINATRA_OPENSSL_SOCKET_BIO \
+            -DCMAKE_CXX_FLAGS_DEBUG="$native_flags" \
+            -DENABLE_SANITIZER=OFF -DBUILD_EXAMPLES=OFF -DBUILD_PRESS_TOOL=OFF \
+            -DENABLE_SSL=ON -DCINATRA_TLS_BUFFERING=OFF
+          cmake --build build-socket-bio -j2 --target test_tls_context test_tls_header_body
+          "${native_prefix[@]}" ctest --test-dir build-socket-bio --output-on-failure -j1 \
+            -R '^(test_tls_context|test_tls_header_body)$'

@@ -9,6 +9,15 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#ifdef CINATRA_ENABLE_LIBDEFLATE
+#include "gzip_libdeflate.hpp"
+#else
+namespace cinatra::gzip_codec::detail {
+inline bool compress_small(std::string_view, std::string &, int) {
+  return false;
+}
+}  // namespace cinatra::gzip_codec::detail
+#endif
 namespace cinatra::gzip_codec {
 // from https://github.com/chafey/GZipCodec
 
@@ -22,9 +31,8 @@ class compress_stream {
  public:
   explicit compress_stream(std::string &output, int level = -1)
       : output_(output),
-        initialized_(deflateInit2(&stream_, level, Z_DEFLATED,
-                                  windowBits | GZIP_ENCODING, 8,
-                                  Z_DEFAULT_STRATEGY) == Z_OK) {}
+        level_(level),
+        failed_(level < Z_DEFAULT_COMPRESSION || level > Z_BEST_COMPRESSION) {}
 
   compress_stream(const compress_stream &) = delete;
   compress_stream &operator=(const compress_stream &) = delete;
@@ -35,7 +43,7 @@ class compress_stream {
     }
   }
 
-  bool good() const { return initialized_ && !failed_; }
+  bool good() const { return !failed_; }
 
   void push_back(char value) {
     if (!writable()) {
@@ -84,8 +92,18 @@ class compress_stream {
     if (!good() || finished_) {
       return good();
     }
+    if (!initialized_ &&
+        detail::compress_small(std::string_view(input_.data(), buffered_),
+                               output_, level_)) {
+      buffered_ = 0;
+      finished_ = true;
+      return true;
+    }
     flush_input();
     if (!good()) {
+      return false;
+    }
+    if (!initialize(0)) {
       return false;
     }
     int result;
@@ -112,6 +130,9 @@ class compress_stream {
   }
 
   void write(const char *data, size_t size) {
+    if (!initialize(size)) {
+      return;
+    }
     while (size != 0 && good()) {
       auto count = static_cast<uInt>((std::min)(
           size, static_cast<size_t>((std::numeric_limits<uInt>::max)())));
@@ -124,6 +145,26 @@ class compress_stream {
       size -= count;
     }
     stream_.next_in = Z_NULL;
+  }
+
+  bool initialize(size_t size) {
+    if (initialized_ || !good()) {
+      return good();
+    }
+    int bits = windowBits;
+    // A short input reaches zlib only at finish(), so its full size is known.
+    // A full buffer or a large span keeps the normal streaming workspace.
+    if (size < input_.size()) {
+      bits = 9;
+      while ((size_t{1} << bits) < size) {
+        ++bits;
+      }
+    }
+    initialized_ =
+        deflateInit2(&stream_, level_, Z_DEFLATED, bits | GZIP_ENCODING,
+                     (std::min)(bits - 6, 8), Z_DEFAULT_STRATEGY) == Z_OK;
+    failed_ = !initialized_;
+    return good();
   }
 
   int pump(int flush) {
@@ -140,10 +181,11 @@ class compress_stream {
   }
 
   std::string &output_;
+  int level_;
   z_stream stream_{};
   std::array<char, CHUNK> input_;
   size_t buffered_ = 0;
-  bool initialized_;
+  bool initialized_ = false;
   bool failed_ = false;
   bool finished_ = false;
 };
@@ -157,6 +199,10 @@ class compress_stream {
 // @return - true on success, false on failure
 inline bool compress(std::string_view data, std::string &compressed_data,
                      int level = -1) {
+  if (data.size() < CHUNK &&
+      detail::compress_small(data, compressed_data, level)) {
+    return true;
+  }
   unsigned char out[CHUNK];
   z_stream strm;
   strm.zalloc = Z_NULL;

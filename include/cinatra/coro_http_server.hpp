@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cerrno>
+#include <filesystem>
 #include <future>
 #include <memory>
 #include <stdexcept>
@@ -16,6 +18,7 @@
 #include "cinatra/coro_http_response.hpp"
 #include "cinatra/coro_http_router.hpp"
 #include "cinatra/define.h"
+#include "cinatra/http_parser.hpp"
 #include "cinatra/mime_types.hpp"
 #include "cinatra_log_wrapper.hpp"
 #include "coro_http_connection.hpp"
@@ -29,6 +32,39 @@ enum class file_resp_format_type {
   chunked,
   range,
 };
+
+// Change path only when an accepted regular sidecar exists. Prefer Brotli on
+// equal weights. The empty result lets the caller serve the original file.
+inline std::string_view select_precompressed_file(
+    std::filesystem::path &path, std::string_view accept_encoding) {
+  struct candidate {
+    std::string_view encoding;
+    const char *suffix;
+    double quality;
+  };
+  std::array candidates{
+      candidate{"br", ".br", accept_encoding_quality(accept_encoding, "br")},
+      candidate{"gzip", ".gz",
+                accept_encoding_quality(accept_encoding, "gzip")}};
+  if (candidates[0].quality < candidates[1].quality) {
+    std::swap(candidates[0], candidates[1]);
+  }
+  for (const auto &entry : candidates) {
+    if (entry.quality <= 0) {
+      break;
+    }
+    auto variant = path;
+    variant += entry.suffix;
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(
+            std::filesystem::symlink_status(variant, ec))) {
+      path = std::move(variant);
+      return entry.encoding;
+    }
+  }
+  return {};
+}
+
 class coro_http_server {
   using file_cache_type = std::unordered_map<std::string, std::string>;
   using file_cache_ptr = std::shared_ptr<file_cache_type>;
@@ -76,6 +112,14 @@ class coro_http_server {
 
   void set_no_delay(bool r) { no_delay_ = r; }
 
+  // Configure automatic Date and Server headers before starting the server.
+  void set_default_response_headers(bool enabled) {
+    default_response_headers_ = enabled;
+    server_header_ = enabled;
+  }
+
+  void set_server_header(bool enabled) { server_header_ = enabled; }
+
   void set_max_http_body_size(int64_t max_size) {
     max_http_body_len_ = max_size;
   }
@@ -115,27 +159,39 @@ class coro_http_server {
         });
       }
 
-      accept_pending_ = acceptors_.size();
+      // Prearm several accepts on an owned, plaintext listener so a
+      // readiness event can dispatch more than one new connection.
+      bool prearm_accepts = out_ctx_ == nullptr;
+#ifdef CINATRA_ENABLE_SSL
+      prearm_accepts = prearm_accepts && !use_ssl_;
+#endif
+      const size_t accept_depth = prearm_accepts ? 8 : 1;
+      accept_pending_ = acceptors_.size() * accept_depth;
+      auto on_accept_done = [promise, this](auto &&res) {
+        if (res.hasError()) {
+          accept_failed_ = true;
+          CINATRA_LOG_ERROR << "accept coroutine failed";
+          close_acceptors_async();
+        }
+        if (--accept_pending_ != 0) {
+          return;
+        }
+        if (accept_failed_) {
+          errc_ = std::make_error_code(std::errc::io_error);
+        }
+        auto ec = errc_ ? errc_ : res.value();
+        acceptor_close_waiter_.set_value();
+        promise->setValue(ec);
+      };
       for (size_t i = 0; i < acceptors_.size(); ++i) {
-        coro_io::ExecutorWrapper<> *fixed_executor =
-            acceptors_.size() > 1 ? pool_->get_executor_at(i) : nullptr;
-        accept(*acceptors_[i], fixed_executor)
-            .start([promise, this](auto &&res) {
-              if (res.hasError()) {
-                accept_failed_ = true;
-                CINATRA_LOG_ERROR << "accept coroutine failed";
-                close_acceptors_async();
-              }
-              if (--accept_pending_ != 0) {
-                return;
-              }
-              if (accept_failed_) {
-                errc_ = std::make_error_code(std::errc::io_error);
-              }
-              auto ec = errc_ ? errc_ : res.value();
-              acceptor_close_waiter_.set_value();
-              promise->setValue(ec);
-            });
+        auto *fixed_executor =
+            acceptors_.size() > 1 || (prearm_accepts && pool_->pool_size() == 1)
+                ? pool_->get_executor_at(i)
+                : nullptr;
+        for (size_t slot = 0; slot < accept_depth; ++slot) {
+          accept(*acceptors_[i], fixed_executor, prearm_accepts)
+              .start(on_accept_done);
+        }
       }
     }
     else {
@@ -361,6 +417,11 @@ class coro_http_server {
     format_type_ = type;
   }
 
+  // Configure before starting the server. Range requests use the original file.
+  void enable_precompressed_static_files(bool enabled = true) {
+    precompressed_static_files_ = enabled;
+  }
+
   void set_transfer_chunked_size(size_t size) { chunked_size_ = size; }
 
   // Enable background cache refresh for the static resource directory.
@@ -447,9 +508,14 @@ class coro_http_server {
           }
 
           std::error_code path_ec;
-          auto abs = fs::weakly_canonical(file_name, path_ec);
           auto base = fs::weakly_canonical(base_dir, path_ec);
-          if (path_ec || abs.string().find(base.string()) != 0) {
+          if (path_ec) {
+            resp.set_status(status_type::bad_request);
+            co_return;
+          }
+          auto abs = fs::weakly_canonical(file_name, path_ec);
+          auto relative = abs.lexically_relative(base);
+          if (path_ec || relative.empty() || *relative.begin() == "..") {
             resp.set_status(status_type::bad_request);
             co_return;
           }
@@ -469,11 +535,25 @@ class coro_http_server {
     std::string_view mime = get_mime_type(extension);
     auto range_str = req.get_header_value("Range");
 
+    std::string selected_file;
+    std::string_view encoding;
+    if (precompressed_static_files_ && range_str.empty()) {
+      const auto accept = req.get_accept_encoding();
+      if (!accept.empty()) {
+        fs::path variant(file_name);
+        encoding = select_precompressed_file(variant, accept);
+        if (!encoding.empty()) {
+          selected_file = variant.string();
+        }
+      }
+    }
+    const auto &read_path = encoding.empty() ? file_name : selected_file;
     auto cache = load_file_cache();
-    if (cache) {
-      if (auto it = cache->find(file_name); it != cache->end()) {
+    if (cache && (!precompressed_static_files_ || range_str.empty())) {
+      if (auto it = cache->find(read_path); it != cache->end()) {
         auto range_header = build_range_header(
-            mime, file_name, std::to_string(fs::file_size(file_name)));
+            mime, file_name, std::to_string(it->second.size()), 200, {},
+            encoding);
         resp.set_delay(true);
         const std::string &body = it->second;
         std::array<asio::const_buffer, 2> arr{asio::buffer(range_header),
@@ -486,20 +566,20 @@ class coro_http_server {
     std::string content;
     detail::resize(content, chunked_size_);
 
-    if (fs::is_directory(file_name)) {
+    if (fs::is_directory(read_path)) {
       resp.set_status(status_type::not_found);
       co_return;
     }
 
     std::error_code size_ec;
-    size_t file_size = fs::file_size(file_name, size_ec);
+    size_t file_size = fs::file_size(read_path, size_ec);
     if (size_ec) {
       resp.set_status(status_type::not_found);
       co_return;
     }
 
     coro_io::coro_file in_file{};
-    in_file.open(file_name, std::ios::in);
+    in_file.open(read_path, std::ios::in);
     if (!in_file.is_open()) {
 #ifndef NDEBUG
       resp.set_status_and_content(status_type::not_found,
@@ -512,6 +592,12 @@ class coro_http_server {
 
     if (format_type_ == file_resp_format_type::chunked && range_str.empty()) {
       resp.add_header("Content-Type", std::string{mime});
+      if (precompressed_static_files_) {
+        resp.add_header("Vary", "Accept-Encoding");
+        if (!encoding.empty()) {
+          resp.add_header("Content-Encoding", std::string(encoding));
+        }
+      }
       resp.set_format_type(format_type::chunked);
       bool ok;
       if (ok = co_await resp.get_conn()->begin_chunked(); !ok) {
@@ -607,8 +693,8 @@ class coro_http_server {
       co_return;
     }
 
-    auto range_header =
-        build_range_header(mime, file_name, std::to_string(file_size));
+    auto range_header = build_range_header(
+        mime, file_name, std::to_string(file_size), 200, {}, encoding);
     resp.set_delay(true);
     bool r = co_await req.get_conn()->write_data(range_header);
     if (!r) {
@@ -670,6 +756,14 @@ class coro_http_server {
  private:
   std::error_code listen() {
     CINATRA_LOG_INFO << "begin to listen " << port_;
+#ifdef CINATRA_ENABLE_SSL
+    if (use_ssl_) {
+      // Fully configure the context before any accept loop or TLS operation.
+      // Connections retain it until their SSL streams have been destroyed.
+      ssl_ctx_ = coro_http_connection::make_ssl_context(cert_file_, key_file_,
+                                                        passwd_);
+    }
+#endif
     using asio::ip::tcp;
     asio::error_code ec;
 
@@ -770,9 +864,9 @@ class coro_http_server {
 
   async_simple::coro::Lazy<std::error_code> accept(
       asio::ip::tcp::acceptor &acceptor,
-      coro_io::ExecutorWrapper<> *fixed_executor = nullptr) {
-    // Run the first async_accept on its context, serialized with close.
-    if (acceptors_.size() > 1) {
+      coro_io::ExecutorWrapper<> *fixed_executor, bool prearmed) {
+    // Initiate the queued accepts and close on the listener's executor.
+    if (prearmed || acceptors_.size() > 1) {
       co_await coro_io::post(
           [] {
           },
@@ -812,7 +906,10 @@ class coro_http_server {
       uint64_t conn_id = conn_id_.fetch_add(1, std::memory_order_relaxed) + 1;
       CINATRA_LOG_DEBUG << "new connection comming, id: " << conn_id;
       auto conn = std::make_shared<coro_http_connection>(
-          executor, std::move(socket), router_);
+          executor, std::move(socket), router_, default_response_headers_);
+      if (server_header_ != default_response_headers_) {
+        conn->set_server_header(server_header_);
+      }
       if (no_delay_) {
         conn->tcp_socket().set_option(asio::ip::tcp::no_delay(true));
       }
@@ -839,7 +936,7 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_) {
-        conn->init_ssl(cert_file_, key_file_, passwd_);
+        conn->init_ssl(ssl_ctx_);
       }
 #endif
 
@@ -997,7 +1094,9 @@ class coro_http_server {
     header_str.append("Content-Length: ");
     header_str.append(std::to_string(content_len)).append(CRCF);
     header_str.append("Content-Type: multipart/byteranges; boundary=");
-    header_str.append(BOUNDARY).append(TWO_CRCF);
+    header_str.append(BOUNDARY).append(CRCF);
+    append_static_encoding_headers(header_str);
+    header_str.append(CRCF);
     return header_str;
   }
 
@@ -1029,7 +1128,8 @@ class coro_http_server {
                                  std::string_view filename,
                                  std::string_view file_size_str,
                                  int status = 200,
-                                 std::string_view content_range = "") {
+                                 std::string_view content_range = "",
+                                 std::string_view encoding = "") {
     std::string header_str = "HTTP/1.1 ";
     header_str.append(std::to_string(status));
     header_str.append(" OK\r\nAccept-Ranges: bytes\r\n");
@@ -1049,8 +1149,20 @@ class coro_http_server {
     header_str.append("Connection: keep-alive\r\n");
     header_str.append("Content-Type: ").append(mime).append("\r\n");
     header_str.append("Content-Length: ");
-    header_str.append(file_size_str).append("\r\n\r\n");
+    header_str.append(file_size_str).append(CRCF);
+    append_static_encoding_headers(header_str, encoding);
+    header_str.append(CRCF);
     return header_str;
+  }
+
+  void append_static_encoding_headers(std::string &header,
+                                      std::string_view encoding = {}) const {
+    if (precompressed_static_files_) {
+      header.append("Vary: Accept-Encoding\r\n");
+      if (!encoding.empty()) {
+        header.append("Content-Encoding: ").append(encoding).append(CRCF);
+      }
+    }
   }
 
   async_simple::coro::Lazy<bool> send_single_part(auto &in_file, auto &content,
@@ -1233,6 +1345,8 @@ class coro_http_server {
   std::atomic<size_t> accept_pending_{0};
   std::atomic<bool> accept_failed_{false};
   bool no_delay_ = true;
+  bool default_response_headers_ = true;
+  bool server_header_ = true;
 
   std::atomic<uint64_t> conn_id_{0};
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
@@ -1263,7 +1377,9 @@ class coro_http_server {
   std::promise<void> cache_refresh_stopped_;
   std::future<void> cache_refresh_done_;
   file_resp_format_type format_type_ = file_resp_format_type::range;
+  bool precompressed_static_files_ = false;
 #ifdef CINATRA_ENABLE_SSL
+  std::shared_ptr<asio::ssl::context> ssl_ctx_;
   std::string cert_file_;
   std::string key_file_;
   std::string passwd_;

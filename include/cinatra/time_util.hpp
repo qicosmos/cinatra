@@ -282,7 +282,17 @@ template <size_t Hour = 8, size_t N>
 inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
                                            std::string_view format) {
   static_assert(N >= 20, "wrong buf");
-  struct tm *loc_time = gmtime(&t);
+  struct tm calendar;
+#ifdef _WIN32
+  if (gmtime_s(&calendar, &t) != 0) {
+    return {};
+  }
+#else
+  if (gmtime_r(&t, &calendar) == nullptr) {
+    return {};
+  }
+#endif
+  const auto *loc_time = &calendar;
 
   char *p = buf;
 

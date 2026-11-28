@@ -2,6 +2,7 @@
 #include <async_simple/Executor.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <array>
 #include <asio/buffer.hpp>
 #include <iterator>
 #include <system_error>
@@ -29,6 +30,9 @@
 #endif
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#if defined(CINATRA_ENABLE_SSL) && defined(CINATRA_OPENSSL_SOCKET_BIO)
+#include "socket_tls_stream.hpp"
+#endif
 
 namespace cinatra {
 struct websocket_result {
@@ -43,49 +47,60 @@ class coro_http_connection
  public:
   template <typename executor_t>
   coro_http_connection(executor_t *executor, asio::ip::tcp::socket socket,
-                       coro_http_router &router)
+                       coro_http_router &router, bool default_headers = true)
       : executor_(executor),
         socket_(std::move(socket)),
         router_(router),
-        max_http_header_size_(8 * 1024),
-        head_buf_(max_http_header_size_),
         request_(parser_, this),
-        response_(this) {
+        response_(this, default_headers) {
     buffers_.reserve(3);
   }
 
   ~coro_http_connection() { close(); }
 
 #ifdef CINATRA_ENABLE_SSL
-  bool init_ssl(const std::string &cert_file, const std::string &key_file,
-                std::string passwd) {
+  static std::shared_ptr<asio::ssl::context> make_ssl_context(
+      const std::string &cert_file, const std::string &key_file,
+      std::string passwd) {
     unsigned long ssl_options = asio::ssl::context::default_workarounds |
                                 asio::ssl::context::no_sslv2 |
                                 asio::ssl::context::single_dh_use;
+    auto context =
+        std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23);
+    context->set_options(ssl_options);
+    if (!passwd.empty()) {
+      context->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+        return pwd;
+      });
+    }
+
+    std::error_code ec;
+    if (fs::exists(cert_file, ec)) {
+      context->use_certificate_chain_file(cert_file);
+    }
+    if (fs::exists(key_file, ec)) {
+      context->use_private_key_file(key_file, asio::ssl::context::pem);
+    }
+    return context;
+  }
+
+  bool init_ssl(const std::string &cert_file, const std::string &key_file,
+                std::string passwd) {
     try {
-      ssl_ctx_ =
-          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+      return init_ssl(make_ssl_context(cert_file, key_file, std::move(passwd)));
+    } catch (const std::exception &e) {
+      CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
+      return false;
+    }
+  }
 
-      ssl_ctx_->set_options(ssl_options);
-      if (!passwd.empty()) {
-        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
-          return pwd;
-        });
-      }
-
-      std::error_code ec;
-      if (fs::exists(cert_file, ec)) {
-        ssl_ctx_->use_certificate_chain_file(std::move(cert_file));
-      }
-
-      if (fs::exists(key_file, ec)) {
-        ssl_ctx_->use_private_key_file(std::move(key_file),
-                                       asio::ssl::context::pem);
-      }
-
-      ssl_stream_ =
-          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
-              socket_, *ssl_ctx_);
+  bool init_ssl(std::shared_ptr<asio::ssl::context> context) {
+    if (!context) {
+      return false;
+    }
+    try {
+      ssl_ctx_ = std::move(context);
+      ssl_stream_ = std::make_unique<server_tls_stream>(socket_, *ssl_ctx_);
       use_ssl_ = true;
     } catch (const std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
@@ -101,8 +116,16 @@ class coro_http_connection
 #endif
     std::chrono::system_clock::time_point start{};
     std::chrono::system_clock::time_point mid{};
-    std::destroy_at(&head_buf_);
-    new (&head_buf_) asio::streambuf(max_http_header_size_);
+#if defined(CINATRA_ENABLE_SSL) && defined(CINATRA_TLS_BUFFERING)
+    const bool use_tls_buffering = use_ssl_;
+#else
+    constexpr bool use_tls_buffering = false;
+#endif
+    if (use_tls_buffering) {
+      constexpr size_t tls_record_size = 16 * 1024;
+      head_buf_.prepare(tls_record_size);
+      head_buf_.commit(0);
+    }
     while (true) {
 #ifdef CINATRA_ENABLE_SSL
       if (use_ssl_ && !has_shake) {
@@ -117,9 +140,11 @@ class coro_http_connection
         has_shake = true;
       }
 #endif
-      auto [ec, size] =
-          co_await async_read_until(head_buf_, detail::http_header_matcher{});
-      if (ec == asio::error::not_found) {
+      bool header_too_large = false;
+      auto [ec, size] = co_await async_read_until(
+          head_buf_, detail::bounded_http_header_matcher{
+                         &head_buf_, max_http_header_size_, &header_too_large});
+      if (header_too_large || ec == asio::error::not_found) {
         CINATRA_LOG_WARNING << "http header too large (> "
                             << max_http_header_size_ << " bytes)";
         response_.set_status_and_content(
@@ -163,6 +188,7 @@ class coro_http_connection
       keep_alive_ = check_keep_alive();
 
       auto type = request_.get_content_type();
+      std::string_view buffered_body;
 
       if (type != content_type::chunked && type != content_type::multipart) {
         size_t body_len = (size_t)parser_.body_len();
@@ -190,10 +216,17 @@ class coro_http_connection
         }
         else if (body_len <= head_buf_.size()) {
           if (body_len > 0) {
-            detail::resize(body_, body_len);
             auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
-            memcpy(body_.data(), data_ptr, body_len);
-            head_buf_.consume(head_buf_.size());
+            if (use_tls_buffering) {
+              // The connection owns this storage until routing and reply
+              // finish.
+              buffered_body = {data_ptr, body_len};
+            }
+            else {
+              detail::resize(body_, body_len);
+              memcpy(body_.data(), data_ptr, body_len);
+            }
+            head_buf_.consume(body_len);
           }
         }
         else {
@@ -225,8 +258,10 @@ class coro_http_connection
         key = decode_key;
       }
 
-      if (!body_.empty()) {
-        request_.set_body(body_);
+      if (!buffered_body.empty() || !body_.empty()) {
+        request_.set_body_view(
+            buffered_body.empty() ? std::string_view(body_) : buffered_body,
+            type);
         if (parser_.parameter_limit_exceeded()) [[unlikely]] {
           CINATRA_LOG_WARNING << "too many form fields";
           response_.set_status_and_content(
@@ -366,6 +401,18 @@ class coro_http_connection
                 // Keep an incomplete next request for the next read.
                 break;
               }
+              if (pos + TWO_CRCF.length() > max_http_header_size_) {
+                coro_http_response rejected(this);
+                rejected.need_date_head(response_.need_date());
+                rejected.need_server_head(response_.need_server());
+                rejected.set_status_and_content(
+                    status_type::request_header_fields_too_large,
+                    "request header too large");
+                rejected.build_resp_str(resp_str_);
+                head_buf_.consume(head_buf_.size());
+                keep_alive_ = false;
+                break;
+              }
               http_parser parser;
               int head_len = parser.parse_request(next_data_ptr, left_size, 0);
               if (head_len <= 0) {
@@ -386,6 +433,7 @@ class coro_http_connection
               coro_http_request req(parser, this);
               coro_http_response resp(this);
               resp.need_date_head(response_.need_date());
+              resp.need_server_head(response_.need_server());
               if (auto handler = router_.get_handler(next_key); handler) {
                 router_.route(handler, req, resp, key);
               }
@@ -447,7 +495,8 @@ class coro_http_connection
     size_t size;
     if (multi_buf_) {
       if (need_to_bufffer) {
-        response_.to_buffers(buffers_, chunk_size_str_);
+        // chunk_size_str_ owns the compact header until this write completes.
+        response_.to_buffers_for_write(buffers_, chunk_size_str_);
       }
       std::tie(ec, size) = co_await async_write(buffers_);
     }
@@ -677,10 +726,23 @@ class coro_http_connection
     co_return result;
   }
 
+  // Disable to batch data frames already in the read buffer. Reads flush before
+  // waiting for more input; control frames and full buffers also flush. As with
+  // immediate writes, serialize reads/writes on the connection's executor.
+  void set_websocket_auto_flush(bool enabled) { ws_auto_flush_ = enabled; }
+
+  async_simple::coro::Lazy<std::error_code> flush_websocket() {
+    if (ws_write_buffer_.empty()) {
+      co_return std::error_code{};
+    }
+    auto [ec, size] = co_await async_write(asio::buffer(ws_write_buffer_));
+    ws_write_buffer_.clear();
+    co_return ec;
+  }
+
   async_simple::coro::Lazy<std::error_code> write_websocket(
       std::string_view msg, opcode op = opcode::text, bool eof = true) {
-    std::vector<asio::const_buffer> buffers;
-    std::string_view header;
+    bool compressed = false;
 #ifdef CINATRA_ENABLE_GZIP
     std::string dest_buf;
     if (is_client_ws_compressed_ && msg.size() > 0) {
@@ -689,24 +751,39 @@ class coro_http_connection
         co_return std::make_error_code(std::errc::protocol_error);
       }
 
-      header = ws_.encode_ws_header(dest_buf.length(), op, eof, true, false);
-      buffers.push_back(asio::buffer(header));
-      buffers.push_back(asio::buffer(dest_buf));
-    }
-    else {
-#endif
-      header = ws_.encode_ws_header(msg.length(), op, eof, false, false);
-      buffers.push_back(asio::buffer(header));
-      buffers.push_back(asio::buffer(msg));
-#ifdef CINATRA_ENABLE_GZIP
+      msg = dest_buf;
+      compressed = true;
     }
 #endif
+    auto header = ws_.encode_ws_header(msg.size(), op, eof, compressed, false);
+    auto frame_size = header.size() + msg.size();
+    bool buffer_frame = !ws_auto_flush_ && static_cast<uint8_t>(op) < 0x8 &&
+                        msg.size() <= websocket_write_size - header.size();
+    if (!ws_write_buffer_.empty() &&
+        (!buffer_frame ||
+         ws_write_buffer_.size() + frame_size > websocket_write_size)) {
+      if (auto ec = co_await flush_websocket(); ec) {
+        co_return ec;
+      }
+    }
+    if (buffer_frame) {
+      // Both the encoder's reused header and the caller's payload may change
+      // before flush. Keep their bytes in bounded, connection-owned storage.
+      ws_write_buffer_.append(header);
+      ws_write_buffer_.append(msg);
+      co_return std::error_code{};
+    }
+    std::array<asio::const_buffer, 2> buffers{asio::buffer(header),
+                                              asio::buffer(msg)};
     auto [ec, sz] = co_await async_write(buffers);
     co_return ec;
   }
 
   async_simple::coro::Lazy<websocket_result> read_websocket() {
-    auto [ec, ws_hd_size] = co_await async_read(head_buf_, SHORT_HEADER);
+    std::error_code ec;
+    if (head_buf_.size() < SHORT_HEADER) {
+      ec = co_await read_websocket_buffer(SHORT_HEADER);
+    }
     websocket_result result{ec};
     if (ec) {
       close();
@@ -717,8 +794,8 @@ class coro_http_connection
       const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
       auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
       if (status == ws_header_status::complete) {
+        head_buf_.consume(ws_.len_bytes());
         ws_.reset_len_bytes();
-        head_buf_.consume(head_buf_.size());
         std::span<char> payload{};
         auto payload_length = ws_.payload_length();
 
@@ -734,13 +811,38 @@ class coro_http_connection
         }
 
         if (payload_length > 0) {
+          // Prefetch small frames, but read large payloads directly into their
+          // owner rather than growing the bounded read-ahead buffer.
+          if (head_buf_.size() < payload_length &&
+              payload_length <= websocket_read_size &&
+              payload_length <= head_buf_.max_size()) {
+            if (auto ec = co_await read_websocket_buffer(payload_length); ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
+          }
           detail::resize(body_, payload_length);
-          auto [ec, read_sz] =
-              co_await async_read(asio::buffer(body_), payload_length);
-          if (ec) {
-            close();
-            result.ec = ec;
-            break;
+          auto buffered = std::min(payload_length, head_buf_.size());
+          if (buffered > 0) {
+            asio::buffer_copy(asio::buffer(body_.data(), buffered),
+                              head_buf_.data(), buffered);
+            head_buf_.consume(buffered);
+          }
+          if (buffered < payload_length) {
+            if (auto ec = co_await flush_websocket(); ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
+            auto remaining = payload_length - buffered;
+            auto [ec, read_sz] = co_await async_read(
+                asio::buffer(body_.data() + buffered, remaining), remaining);
+            if (ec) {
+              close();
+              result.ec = ec;
+              break;
+            }
           }
           payload = body_;
         }
@@ -807,11 +909,13 @@ class coro_http_connection
         co_return result;
       }
       else if (status == ws_header_status::incomplete) {
-        auto [ec, sz] = co_await async_read(head_buf_, ws_.left_header_len());
-        if (ec) {
-          close();
-          result.ec = ec;
-          break;
+        if (head_buf_.size() < size_t(ws_.len_bytes())) {
+          auto ec = co_await read_websocket_buffer(ws_.len_bytes());
+          if (ec) {
+            close();
+            result.ec = ec;
+            break;
+          }
         }
         continue;
       }
@@ -854,6 +958,10 @@ class coro_http_connection
   void set_shrink_to_fit(bool r) {
     need_shrink_every_time_ = r;
     response_.set_shrink_to_fit(r);
+  }
+
+  void set_server_header(bool enabled) {
+    response_.set_default_server_header(enabled);
   }
 
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
@@ -974,6 +1082,41 @@ class coro_http_connection
   }
 
  private:
+  static constexpr size_t websocket_read_size = 4096;
+  static constexpr size_t websocket_write_size = 64 * 1024;
+
+  async_simple::coro::Lazy<std::error_code> read_websocket_buffer(size_t size) {
+    while (head_buf_.size() < size) {
+      if (auto ec = co_await flush_websocket(); ec) {
+        co_return ec;
+      }
+#ifdef INJECT_FOR_HTTP_SEVER_TEST
+      if (read_failed_forever_) {
+        co_return std::make_error_code(std::errc::io_error);
+      }
+#endif
+      set_last_time();
+      auto buffer = head_buf_.prepare(std::min(
+          websocket_read_size, head_buf_.max_size() - head_buf_.size()));
+      std::pair<std::error_code, size_t> read;
+#ifdef CINATRA_ENABLE_SSL
+      if (use_ssl_) {
+        read = co_await coro_io::async_read_some(*ssl_stream_, buffer);
+      }
+      else {
+#endif
+        read = co_await coro_io::async_read_some(socket_, buffer);
+#ifdef CINATRA_ENABLE_SSL
+      }
+#endif
+      head_buf_.commit(read.second);
+      if (read.first) {
+        co_return read.first;
+      }
+    }
+    co_return std::error_code{};
+  }
+
   // Own temporary buffer sequences while retaining references to lvalues.
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>>
@@ -1121,6 +1264,7 @@ class coro_http_connection
   asio::ip::tcp::socket socket_;
   coro_http_router &router_;
   size_t max_http_header_size_ = 8 * 1024;
+  // The header matcher enforces the limit independently of read capacity.
   asio::streambuf head_buf_;
   std::string body_;
   asio::streambuf chunked_buf_;
@@ -1145,9 +1289,16 @@ class coro_http_connection
 #endif
 
   websocket ws_;
+  bool ws_auto_flush_ = true;
+  std::string ws_write_buffer_;
 #ifdef CINATRA_ENABLE_SSL
-  std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> ssl_stream_;
+  std::shared_ptr<asio::ssl::context> ssl_ctx_;
+#ifdef CINATRA_OPENSSL_SOCKET_BIO
+  using server_tls_stream = detail::socket_tls_stream;
+#else
+  using server_tls_stream = asio::ssl::stream<asio::ip::tcp::socket &>;
+#endif
+  std::unique_ptr<server_tls_stream> ssl_stream_;
   bool use_ssl_ = false;
 #endif
   bool need_shrink_every_time_ = false;
