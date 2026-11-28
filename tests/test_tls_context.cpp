@@ -106,4 +106,35 @@ TEST_CASE("server keeps TLS credentials for concurrent later connections") {
   server.stop();
   CHECK(replies == clients);
 }
+
+TEST_CASE("client verifies TLS hostname on the first connection") {
+  const auto cert_dir =
+      std::filesystem::path(__FILE__).parent_path().parent_path() /
+      "include/cinatra";
+  const auto cert = (cert_dir / "server.crt").string();
+  coro_http_server server(1, 0, "127.0.0.1", false);
+  server.init_ssl(cert, (cert_dir / "server.key").string(), "test");
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  auto serving = server.async_start();
+  REQUIRE_FALSE(server.get_errc());
+
+  const std::string uri =
+      "https://127.0.0.1:" + std::to_string(server.port()) + "/";
+  const auto get = [&](const char *hostname) {
+    coro_http_client client;
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                            "server.crt", hostname));
+    const auto result = client.get(uri);
+    return std::pair(result.net_err, result.status);
+  };
+  const auto [valid_error, valid_status] = get("localhost");
+  CHECK_FALSE(valid_error);
+  CHECK(valid_status == 200);
+  const auto [invalid_error, invalid_status] = get("127.0.0.1");
+  CHECK(invalid_error);
+  CHECK(invalid_status != 200);
+}
 #endif

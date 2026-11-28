@@ -250,7 +250,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
       if (!sni_hostname.empty()) {
-        ssl_ctx_->set_verify_callback(
+        socket_->ssl_stream_->set_verify_callback(
             asio::ssl::host_name_verification(sni_hostname));
 
         if (need_set_sni_host_) {
@@ -2182,15 +2182,15 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         chunked_buf_.consume(size);
         data.eof = true;
         if constexpr (is_sse_event_handler_v<BodyTarget>) {
-          ec = parse_sse_events({}, *out_buf.handler, true);
+          ec = co_await parse_sse_events({}, *out_buf.handler, true);
         }
         break;
       }
 
       data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
       if constexpr (is_sse_event_handler_v<BodyTarget>) {
-        ec = parse_sse_events({data_ptr, (size_t)chunk_size}, *out_buf.handler,
-                              false);
+        ec = co_await parse_sse_events({data_ptr, (size_t)chunk_size},
+                                       *out_buf.handler, false);
       }
       else {
         if (ctx.resp_body_stream) {
@@ -2211,8 +2211,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   template <typename Handler>
-  std::error_code parse_sse_events(std::string_view chunk, Handler &handler,
-                                   bool flush) {
+  async_simple::coro::Lazy<std::error_code> parse_sse_events(
+      std::string_view chunk, Handler &handler, bool flush) {
+    using result_type = std::invoke_result_t<Handler &, const sse_event &>;
     if (!chunk.empty()) {
       resp_chunk_str_.append(chunk.data(), chunk.size());
     }
@@ -2248,25 +2249,42 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-      auto ec = dispatch_sse_event(
-          std::string_view{resp_chunk_str_.data(), event_end}, handler);
+      std::error_code ec;
+      sse_event event;
+      if (parse_sse_event({resp_chunk_str_.data(), event_end}, event)) {
+        if constexpr (std::is_same_v<result_type,
+                                     async_simple::coro::Lazy<bool>>) {
+          if (!co_await handler(event)) {
+            ec = std::make_error_code(std::errc::operation_canceled);
+          }
+        }
+        else if constexpr (std::is_same_v<result_type, std::error_code>) {
+          ec = handler(event);
+        }
+        else if constexpr (std::is_same_v<result_type, bool>) {
+          if (!handler(event)) {
+            ec = std::make_error_code(std::errc::operation_canceled);
+          }
+        }
+        else {
+          handler(event);
+        }
+      }
       resp_chunk_str_.erase(0, event_next);
       if (ec) {
-        return ec;
+        co_return ec;
       }
     }
 
-    return {};
+    co_return std::error_code{};
   }
 
-  template <typename Handler>
-  std::error_code dispatch_sse_event(std::string_view raw, Handler &handler) {
+  static bool parse_sse_event(std::string_view raw, sse_event &event) {
     if (raw.size() >= 3 && (unsigned char)raw[0] == 0xef &&
         (unsigned char)raw[1] == 0xbb && (unsigned char)raw[2] == 0xbf) {
       raw.remove_prefix(3);
     }
 
-    sse_event event;
     bool has_data = false;
     size_t start = 0;
     while (start < raw.size()) {
@@ -2319,26 +2337,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
     }
 
-    if (!has_data) {
-      return {};
-    }
-
-    if constexpr (std::is_same_v<
-                      std::invoke_result_t<Handler &, const sse_event &>,
-                      std::error_code>) {
-      return handler(event);
-    }
-    else if constexpr (std::is_same_v<
-                           std::invoke_result_t<Handler &, const sse_event &>,
-                           bool>) {
-      return handler(event)
-                 ? std::error_code{}
-                 : std::make_error_code(std::errc::operation_canceled);
-    }
-    else {
-      handler(event);
-      return {};
-    }
+    return has_data;
   }
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
