@@ -2,7 +2,9 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "cinatra/http_header_matcher.hpp"
@@ -462,3 +464,74 @@ TEST_CASE("native response headers share one TLS application record") {
   CHECK(test.application_records == 1);
 }
 #endif
+
+TEST_CASE("SSE awaits the event handler on the shared executor") {
+  bool tls = false;
+  SUBCASE("HTTP") {}
+#ifdef CINATRA_ENABLE_SSL
+  SUBCASE("HTTPS") { tls = true; }
+#endif
+  asio::io_context context;
+  coro_http_server server(context, 0, "127.0.0.1");
+#ifdef CINATRA_ENABLE_SSL
+  if (tls) {
+    const auto dir =
+        std::filesystem::path(__FILE__).parent_path().parent_path() /
+        "include/cinatra";
+    server.init_ssl((dir / "server.crt").string(),
+                    (dir / "server.key").string(), "test");
+  }
+#endif
+  using async_simple::coro::Lazy;
+  server.set_http_handler<POST>(
+      "/", [](coro_http_request &, coro_http_response &resp) -> Lazy<void> {
+        auto *conn = resp.get_conn();
+        if (co_await conn->begin_sse() &&
+            co_await conn->write_chunked(
+                "data: first\r\n\r\ndata: stop\r\n\r\ndata: extra\r\n\r\n")) {
+          co_await conn->end_sse();
+        }
+      });
+  auto serving = server.async_start();
+  REQUIRE_FALSE(server.get_errc());
+  std::jthread io([&] {
+    context.run();
+  });
+
+  coro_http_client client(context.get_executor());
+  client.set_req_timeout(2s);
+  bool callback_throws = true;
+  std::vector<std::string> events;
+  auto handler = [&](const sse_event &event) -> Lazy<bool> {
+    // Posting suspends the handler even when all events arrived in one chunk.
+    co_await coro_io::post(
+        [] {
+        },
+        &client.get_executor());
+    CHECK(context.get_executor().running_in_this_thread());
+    if (callback_throws) {
+      throw std::runtime_error("SSE callback failed");
+    }
+    events.push_back(event.data);
+    co_return event.data != "stop";
+  };
+  const auto url = (tls ? "https://" : "http://") + std::string("127.0.0.1:") +
+                   std::to_string(server.port()) + "/";
+  const auto request = [&] {
+    return async_simple::coro::syncAwait(
+        client.async_post_sse(url, "prompt", req_content_type::text, handler)
+            .via(&client.get_executor()));
+  };
+  CHECK_THROWS_WITH_AS(request(), "SSE callback failed", std::runtime_error);
+  CHECK(client.has_closed());
+  callback_throws = false;
+  const auto result = request();
+  client.close();
+  server.stop();
+  io.join();
+
+  CHECK_FALSE(result.net_err);
+  CHECK(result.status == 200);
+  CHECK_FALSE(result.eof);
+  CHECK((events == std::vector<std::string>{"first", "stop"}));
+}
