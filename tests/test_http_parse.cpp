@@ -219,6 +219,24 @@ TEST_CASE("http_request test") {
   CHECK(req.get_encoding_type() == content_encoding::none);
 }
 
+TEST_CASE("Accept-Encoding quality uses explicit weights before wildcard") {
+  CHECK(accept_encoding_quality("", "gzip") == 0);
+  CHECK(accept_encoding_quality("x-gzip", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip", "gzip") == 1);
+  CHECK(accept_encoding_quality("*;q=1, gzip;q=0", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip;q=0, *;q=1", "gzip") == 0);
+  CHECK(accept_encoding_quality("gzip;q=0, *;q=0.125", "br") == 0.125);
+  CHECK(accept_encoding_quality("gzip;q=1.000", "gzip") == 1);
+  const auto weighted = "\tBr ;\tQ=0.4\t, gzip;q=0.800";
+  CHECK(accept_encoding_quality(weighted, "br") == 0.4);
+  CHECK(accept_encoding_quality(weighted, "gzip") == 0.8);
+
+  for (const auto header : {"gzip;q=", "gzip;q=nan", "gzip;q=1.001",
+                            "gzip;q=0.1234", "gzip;q=0.1e0"}) {
+    CHECK(accept_encoding_quality(header, "gzip") == 0);
+  }
+}
+
 TEST_CASE("request content type follows header order and chunked precedence") {
   http_parser parser{};
   coro_http_request request(parser, nullptr);

@@ -23,6 +23,7 @@
 #endif
 
 #include "cinatra/coro_http_server.hpp"
+#include "cinatra/http_parser.hpp"
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "json_response.hpp"
@@ -47,41 +48,6 @@ int64_t number(std::string_view value) {
   int64_t result = 0;
   std::from_chars(value.data(), value.data() + value.size(), result);
   return result;
-}
-
-double encoding_quality(std::string_view header, std::string_view encoding) {
-  double wildcard = 0;
-  while (!header.empty()) {
-    const auto comma = header.find(',');
-    auto entry = trim_sv(header.substr(0, comma));
-    const auto semicolon = entry.find(';');
-    const auto name = trim_sv(entry.substr(0, semicolon));
-    double quality = 1;
-    if (semicolon != std::string_view::npos) {
-      auto parameter = trim_sv(entry.substr(semicolon + 1));
-      if (parameter.starts_with("q=")) {
-        parameter.remove_prefix(2);
-        const auto [end, error] = std::from_chars(
-            parameter.data(), parameter.data() + parameter.size(), quality);
-        if (error != std::errc{} ||
-            end != parameter.data() + parameter.size() ||
-            !(quality >= 0 && quality <= 1)) {
-          quality = 0;
-        }
-      }
-    }
-    if (name == encoding) {
-      return quality;
-    }
-    if (name == "*") {
-      wildcard = quality;
-    }
-    if (comma == std::string_view::npos) {
-      break;
-    }
-    header.remove_prefix(comma + 1);
-  }
-  return wildcard;
 }
 
 size_t worker_count() {
@@ -155,35 +121,10 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
         auto path =
             std::filesystem::path(directory ? directory : "/data/static") /
             name;
-        const auto extension = get_extension(name);
-        auto mime = get_mime_type(extension);
-        if (extension == ".js") {
-          mime = "application/javascript";
-        }
-        else if (extension == ".woff2") {
-          mime = "font/woff2";
-        }
-        else if (extension == ".webp") {
-          mime = "image/webp";
-        }
-        const auto accept = request.get_accept_encoding();
-        const auto br = encoding_quality(accept, "br");
-        const auto gzip = encoding_quality(accept, "gzip");
-        std::string_view selected_encoding;
+        const auto mime = get_mime_type(get_extension(name));
+        const auto selected_encoding =
+            select_precompressed_file(path, request.get_accept_encoding());
         std::error_code error;
-        for (const auto encoding :
-             br >= gzip ? std::array{"br", "gzip"} : std::array{"gzip", "br"}) {
-          if ((std::string_view(encoding) == "br" ? br : gzip) <= 0) {
-            continue;
-          }
-          auto variant = path;
-          variant += std::string_view(encoding) == "br" ? ".br" : ".gz";
-          if (std::filesystem::is_regular_file(variant, error)) {
-            path = std::move(variant);
-            selected_encoding = encoding;
-            break;
-          }
-        }
         const auto size = std::filesystem::file_size(path, error);
 #ifdef ENABLE_FILE_IO_URING
         coro_io::coro_file file(
@@ -264,7 +205,7 @@ void register_routes(coro_http_server &server, const std::vector<Item> &dataset,
         const JsonResponse body{{items, multiplier}, items.size()};
         response.add_header_span(json_headers);
         const auto encoding =
-            encoding_quality(request.get_accept_encoding(), "gzip") > 0
+            accept_encoding_quality(request.get_accept_encoding(), "gzip") > 0
                 ? content_encoding::gzip
                 : content_encoding::none;
         response.set_buffered_content(

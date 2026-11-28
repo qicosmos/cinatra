@@ -50,7 +50,7 @@ jobs:
       - name: Build affected targets
         run: |
           cmake --build build-native -j2 --target \
-            test_http_pipeline test_tls_context test_websocket_buffering \
+            test_http_pipeline test_static_precompressed test_tls_context test_websocket_buffering \
             test_gzip_stream test_time_util test_http_parse \
             test_tls_header_body \
             test_cinatra httparena_server
@@ -63,7 +63,7 @@ jobs:
             native_prefix=(setarch x86_64 -R)
           fi
           "${native_prefix[@]}" ctest --test-dir .. --output-on-failure -j1 \
-            -R '^(test_http_pipeline|test_tls_context|test_websocket_buffering|test_gzip_stream|test_time_util|test_http_parse|test_tls_header_body)$'
+            -R '^(test_http_pipeline|test_static_precompressed|test_tls_context|test_websocket_buffering|test_gzip_stream|test_time_util|test_http_parse|test_tls_header_body)$'
           "${native_prefix[@]}" ./test_cinatra \
             --test-case='server threads serve concurrent connections,server shutdown drains accept loops,listener failure stops all acceptors,shutdown drains handlers awaiting off-thread work,optimistic*,test server start and stop,test server sync_start and stop,test multipart early return keeps server valid,test max http header size,request field limits reject before routing'
       - name: Run TLS regressions with the socket BIO and default read buffer

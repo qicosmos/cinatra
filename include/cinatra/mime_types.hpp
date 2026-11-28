@@ -148,7 +148,7 @@ static const std::map<std::string_view, std::string_view, ci_less> mime_map = {
     {".jpeg", "image/jpeg"},
     {".jpg", "image/jpeg"},
     {".jpz", "image/jpeg"},
-    {".js", "application/x-javascript"},
+    {".js", "application/javascript"},
     {".jwc", "application/jwc"},
     {".kjx", "application/x-kjx"},
     {".lak", "x-lml/x-lak"},
@@ -367,7 +367,9 @@ static const std::map<std::string_view, std::string_view, ci_less> mime_map = {
     {".sv4crc", "application/x-sv4crc"},
     {".svf", "image/vnd"},
     {".eot", "application/vnd.ms-fontobject"},
+    {".webp", "image/webp"},
     {".woff", "application/font-woff"},
+    {".woff2", "font/woff2"},
     {".svh", "image/svh"},
     {".svr", "x-world/x-svr"},
     {".swf", "application/x-shockwave-flash"},
@@ -502,7 +504,7 @@ static std::map<cinatra::req_content_type, std::string_view> res_mime_map = {
     {cinatra::req_content_type::multipart, "multipart/form-data; boundary="}};
 
 inline std::string_view get_mime_type(std::string_view extension) {
-  auto it = mime_map.find(std::string(extension.data(), extension.size()));
+  auto it = mime_map.find(extension);
   if (it == mime_map.end()) {
     return "application/octet-stream";
   }

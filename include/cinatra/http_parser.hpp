@@ -42,7 +42,74 @@ inline bool http_header_name_equal(std::string_view lhs,
                       return lower(a) == lower(b);
                     });
 }
+
+inline double parse_http_quality(std::string_view value) noexcept {
+  if (value.empty() || (value.front() != '0' && value.front() != '1')) {
+    return 0;
+  }
+  const bool full_weight = value.front() == '1';
+  if (value.size() == 1) {
+    return full_weight ? 1 : 0;
+  }
+  if (value[1] != '.' || value.size() > 5) {
+    return 0;
+  }
+
+  unsigned fraction = 0;
+  unsigned place = 100;
+  for (const char digit : value.substr(2)) {
+    if (digit < '0' || digit > '9') {
+      return 0;
+    }
+    fraction += (digit - '0') * place;
+    place /= 10;
+  }
+  if (full_weight) {
+    return fraction == 0 ? 1 : 0;
+  }
+  return fraction / 1000.0;
+}
 }  // namespace detail
+
+// Return the explicit weight, the wildcard weight, or zero for no match.
+// The caller chooses its policy for an absent header and identity fallback.
+inline double accept_encoding_quality(std::string_view header,
+                                      std::string_view encoding) noexcept {
+  const auto trim = [](std::string_view value) {
+    const auto first = value.find_first_not_of(" \t");
+    if (first == std::string_view::npos) {
+      return std::string_view{};
+    }
+    return value.substr(first, value.find_last_not_of(" \t") - first + 1);
+  };
+
+  double wildcard = 0;
+  while (!header.empty()) {
+    const auto comma = header.find(',');
+    const auto entry = header.substr(0, comma);
+    const auto semicolon = entry.find(';');
+    const auto name = trim(entry.substr(0, semicolon));
+    const bool matches = detail::http_header_name_equal(name, encoding);
+    if (matches || name == "*") {
+      double quality = 1;
+      if (semicolon != std::string_view::npos) {
+        const auto parameter = trim(entry.substr(semicolon + 1));
+        if (detail::http_header_name_equal(parameter.substr(0, 2), "q=")) {
+          quality = detail::parse_http_quality(parameter.substr(2));
+        }
+      }
+      if (matches) {
+        return quality;
+      }
+      wildcard = quality;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    header.remove_prefix(comma + 1);
+  }
+  return wildcard;
+}
 
 class http_parser {
  public:
