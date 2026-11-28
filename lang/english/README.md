@@ -4,6 +4,10 @@
   <span>English</span> | <a href="https://github.com/qicosmos/cinatra">中文</a>
 </p>
 
+🏆 **Cinatra ranked #1 out of 114 frameworks** on HttpArena's cross-language HTTP/1.1 composite leaderboard (Tuned configuration, 2026-11-27). [Official results](https://http-arena.com/frameworks/cinatra/)
+
+[![HttpArena HTTP/1.1 leaderboard top 10, with Cinatra at #1 and a composite score of 6508](../httparena-http11-leaderboard.png)](https://http-arena.com/)
+
 ## Table of Contents
 * [Introduction](#introduction)
 * [Usage](#usage)

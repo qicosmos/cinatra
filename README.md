@@ -4,6 +4,10 @@
   <a href="https://github.com/qicosmos/cinatra/tree/master/lang/english">English</a> | <span>中文</span>
 </p>
 
+🏆 **Cinatra 在 HttpArena HTTP/1.1 跨语言框架综合榜位列第 1（共 114 项）**。Tuned 配置，2026-11-27。 [官方成绩](https://http-arena.com/frameworks/cinatra/)
+
+[![HttpArena HTTP/1.1 综合榜前十名，Cinatra 以 6508 分位列第一](lang/httparena-http11-leaderboard.png)](https://http-arena.com/)
+
 | OS (Compiler Version)                          | Status                                                                                                   |
 |------------------------------------------------|----------------------------------------------------------------------------------------------------------|
 | Ubuntu 22.04 (clang 14.0.0)                    | ![win](https://github.com/qicosmos/cinatra/actions/workflows/linux_clang.yml/badge.svg?branch=master) |
