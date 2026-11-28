@@ -239,6 +239,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       ctx->set_verify_mode(verify_mode);
       ssl_hostname_ = sni_hostname;
+      ssl_hostname_origin_.reset();
       ssl_ctx_ = std::move(ctx);
     } catch (std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
@@ -1180,7 +1181,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     std::string header_str =
         build_request_header(u, method, ctx, true, std::move(headers));
 
-    if (socket_->has_closed_) {
+    if (socket_->has_closed_ || !origin_.matches(u)) {
       if (bool r = co_await reconnect(data, u); !r) {
         co_return data;
       }
@@ -1399,7 +1400,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       uri_t u;
       std::string append_uri;
 
-      if (socket_->has_closed_ || (!uri.empty() && uri[0] != '/')) {
+      const bool relative = !uri.empty() && uri[0] == '/';
+      if (!relative) {
         bool no_schema = !has_schema(uri);
 
         if (no_schema) {
@@ -1420,11 +1422,18 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
       else {
+        if (origin_.host.empty()) {
+          co_return resp_data{std::make_error_code(std::errc::protocol_error),
+                              404};
+        }
+        u.schema = origin_.scheme;
+        u.host = origin_.host;
+        u.port = origin_.port;
         u.path = uri;
-        u.host = host_;
-        u.port = port_;
+        u.is_ssl = u.schema == "https" || u.schema == "wss";
+        construct_proxy_uri(u);
       }
-      if (socket_->has_closed_) {
+      if (socket_->has_closed_ || (!relative && !origin_.matches(u))) {
         if (bool connected = co_await reconnect(data, u); !connected) {
           co_return data;
         }
@@ -1590,6 +1599,23 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   friend class coro_io::client_pool;
 
  private:
+  struct request_origin {
+    request_origin() = default;
+    explicit request_origin(const uri_t &u)
+        : scheme(u.schema), host(u.host), port(u.get_port()) {}
+
+    bool matches(const uri_t &u) const {
+      const auto effective_port =
+          u.port.empty() ? (u.is_ssl ? "443" : "80") : u.port;
+      return scheme == u.schema && port == effective_port &&
+             detail::http_header_name_equal(host, u.host);
+    }
+
+    std::string scheme;
+    std::string host;
+    std::string port;
+  };
+
   struct socket_t {
     asio::ip::tcp::socket impl_;
     std::atomic<bool> has_closed_ = true;
@@ -2353,6 +2379,24 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   async_simple::coro::Lazy<resp_data> connect(const uri_t &u) {
+#ifdef CINATRA_ENABLE_SSL
+    if (u.is_ssl && !ssl_hostname_.empty()) {
+      if (!ssl_hostname_origin_) {
+        ssl_hostname_origin_.emplace(u);
+      }
+      else if (!ssl_hostname_origin_->matches(u)) {
+        co_return resp_data{std::make_error_code(std::errc::invalid_argument),
+                            404};
+      }
+    }
+#endif
+    if (!socket_->has_closed_ && !origin_.matches(u)) {
+      co_await coro_io::post(
+          [this] {
+            close_socket(*socket_);
+          },
+          &executor_wrapper_);
+    }
     if (socket_->has_closed_) {
       head_buf_.consume(head_buf_.size());
       chunked_buf_.consume(chunked_buf_.size());
@@ -2441,6 +2485,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           close_socket(*socket_);
           co_return resp_data{ec, 404};
         }
+      }
+      if (!origin_.matches(u)) {
+        origin_ = request_origin(u);
       }
       socket_->has_closed_ = false;
     }
@@ -2791,10 +2838,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::string ws_sec_key_;
   std::string host_;
   std::string port_;
+  request_origin origin_;
 
 #ifdef CINATRA_ENABLE_SSL
   std::unique_ptr<asio::ssl::context> ssl_ctx_ = nullptr;
   std::string ssl_hostname_;
+  std::optional<request_origin> ssl_hostname_origin_;
   bool is_ssl_schema_ = false;
   bool need_set_sni_host_ = true;
 #endif

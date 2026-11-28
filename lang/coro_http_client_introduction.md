@@ -216,7 +216,9 @@ void test_coro_http_client() {
 # http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。
 
-如果host 已经通过请求连接成功之后，后面发请求的时候只传入path 而不用传入完整的路径，这样可以获得更好的性能，coro_http_client 对于已经连接的host，当传入path 的时候不会再重复去解析已经解析过的uri。
+如果已经建立过连接，可以只传入以 `/` 开头的路径，客户端会使用最近一次成功连接的目标。传入完整 URL 时，只有协议、主机和有效端口都相同才会复用连接。
+
+显式设置的 `sni_hostname` 绑定到该 TLS 配置首次连接的目标。相同目标重连时继续使用这项设置。切换到另一目标前，使用独立客户端，或调用 `reset()` 后重新调用 `init_ssl()`。
 
 ```c++
 async_simple::coro::Lazy<void> test_async_client() {

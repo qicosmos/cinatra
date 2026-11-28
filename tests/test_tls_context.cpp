@@ -177,4 +177,95 @@ TEST_CASE("client keeps TLS verification across new connections") {
     CHECK(client.has_closed());
   }
 }
+
+TEST_CASE("client scopes persistent connections to the request origin") {
+  enum class check { reuse, verify_url, scope_override };
+  check scenario = check::reuse;
+  bool second_tls = true;
+  SUBCASE("switch between TLS ports") {}
+  SUBCASE("switch to HTTP") { second_tls = false; }
+  SUBCASE("the next origin needs its own verified certificate") {
+    scenario = check::verify_url;
+  }
+  SUBCASE("an explicit TLS hostname is scoped to the first target") {
+    scenario = check::scope_override;
+  }
+
+  const auto dir = std::filesystem::path(__FILE__).parent_path().parent_path() /
+                   "include/cinatra";
+  coro_http_server first(1, 0, "127.0.0.1", false);
+  coro_http_server second(1, 0, "127.0.0.1", false);
+  const auto setup = [&](coro_http_server &server, bool tls,
+                         const std::string &body) {
+    if (tls) {
+      server.init_ssl((dir / "server.crt").string(),
+                      (dir / "server.key").string(), "test");
+    }
+    server.set_http_handler<GET, POST>(
+        "/",
+        [body](coro_http_request &req,
+               coro_http_response &resp) -> async_simple::coro::Lazy<void> {
+          if (req.get_content_type() == content_type::chunked) {
+            auto chunk = co_await req.get_conn()->read_chunked();
+            while (!chunk.eof && !chunk.ec) {
+              chunk = co_await req.get_conn()->read_chunked();
+            }
+            CHECK_FALSE(chunk.ec);
+          }
+          resp.set_status_and_content(status_type::ok, body);
+        });
+    return server.async_start();
+  };
+  auto first_running = setup(first, true, "first");
+  auto second_running = setup(second, second_tls, "second");
+  REQUIRE_FALSE(first.get_errc());
+  REQUIRE_FALSE(second.get_errc());
+  const auto first_url =
+      "https://localhost:" + std::to_string(first.port()) + "/";
+  const auto second_url = std::string(second_tls ? "https" : "http") +
+                          "://localhost:" + std::to_string(second.port()) + "/";
+  const auto unverified_host =
+      "https://127.0.0.1:" + std::to_string(second.port()) + "/";
+
+  coro_http_client client;
+  client.set_conn_timeout(std::chrono::seconds(3));
+  client.set_req_timeout(std::chrono::seconds(3));
+  const auto trust_fixture = [&](std::string hostname = {}) {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, dir.string(), "server.crt",
+                            hostname));
+  };
+  if (scenario == check::reuse) {
+    trust_fixture();
+    CHECK(client.get(first_url).resp_body == "first");
+    CHECK_FALSE(client.has_closed());
+    auto upload = async_simple::coro::syncAwait(client.async_post_chunked(
+        second_url, "request", req_content_type::text));
+    CHECK_FALSE(upload.net_err);
+    CHECK(upload.resp_body == "second");
+    CHECK(client.get(first_url).resp_body == "first");
+    CHECK(client.get(second_url).resp_body == "second");
+    CHECK(client.get("/").resp_body == "second");
+  }
+  else if (scenario == check::verify_url) {
+    trust_fixture();
+    CHECK(client.get(first_url).resp_body == "first");
+    CHECK_FALSE(client.has_closed());
+    const auto result = client.get(unverified_host);
+    CHECK(result.net_err.category() == asio::error::get_ssl_category());
+    CHECK(ERR_GET_REASON(result.net_err.value()) ==
+          SSL_R_CERTIFICATE_VERIFY_FAILED);
+    CHECK(client.has_closed());
+  }
+  else {
+    trust_fixture("localhost");
+    const auto first_ip =
+        "https://127.0.0.1:" + std::to_string(first.port()) + "/";
+    CHECK(client.get(first_ip).resp_body == "first");
+    CHECK(client.get(second_url).net_err == std::errc::invalid_argument);
+    client.reset();
+    CHECK(client.get(second_url).net_err == std::errc::invalid_argument);
+    trust_fixture();
+    CHECK(client.get(second_url).resp_body == "second");
+  }
+}
 #endif
