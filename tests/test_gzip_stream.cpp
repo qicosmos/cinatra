@@ -498,10 +498,9 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   coro_http_server server(context, 0, "127.0.0.1");
   server.set_server_header(false);
 #ifdef CINATRA_ENABLE_SSL
+  const auto dir = std::filesystem::path(__FILE__).parent_path().parent_path() /
+                   "include/cinatra";
   if (tls) {
-    const auto dir =
-        std::filesystem::path(__FILE__).parent_path().parent_path() /
-        "include/cinatra";
     server.init_ssl((dir / "server.crt").string(),
                     (dir / "server.key").string(), "test");
   }
@@ -557,6 +556,12 @@ TEST_CASE("streamed responses own their buffers across coroutine suspension") {
   auto serving = server.async_start();
   REQUIRE(server.port() != 0);
   coro_http_client client(context.get_executor());
+#ifdef CINATRA_ENABLE_SSL
+  if (tls) {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, dir.string(), "server.crt",
+                            "localhost"));
+  }
+#endif
   const auto base_uri = std::string(tls ? "https" : "http") +
                         "://127.0.0.1:" + std::to_string(server.port());
   const auto uri = base_uri + "/json";

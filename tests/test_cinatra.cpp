@@ -2090,9 +2090,11 @@ TEST_CASE("test ssl upload") {
 
   {
     coro_http_client client{};
-    bool r = client.init_ssl();
+    bool r = client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                             "server.crt", "localhost");
     CHECK(r);
-    r = client.init_ssl();
+    r = client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                        "server.crt", "localhost");
     CHECK(r);
     client.add_header("filename", filename);
     auto lazy = client.async_upload(uri, http_method::PUT, filename);
@@ -2102,6 +2104,8 @@ TEST_CASE("test ssl upload") {
 
   {
     coro_http_client client{};
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                            "server.crt", "localhost"));
     client.add_header("filename", filename);
     auto lazy = client.async_upload(uri, http_method::PUT, filename);
     auto result = async_simple::coro::syncAwait(lazy);
@@ -2141,7 +2145,8 @@ TEST_CASE("test ssl upload") {
   uri = "https://127.0.0.1:19002/chunked";
   {
     coro_http_client client{};
-    bool r = client.init_ssl();
+    bool r = client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                             "server.crt", "localhost");
     CHECK(r);
     std::string_view file = "test_ssl_upload.txt";
     client.add_header("filename", filename);
@@ -2153,7 +2158,8 @@ TEST_CASE("test ssl upload") {
   {
     coro_http_client client{};
     client.enable_sni_hostname(true);
-    bool r = client.init_ssl();
+    bool r = client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                             "server.crt", "localhost");
     CHECK(r);
     std::unordered_map<std::string, std::string> headers;
     headers.emplace("filename", filename);
@@ -2166,7 +2172,8 @@ TEST_CASE("test ssl upload") {
   {
     coro_http_client client{};
     client.write_failed_forever_ = true;
-    bool r = client.init_ssl();
+    bool r = client.init_ssl(asio::ssl::verify_peer, "../../include/cinatra",
+                             "server.crt", "localhost");
     CHECK(r);
     client.add_header("filename", filename);
     auto lazy = client.async_upload_chunked(uri, http_method::PUT, filename);

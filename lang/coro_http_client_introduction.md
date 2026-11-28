@@ -182,11 +182,11 @@ const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 
   /// 
-  /// \param verify_mode 证书校验模式，默认 verify_none
+  /// \param verify_mode 证书校验模式，默认 verify_peer
   /// \param full_path CA 证书文件路径，留空使用系统信任库
   /// \param sni_hostname 用于 SNI 和证书校验的主机名，留空使用 URL 的主机名
   /// \return ssl 初始化是否成功
-  bool init_ssl(int verify_mode = asio::ssl::verify_none,
+  bool init_ssl(int verify_mode = asio::ssl::verify_peer,
                               std::string full_path = "",
                               const std::string &sni_hostname = "");
 ```
@@ -211,7 +211,7 @@ void test_coro_http_client() {
 }
 #endif
 ```
-根据需要，一般情况下init_ssl()可以不调用。
+直接发起 HTTPS 或 WSS 请求时，客户端默认使用系统信任库校验证书链和 URL 主机名。私有 CA 可以通过 `init_ssl(asio::ssl::verify_peer, ca_file)` 配置。兼容已有测试环境时，可以显式传入 `asio::ssl::verify_none` 关闭校验。
 
 # http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。

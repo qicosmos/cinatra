@@ -406,10 +406,9 @@ TEST_CASE("websocket batching resumes on a shared server executor") {
   coro_io::ExecutorWrapper<> executor(context.get_executor());
   coro_http_server server(context, 0, "127.0.0.1");
 #ifdef CINATRA_ENABLE_SSL
+  const auto dir = std::filesystem::path(__FILE__).parent_path().parent_path() /
+                   "include/cinatra";
   if (tls) {
-    const auto dir =
-        std::filesystem::path(__FILE__).parent_path().parent_path() /
-        "include/cinatra";
     server.init_ssl((dir / "server.crt").string(),
                     (dir / "server.key").string(), "test");
   }
@@ -436,6 +435,12 @@ TEST_CASE("websocket batching resumes on a shared server executor") {
       });
   auto serving = server.async_start();
   coro_http_client client(context.get_executor());
+#ifdef CINATRA_ENABLE_SSL
+  if (tls) {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, dir.string(), "server.crt",
+                            "localhost"));
+  }
+#endif
   const auto uri = std::string(tls ? "wss" : "ws") +
                    "://127.0.0.1:" + std::to_string(server.port()) + "/ws";
   bool timed_out = false;
