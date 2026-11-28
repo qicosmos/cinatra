@@ -184,7 +184,7 @@ const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
   /// 
   /// \param verify_mode 证书校验模式，默认 verify_none
   /// \param full_path CA 证书文件路径，留空使用系统信任库
-  /// \param sni_hostname SNI 主机名，启用校验时传入 URL 的主机名
+  /// \param sni_hostname 用于 SNI 和证书校验的主机名，留空使用 URL 的主机名
   /// \return ssl 初始化是否成功
   bool init_ssl(int verify_mode = asio::ssl::verify_none,
                               std::string full_path = "",
@@ -349,7 +349,7 @@ auto result = co_await client.async_get_sse(
 
 如果 handler 返回 `std::error_code`，非零错误码会停止读取。如果返回 `void`，则继续读取直到流结束或出错。
 
-`async_get_sse` 和 `async_post_sse` 也接受返回 `async_simple::coro::Lazy<bool>` 的协程回调。客户端会等待当前回调完成再处理下一个事件。返回 `false` 可以停止读取，和同步回调的行为一致。
+`async_get_sse` 和 `async_post_sse` 的协程回调须返回 `async_simple::coro::Lazy<bool>`。客户端会等待当前回调完成再处理下一个事件。返回 `false` 可以停止读取，和同步回调的行为一致。
 
 ## multipart 格式上传
 multipart 上传有两个接口，一个是一步实现上传，一个是分两步实现上传。

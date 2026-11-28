@@ -107,7 +107,7 @@ TEST_CASE("server keeps TLS credentials for concurrent later connections") {
   CHECK(replies == clients);
 }
 
-TEST_CASE("client verifies TLS hostname on the first connection") {
+TEST_CASE("client keeps TLS verification across new connections") {
   const auto cert_dir =
       std::filesystem::path(__FILE__).parent_path().parent_path() /
       "include/cinatra";
@@ -116,6 +116,7 @@ TEST_CASE("client verifies TLS hostname on the first connection") {
   server.init_ssl(cert, (cert_dir / "server.key").string(), "test");
   server.set_http_handler<GET>(
       "/", [](coro_http_request &, coro_http_response &resp) {
+        resp.add_header("Connection", "close");
         resp.set_status_and_content(status_type::ok, "ok");
       });
   auto serving = server.async_start();
@@ -123,18 +124,47 @@ TEST_CASE("client verifies TLS hostname on the first connection") {
 
   const std::string uri =
       "https://127.0.0.1:" + std::to_string(server.port()) + "/";
-  const auto get = [&](const char *hostname) {
-    coro_http_client client;
-    REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
-                            "server.crt", hostname));
-    const auto result = client.get(uri);
-    return std::pair(result.net_err, result.status);
+  coro_http_client client;
+  client.set_conn_timeout(std::chrono::seconds(3));
+  client.set_req_timeout(std::chrono::seconds(3));
+  const auto get = [&] {
+    // Ask the server to close each connection so all requests require TLS
+    // handshakes.
+    return client.get(uri, {{"Connection", "close"}});
   };
-  const auto [valid_error, valid_status] = get("localhost");
-  CHECK_FALSE(valid_error);
-  CHECK(valid_status == 200);
-  const auto [invalid_error, invalid_status] = get("127.0.0.1");
-  CHECK(invalid_error);
-  CHECK(invalid_status != 200);
+
+  SUBCASE("trusted certificate matches the configured hostname") {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                            "server.crt", "localhost"));
+    for (int attempt = 0; attempt < 2; ++attempt) {
+      auto result = get();
+      CHECK_FALSE(result.net_err);
+      CHECK(result.status == 200);
+      CHECK(client.has_closed());
+    }
+    client.reset();
+    auto result = get();
+    CHECK_FALSE(result.net_err);
+    CHECK(result.status == 200);
+  }
+
+  const auto check_hostname_rejected = [&] {
+    const auto ec = get().net_err;
+    CHECK(ec.category() == asio::error::get_ssl_category());
+    CHECK(ERR_GET_REASON(ec.value()) == SSL_R_CERTIFICATE_VERIFY_FAILED);
+  };
+  SUBCASE("trusted certificate does not match the configured hostname") {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                            "server.crt", "127.0.0.1"));
+    check_hostname_rejected();
+    client.reset();
+    check_hostname_rejected();
+  }
+
+  SUBCASE("hostname defaults to the URL host") {
+    REQUIRE(client.init_ssl(asio::ssl::verify_peer, cert_dir.string(),
+                            "server.crt", ""));
+    check_hostname_rejected();
+  }
 }
 #endif
