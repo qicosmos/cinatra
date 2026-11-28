@@ -60,20 +60,23 @@ struct bounded_http_header_matcher {
   std::pair<asio::buffers_iterator<Buffer>, bool> operator()(
       asio::buffers_iterator<Buffer> begin,
       asio::buffers_iterator<Buffer> end) const noexcept {
-    // Asio advances begin after each unsuccessful search. Recover the absolute
-    // header offset while ignoring body/pipeline bytes after the delimiter.
-    const auto available = static_cast<size_t>(end - begin);
-    const auto offset = source->size() - available;
-    const auto remaining = maximum > offset ? maximum - offset : 0;
-    const auto checked = (std::min)(available, remaining);
-    auto match = http_header_matcher{}(begin, begin + checked);
-    if (match.second)
-      return match;
-    if (available >= remaining && source->size() != 0) {
-      *exceeded = true;
-      return {begin + checked, true};
+    const auto buffered = source->size();
+    if (buffered < maximum) [[likely]] {
+      return http_header_matcher{}(begin, end);
     }
-    return match;
+
+    // Asio may resume partway through the buffer. Truncate the search
+    // interval by the bytes already buffered past the header limit.
+    const auto available = static_cast<size_t>(end - begin);
+    const auto excess = buffered - maximum;
+    const auto checked = available > excess ? available - excess : 0;
+    const auto limit = begin + checked;
+    auto match = http_header_matcher{}(begin, limit);
+    if (match.second || buffered == 0) {
+      return match;
+    }
+    *exceeded = true;
+    return {limit, true};
   }
 };
 
