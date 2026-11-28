@@ -2251,26 +2251,26 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       std::error_code ec;
       sse_event event;
+      bool keep_reading = true;
       if (parse_sse_event({resp_chunk_str_.data(), event_end}, event)) {
         if constexpr (std::is_same_v<result_type,
                                      async_simple::coro::Lazy<bool>>) {
-          if (!co_await handler(event)) {
-            ec = std::make_error_code(std::errc::operation_canceled);
-          }
+          keep_reading = co_await handler(event);
         }
         else if constexpr (std::is_same_v<result_type, std::error_code>) {
           ec = handler(event);
         }
         else if constexpr (std::is_same_v<result_type, bool>) {
-          if (!handler(event)) {
-            ec = std::make_error_code(std::errc::operation_canceled);
-          }
+          keep_reading = handler(event);
         }
         else {
           handler(event);
         }
       }
       resp_chunk_str_.erase(0, event_next);
+      if (!keep_reading) {
+        co_return std::make_error_code(std::errc::operation_canceled);
+      }
       if (ec) {
         co_return ec;
       }

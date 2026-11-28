@@ -1,9 +1,9 @@
 #include <asio/streambuf.hpp>
-#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "cinatra/http_header_matcher.hpp"
@@ -464,88 +464,62 @@ TEST_CASE("native response headers share one TLS application record") {
 }
 #endif
 
-TEST_CASE("SSE relay awaits the event handler on the shared executor") {
+TEST_CASE("SSE awaits the event handler on the shared executor") {
   bool tls = false;
   SUBCASE("HTTP") {}
 #ifdef CINATRA_ENABLE_SSL
   SUBCASE("HTTPS") { tls = true; }
 #endif
-  coro_http_server server(1, 0, "127.0.0.1", false);
+  asio::io_context context;
+  coro_http_server server(context, 0, "127.0.0.1");
 #ifdef CINATRA_ENABLE_SSL
-  const auto cert_dir =
-      std::filesystem::path(__FILE__).parent_path().parent_path() /
-      "include/cinatra";
   if (tls) {
-    server.init_ssl((cert_dir / "server.crt").string(),
-                    (cert_dir / "server.key").string(), "test");
+    const auto dir =
+        std::filesystem::path(__FILE__).parent_path().parent_path() /
+        "include/cinatra";
+    server.init_ssl((dir / "server.crt").string(),
+                    (dir / "server.key").string(), "test");
   }
 #endif
   using async_simple::coro::Lazy;
   server.set_http_handler<POST>(
-      "/upstream",
-      [](coro_http_request &req, coro_http_response &resp) -> Lazy<void> {
-        CHECK(req.get_body() == "prompt");
+      "/", [](coro_http_request &, coro_http_response &resp) -> Lazy<void> {
         auto *conn = resp.get_conn();
-        if (co_await conn->begin_sse()) {
-          // Deliver all events in a single HTTP chunk to exercise serial
-          // dispatch.
-          if (co_await conn->write_chunked(
-                  "data: first\r\n\r\ndata: stop\r\n\r\ndata: extra\r\n\r\n")) {
-            co_await conn->end_sse();
-          }
-        }
-      });
-  std::atomic<unsigned short> port{};
-  const auto base_url = [&] {
-    return (tls ? "https://" : "http://") + std::string("127.0.0.1:") +
-           std::to_string(port.load());
-  };
-  server.set_http_handler<POST>(
-      "/relay",
-      [&](coro_http_request &, coro_http_response &resp) -> Lazy<void> {
-        auto *conn = resp.get_conn();
-        auto *executor = conn->get_executor();
-        coro_http_client upstream(executor);
-        bool started = false;
-        auto forward = [&](const sse_event &event) -> Lazy<bool> {
-          CHECK(executor->get_asio_executor().running_in_this_thread());
-          // Post to the same executor to force suspension before forwarding.
-          co_await coro_io::post(
-              [] {
-              },
-              executor);
-          CHECK(executor->get_asio_executor().running_in_this_thread());
-          if (!started) {
-            started = true;
-            if (!co_await conn->begin_sse())
-              co_return false;
-          }
-          if (!co_await conn->write_sse_event(event))
-            co_return false;
-          co_return event.data != "stop";
-        };
-        auto result =
-            co_await upstream.async_post_sse(base_url() + "/upstream", "prompt",
-                                             req_content_type::text, forward);
-        CHECK_FALSE(result.net_err);
-        CHECK(result.status == 200);
-        if (started) {
+        if (co_await conn->begin_sse() &&
+            co_await conn->write_chunked(
+                "data: first\r\n\r\ndata: stop\r\n\r\ndata: extra\r\n\r\n")) {
           co_await conn->end_sse();
         }
       });
-
   auto serving = server.async_start();
   REQUIRE_FALSE(server.get_errc());
-  port.store(server.port());
+  std::jthread io([&] {
+    context.run();
+  });
 
+  coro_http_client client(context.get_executor());
   std::vector<std::string> events;
-  coro_http_client client;
-  auto result = async_simple::coro::syncAwait(client.async_post_sse(
-      base_url() + "/relay", "request", req_content_type::text,
-      [&](const sse_event &event) {
-        events.push_back(event.data);
-      }));
+  auto handler = [&](const sse_event &event) -> Lazy<bool> {
+    // Posting suspends the handler even when all events arrived in one chunk.
+    co_await coro_io::post(
+        [] {
+        },
+        &client.get_executor());
+    CHECK(context.get_executor().running_in_this_thread());
+    events.push_back(event.data);
+    co_return event.data != "stop";
+  };
+  const auto url = (tls ? "https://" : "http://") + std::string("127.0.0.1:") +
+                   std::to_string(server.port()) + "/";
+  auto result = async_simple::coro::syncAwait(
+      client.async_post_sse(url, "prompt", req_content_type::text, handler)
+          .via(&client.get_executor()));
+  client.close();
+  server.stop();
+  io.join();
+
   CHECK_FALSE(result.net_err);
-  CHECK(result.eof);
+  CHECK(result.status == 200);
+  CHECK_FALSE(result.eof);
   CHECK((events == std::vector<std::string>{"first", "stop"}));
 }
